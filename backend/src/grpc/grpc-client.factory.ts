@@ -16,7 +16,7 @@ export class GrpcClientFactory {
       { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true },
     );
 
-    const loaded = loadPackageDefinition(packageDefinition) as {
+    const loaded = loadPackageDefinition(packageDefinition) as unknown as {
       grpc: { health: { v1: { Health: new (...args: unknown[]) => any } } };
     };
 
