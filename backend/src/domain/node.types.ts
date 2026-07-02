@@ -63,6 +63,16 @@ export interface NodeUpdateDetailMeta {
   [key: string]: unknown;
 }
 
+export interface NodeUpdateDetailEvent {
+  eventKind: 'create' | 'consuming_exercise' | 'non_consuming_exercise';
+  eventId: string | null;
+  contractId: string | null;
+  templateId: string | null;
+  choice: string | null;
+  witnesses: string[];
+  raw: Record<string, unknown>;
+}
+
 export interface NodeUpdateDetailResponse {
   nodeId: string;
   label: string;
@@ -70,4 +80,5 @@ export interface NodeUpdateDetailResponse {
   recordTime: string | null;
   parties: string[];
   meta: NodeUpdateDetailMeta;
+  events: NodeUpdateDetailEvent[];
 }

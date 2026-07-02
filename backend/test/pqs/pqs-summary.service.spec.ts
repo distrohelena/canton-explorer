@@ -228,6 +228,7 @@ describe('PqsSummaryService', () => {
       updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
+      events: [],
       meta: {
         update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
         record_time: '2026-07-01T12:00:00.000Z',
@@ -338,6 +339,199 @@ describe('PqsSummaryService', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         parties: [],
+        events: [],
+      }),
+    );
+  });
+
+  it('returns mixed normalized event rows on a single update detail', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            record_time: '2026-07-01T12:00:00.000Z',
+            event_offset: '0000000000000001',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            parties: ['Alice', 'Bob'],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            event_kind: 'create',
+            event_id: '#0:0',
+            contract_id: '00abc',
+            template_id: 'Main:Asset',
+            choice: null,
+            witnesses: ['Alice', 'Bob'],
+            raw: {
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_id: '#0:0',
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              tree_event_witnesses: ['Alice', 'Bob'],
+            },
+          },
+          {
+            event_kind: 'consuming_exercise',
+            event_id: '#0:1',
+            contract_id: '00abc',
+            template_id: 'Main:Asset',
+            choice: 'Archive',
+            witnesses: ['Alice'],
+            raw: {
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_id: '#0:1',
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              choice: 'Archive',
+              tree_event_witnesses: ['Alice'],
+            },
+          },
+        ],
+      });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        events: [
+          {
+            eventKind: 'create',
+            eventId: '#0:0',
+            contractId: '00abc',
+            templateId: 'Main:Asset',
+            choice: null,
+            witnesses: ['Alice', 'Bob'],
+            raw: {
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_id: '#0:0',
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              tree_event_witnesses: ['Alice', 'Bob'],
+            },
+          },
+          {
+            eventKind: 'consuming_exercise',
+            eventId: '#0:1',
+            contractId: '00abc',
+            templateId: 'Main:Asset',
+            choice: 'Archive',
+            witnesses: ['Alice'],
+            raw: {
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_id: '#0:1',
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              choice: 'Archive',
+              tree_event_witnesses: ['Alice'],
+            },
+          },
+        ],
+      }),
+    );
+  });
+
+  it('preserves raw event rows when a normalized field cannot be derived', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            record_time: '2026-07-01T12:00:00.000Z',
+            event_offset: '0000000000000001',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            parties: ['Alice'],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            event_kind: 'create',
+            event_id: '#0:0',
+            contract_id: '00abc',
+            template_id: null,
+            choice: null,
+            witnesses: ['Alice'],
+            raw: {
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_id: '#0:0',
+              contract_id: '00abc',
+              tree_event_witnesses: ['Alice'],
+            },
+          },
+        ],
+      });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            eventKind: 'create',
+            templateId: null,
+            raw: {
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_id: '#0:0',
+              contract_id: '00abc',
+              tree_event_witnesses: ['Alice'],
+            },
+          }),
+        ],
       }),
     );
   });
