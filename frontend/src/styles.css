@@ -383,6 +383,61 @@ h3 {
   font-size: 0.9rem;
 }
 
+.update-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.update-detail__content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.update-detail__id,
+.update-detail__canonical {
+  word-break: break-all;
+}
+
+.update-detail__id {
+  color: var(--blue-600);
+  font-weight: 600;
+}
+
+.update-detail__canonical {
+  color: var(--text-500);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92rem;
+}
+
+.update-detail__time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.update-detail__time-date {
+  font-weight: 600;
+  color: var(--text-900);
+}
+
+.update-detail__time-clock {
+  color: var(--text-500);
+  font-size: 0.9rem;
+}
+
+.update-detail__meta {
+  margin: 0;
+  padding: 16px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #dbe7ff;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
 .dashboard__hero {
   display: flex;
   justify-content: space-between;
