@@ -57,7 +57,8 @@ The flow is:
 4. update-detail and contract-detail endpoints delegate all payload decoding to that generic decoder
 5. the API returns either:
    - `decoded` with a complete JSON-safe value
-   - or `invalid_data` with a machine-readable reason and no partial value tree
+   - `invalid_data` with a machine-readable reason and no partial value tree
+   - `not_available` when the source system does not expose the raw bytes needed for decoding
 
 This keeps persistence simple, avoids reparsing packages on every request, and replaces narrow hard-coded decoders with one shared decode path.
 
@@ -166,6 +167,23 @@ The decoder must never return partially decoded nested objects.
 ### Canonical Decoded Value Shape
 
 All decoded payloads should use one shared recursive JSON-safe schema so backend serialization, frontend rendering, and tests all target the same contract.
+
+Decoder lookup inputs:
+
+- `templateId` should be treated as the fully qualified DAML template identifier used by PQS
+- `packageId` should be carried alongside it and used as the stable package-aware lookup key when resolving template and choice definitions
+
+Primitive serialization rules:
+
+- `Text`, `Party`, and similar textual scalars serialize as `string`
+- `Bool` serializes as `boolean`
+- `Int64` serializes as `string`
+- `Numeric` serializes as `string`
+- `Date` serializes as ISO date `string`
+- `Timestamp` serializes as ISO timestamp `string`
+- `Unit` does not serialize as `null`; it uses the explicit `{ kind: "unit" }` wrapper
+- plain JSON `number` should only be used for values that are known to be safe in JavaScript without precision loss
+- `null` is reserved for explicit absence inside wrapper types such as optionals or empty variant payloads
 
 Suggested shape:
 
@@ -285,6 +303,16 @@ Exercise-specific rules:
 - no combined top-level exercise status should collapse argument and result into a single ambiguous state
 
 No partial nested objects should be returned under any non-`decoded` state.
+
+State matrix:
+
+- `decoded`
+  - use when the payload fully decodes against the resolved DAML definition
+  - also use for known unit exercise results when the return type is unit and no result bytes are emitted
+- `invalid_data`
+  - use when bytes were found but package resolution or payload decoding fails
+- `not_available`
+  - use when PQS does not expose the raw bytes needed for that field and there is no type-level rule that allows a fully determined value
 
 ### Example Decoded Shapes
 
