@@ -202,13 +202,11 @@ describe('PqsSummaryService', () => {
     const service = new PqsSummaryService({
       getClient: () => ({ query }),
     } as never);
-    const fetchUpdateDetail = (
-      service as unknown as {
-        fetchUpdateDetail?: (node: object, updateId: string) => Promise<unknown>;
-      }
-    ).fetchUpdateDetail;
+    const serviceWithDetail = service as unknown as {
+      fetchUpdateDetail?: (node: object, updateId: string) => Promise<unknown>;
+    };
 
-    expect(fetchUpdateDetail).toBeDefined();
+    expect(serviceWithDetail.fetchUpdateDetail).toBeDefined();
 
     const node = {
       id: 'participant-1',
@@ -219,7 +217,8 @@ describe('PqsSummaryService', () => {
     };
 
     await expect(
-      fetchUpdateDetail?.(
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
         node,
         '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       ),
@@ -237,7 +236,8 @@ describe('PqsSummaryService', () => {
     });
 
     await expect(
-      fetchUpdateDetail?.(
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
         node,
         '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       ),
@@ -248,7 +248,8 @@ describe('PqsSummaryService', () => {
     );
 
     await expect(
-      fetchUpdateDetail?.(
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
         node,
         '994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       ),
@@ -257,22 +258,35 @@ describe('PqsSummaryService', () => {
         updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       }),
     );
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('from participant.lapi_update_meta'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('participant.lapi_events_create'),
+    );
   });
 
   it('rejects when a single update detail is missing', async () => {
     const service = new PqsSummaryService({
-      getClient: () => ({ query: jest.fn() }),
+      getClient: () =>
+        ({
+          query: jest.fn().mockResolvedValue({
+            rows: [],
+          }),
+        }) as never,
     } as never);
-    const fetchUpdateDetail = (
-      service as unknown as {
-        fetchUpdateDetail?: (node: object, updateId: string) => Promise<unknown>;
-      }
-    ).fetchUpdateDetail;
+    const serviceWithDetail = service as unknown as {
+      fetchUpdateDetail?: (node: object, updateId: string) => Promise<unknown>;
+    };
 
-    expect(fetchUpdateDetail).toBeDefined();
+    expect(serviceWithDetail.fetchUpdateDetail).toBeDefined();
 
     await expect(
-      fetchUpdateDetail?.(
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
         {
           id: 'participant-1',
           label: 'Participant 1',
@@ -283,5 +297,48 @@ describe('PqsSummaryService', () => {
         'missing-update-id',
       ),
     ).rejects.toThrow('Update not found');
+  });
+
+  it('returns a single update detail with empty parties when witness lookup fails', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            record_time: '2026-07-01T12:00:00.000Z',
+            event_offset: '0000000000000001',
+          },
+        ],
+      })
+      .mockRejectedValueOnce(new Error('events lookup failed'));
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+    const serviceWithDetail = service as unknown as {
+      fetchUpdateDetail?: (node: object, updateId: string) => Promise<unknown>;
+    };
+
+    expect(serviceWithDetail.fetchUpdateDetail).toBeDefined();
+
+    await expect(
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        parties: [],
+      }),
+    );
   });
 });
