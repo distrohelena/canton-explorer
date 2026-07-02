@@ -40,6 +40,21 @@ describe('UpdateDetailView', () => {
       updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
+      events: [
+        {
+          eventKind: 'create',
+          eventId: '#0:0',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          choice: null,
+          witnesses: ['Alice', 'Bob'],
+          raw: {
+            event_id: '#0:0',
+            contract_id: '00abc',
+            template_id: 'Main:Asset',
+          },
+        },
+      ],
       meta: {
         update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
         record_time: 1782907200000000,

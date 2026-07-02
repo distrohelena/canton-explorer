@@ -17,5 +17,16 @@ export interface NodeUpdateDetailResponse {
   updateId: string;
   recordTime: string | null;
   parties: string[];
+  events: NodeUpdateDetailEvent[];
   meta: Record<string, unknown>;
+}
+
+export interface NodeUpdateDetailEvent {
+  eventKind: 'create' | 'consuming_exercise' | 'non_consuming_exercise';
+  eventId: string | null;
+  contractId: string | null;
+  templateId: string | null;
+  choice: string | null;
+  witnesses: string[];
+  raw: Record<string, unknown>;
 }
