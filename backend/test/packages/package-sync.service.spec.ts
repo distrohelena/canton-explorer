@@ -1,8 +1,10 @@
+import { Test } from '@nestjs/testing';
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
+import { PqsPackageService } from '../../src/packages/pqs-package.service';
 import { PackageSyncService } from '../../src/packages/package-sync.service';
 
 describe('PackageSyncService', () => {
@@ -93,5 +95,26 @@ describe('PackageSyncService', () => {
     });
 
     expect(pqsPackageService.fetchPackagesById).toHaveBeenCalledTimes(1);
+  });
+
+  it('is resolvable through Nest dependency injection', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-sync-service-di-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PackageCacheService,
+        PackageSyncService,
+        {
+          provide: PqsPackageService,
+          useValue: {
+            fetchPackageRefs: jest.fn(),
+            fetchPackagesById: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    expect(moduleRef.get(PackageSyncService)).toBeInstanceOf(PackageSyncService);
   });
 });

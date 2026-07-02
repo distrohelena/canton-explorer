@@ -12,11 +12,11 @@ export interface PackageSyncResult {
 @Injectable()
 export class PackageSyncService {
   private readonly lastSyncStartedAtByNode = new Map<string, number>();
+  private readonly syncIntervalMs = 15 * 60 * 1000;
 
   constructor(
     private readonly cacheService: PackageCacheService,
     private readonly pqsPackageService: PqsPackageService,
-    private readonly syncIntervalMs = 15 * 60 * 1000,
   ) {}
 
   async syncNodePackagesIfDue(node: NodeConfig): Promise<PackageSyncResult> {
