@@ -163,6 +163,40 @@ Output contract:
 
 The decoder must never return partially decoded nested objects.
 
+### Canonical Decoded Value Shape
+
+All decoded payloads should use one shared recursive JSON-safe schema so backend serialization, frontend rendering, and tests all target the same contract.
+
+Suggested shape:
+
+- scalar values:
+  - `string`
+  - `number`
+  - `boolean`
+  - `null`
+- contract references:
+  - `{ kind: "contract_id", value: string }`
+- records:
+  - `{ kind: "record", fields: Array<{ label: string; value: DecodedDamlValue }> }`
+- variants:
+  - `{ kind: "variant", constructor: string; value: DecodedDamlValue | null }`
+- enums:
+  - `{ kind: "enum", constructor: string }`
+- lists:
+  - `{ kind: "list", items: DecodedDamlValue[] }`
+- optionals:
+  - `{ kind: "optional", value: DecodedDamlValue | null }`
+- text maps:
+  - `{ kind: "text_map", entries: Array<{ key: string; value: DecodedDamlValue }> }`
+- generic maps:
+  - `{ kind: "gen_map", entries: Array<{ key: DecodedDamlValue; value: DecodedDamlValue }> }`
+- unit:
+  - `{ kind: "unit" }`
+
+`DecodedDamlValue` should be the shared backend/frontend type alias for this recursive schema.
+
+Contract-id references should remain explicit objects rather than bare strings so the frontend can reliably render them as links without guessing from field names.
+
 ### Summary Service Integration
 
 `PqsSummaryService` should stop owning template-specific decode logic.
@@ -246,10 +280,68 @@ Exercise-specific rules:
 
 - argument and result are evaluated independently
 - if argument bytes are present and decode cleanly, `argument.status` is `decoded` even if result decoding fails
-- if result bytes are absent because the exercised choice returns unit or PQS does not expose a result payload, `result.status` is `not_available`
+- if the exercised choice return type is known to be unit and PQS provides no result bytes, `result.status` is `decoded` with `value: { kind: "unit" }`
+- if result bytes are absent and the return type is not known to be unit, `result.status` is `not_available`
 - no combined top-level exercise status should collapse argument and result into a single ambiguous state
 
 No partial nested objects should be returned under any non-`decoded` state.
+
+### Example Decoded Shapes
+
+Create payload example:
+
+```json
+{
+  "status": "decoded",
+  "value": {
+    "kind": "record",
+    "fields": [
+      { "label": "svParty", "value": "sv::1220abc" },
+      { "label": "coupon", "value": { "kind": "contract_id", "value": "001fcf..." } },
+      {
+        "label": "weights",
+        "value": {
+          "kind": "list",
+          "items": [1, 2, 3]
+        }
+      }
+    ]
+  }
+}
+```
+
+Exercise argument example:
+
+```json
+{
+  "argument": {
+    "status": "decoded",
+    "value": {
+      "kind": "variant",
+      "constructor": "Receive",
+      "value": {
+        "kind": "record",
+        "fields": [
+          { "label": "round", "value": 258 }
+        ]
+      }
+    }
+  },
+  "result": {
+    "status": "decoded",
+    "value": { "kind": "unit" }
+  }
+}
+```
+
+Contract detail example:
+
+```json
+{
+  "status": "invalid_data",
+  "reason": "decode_failure"
+}
+```
 
 ### Contract Detail
 
@@ -367,6 +459,10 @@ Initial set:
 `frontend/src/types/updates.ts`
 
 - update event and contract payload types to the new decode-state wrappers
+
+`frontend/src/types/contracts.ts`
+
+- update contract-detail payload types to the shared recursive decoded-value schema and decode-state wrappers
 
 `frontend/src/lib/api.ts`
 
