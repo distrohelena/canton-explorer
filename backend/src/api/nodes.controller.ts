@@ -1,13 +1,24 @@
-import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { NodeCacheService } from '../cache/node-cache.service';
+import { NodeConfigService } from '../config/node-config.service';
+import { PqsSummaryService } from '../pqs/pqs-summary.service';
 
 @Controller('/api')
 export class NodesController {
-  constructor(private readonly cacheService: NodeCacheService) {}
+  constructor(
+    private readonly cacheService: NodeCacheService,
+    private readonly configService: NodeConfigService,
+    private readonly pqsSummaryService: PqsSummaryService,
+  ) {}
 
   @Get('/nodes')
   listNodes() {
     return this.cacheService.list();
+  }
+
+  @Get('/nodes/activity-history')
+  listActivityHistory() {
+    return this.cacheService.listActivityHistory();
   }
 
   @Get('/nodes/:id')
@@ -18,6 +29,45 @@ export class NodesController {
     }
 
     return node;
+  }
+
+  @Get('/nodes/:id/updates')
+  async listNodeUpdates(
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+  ) {
+    const node = this.configService.list().find((candidate) => candidate.id === id);
+    if (!node) {
+      throw new NotFoundException(`Unknown node: ${id}`);
+    }
+
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    return this.pqsSummaryService.fetchRecentUpdates(
+      node,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+    );
+  }
+
+  @Get('/nodes/:id/updates/:updateId')
+  async getNodeUpdateDetail(
+    @Param('id') id: string,
+    @Param('updateId') updateId: string,
+  ) {
+    const node = this.configService.list().find((candidate) => candidate.id === id);
+    if (!node) {
+      throw new NotFoundException(`Unknown node: ${id}`);
+    }
+
+    try {
+      return await this.pqsSummaryService.fetchUpdateDetail(node, updateId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Update not found') {
+        throw new NotFoundException(`Unknown update: ${updateId}`);
+      }
+
+      throw error;
+    }
   }
 
   @Get('/ledgers')
