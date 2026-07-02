@@ -17,8 +17,12 @@ export class NodesController {
   }
 
   @Get('/nodes/activity-history')
-  listActivityHistory() {
-    return this.cacheService.listActivityHistory();
+  listActivityHistory(@Query('days') days?: string) {
+    const parsedDays = days ? Number.parseInt(days, 10) : undefined;
+
+    return this.cacheService.listActivityHistory(
+      parsedDays && Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : undefined,
+    );
   }
 
   @Get('/nodes/:id')
@@ -64,6 +68,27 @@ export class NodesController {
     } catch (error) {
       if (error instanceof Error && error.message === 'Update not found') {
         throw new NotFoundException(`Unknown update: ${updateId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/nodes/:id/contracts/:contractId')
+  async getNodeContractDetail(
+    @Param('id') id: string,
+    @Param('contractId') contractId: string,
+  ) {
+    const node = this.configService.list().find((candidate) => candidate.id === id);
+    if (!node) {
+      throw new NotFoundException(`Unknown node: ${id}`);
+    }
+
+    try {
+      return await this.pqsSummaryService.fetchContractDetail(node, contractId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Contract not found') {
+        throw new NotFoundException(`Unknown contract: ${contractId}`);
       }
 
       throw error;

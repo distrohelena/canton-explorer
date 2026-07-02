@@ -8,6 +8,8 @@ import { NodePollerService } from './orchestrator/node-poller.service';
 import { PqsClientFactory } from './pqs/pqs-client.factory';
 import { PqsSummaryService } from './pqs/pqs-summary.service';
 import { PackageCacheService } from './packages/package-cache.service';
+import { DamlValueDecoderService } from './packages/daml-value-decoder.service';
+import { PackageRegistryService } from './packages/package-registry.service';
 import { PackageSyncService } from './packages/package-sync.service';
 import { PqsPackageService } from './packages/pqs-package.service';
 
@@ -22,6 +24,8 @@ import { PqsPackageService } from './packages/pqs-package.service';
     GrpcOperationsService,
     NodeCacheService,
     PackageCacheService,
+    PackageRegistryService,
+    DamlValueDecoderService,
     PackageSyncService,
     NodePollerService,
   ],

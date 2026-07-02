@@ -11,11 +11,13 @@ vi.mock('../lib/api', () => ({
     limit: 25,
     updates: [
       {
+        eventOffset: '000000000000000001',
         updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
         recordTime: '2026-07-01T12:00:00.000Z',
         parties: ['Alice', 'Bob'],
       },
       {
+        eventOffset: '000000000000000000',
         updateId: '00000000000000000000000000000000',
         recordTime: '2026-07-01T11:59:00.000Z',
         parties: [],
@@ -68,11 +70,11 @@ describe('NodeUpdatesView', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+    expect(screen.getByText('Event Offset')).toBeInTheDocument();
+    expect(screen.getByText('000000000000000001')).toBeInTheDocument();
+    expect(screen.getByText('000000000000000000')).toBeInTheDocument();
     expect(
-      screen.getByText('994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1'),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText('\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1'),
+      screen.queryByText('994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1'),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText('Jul 1, 2026')).toHaveLength(2);
     expect(screen.getByText('12:00:00 PM')).toBeInTheDocument();
@@ -84,10 +86,10 @@ describe('NodeUpdatesView', () => {
     expect(screen.queryByText('Back to overview')).not.toBeInTheDocument();
 
     const firstRowLink = container.querySelector(
-      'a[href="/nodes/participant-1/updates/1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1"]',
+      'a[href="/nodes/participant-1/updates/000000000000000001"]',
     );
     const secondRowLink = container.querySelector(
-      'a[href="/nodes/participant-1/updates/00000000000000000000000000000000"]',
+      'a[href="/nodes/participant-1/updates/000000000000000000"]',
     );
 
     expect(firstRowLink).not.toBeNull();
@@ -97,7 +99,7 @@ describe('NodeUpdatesView', () => {
     await fireEvent.click(firstRowLink as HTMLAnchorElement);
 
     expect(navigateMock).toHaveBeenCalledWith(
-      '/nodes/participant-1/updates/1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      '/nodes/participant-1/updates/000000000000000001',
     );
   });
 });

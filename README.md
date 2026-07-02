@@ -16,8 +16,8 @@ npm run dev:backend
 npm run dev:frontend
 ```
 
-Backend: `http://localhost:3000`
-Frontend: `http://localhost:5173`
+Backend: `http://localhost:3100`
+Frontend: `http://localhost:46000`
 
 ## Test
 

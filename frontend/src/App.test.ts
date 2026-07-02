@@ -20,6 +20,10 @@ const UpdateDetailStub = defineComponent({
   template: '<div>Update Detail View</div>',
 });
 
+const ContractDetailStub = defineComponent({
+  template: '<div>Contract Detail View</div>',
+});
+
 const NodeStub = defineComponent({
   template: '<div>Node View</div>',
 });
@@ -31,7 +35,8 @@ async function renderAt(path: string) {
       { path: '/', component: HomeStub },
       { path: '/nodes', component: NodesStub },
       { path: '/nodes/:id/updates', component: NodeUpdatesStub, props: true },
-      { path: '/nodes/:id/updates/:updateId', component: UpdateDetailStub, props: true },
+      { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailStub, props: true },
+      { path: '/nodes/:id/contracts/:contractId', component: ContractDetailStub, props: true },
       { path: '/nodes/:id', component: NodeStub, props: true },
     ],
   });
@@ -100,5 +105,13 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Update Detail View')).toBeInTheDocument();
+  });
+
+  it('keeps the shared shell on a contract detail route', async () => {
+    await renderAt('/nodes/participant-1/contracts/00abc');
+
+    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByText('Contract Detail View')).toBeInTheDocument();
   });
 });

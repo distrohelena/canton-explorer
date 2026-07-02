@@ -21,6 +21,14 @@ export interface CachedPackageBlob {
   data: Buffer;
 }
 
+export interface CachedPackageMetadata {
+  packageId: string;
+  name: string | null;
+  version: string | null;
+  uploadedAt: string | null;
+  packageSize: number | null;
+}
+
 @Injectable()
 export class PackageCacheService {
   private readonly database: DatabaseSync;
@@ -117,6 +125,73 @@ export class PackageCacheService {
       .all() as Array<{ package_id: string }>;
 
     return rows.map((row) => row.package_id);
+  }
+
+  getPackage(packageId: string): CachedPackageBlob | null {
+    const row = this.database
+      .prepare(`
+        select
+          package_id,
+          package_name,
+          package_version,
+          uploaded_at,
+          package_size,
+          data
+        from packages
+        where package_id = ?
+      `)
+      .get(packageId) as
+      | {
+          package_id: string;
+          package_name: string | null;
+          package_version: string | null;
+          uploaded_at: string | null;
+          package_size: number | null;
+          data: Buffer;
+        }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      packageId: row.package_id,
+      name: row.package_name,
+      version: row.package_version,
+      uploadedAt: row.uploaded_at,
+      packageSize: row.package_size,
+      data: row.data,
+    };
+  }
+
+  listPackages(): CachedPackageMetadata[] {
+    const rows = this.database
+      .prepare(`
+        select
+          package_id,
+          package_name,
+          package_version,
+          uploaded_at,
+          package_size
+        from packages
+        order by package_id asc
+      `)
+      .all() as Array<{
+      package_id: string;
+      package_name: string | null;
+      package_version: string | null;
+      uploaded_at: string | null;
+      package_size: number | null;
+    }>;
+
+    return rows.map((row) => ({
+      packageId: row.package_id,
+      name: row.package_name,
+      version: row.package_version,
+      uploadedAt: row.uploaded_at,
+      packageSize: row.package_size,
+    }));
   }
 
   close(): void {

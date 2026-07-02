@@ -52,7 +52,7 @@ vi.mock('../composables/useNodes', () => ({
 }));
 
 describe('OperationsDashboardView', () => {
-  it('renders the node card and summary metrics', () => {
+  it('renders a calm overview of connected nodes', () => {
     render(OperationsDashboardView, {
       global: {
         stubs: {
@@ -63,8 +63,19 @@ describe('OperationsDashboardView', () => {
       },
     });
 
+    expect(
+      screen.getByRole('heading', { name: 'Connected Nodes' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Nodes currently reachable from this explorer.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Search by Update ID or Party ID...'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Participant 1')).toBeInTheDocument();
-    expect(screen.getByText('Retail Ledger')).toBeInTheDocument();
-    expect(screen.getByText(/12 active contracts/i)).toBeInTheDocument();
+    expect(screen.getByText(/healthy/i)).toBeInTheDocument();
+    expect(screen.queryByText('Retail Ledger')).not.toBeInTheDocument();
+    expect(screen.queryByText(/12 active contracts/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Overview')).not.toBeInTheDocument();
   });
 });

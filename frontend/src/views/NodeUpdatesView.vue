@@ -16,16 +16,6 @@ onMounted(async () => {
   }
 });
 
-function formatUpdateId(updateId: string): string {
-  const normalized = updateId.startsWith('\\x') ? updateId.slice(2) : updateId;
-
-  if (/^1220[0-9a-f]{64}$/i.test(normalized)) {
-    return normalized.slice(4);
-  }
-
-  return normalized;
-}
-
 function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
   if (!recordTime) {
     return null;
@@ -49,7 +39,6 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
 const renderedUpdates = computed(() =>
   (updatesResponse.value?.updates ?? []).map((update) => ({
     ...update,
-    displayUpdateId: formatUpdateId(update.updateId),
     recordTimeLines: formatRecordTime(update.recordTime),
   })),
 );
@@ -76,19 +65,19 @@ const renderedUpdates = computed(() =>
         <section class="node-updates__section">
           <div class="node-updates__table" role="table" aria-label="Recent node updates">
             <div class="node-updates__row node-updates__row--head" role="row">
-              <span role="columnheader">Update ID</span>
+              <span role="columnheader">Event Offset</span>
               <span role="columnheader">Record Time</span>
               <span role="columnheader">Parties</span>
             </div>
 
             <RouterLink
               v-for="update in renderedUpdates"
-              :key="update.updateId"
+              :key="update.eventOffset"
               class="node-updates__row node-updates__row--link"
-              :to="`/nodes/${props.id}/updates/${update.updateId}`"
+              :to="`/nodes/${props.id}/updates/${update.eventOffset}`"
               role="row"
             >
-              <span class="node-updates__id" role="cell">{{ update.displayUpdateId }}</span>
+              <span class="node-updates__id" role="cell">{{ update.eventOffset }}</span>
               <span class="node-updates__time" role="cell">
                 <template v-if="update.recordTimeLines">
                   <span class="node-updates__time-date">{{ update.recordTimeLines.date }}</span>

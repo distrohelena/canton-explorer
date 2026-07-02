@@ -1,4 +1,5 @@
 import type { ActivityHistoryResponse } from '../types/activity';
+import type { NodeContractDetailResponse } from '../types/contracts';
 import type { NodeSnapshot } from '../types/nodes';
 import type { NodeUpdateDetailResponse, NodeUpdatesResponse } from '../types/updates';
 
@@ -21,8 +22,8 @@ export function fetchNode(id: string): Promise<NodeSnapshot> {
   return fetchJson<NodeSnapshot>(`/nodes/${id}`);
 }
 
-export function fetchActivityHistory(): Promise<ActivityHistoryResponse> {
-  return fetchJson<ActivityHistoryResponse>('/nodes/activity-history');
+export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse> {
+  return fetchJson<ActivityHistoryResponse>(`/nodes/activity-history?days=${days}`);
 }
 
 export function fetchNodeUpdates(id: string, limit = 25): Promise<NodeUpdatesResponse> {
@@ -31,7 +32,14 @@ export function fetchNodeUpdates(id: string, limit = 25): Promise<NodeUpdatesRes
 
 export function fetchNodeUpdateDetail(
   id: string,
-  updateId: string,
+  eventOffset: string,
 ): Promise<NodeUpdateDetailResponse> {
-  return fetchJson<NodeUpdateDetailResponse>(`/nodes/${id}/updates/${updateId}`);
+  return fetchJson<NodeUpdateDetailResponse>(`/nodes/${id}/updates/${eventOffset}`);
+}
+
+export function fetchNodeContractDetail(
+  id: string,
+  contractId: string,
+): Promise<NodeContractDetailResponse> {
+  return fetchJson<NodeContractDetailResponse>(`/nodes/${id}/contracts/${contractId}`);
 }

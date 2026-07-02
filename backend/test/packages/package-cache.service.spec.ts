@@ -88,4 +88,56 @@ describe('PackageCacheService', () => {
     expect(missingAfterStore).toEqual(['package-b']);
     expect(service.listCachedPackageIds()).toEqual(['package-a']);
   });
+
+  it('returns cached package blobs and metadata through the read APIs', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const service = new PackageCacheService();
+
+    service.storePackages([
+      {
+        packageId: 'package-a',
+        name: 'splice-amulet',
+        version: '0.1.14',
+        uploadedAt: '1782930510606316',
+        packageSize: 1466372,
+        data: Buffer.from('package-a-data'),
+      },
+      {
+        packageId: 'package-b',
+        name: 'daml-prim',
+        version: '0.0.0',
+        uploadedAt: '1782930510606317',
+        packageSize: 455515,
+        data: Buffer.from('package-b-data'),
+      },
+    ]);
+
+    expect(service.getPackage('package-a')).toEqual({
+      packageId: 'package-a',
+      name: 'splice-amulet',
+      version: '0.1.14',
+      uploadedAt: '1782930510606316',
+      packageSize: 1466372,
+      data: Buffer.from('package-a-data'),
+    });
+
+    expect(service.getPackage('missing')).toBeNull();
+    expect(service.listPackages()).toEqual([
+      {
+        packageId: 'package-a',
+        name: 'splice-amulet',
+        version: '0.1.14',
+        uploadedAt: '1782930510606316',
+        packageSize: 1466372,
+      },
+      {
+        packageId: 'package-b',
+        name: 'daml-prim',
+        version: '0.0.0',
+        uploadedAt: '1782930510606317',
+        packageSize: 455515,
+      },
+    ]);
+  });
 });

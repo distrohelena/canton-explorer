@@ -44,19 +44,24 @@ vi.mock('../lib/api', () => ({
 }));
 
 describe('NodeDetailView', () => {
-  it('renders source diagnostics for the selected node', async () => {
+  it('renders the selected node in grouped operational sections', async () => {
     render(NodeDetailView, {
       props: { id: 'participant-1' },
       global: {
         stubs: {
           RouterLink: {
-            template: '<a><slot /></a>',
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
           },
         },
       },
     });
 
     expect(await screen.findByText('Participant 1')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveTextContent('←');
+    expect(screen.queryByText('Back to overview')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Service Health' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Ledger Snapshot' })).toBeInTheDocument();
     expect(screen.getByText(/SERVING/)).toBeInTheDocument();
     expect(screen.getByText(/participant1_pqs/)).toBeInTheDocument();
   });
