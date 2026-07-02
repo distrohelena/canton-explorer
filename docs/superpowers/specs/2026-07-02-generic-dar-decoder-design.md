@@ -148,7 +148,7 @@ Add `GenericDamlDecoderService` with one responsibility: fully decode raw payloa
 Entry points:
 
 - `decodeCreate(templateId, packageId, contractInstance)`
-- `decodeExercise(templateId, choice, argumentBytes, resultBytes)`
+- `decodeExercise(templateId, packageId, choice, argumentBytes, resultBytes)`
 - `decodeContract(templateId, packageId, contractInstance)`
 
 Output contract:
@@ -195,6 +195,7 @@ Design requirement:
 
 - both the primary event-table query and the normalized fallback query should expose enough raw bytes for generic exercise decoding when the underlying schema supports them
 - if bytes are absent in the source tables, return `not_available` rather than inventing decoded output
+- both query paths should propagate the event's `package_id` or another stable package identity sufficient to resolve the exercised template definition without relying on display-only identifiers
 
 The design assumes `PqsSummaryService` will continue its current fallback strategy across PQS schema variants, but the normalized event contract should be extended to include raw exercise payload bytes.
 
@@ -205,6 +206,7 @@ The generic decoder should not rely on display-oriented template identifiers alo
 Design requirement:
 
 - create events and contract-detail rows should carry `package_id` through the backend normalization path for decoder lookup
+- exercise events should also carry `package_id` through the backend normalization path for decoder lookup
 - exercise decoding should use the resolved template and choice definitions from the package registry, anchored by package-aware lookups rather than frontend display strings
 
 `package_id` does not need to be rendered in the UI for update events, but it should be available in the backend event model used for decoding.
@@ -225,16 +227,27 @@ Create events:
 Exercise events:
 
 - `exerciseData`
-  - `status: "decoded" | "invalid_data" | "not_available"`
-  - `argumentValue` only when `status === "decoded"` and an argument exists
-  - `resultValue` only when `status === "decoded"` and a result exists
-  - `reason` only when `status === "invalid_data"`
+  - `argument`
+    - `status: "decoded" | "invalid_data" | "not_available"`
+    - `value` only when `status === "decoded"`
+    - `reason` only when `status === "invalid_data"`
+  - `result`
+    - `status: "decoded" | "invalid_data" | "not_available"`
+    - `value` only when `status === "decoded"`
+    - `reason` only when `status === "invalid_data"`
 
 Semantics:
 
 - `decoded`: payload bytes were present and fully decoded
 - `invalid_data`: payload bytes were found but full decoding failed
 - `not_available`: no payload bytes were available from the source tables for that field
+
+Exercise-specific rules:
+
+- argument and result are evaluated independently
+- if argument bytes are present and decode cleanly, `argument.status` is `decoded` even if result decoding fails
+- if result bytes are absent because the exercised choice returns unit or PQS does not expose a result payload, `result.status` is `not_available`
+- no combined top-level exercise status should collapse argument and result into a single ambiguous state
 
 No partial nested objects should be returned under any non-`decoded` state.
 
@@ -299,6 +312,18 @@ If PQS does not provide the raw bytes needed for a field:
 - return `not_available`
 - do not synthesize invalid data
 
+### Reason Codes
+
+`reason` should be modeled as a small fixed enum shared by backend and frontend types.
+
+Initial set:
+
+- `missing_package`
+- `invalid_package`
+- `unknown_template`
+- `unknown_choice`
+- `decode_failure`
+
 ## File-Level Design
 
 ### Backend
@@ -330,7 +355,7 @@ If PQS does not provide the raw bytes needed for a field:
 - update response types for:
   - strict decode-state wrappers
   - create payload data
-  - exercise payload data
+  - exercise argument and result payload data as separate wrappers
   - contract-detail payload data
 
 `backend/src/app.module.ts`
@@ -377,17 +402,19 @@ If PQS does not provide the raw bytes needed for a field:
 ### Summary Service Tests
 
 - update detail returns decoded create data through the generic decoder
-- update detail returns decoded exercise data through the generic decoder
+- update detail returns decoded exercise argument and result data through the generic decoder
 - update detail returns `invalid_data` when bytes exist but decoding fails
-- update detail returns `not_available` when the underlying row has no exercise bytes
+- update detail returns `not_available` when the underlying row has no argument bytes or no result bytes
+- update detail preserves independent argument/result states when one decodes and the other does not
 - contract detail returns the same decode-state model as update detail
 
 ### Frontend Tests
 
 - decoded create data renders correctly
-- decoded exercise argument/result render correctly
+- decoded exercise argument and decoded exercise result render correctly
 - invalid-data state renders an explicit notice
 - unavailable state does not render a fake data block
+- mixed exercise states render each field according to its own status
 
 ## Scope Guard
 
