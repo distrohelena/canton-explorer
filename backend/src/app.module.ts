@@ -7,6 +7,9 @@ import { GrpcOperationsService } from './grpc/grpc-operations.service';
 import { NodePollerService } from './orchestrator/node-poller.service';
 import { PqsClientFactory } from './pqs/pqs-client.factory';
 import { PqsSummaryService } from './pqs/pqs-summary.service';
+import { PackageCacheService } from './packages/package-cache.service';
+import { PackageSyncService } from './packages/package-sync.service';
+import { PqsPackageService } from './packages/pqs-package.service';
 
 @Module({
   controllers: [NodesController],
@@ -14,9 +17,12 @@ import { PqsSummaryService } from './pqs/pqs-summary.service';
     NodeConfigService,
     PqsClientFactory,
     PqsSummaryService,
+    PqsPackageService,
     GrpcClientFactory,
     GrpcOperationsService,
     NodeCacheService,
+    PackageCacheService,
+    PackageSyncService,
     NodePollerService,
   ],
 })
