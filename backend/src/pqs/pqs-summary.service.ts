@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
 import type {
   LedgerSummary,
+  NodeUpdateDetailEvent,
   NodeUpdateDetailMeta,
   NodeUpdateDetailResponse,
   NodeRecentUpdate,
@@ -32,6 +33,16 @@ interface UpdateDetailRow {
 interface UpdatePartiesRow {
   update_id: string;
   parties: string[] | string | null;
+}
+
+interface UpdateEventRow {
+  event_kind: 'create' | 'consuming_exercise' | 'non_consuming_exercise';
+  event_id: string | null;
+  contract_id: string | null;
+  template_id: string | null;
+  choice: string | null;
+  witnesses: string[] | string | null;
+  raw: Record<string, unknown> | null;
 }
 
 const ACTIVE_QUERY = `
@@ -129,6 +140,60 @@ function singleUpdateQuery(updateIds: string[]): string {
   `;
 }
 
+function updateEventsQuery(updateId: string): string {
+  const quotedId = `'${escapeSqlLiteral(updateId)}'`;
+
+  return `
+    select
+      event_kind,
+      event_id,
+      contract_id,
+      template_id,
+      choice,
+      witnesses,
+      raw
+    from (
+      select
+        'create'::text as event_kind,
+        create_event.event_id::text as event_id,
+        create_event.contract_id::text as contract_id,
+        create_event.template_id::text as template_id,
+        null::text as choice,
+        create_event.tree_event_witnesses as witnesses,
+        to_jsonb(create_event) as raw
+      from participant.lapi_events_create create_event
+      where create_event.update_id::text = ${quotedId}
+
+      union all
+
+      select
+        'consuming_exercise'::text as event_kind,
+        exercise_event.event_id::text as event_id,
+        exercise_event.contract_id::text as contract_id,
+        exercise_event.template_id::text as template_id,
+        exercise_event.choice::text as choice,
+        exercise_event.tree_event_witnesses as witnesses,
+        to_jsonb(exercise_event) as raw
+      from participant.lapi_events_consuming_exercise exercise_event
+      where exercise_event.update_id::text = ${quotedId}
+
+      union all
+
+      select
+        'non_consuming_exercise'::text as event_kind,
+        exercise_event.event_id::text as event_id,
+        exercise_event.contract_id::text as contract_id,
+        exercise_event.template_id::text as template_id,
+        exercise_event.choice::text as choice,
+        exercise_event.tree_event_witnesses as witnesses,
+        to_jsonb(exercise_event) as raw
+      from participant.lapi_events_non_consuming_exercise exercise_event
+      where exercise_event.update_id::text = ${quotedId}
+    ) update_events
+    order by event_id asc, event_kind asc, contract_id asc, template_id asc
+  `;
+}
+
 function escapeSqlLiteral(value: string): string {
   return value.replaceAll("'", "''");
 }
@@ -170,7 +235,7 @@ export class PqsSummaryService {
         nodeId: node.id,
         label: node.label,
         limit: normalizedLimit,
-        updates,
+        updates: [],
       };
     }
 
@@ -207,6 +272,7 @@ export class PqsSummaryService {
     const rawUpdateId = this.extractRawUpdateId(detailRow);
     const canonicalUpdateId = this.normalizeUpdateId(rawUpdateId);
     const partiesByUpdateId = await this.fetchPartiesByUpdateId(client.query.bind(client), [rawUpdateId]);
+    const events = await this.fetchEventsByUpdateId(client.query.bind(client), rawUpdateId);
 
     return {
       nodeId: node.id,
@@ -215,6 +281,7 @@ export class PqsSummaryService {
       recordTime: this.extractIsoRecordTime(detailRow),
       parties: partiesByUpdateId.get(canonicalUpdateId) ?? [],
       meta: this.extractMeta(detailRow),
+      events,
     };
   }
 
@@ -264,6 +331,16 @@ export class PqsSummaryService {
     return updateId.startsWith('\\x') ? updateId.slice(2) : updateId;
   }
 
+  private async fetchEventsByUpdateId(
+    query: (sql: string) => Promise<{ rows: unknown[] }>,
+    rawUpdateId: string,
+  ): Promise<NodeUpdateDetailEvent[]> {
+    const result = await query(updateEventsQuery(rawUpdateId));
+    const rows = (result.rows as UpdateEventRow[]) ?? [];
+
+    return rows.map((row) => this.normalizeEventRow(row));
+  }
+
   private lookupUpdateIdCandidates(updateId: string): string[] {
     const canonicalUpdateId = this.normalizeLookupUpdateId(updateId);
     return Array.from(new Set([canonicalUpdateId, `\\x${canonicalUpdateId}`]));
@@ -307,6 +384,18 @@ export class PqsSummaryService {
 
     const { record_time_iso: _recordTimeIso, ...meta } = row;
     return meta as unknown as NodeUpdateDetailMeta;
+  }
+
+  private normalizeEventRow(row: UpdateEventRow): NodeUpdateDetailEvent {
+    return {
+      eventKind: row.event_kind,
+      eventId: typeof row.event_id === 'string' ? row.event_id : null,
+      contractId: typeof row.contract_id === 'string' ? row.contract_id : null,
+      templateId: typeof row.template_id === 'string' ? row.template_id : null,
+      choice: typeof row.choice === 'string' ? row.choice : null,
+      witnesses: this.normalizeParties(row.witnesses),
+      raw: row.raw && typeof row.raw === 'object' && !Array.isArray(row.raw) ? row.raw : {},
+    };
   }
 
   private normalizeParties(parties: string[] | string | null): string[] {

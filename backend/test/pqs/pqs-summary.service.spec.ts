@@ -161,23 +161,7 @@ describe('PqsSummaryService', () => {
         ],
       })
       .mockResolvedValueOnce({
-        rows: [
-          {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
-            record_time: '2026-07-01T12:00:00.000Z',
-            event_offset: '0000000000000001',
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
-            parties: ['Alice', 'Bob'],
-          },
-        ],
+        rows: [],
       })
       .mockResolvedValueOnce({
         rows: [
@@ -197,6 +181,31 @@ describe('PqsSummaryService', () => {
             parties: ['Alice', 'Bob'],
           },
         ],
+      })
+      .mockResolvedValueOnce({
+        rows: [],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            record_time: '2026-07-01T12:00:00.000Z',
+            event_offset: '0000000000000001',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            parties: ['Alice', 'Bob'],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [],
       });
 
     const service = new PqsSummaryService({
@@ -265,7 +274,7 @@ describe('PqsSummaryService', () => {
       expect.stringContaining('from participant.lapi_update_meta'),
     );
     expect(query).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.stringContaining('participant.lapi_events_create'),
     );
   });
@@ -313,7 +322,10 @@ describe('PqsSummaryService', () => {
           },
         ],
       })
-      .mockRejectedValueOnce(new Error('events lookup failed'));
+      .mockRejectedValueOnce(new Error('events lookup failed'))
+      .mockResolvedValueOnce({
+        rows: [],
+      });
 
     const service = new PqsSummaryService({
       getClient: () => ({ query }),
@@ -458,6 +470,30 @@ describe('PqsSummaryService', () => {
         ],
       }),
     );
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('from participant.lapi_update_meta'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('participant.lapi_events_create'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('participant.lapi_events_consuming_exercise'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('participant.lapi_events_non_consuming_exercise'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining(
+        "\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1",
+      ),
+    );
+    expect(query).toHaveBeenNthCalledWith(3, expect.stringContaining('order by event_id asc'));
   });
 
   it('preserves raw event rows when a normalized field cannot be derived', async () => {
