@@ -25,10 +25,10 @@ export interface CachedPackageBlob {
 export class PackageCacheService {
   private readonly database: DatabaseSync;
 
-  constructor(
-    databasePath = process.env.PACKAGE_CACHE_DB_PATH ??
-      resolve(process.cwd(), 'data', 'package-cache.sqlite'),
-  ) {
+  constructor() {
+    const databasePath =
+      process.env.PACKAGE_CACHE_DB_PATH ??
+      resolve(process.cwd(), 'data', 'package-cache.sqlite');
     mkdirSync(dirname(databasePath), { recursive: true });
     this.database = new DatabaseSync(databasePath);
     this.initializeSchema();

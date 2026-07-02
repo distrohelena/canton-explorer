@@ -6,8 +6,15 @@ import { PackageCacheService } from '../../src/packages/package-cache.service';
 
 describe('PackageCacheService', () => {
   let tempDir: string | null = null;
+  const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
 
   afterEach(() => {
+    if (originalDatabasePath === undefined) {
+      delete process.env.PACKAGE_CACHE_DB_PATH;
+    } else {
+      process.env.PACKAGE_CACHE_DB_PATH = originalDatabasePath;
+    }
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true });
       tempDir = null;
@@ -16,7 +23,8 @@ describe('PackageCacheService', () => {
 
   it('records node package presence and returns only uncached package ids as missing', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
-    const service = new PackageCacheService(join(tempDir, 'packages.sqlite'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const service = new PackageCacheService();
 
     const missingBeforeStore = service.recordPackagePresence(
       'cnqs-sv',

@@ -7,8 +7,15 @@ import { PackageSyncService } from '../../src/packages/package-sync.service';
 
 describe('PackageSyncService', () => {
   let tempDir: string | null = null;
+  const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
 
   afterEach(() => {
+    if (originalDatabasePath === undefined) {
+      delete process.env.PACKAGE_CACHE_DB_PATH;
+    } else {
+      process.env.PACKAGE_CACHE_DB_PATH = originalDatabasePath;
+    }
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true });
       tempDir = null;
@@ -17,7 +24,8 @@ describe('PackageSyncService', () => {
 
   it('fetches and stores only packages that are not already cached', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'package-sync-service-'));
-    const cacheService = new PackageCacheService(join(tempDir, 'packages.sqlite'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
     const pqsPackageService = {
       fetchPackageRefs: jest.fn().mockResolvedValue([
         {
