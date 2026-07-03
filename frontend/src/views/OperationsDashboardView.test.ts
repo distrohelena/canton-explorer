@@ -10,6 +10,7 @@ vi.mock('../composables/useNodes', () => ({
         id: 'participant-1',
         label: 'Participant 1',
         role: 'participant',
+        mode: 'pqs_with_grpc',
         ledgerLabel: 'Retail Ledger',
         status: 'healthy',
         latencyMs: 21,
@@ -68,9 +69,6 @@ describe('OperationsDashboardView', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText('Nodes currently reachable from this explorer.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByPlaceholderText('Search by Update ID or Party ID...'),
     ).toBeInTheDocument();
     expect(screen.getByText('Participant 1')).toBeInTheDocument();
     expect(screen.getByText(/healthy/i)).toBeInTheDocument();

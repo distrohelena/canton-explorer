@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import NodeUpdatesView from './NodeUpdatesView.vue';
 import { fetchNodeUpdates } from '../lib/api';
+import type { NodeUpdatesResponse } from '../types/updates';
 
 vi.mock('../lib/api', () => ({
   fetchNodeUpdates: vi.fn(),
@@ -119,7 +120,7 @@ describe('NodeUpdatesView', () => {
     expect(screen.getByText('000000000000000101')).toBeInTheDocument();
     expect(screen.getByText('Alice, Bob')).toBeInTheDocument();
     expect(screen.getByText('No parties')).toBeInTheDocument();
-    expect(screen.queryByText('Advanced Search Parameters')).not.toBeInTheDocument();
+    expect(screen.queryByText('Advanced Filter Parameters')).not.toBeInTheDocument();
 
     const pagerButtons = screen.getAllByRole('button');
     expect(pagerButtons[0]).toHaveTextContent('Advanced Filter');
@@ -128,7 +129,7 @@ describe('NodeUpdatesView', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
 
-    expect(await screen.findByText('Advanced Search Parameters')).toBeInTheDocument();
+    expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Party ID')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add party filter' })).toHaveTextContent('+');
     expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
@@ -154,6 +155,67 @@ describe('NodeUpdatesView', () => {
     expect(
       container.querySelector('a[href="/nodes/participant-1/updates/000000000000000098"]'),
     ).not.toBeNull();
+  });
+
+  it('shows a spinner overlay while refreshing an already loaded updates list', async () => {
+    let resolveOlderPage: ((value: NodeUpdatesResponse) => void) | undefined;
+
+    vi.mocked(fetchNodeUpdates)
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        limit: 25,
+        nextBefore: '000000000000000099',
+        nextAfter: null,
+        updates: [
+          {
+            eventOffset: '000000000000000101',
+            updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            recordTime: '2026-07-01T12:00:00.000Z',
+            parties: ['Alice'],
+          },
+        ],
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise<NodeUpdatesResponse>((resolve) => {
+            resolveOlderPage = resolve;
+          }),
+      );
+
+    await renderAt('/nodes/participant-1/updates');
+
+    expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Updating node updates')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+
+    expect(await screen.findByLabelText('Updating node updates')).toBeInTheDocument();
+
+    const resolve = resolveOlderPage;
+    if (!resolve) {
+      throw new Error('Expected pending refresh request to expose a resolver');
+    }
+
+    resolve({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: '000000000000000100',
+      updates: [
+        {
+          eventOffset: '000000000000000100',
+          updateId: '00000000000000000000000000000000',
+          recordTime: '2026-07-01T11:59:00.000Z',
+          parties: [],
+        },
+      ],
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Updating node updates')).not.toBeInTheDocument(),
+    );
   });
 
   it('adds and removes party filter chips and applies global OR and AND modes', async () => {
@@ -281,7 +343,7 @@ describe('NodeUpdatesView', () => {
     await renderAt('/nodes/participant-1/updates?party=Alice&mode=and');
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
-    expect(await screen.findByText('Advanced Search Parameters')).toBeInTheDocument();
+    expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'AND' })).toHaveClass(
       'node-updates__advanced-filter-mode--active',

@@ -107,6 +107,15 @@ function statusLabel(status: ActivitySeries['status']): string {
 function peakActivity(series: ActivitySeries): number {
   return Math.max(...series.samples.map((sample) => sample.activityValue), 0);
 }
+
+function verticalScaleLabels(series: ActivitySeries): string[] {
+  const peak = peakActivity(series);
+  const midpoint = peak / 2;
+
+  return [peak, midpoint, 0].map((value) =>
+    Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, ''),
+  );
+}
 </script>
 
 <template>
@@ -159,30 +168,42 @@ function peakActivity(series: ActivitySeries): number {
               </span>
             </div>
 
-            <svg
-              class="activity-panel__chart"
-              viewBox="0 0 320 96"
-              role="img"
-              :aria-label="`${series.label} activity history`"
-            >
-              <line
-                v-for="position in guidePositions(selectedDays)"
-                :key="`${series.nodeId}-${selectedDays}-${position}`"
-                class="activity-panel__guide"
-                :x1="position"
-                y1="0"
-                :x2="position"
-                y2="96"
-              />
-              <polyline
-                class="activity-panel__line"
-                fill="none"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="3"
-                :points="linePoints(series, windowMinutesLabel)"
-              />
-            </svg>
+            <div class="activity-panel__chart-layout">
+              <div class="activity-panel__scale" aria-hidden="true">
+                <span
+                  v-for="label in verticalScaleLabels(series)"
+                  :key="`${series.nodeId}-${label}`"
+                  class="activity-panel__scale-label"
+                >
+                  {{ label }}
+                </span>
+              </div>
+
+              <svg
+                class="activity-panel__chart"
+                viewBox="0 0 320 96"
+                role="img"
+                :aria-label="`${series.label} activity history`"
+              >
+                <line
+                  v-for="position in guidePositions(selectedDays)"
+                  :key="`${series.nodeId}-${selectedDays}-${position}`"
+                  class="activity-panel__guide"
+                  :x1="position"
+                  y1="0"
+                  :x2="position"
+                  y2="96"
+                />
+                <polyline
+                  class="activity-panel__line"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="3"
+                  :points="linePoints(series, windowMinutesLabel)"
+                />
+              </svg>
+            </div>
 
             <div
               v-if="chartDomain(series, windowMinutesLabel)"

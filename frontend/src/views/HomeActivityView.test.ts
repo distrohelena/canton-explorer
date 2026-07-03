@@ -109,13 +109,33 @@ describe('HomeActivityView', () => {
       '/nodes/participant-1/updates',
     );
     expect(
-      screen.queryByPlaceholderText('Search by Update ID or Party ID...'),
+      screen.queryByPlaceholderText('Search'),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Connected Nodes' })).not.toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: '30' }));
 
     expect(selectDays).toHaveBeenCalledWith(30);
+  });
+
+  it('shows a left-side vertical scale for each activity chart', () => {
+    const { container } = render(HomeActivityView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    const scaleLabels = Array.from(
+      container.querySelectorAll('.activity-panel__scale-label'),
+      (label) => label.textContent,
+    );
+
+    expect(scaleLabels).toEqual(['3', '1.5', '0']);
   });
 
   it('repositions chart points when the selected window changes', async () => {

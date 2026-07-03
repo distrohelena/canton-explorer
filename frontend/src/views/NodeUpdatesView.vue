@@ -254,9 +254,9 @@ async function setFilterMode(mode: FilterMode) {
             v-if="showAdvancedFilter"
             id="node-updates-advanced-filter"
             class="node-updates__advanced-filter"
-            aria-label="Advanced Search Parameters"
+            aria-label="Advanced Filter Parameters"
           >
-            <h3 class="node-updates__advanced-filter-title">Advanced Search Parameters</h3>
+            <h3 class="node-updates__advanced-filter-title">Advanced Filter Parameters</h3>
             <div class="node-updates__advanced-filter-grid">
               <label class="node-updates__advanced-filter-field">
                 <span>Party ID</span>
@@ -317,8 +317,22 @@ async function setFilterMode(mode: FilterMode) {
           </section>
         </Transition>
 
-        <section class="node-updates__section">
-          <div class="node-updates__table" role="table" aria-label="Recent node updates">
+        <section class="node-updates__section" :aria-busy="loading ? 'true' : 'false'">
+          <div
+            v-if="loading"
+            class="node-updates__overlay"
+            role="status"
+            aria-label="Updating node updates"
+          >
+            <span class="node-updates__spinner" aria-hidden="true"></span>
+          </div>
+
+          <div
+            class="node-updates__table"
+            :class="{ 'node-updates__table--loading': loading }"
+            role="table"
+            aria-label="Recent node updates"
+          >
             <div class="node-updates__row node-updates__row--head" role="row">
               <span role="columnheader">Event Offset</span>
               <span role="columnheader">Record Time</span>

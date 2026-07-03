@@ -145,9 +145,14 @@ describe('UpdateDetailView', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Jul 1, 2026')).toBeInTheDocument();
     expect(screen.getByText('12:00:00 PM')).toBeInTheDocument();
-    expect(screen.getByText('Alice, Bob')).toBeInTheDocument();
-    expect(screen.getAllByText('Alice')).toHaveLength(2);
-    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.queryByText('Alice, Bob')).not.toBeInTheDocument();
+    const summaryParties = screen.getByText('Parties').nextElementSibling;
+    expect(summaryParties).not.toBeNull();
+    expect(summaryParties?.textContent).toContain('Alice');
+    expect(summaryParties?.textContent).toContain('Bob');
+    expect(summaryParties?.querySelectorAll('.update-detail__party')).toHaveLength(2);
+    expect(container.querySelector('a[href="/parties/Alice"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/parties/Bob"]')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Summary' }).closest('section')).toHaveClass(
       'update-detail__section--summary',
     );
@@ -176,6 +181,8 @@ describe('UpdateDetailView', () => {
     expect(screen.getAllByText('258')).toHaveLength(2);
     expect(container.querySelector('a[href="/packages/main-package"]')).not.toBeNull();
     expect(container.querySelector('a[href="/packages/splice-dso-rules"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/parties/Alice"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/parties/Bob"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00abc"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00coupon"]')).not.toBeNull();
     expect(screen.queryByText('Update Detail')).not.toBeInTheDocument();
@@ -187,6 +194,9 @@ describe('UpdateDetailView', () => {
   });
 
   it('renders nested decoded exercise data with flattened labels', async () => {
+    const endUserParty =
+      'app_user_quickstart-helena-1::122039623d5100d9d3e7570612752bc03420abf158361d66c5694f22ee0f72260339';
+
     vi.mocked(fetchNodeUpdateDetail).mockResolvedValue({
       nodeId: 'cnqs-sv',
       label: 'CNQS Super Validator',
@@ -228,6 +238,10 @@ describe('UpdateDetailView', () => {
                 kind: 'record',
                 fields: [
                   {
+                    label: 'optEndUserParty',
+                    value: endUserParty,
+                  },
+                  {
                     label: 'newReport',
                     value: { kind: 'contract_id', value: '00newreport' },
                   },
@@ -267,7 +281,9 @@ describe('UpdateDetailView', () => {
     expect(screen.getByText('2026-07-02T16:28:31.901Z')).toBeInTheDocument();
     expect(screen.getByText('Argument / Status / Migration Id')).toBeInTheDocument();
     expect(screen.getByText('-1')).toBeInTheDocument();
+    expect(screen.getByText('Result / Opt End User Party')).toBeInTheDocument();
     expect(screen.getByText('Result / New Report')).toBeInTheDocument();
+    expect(container.querySelector(`a[href="/parties/${endUserParty}"]`)).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/cnqs-sv/contracts/00newreport"]')).not.toBeNull();
   });
 

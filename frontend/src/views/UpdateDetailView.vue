@@ -110,6 +110,16 @@ function isContractReference(
   return typeof value === 'object' && value?.kind === 'contract_id';
 }
 
+function isPartyFieldLabel(label: string): boolean {
+  return label
+    .split('.')
+    .some((segment) => segment.replace(/\[\d+\]/g, '').toLowerCase().includes('party'));
+}
+
+function isPartyReference(label: string, value: RenderableValue): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && isPartyFieldLabel(label);
+}
+
 type RenderableValue =
   | string
   | number
@@ -266,9 +276,16 @@ function getExerciseEntries(
               <div class="update-detail__summary-item update-detail__summary-item--parties">
                 <dt>Parties</dt>
                 <dd class="update-detail__parties">
-                  <span v-if="updateDetail.parties.length > 0">
-                    {{ updateDetail.parties.join(', ') }}
-                  </span>
+                  <template v-if="updateDetail.parties.length > 0">
+                    <RouterLink
+                      v-for="party in updateDetail.parties"
+                      :key="party"
+                      class="contract-detail__link update-detail__party"
+                      :to="`/parties/${party}`"
+                    >
+                      {{ party }}
+                    </RouterLink>
+                  </template>
                   <span v-else>No parties</span>
                 </dd>
               </div>
@@ -331,13 +348,14 @@ function getExerciseEntries(
                     <dt>Witnesses</dt>
                     <dd class="update-detail__witnesses">
                       <template v-if="event.witnesses.length > 0">
-                        <span
+                        <RouterLink
                           v-for="witness in event.witnesses"
                           :key="`${event.eventId ?? 'missing-event-id'}-${witness}`"
-                          class="update-detail__witness"
+                          class="contract-detail__link update-detail__witness"
+                          :to="`/parties/${witness}`"
                         >
                           {{ witness }}
-                        </span>
+                        </RouterLink>
                       </template>
                       <span v-else>No witnesses</span>
                     </dd>
@@ -363,6 +381,13 @@ function getExerciseEntries(
                             :to="`/nodes/${props.id}/contracts/${value.value}`"
                           >
                             {{ value.value }}
+                          </RouterLink>
+                          <RouterLink
+                            v-else-if="isPartyReference(key, value)"
+                            class="contract-detail__link"
+                            :to="`/parties/${value}`"
+                          >
+                            {{ value }}
                           </RouterLink>
                           <template v-else>
                             {{ formatEventDataValue(value) }}
@@ -392,6 +417,13 @@ function getExerciseEntries(
                             :to="`/nodes/${props.id}/contracts/${value.value}`"
                           >
                             {{ value.value }}
+                          </RouterLink>
+                          <RouterLink
+                            v-else-if="isPartyReference(key, value)"
+                            class="contract-detail__link"
+                            :to="`/parties/${value}`"
+                          >
+                            {{ value }}
                           </RouterLink>
                           <template v-else>
                             {{ formatEventDataValue(value) }}

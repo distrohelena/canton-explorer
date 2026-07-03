@@ -7,6 +7,7 @@ vi.mock('../lib/api', () => ({
     id: 'participant-1',
     label: 'Participant 1',
     role: 'participant',
+    mode: 'pqs_only',
     ledgerLabel: 'Retail Ledger',
     status: 'healthy',
     latencyMs: 21,
@@ -97,7 +98,8 @@ describe('NodeDetailView', () => {
     expect(screen.getByRole('heading', { name: 'Service Health' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ledger Snapshot' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Installed Packages' })).toBeInTheDocument();
-    expect(screen.getByText(/SERVING/)).toBeInTheDocument();
+    expect(screen.getByText('PQS Only')).toBeInTheDocument();
+    expect(screen.getAllByText(/Not configured/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/participant1_pqs/)).toBeInTheDocument();
     expect(screen.getByText('main-package-name')).toBeInTheDocument();
     expect(screen.getByText('daml-prim')).toBeInTheDocument();

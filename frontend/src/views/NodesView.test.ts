@@ -10,6 +10,7 @@ vi.mock('../composables/useNodes', () => ({
         id: 'participant-1',
         label: 'Participant 1',
         role: 'participant',
+        mode: 'pqs_with_grpc',
         ledgerLabel: 'Retail Ledger',
         status: 'healthy',
         latencyMs: 21,
@@ -65,8 +66,9 @@ describe('NodesView', () => {
 
     expect(screen.getByRole('heading', { name: 'Connected Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Participant 1')).toBeInTheDocument();
+    expect(screen.getByText(/PQS \+ gRPC/)).toBeInTheDocument();
     expect(
-      screen.queryByPlaceholderText('Search by Update ID or Party ID...'),
+      screen.queryByPlaceholderText('Search'),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Network Activity' })).not.toBeInTheDocument();
   });
