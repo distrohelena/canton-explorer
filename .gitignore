@@ -5,4 +5,5 @@ coverage/
 .env.local
 .DS_Store
 backend/config/nodes.local.json
+backend/data/
 frontend/.env.local
