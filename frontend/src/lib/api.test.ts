@@ -1,8 +1,10 @@
 import * as api from './api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchActivityHistory, fetchNodeUpdates, fetchNodes } from './api';
+import { fetchActiveParties, fetchActivityHistory, fetchNodeUpdates, fetchNodes } from './api';
 import type { NodeContractDetailResponse } from '../types/contracts';
 import type { NodePackagesResponse } from '../types/nodes';
+import type { ActivePartiesResponse } from '../types/active-parties';
+import type { PartyDetailResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
 import type { NodeUpdateDetailResponse } from '../types/updates';
 
@@ -144,6 +146,66 @@ const typedNodePackagesFixture = {
   ],
 } satisfies NodePackagesResponse;
 
+const typedPartyDetailFixture = {
+  partyId: 'Alice',
+  nodeCount: 2,
+  recentUpdateCount: 2,
+  recentContractCount: 2,
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+  ],
+  recentUpdates: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      eventOffset: '0000000000000001',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      recordTime: '2026-07-01T12:00:00.000Z',
+      parties: ['Alice', 'Bob'],
+    },
+  ],
+  recentContracts: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      contractId: '00abc',
+      templateId: 'Main:Asset',
+      packageId: 'main-package',
+      packageName: 'Main Package',
+      packageVersion: '1.2.3',
+      recordTime: '2026-07-01T12:00:00.000Z',
+    },
+  ],
+} satisfies PartyDetailResponse;
+
+const typedActivePartiesFixture = {
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_only',
+      parties: ['Alice', 'Bob'],
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      parties: [],
+    },
+  ],
+} satisfies ActivePartiesResponse;
+
 describe('fetchNodes', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -155,6 +217,7 @@ describe('fetchNodes', () => {
     expect(typedPackageDetailFixture.templates[0].templateId).toBe('Splice.Amulet:SvRewardCoupon');
     expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
     expect(typedNodePackagesFixture.packagesByName[0].packages[0].packageId).toBe('main-package-v2');
+    expect(typedPartyDetailFixture.recentUpdates[0].updateId).toContain('1220994e');
   });
 
   it('loads node summaries from the backend API', async () => {
@@ -206,7 +269,60 @@ describe('fetchNodes', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/nodes/activity-history?days=7');
   });
 
+  it('loads active parties grouped by node from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedActivePartiesFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchActiveParties();
+
+    expect(result.nodes[0].nodeId).toBe('participant-1');
+    expect(result.nodes[0].parties).toEqual(['Alice', 'Bob']);
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/parties');
+  });
+
   it('loads recent updates for a node from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        limit: 25,
+        nextBefore: '000000000000000001',
+        nextAfter: null,
+        updates: [
+          {
+            eventOffset: '000000000000000001',
+            updateId: '00000000000000000000000000000001',
+            recordTime: '2026-07-01T12:00:00.000Z',
+            parties: ['Alice'],
+          },
+        ],
+      }),
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const updates = await fetchNodeUpdates('participant-1', {
+      before: '000000000000000025',
+      parties: ['Alice', 'Bob'],
+      mode: 'and',
+    });
+
+    expect(updates.nodeId).toBe('participant-1');
+    expect(updates.limit).toBe(25);
+    expect(updates.nextBefore).toBe('000000000000000001');
+    expect(updates.nextAfter).toBeNull();
+    expect(updates.updates[0].eventOffset).toBe('000000000000000001');
+    expect(updates.updates[0].updateId).toBe('00000000000000000000000000000001');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/nodes/participant-1/updates?before=000000000000000025&party=Alice&party=Bob&mode=and',
+    );
+  });
+
+  it('loads recent updates for a node without cursor params by default', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -215,6 +331,8 @@ describe('fetchNodes', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           limit: 25,
+          nextBefore: null,
+          nextAfter: null,
           updates: [
             {
               eventOffset: '000000000000000001',
@@ -414,5 +532,26 @@ describe('fetchNodes', () => {
       'http://localhost:3100/api/nodes/participant-1/packages',
     );
     expect(nodePackages).toEqual(typedNodePackagesFixture);
+  });
+
+  it('loads party detail from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedPartyDetailFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchPartyDetail = (
+      api as {
+        fetchPartyDetail?: (partyId: string) => Promise<unknown>;
+      }
+    ).fetchPartyDetail;
+
+    expect(fetchPartyDetail).toBeTypeOf('function');
+
+    const partyDetail = await fetchPartyDetail?.('Alice');
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/parties/Alice');
+    expect(partyDetail).toEqual(typedPartyDetailFixture);
   });
 });

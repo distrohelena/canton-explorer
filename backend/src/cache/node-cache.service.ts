@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
   LedgerSummary,
+  NodeMode,
   NodeActivityHistoryResponse,
   NodeActivitySample,
   NodeActivitySeries,
@@ -14,6 +15,7 @@ export interface NodeSnapshot {
   id: string;
   label: string;
   role: NodeRole;
+  mode: NodeMode;
   ledgerLabel: string;
   status: NodeStatus;
   latencyMs: number | null;
@@ -109,6 +111,7 @@ export class NodeCacheService {
 
   listActivityHistory(requestedDays?: number): NodeActivityHistoryResponse {
     const windowDays = this.normalizeWindowDays(requestedDays);
+    const generatedAt = new Date().toISOString();
     const nodes = [...this.activityHistory.values()]
       .sort((left, right) => left.label.localeCompare(right.label))
       .map<NodeActivitySeries>((series) => ({
@@ -116,11 +119,11 @@ export class NodeCacheService {
         label: series.label,
         status: series.status,
         latestActiveContractCount: series.latestActiveContractCount,
-        samples: this.sliceSamplesForWindow(series.samples, windowDays),
+        samples: this.sliceSamplesForWindow(series.samples, windowDays, generatedAt),
       }));
 
     return {
-      generatedAt: new Date().toISOString(),
+      generatedAt,
       windowMinutes: windowDays * 1440,
       nodes,
     };
@@ -171,21 +174,29 @@ export class NodeCacheService {
     return 1;
   }
 
-  private sliceSamplesForWindow(samples: NodeActivitySample[], windowDays: 1 | 7 | 30): NodeActivitySample[] {
+  private sliceSamplesForWindow(
+    samples: NodeActivitySample[],
+    windowDays: 1 | 7 | 30,
+    generatedAt: string,
+  ): NodeActivitySample[] {
     if (samples.length === 0) {
       return [];
     }
 
-    const latestTimestamp = Date.parse(samples[samples.length - 1].timestamp);
-    if (!Number.isFinite(latestTimestamp)) {
+    const generatedAtTimestamp = Date.parse(generatedAt);
+    if (!Number.isFinite(generatedAtTimestamp)) {
       return [...samples];
     }
 
-    const windowStart = latestTimestamp - windowDays * 24 * 60 * 60 * 1000;
+    const windowStart = generatedAtTimestamp - windowDays * 24 * 60 * 60 * 1000;
 
     return samples.filter((sample) => {
       const sampleTimestamp = Date.parse(sample.timestamp);
-      return Number.isFinite(sampleTimestamp) && sampleTimestamp >= windowStart;
+      return (
+        Number.isFinite(sampleTimestamp) &&
+        sampleTimestamp >= windowStart &&
+        sampleTimestamp <= generatedAtTimestamp
+      );
     });
   }
 

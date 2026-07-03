@@ -92,7 +92,7 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(container.querySelector('img[src="/cantonexplorer.png"]')).not.toBeNull();
-    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(
@@ -108,7 +108,7 @@ describe('App', () => {
   it('keeps the shared shell on the nodes route', async () => {
     await renderAt('/nodes');
 
-    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByText('Nodes View')).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe('App', () => {
   it('keeps the shared shell on the parties route', async () => {
     await renderAt('/parties');
 
-    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByText('Parties View')).toBeInTheDocument();
@@ -126,7 +126,7 @@ describe('App', () => {
   it('keeps the shared shell on a node detail route', async () => {
     await renderAt('/nodes/participant-1');
 
-    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(screen.queryByText('Current Node')).not.toBeInTheDocument();
@@ -135,7 +135,7 @@ describe('App', () => {
   it('keeps the shared shell on a node updates route', async () => {
     await renderAt('/nodes/participant-1/updates');
 
-    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Node Updates View')).toBeInTheDocument();
   });
@@ -145,7 +145,7 @@ describe('App', () => {
       '/nodes/participant-1/updates/1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
     );
 
-    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Update Detail View')).toBeInTheDocument();
   });
@@ -153,7 +153,7 @@ describe('App', () => {
   it('keeps the shared shell on a contract detail route', async () => {
     await renderAt('/nodes/participant-1/contracts/00abc');
 
-    expect(screen.getByRole('link', { name: '⌂ Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Contract Detail View')).toBeInTheDocument();
   });

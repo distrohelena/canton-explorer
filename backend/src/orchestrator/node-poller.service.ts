@@ -54,6 +54,7 @@ export class NodePollerService
   private async refreshNode(node: NodeConfig): Promise<void> {
     const previous = this.cacheService.get(node.id);
     const timestamp = new Date().toISOString();
+    const grpcRequired = node.mode === 'pqs_with_grpc';
     const [ledgerAttempt, grpcAttempt] = await Promise.all([
       this.refreshPqs(node),
       this.refreshGrpc(node),
@@ -63,7 +64,7 @@ export class NodePollerService
       this.logger.error(`PQS refresh failed for ${node.id}: ${ledgerAttempt.error}`);
     }
 
-    if (node.grpc && !grpcAttempt.ok) {
+    if (grpcRequired && !grpcAttempt.ok) {
       this.logger.error(`gRPC refresh failed for ${node.id}: ${grpcAttempt.error}`);
     }
 
@@ -77,11 +78,11 @@ export class NodePollerService
       .filter((message): message is string => message !== null)
       .join('; ');
     const pqsOk = ledgerAttempt.ok;
-    const grpcOk = node.grpc ? grpcAttempt.ok : true;
+    const grpcOk = grpcRequired ? grpcAttempt.ok : true;
     const hasUsableSnapshot = ledgerAttempt.ok || Boolean(previous);
     const status = computeNodeStatus({
       pqsOk,
-      grpcRequired: Boolean(node.grpc),
+      grpcRequired,
       grpcOk,
       isStale: !pqsOk,
       hasUsableSnapshot,
@@ -91,6 +92,7 @@ export class NodePollerService
       id: node.id,
       label: node.label,
       role: node.role,
+      mode: node.mode,
       ledgerLabel: node.ledgerLabel ?? node.label,
       status,
       latencyMs: this.combineLatencies(ledgerAttempt.latencyMs, grpcAttempt.latencyMs),
@@ -111,7 +113,7 @@ export class NodePollerService
           ok: grpcOk,
           checkedAt: timestamp,
           latencyMs: grpcAttempt.latencyMs,
-          message: grpcAttempt.error,
+          message: grpcRequired ? grpcAttempt.error : 'Not configured',
         },
       },
     });
@@ -176,7 +178,7 @@ export class NodePollerService
   }
 
   private async refreshGrpc(node: NodeConfig): Promise<RefreshAttempt<ServiceInfo>> {
-    if (!node.grpc) {
+    if (node.mode === 'pqs_only') {
       return {
         ok: true,
         value: this.defaultServiceInfo(node),
@@ -236,7 +238,7 @@ export class NodePollerService
 
   private defaultServiceInfo(node: NodeConfig): ServiceInfo {
     return {
-      target: node.grpc?.target ?? null,
+      target: node.mode === 'pqs_with_grpc' ? node.grpc.target : null,
       reachable: false,
       healthCheckImplemented: false,
       servingStatus: null,

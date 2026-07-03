@@ -113,7 +113,7 @@ onBeforeUnmount(() => {
           </RouterLink>
           <div class="app-toolbar">
             <nav class="app-nav" aria-label="Primary">
-              <RouterLink class="nav-button" to="/">⌂ Home</RouterLink>
+              <RouterLink class="nav-button" to="/">Home</RouterLink>
               <RouterLink class="nav-button" to="/nodes">Nodes</RouterLink>
               <RouterLink class="nav-button" to="/parties">Parties</RouterLink>
             </nav>

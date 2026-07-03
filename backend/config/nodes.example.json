@@ -4,6 +4,7 @@
       "id": "participant-1",
       "label": "Participant 1",
       "role": "participant",
+      "mode": "pqs_with_grpc",
       "ledgerLabel": "Retail Ledger",
       "pqs": {
         "connectionUriEnv": "PARTICIPANT_1_PQS_URL"

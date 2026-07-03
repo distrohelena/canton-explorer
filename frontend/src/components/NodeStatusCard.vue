@@ -9,12 +9,16 @@ const props = defineProps<{
 const statusLabel = computed(
   () => props.node.status.charAt(0).toUpperCase() + props.node.status.slice(1),
 );
+
+const modeLabel = computed(() =>
+  props.node.mode === 'pqs_only' ? 'PQS Only' : 'PQS + gRPC',
+);
 </script>
 
 <template>
   <RouterLink class="node-card" :to="`/nodes/${node.id}`">
     <div class="node-card__topline">
-      <p class="node-card__eyebrow">{{ node.role }}</p>
+      <p class="node-card__eyebrow">{{ node.role }} · {{ modeLabel }}</p>
       <span class="node-card__state-dot" :data-status="node.status" aria-hidden="true"></span>
     </div>
     <div class="node-card__body">

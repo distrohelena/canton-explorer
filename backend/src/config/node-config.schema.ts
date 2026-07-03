@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const nodeSchema = z.object({
+const nodeBaseSchema = {
   id: z.string().min(1),
   label: z.string().min(1),
   role: z.literal('participant'),
@@ -8,20 +8,35 @@ const nodeSchema = z.object({
   pqs: z.object({
     connectionUriEnv: z.string().min(1),
   }),
-  grpc: z
-    .object({
-      target: z.string().min(1),
-      useTls: z.boolean().default(false),
-      connectTimeoutMs: z.number().int().positive().default(5000),
-    })
-    .optional(),
   polling: z
     .object({
       intervalMs: z.number().int().positive().default(15000),
       staleAfterMs: z.number().int().positive().default(45000),
     })
     .optional(),
+};
+
+const grpcSchema = z.object({
+  target: z.string().min(1),
+  useTls: z.boolean().default(false),
+  connectTimeoutMs: z.number().int().positive().default(5000),
 });
+
+const nodeSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      ...nodeBaseSchema,
+      mode: z.literal('pqs_only'),
+    })
+    .strict(),
+  z
+    .object({
+      ...nodeBaseSchema,
+      mode: z.literal('pqs_with_grpc'),
+      grpc: grpcSchema,
+    })
+    .strict(),
+]);
 
 const configSchema = z.object({
   nodes: z.array(nodeSchema).min(1),

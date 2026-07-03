@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
+import { GrpcOperationsService } from '../grpc/grpc-operations.service';
 import { PackageCacheService } from './package-cache.service';
 import { PqsPackageService } from './pqs-package.service';
 
@@ -17,6 +18,7 @@ export class PackageSyncService {
   constructor(
     private readonly cacheService: PackageCacheService,
     private readonly pqsPackageService: PqsPackageService,
+    private readonly grpcOperationsService: GrpcOperationsService,
   ) {}
 
   async syncNodePackagesIfDue(node: NodeConfig): Promise<PackageSyncResult> {
@@ -39,7 +41,10 @@ export class PackageSyncService {
   }
 
   async syncNodePackages(node: NodeConfig): Promise<PackageSyncResult> {
-    const packageRefs = await this.pqsPackageService.fetchPackageRefs(node);
+    const packageRefs =
+      node.mode === 'pqs_with_grpc'
+        ? await this.grpcOperationsService.fetchPackageRefs(node)
+        : await this.pqsPackageService.fetchPackageRefs(node);
     const missingPackageIds = this.cacheService.recordPackagePresence(
       node.id,
       packageRefs,
@@ -54,7 +59,13 @@ export class PackageSyncService {
       };
     }
 
-    const packages = await this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+    const missingPackageRefs = packageRefs.filter((packageRef) =>
+      missingPackageIds.includes(packageRef.packageId),
+    );
+    const packages =
+      node.mode === 'pqs_with_grpc'
+        ? await this.grpcOperationsService.fetchPackagesByRefs(node, missingPackageRefs)
+        : await this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
     this.cacheService.storePackages(packages);
 
     return {

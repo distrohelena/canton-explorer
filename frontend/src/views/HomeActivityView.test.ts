@@ -333,4 +333,89 @@ describe('HomeActivityView', () => {
       expectedEndLabel,
     );
   });
+
+  it('adds trailing zero buckets at the end of the selected range instead of extending a stale slope', () => {
+    history.value = {
+      generatedAt: '2026-07-03T12:00:00.000Z',
+      windowMinutes: 10080,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'healthy',
+          latestActiveContractCount: 15,
+          samples: [
+            {
+              timestamp: '2026-07-01T00:00:00.000Z',
+              activityValue: 8,
+              activeContractCount: 13,
+              latestOffset: '10',
+            },
+          ],
+        },
+      ],
+    };
+    selectedDays.value = 7;
+
+    const { container } = render(HomeActivityView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toBe(
+      '205.71428571428572,5 251.42857142857142,91 297.14285714285717,91 320,91',
+    );
+    expect(container.querySelector('.activity-panel__axis-label--end')?.textContent).toBe('Jul 3');
+  });
+
+  it('fills missing interior hourly buckets with zero activity in the 1 day view', () => {
+    history.value = {
+      generatedAt: '2026-07-03T12:00:00.000Z',
+      windowMinutes: 1440,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'healthy',
+          latestActiveContractCount: 15,
+          samples: [
+            {
+              timestamp: '2026-07-03T08:00:00.000Z',
+              activityValue: 8,
+              activeContractCount: 13,
+              latestOffset: '10',
+            },
+            {
+              timestamp: '2026-07-03T12:00:00.000Z',
+              activityValue: 4,
+              activeContractCount: 15,
+              latestOffset: '11',
+            },
+          ],
+        },
+      ],
+    };
+    selectedDays.value = 1;
+
+    const { container } = render(HomeActivityView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toBe(
+      '266.6666666666667,5 280,91 293.3333333333333,91 306.6666666666667,91 320,48',
+    );
+  });
 });

@@ -1,4 +1,5 @@
 export type NodeStatus = 'healthy' | 'degraded' | 'down';
+export type NodeMode = 'pqs_only' | 'pqs_with_grpc';
 
 export interface SourceStatus {
   ok: boolean;
@@ -11,6 +12,7 @@ export interface NodeSnapshot {
   id: string;
   label: string;
   role: 'participant';
+  mode: NodeMode;
   ledgerLabel: string;
   status: NodeStatus;
   latencyMs: number | null;

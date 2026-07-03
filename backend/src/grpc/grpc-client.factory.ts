@@ -1,30 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { credentials, loadPackageDefinition } from '@grpc/grpc-js';
-import { loadSync } from '@grpc/proto-loader';
-import { join } from 'node:path';
 import type { NodeConfig } from '../config/node-config.schema';
 
 @Injectable()
 export class GrpcClientFactory {
-  create(node: NodeConfig) {
-    if (!node.grpc) {
+  async create(node: NodeConfig) {
+    if (node.mode !== 'pqs_with_grpc') {
       throw new Error(`Node ${node.id} does not define grpc settings`);
     }
 
-    const packageDefinition = loadSync(
-      join(process.cwd(), 'proto', 'grpc', 'health', 'v1', 'health.proto'),
-      { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true },
+    const sdk = await import('canton-typescript-sdk');
+
+    return new sdk.CantonClient(
+      new sdk.CantonClientOptions({
+        transportKind: sdk.TransportKind.grpc,
+        endpoint: node.grpc.target,
+        defaultRequestTimeoutMs: node.grpc.connectTimeoutMs,
+        grpcConnectTimeoutMs: node.grpc.connectTimeoutMs,
+        grpcChannelSecurity: node.grpc.useTls
+          ? sdk.GrpcChannelSecurity.tls
+          : sdk.GrpcChannelSecurity.insecure,
+      }),
     );
-
-    const loaded = loadPackageDefinition(packageDefinition) as unknown as {
-      grpc: { health: { v1: { Health: new (...args: unknown[]) => any } } };
-    };
-
-    const Client = loaded.grpc.health.v1.Health;
-    const channelCredentials = node.grpc.useTls
-      ? credentials.createSsl()
-      : credentials.createInsecure();
-
-    return new Client(node.grpc.target, channelCredentials);
   }
 }

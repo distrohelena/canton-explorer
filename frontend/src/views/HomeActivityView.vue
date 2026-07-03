@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useActivityHistory } from '../composables/useActivityHistory';
-import type { ActivitySeries } from '../types/activity';
+import type { ActivitySample, ActivitySeries } from '../types/activity';
 
 const { history, loading, error, refresh, selectedDays, selectDays } = useActivityHistory();
 const windowOptions = [1, 7, 30] as const;
@@ -17,40 +17,165 @@ interface ChartDomain {
   durationMs: number;
 }
 
-function chartDomain(series: ActivitySeries, windowMinutes: number): ChartDomain | null {
+function resolveChartEndMs(series: ActivitySeries, generatedAt: string | null): number | null {
+  const generatedAtMs = Date.parse(generatedAt ?? '');
+
+  if (Number.isFinite(generatedAtMs)) {
+    return generatedAtMs;
+  }
+
+  const latestTimestamp = Date.parse(series.samples[series.samples.length - 1]?.timestamp ?? '');
+  if (Number.isFinite(latestTimestamp)) {
+    return latestTimestamp;
+  }
+
+  return null;
+}
+
+function chartDomain(
+  series: ActivitySeries,
+  windowMinutes: number,
+  generatedAt: string | null,
+): ChartDomain | null {
   if (series.samples.length === 0) {
     return null;
   }
 
-  const latestTimestamp = Date.parse(series.samples[series.samples.length - 1].timestamp);
+  const endMs = resolveChartEndMs(series, generatedAt);
   const windowDurationMs = Math.max(windowMinutes, 1) * 60 * 1000;
 
-  if (!Number.isFinite(latestTimestamp)) {
+  if (endMs === null) {
     return null;
   }
 
   return {
-    startMs: latestTimestamp - windowDurationMs,
-    endMs: latestTimestamp,
+    startMs: endMs - windowDurationMs,
+    endMs,
     durationMs: windowDurationMs,
   };
 }
 
-function linePoints(series: ActivitySeries, windowMinutes: number): string {
-  if (series.samples.length === 0) {
+function displayBucketMs(days: 1 | 7 | 30): number {
+  return days === 1 ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+}
+
+function bucketStart(timestampMs: number, days: 1 | 7 | 30): number {
+  const bucketMs = displayBucketMs(days);
+  return Math.floor(timestampMs / bucketMs) * bucketMs;
+}
+
+function displaySamples(
+  series: ActivitySeries,
+  windowMinutes: number,
+  generatedAt: string | null,
+  days: 1 | 7 | 30,
+): ActivitySample[] {
+  const domain = chartDomain(series, windowMinutes, generatedAt);
+  if (domain === null) {
+    return [];
+  }
+
+  const visibleSamples = series.samples.filter((sample) => {
+    const sampleTimestamp = Date.parse(sample.timestamp);
+    return (
+      Number.isFinite(sampleTimestamp) &&
+      sampleTimestamp >= domain.startMs &&
+      sampleTimestamp <= domain.endMs
+    );
+  });
+
+  if (visibleSamples.length === 0) {
+    return [];
+  }
+
+  const bucketMs = displayBucketMs(days);
+  const filledSamples: ActivitySample[] = [];
+
+  for (const sample of visibleSamples) {
+    const sampleTimestamp = Date.parse(sample.timestamp);
+    if (!Number.isFinite(sampleTimestamp)) {
+      filledSamples.push(sample);
+      continue;
+    }
+
+    const sampleBucketStart = bucketStart(sampleTimestamp, days);
+    const previousSample = filledSamples[filledSamples.length - 1];
+    const previousTimestamp = previousSample ? Date.parse(previousSample.timestamp) : Number.NaN;
+    const previousBucketStart = Number.isFinite(previousTimestamp)
+      ? bucketStart(previousTimestamp, days)
+      : null;
+
+    if (previousBucketStart !== null) {
+      for (
+        let missingBucketStart = previousBucketStart + bucketMs;
+        missingBucketStart < sampleBucketStart;
+        missingBucketStart += bucketMs
+      ) {
+        filledSamples.push({
+          timestamp: new Date(missingBucketStart).toISOString(),
+          activityValue: 0,
+          activeContractCount: previousSample.activeContractCount,
+          latestOffset: previousSample.latestOffset,
+        });
+      }
+    }
+
+    filledSamples.push(sample);
+  }
+
+  const lastSample = filledSamples[filledSamples.length - 1];
+  const lastSampleTimestamp = Date.parse(lastSample.timestamp);
+  if (!Number.isFinite(lastSampleTimestamp)) {
+    return filledSamples;
+  }
+
+  for (
+    let missingBucketStart = bucketStart(lastSampleTimestamp, days) + bucketMs;
+    missingBucketStart <= domain.endMs;
+    missingBucketStart += bucketMs
+  ) {
+    filledSamples.push({
+      timestamp: new Date(missingBucketStart).toISOString(),
+      activityValue: 0,
+      activeContractCount: lastSample.activeContractCount,
+      latestOffset: lastSample.latestOffset,
+    });
+  }
+
+  const finalTimestamp = Date.parse(filledSamples[filledSamples.length - 1]?.timestamp ?? '');
+  if (Number.isFinite(finalTimestamp) && finalTimestamp < domain.endMs) {
+    filledSamples.push({
+      timestamp: new Date(domain.endMs).toISOString(),
+      activityValue: 0,
+      activeContractCount: lastSample.activeContractCount,
+      latestOffset: lastSample.latestOffset,
+    });
+  }
+
+  return filledSamples;
+}
+
+function linePoints(
+  series: ActivitySeries,
+  windowMinutes: number,
+  generatedAt: string | null,
+  days: 1 | 7 | 30,
+): string {
+  const samples = displaySamples(series, windowMinutes, generatedAt, days);
+  if (samples.length === 0) {
     return '';
   }
 
-  const domain = chartDomain(series, windowMinutes);
-  const maxValue = Math.max(...series.samples.map((sample) => sample.activityValue), 1);
+  const domain = chartDomain(series, windowMinutes, generatedAt);
+  const maxValue = Math.max(...samples.map((sample) => sample.activityValue), 1);
 
-  if (series.samples.length === 1) {
-    const onlySample = series.samples[0];
+  if (samples.length === 1) {
+    const onlySample = samples[0];
     const y = chartHeight - (onlySample.activityValue / maxValue) * (chartHeight - 10) - 5;
     return `${chartWidth - 8},${y} ${chartWidth},${y}`;
   }
 
-  return series.samples
+  return samples
     .map((sample, index) => {
       const sampleTimestamp = Date.parse(sample.timestamp);
       const hasTimeAxis =
@@ -64,9 +189,9 @@ function linePoints(series: ActivitySeries, windowMinutes: number): string {
               ((sampleTimestamp - domain.startMs) / domain.durationMs) * chartWidth,
             ),
           )
-        : series.samples.length === 1
+        : samples.length === 1
           ? chartWidth / 2
-          : (index / (series.samples.length - 1)) * chartWidth;
+          : (index / (samples.length - 1)) * chartWidth;
       const y = chartHeight - (sample.activityValue / maxValue) * (chartHeight - 10) - 5;
       return `${x},${y}`;
     })
@@ -104,12 +229,27 @@ function statusLabel(status: ActivitySeries['status']): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function peakActivity(series: ActivitySeries): number {
-  return Math.max(...series.samples.map((sample) => sample.activityValue), 0);
+function peakActivity(
+  series: ActivitySeries,
+  windowMinutes: number,
+  generatedAt: string | null,
+  days: 1 | 7 | 30,
+): number {
+  return Math.max(
+    ...displaySamples(series, windowMinutes, generatedAt, days).map(
+      (sample) => sample.activityValue,
+    ),
+    0,
+  );
 }
 
-function verticalScaleLabels(series: ActivitySeries): string[] {
-  const peak = peakActivity(series);
+function verticalScaleLabels(
+  series: ActivitySeries,
+  windowMinutes: number,
+  generatedAt: string | null,
+  days: 1 | 7 | 30,
+): string[] {
+  const peak = peakActivity(series, windowMinutes, generatedAt, days);
   const midpoint = peak / 2;
 
   return [peak, midpoint, 0].map((value) =>
@@ -171,7 +311,12 @@ function verticalScaleLabels(series: ActivitySeries): string[] {
             <div class="activity-panel__chart-layout">
               <div class="activity-panel__scale" aria-hidden="true">
                 <span
-                  v-for="label in verticalScaleLabels(series)"
+                  v-for="label in verticalScaleLabels(
+                    series,
+                    windowMinutesLabel,
+                    history?.generatedAt ?? null,
+                    selectedDays,
+                  )"
                   :key="`${series.nodeId}-${label}`"
                   class="activity-panel__scale-label"
                 >
@@ -200,25 +345,30 @@ function verticalScaleLabels(series: ActivitySeries): string[] {
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="3"
-                  :points="linePoints(series, windowMinutesLabel)"
+                  :points="linePoints(
+                    series,
+                    windowMinutesLabel,
+                    history?.generatedAt ?? null,
+                    selectedDays,
+                  )"
                 />
               </svg>
             </div>
 
             <div
-              v-if="chartDomain(series, windowMinutesLabel)"
+              v-if="chartDomain(series, windowMinutesLabel, history?.generatedAt ?? null)"
               class="activity-panel__axis"
             >
               <span class="activity-panel__axis-label activity-panel__axis-label--start">
-                {{ formatAxisLabel(chartDomain(series, windowMinutesLabel)!.startMs, 'start', selectedDays) }}
+                {{ formatAxisLabel(chartDomain(series, windowMinutesLabel, history?.generatedAt ?? null)!.startMs, 'start', selectedDays) }}
               </span>
               <span class="activity-panel__axis-label activity-panel__axis-label--end">
-                {{ formatAxisLabel(chartDomain(series, windowMinutesLabel)!.endMs, 'end', selectedDays) }}
+                {{ formatAxisLabel(chartDomain(series, windowMinutesLabel, history?.generatedAt ?? null)!.endMs, 'end', selectedDays) }}
               </span>
             </div>
 
             <div class="activity-panel__footer">
-              <p>Peak activity {{ peakActivity(series) }}</p>
+              <p>Peak activity {{ peakActivity(series, windowMinutesLabel, history?.generatedAt ?? null, selectedDays) }}</p>
               <p>Latest offset {{ latestOffset(series) }}</p>
             </div>
           </article>

@@ -1052,6 +1052,98 @@ mode: 'pqs_only',
     );
   });
 
+  it('pushes hide Splice filtering into normalized recent updates queries without per-update event lookups', async () => {
+    const missingLegacyRelation = Object.assign(
+      new Error('relation "participant.lapi_events_create" does not exist'),
+      { code: '42P01' },
+    );
+    const query = jest
+      .fn()
+      .mockRejectedValueOnce(missingLegacyRelation)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            event_offset: '9130',
+            record_time: '2026-07-03T12:00:00.000Z',
+          },
+        ],
+      })
+      .mockRejectedValueOnce(missingLegacyRelation)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            parties: ['Alice'],
+          },
+        ],
+      });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+    const fetchEventsSpy = jest
+      .spyOn(service as never, 'fetchEventsByUpdateId' as never)
+      .mockResolvedValue([
+        {
+          eventKind: 'create',
+          eventId: '#0:0',
+          contractId: '00abc',
+          templateId: 'Main.Asset:Holding',
+          choice: null,
+          witnesses: ['Alice'],
+          createData: null,
+          exerciseData: null,
+          raw: {},
+        },
+      ]);
+
+    await expect(
+      service.fetchRecentUpdates(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+role: 'participant',
+mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        {
+          limit: 25,
+          hideSplice: true,
+        },
+      ),
+    ).resolves.toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [
+        {
+          eventOffset: '9130',
+          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          recordTime: '2026-07-03T12:00:00.000Z',
+          parties: ['Alice'],
+        },
+      ],
+    });
+
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '')"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("regexp_replace(coalesce(template_string.external_string, ''), '^t\\\\|#[^:]+:', '')"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("update_event_templates.template_id not like 'Splice.%'"),
+    );
+    expect(fetchEventsSpy).not.toHaveBeenCalled();
+  });
+
   it('returns cursor metadata for older update pagination windows', async () => {
     const query = jest
       .fn()

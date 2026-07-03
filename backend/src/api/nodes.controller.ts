@@ -1,6 +1,7 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { NodeCacheService } from '../cache/node-cache.service';
 import { NodeConfigService } from '../config/node-config.service';
+import { GrpcOperationsService } from '../grpc/grpc-operations.service';
 import { PqsSummaryService } from '../pqs/pqs-summary.service';
 
 @Controller('/api')
@@ -8,6 +9,7 @@ export class NodesController {
   constructor(
     private readonly cacheService: NodeCacheService,
     private readonly configService: NodeConfigService,
+    private readonly grpcOperationsService: GrpcOperationsService,
     private readonly pqsSummaryService: PqsSummaryService,
   ) {}
 
@@ -49,6 +51,11 @@ export class NodesController {
   async listNodeUpdates(
     @Param('id') id: string,
     @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('party') party?: string | string[],
+    @Query('mode') mode?: string,
+    @Query('hideSplice') hideSplice?: string,
   ) {
     const node = this.configService.list().find((candidate) => candidate.id === id);
     if (!node) {
@@ -59,7 +66,14 @@ export class NodesController {
 
     return this.pqsSummaryService.fetchRecentUpdates(
       node,
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      {
+        limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+        before,
+        after,
+        parties: Array.isArray(party) ? party : party ? [party] : undefined,
+        mode,
+        hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      },
     );
   }
 
@@ -103,6 +117,43 @@ export class NodesController {
 
       throw error;
     }
+  }
+
+  @Get('/parties/:partyId')
+  async getPartyDetail(@Param('partyId') partyId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPartyDetail(this.configService.list(), partyId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Party not found') {
+        throw new NotFoundException(`Unknown party: ${partyId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/parties')
+  async listActiveParties() {
+    return this.pqsSummaryService.fetchActiveParties(this.configService.list());
+  }
+
+  @Get('/parties/local')
+  async listLocalParties() {
+    const nodes = await Promise.all(
+      this.configService.list().map(async (node) => ({
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        parties:
+          node.mode === 'pqs_with_grpc'
+            ? await this.grpcOperationsService
+                .listLocalParties(node)
+                .catch(() => [])
+            : [],
+      })),
+    );
+
+    return { nodes };
   }
 
   @Get('/packages/by-name/:packageName')

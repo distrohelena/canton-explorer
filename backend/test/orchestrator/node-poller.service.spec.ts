@@ -34,6 +34,7 @@ describe('NodePollerService', () => {
       id: 'cnqs-app-provider',
       label: 'CNQS App Provider',
       role: 'participant',
+      mode: 'pqs_with_grpc',
       ledgerLabel: 'Quickstart App Provider',
       pqs: { connectionUriEnv: 'CNQS_PQS_APP_PROVIDER_URL' },
       grpc: { target: 'localhost:3961', useTls: false, connectTimeoutMs: 5000 },
@@ -118,6 +119,7 @@ describe('NodePollerService', () => {
       id: 'participant-1',
       label: 'Participant 1',
       role: 'participant',
+      mode: 'pqs_with_grpc',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PQS_URL' },
       grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
@@ -132,34 +134,33 @@ describe('NodePollerService', () => {
 
       jest.setSystemTime(new Date('2026-07-01T12:16:00.000Z'));
       await poller['refreshNode'](node);
+      expect(cache.listActivityHistory()).toEqual({
+        generatedAt: expect.any(String),
+        windowMinutes: expect.any(Number),
+        nodes: [
+          {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            status: 'healthy',
+            latestActiveContractCount: 12,
+            samples: [
+              expect.objectContaining({
+                activityValue: 0,
+                activeContractCount: 12,
+                latestOffset: '10',
+              }),
+              expect.objectContaining({
+                activityValue: 7,
+                activeContractCount: 12,
+                latestOffset: '11',
+              }),
+            ],
+          },
+        ],
+      });
     } finally {
       jest.useRealTimers();
     }
-
-    expect(cache.listActivityHistory()).toEqual({
-      generatedAt: expect.any(String),
-      windowMinutes: expect.any(Number),
-      nodes: [
-        {
-          nodeId: 'participant-1',
-          label: 'Participant 1',
-          status: 'healthy',
-          latestActiveContractCount: 12,
-          samples: [
-            expect.objectContaining({
-              activityValue: 0,
-              activeContractCount: 12,
-              latestOffset: '10',
-            }),
-            expect.objectContaining({
-              activityValue: 7,
-              activeContractCount: 12,
-              latestOffset: '11',
-            }),
-          ],
-        },
-      ],
-    });
   });
 
   it('seeds activity history from PQS buckets on the first successful refresh', async () => {
@@ -203,29 +204,94 @@ describe('NodePollerService', () => {
       packageSyncService as never,
     );
 
+    jest.useFakeTimers();
+
+    try {
+      jest.setSystemTime(new Date('2026-07-01T12:16:00.000Z'));
+      await poller['refreshNode']({
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PQS_URL' },
+        grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+        polling: { intervalMs: 15000, staleAfterMs: 45000 },
+      });
+
+      expect(cache.listActivityHistory().nodes[0].samples).toEqual([
+        {
+          timestamp: '2026-07-01T11:45:00.000Z',
+          activityValue: 3,
+          activeContractCount: 12,
+          latestOffset: '10',
+        },
+        {
+          timestamp: '2026-07-01T12:00:00.000Z',
+          activityValue: 4,
+          activeContractCount: 12,
+          latestOffset: '11',
+        },
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('marks grpc as not configured for pqs_only nodes', async () => {
+    const cache = new NodeCacheService();
+    const packageSyncService = {
+      syncNodePackagesIfDue: jest.fn().mockResolvedValue(undefined),
+    };
+    const poller = new NodePollerService(
+      { list: () => [] } as never,
+      cache,
+      {
+        fetchSummary: jest.fn().mockResolvedValue({
+          ledgerLabel: 'Quickstart App User',
+          pqsDatabase: 'pqs-app-user',
+          activeContractCount: 4,
+          latestOffset: '101',
+          latestEventAt: '2026-07-02T12:00:00.000Z',
+          totalUpdateCount: 18,
+        }),
+        fetchActivityBuckets: jest.fn().mockResolvedValue([]),
+      } as never,
+      {
+        fetchOperationalInfo: jest.fn(),
+      } as never,
+      packageSyncService as never,
+    );
+
     await poller['refreshNode']({
-      id: 'participant-1',
-      label: 'Participant 1',
+      id: 'cnqs-app-user',
+      label: 'CNQS App User',
       role: 'participant',
-      ledgerLabel: 'Retail Ledger',
-      pqs: { connectionUriEnv: 'PQS_URL' },
-      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+      mode: 'pqs_only',
+      ledgerLabel: 'Quickstart App User',
+      pqs: { connectionUriEnv: 'CNQS_PQS_APP_USER_URL' },
       polling: { intervalMs: 15000, staleAfterMs: 45000 },
     });
 
-    expect(cache.listActivityHistory().nodes[0].samples).toEqual([
-      {
-        timestamp: '2026-07-01T11:45:00.000Z',
-        activityValue: 3,
-        activeContractCount: 12,
-        latestOffset: '10',
-      },
-      {
-        timestamp: '2026-07-01T12:00:00.000Z',
-        activityValue: 4,
-        activeContractCount: 12,
-        latestOffset: '11',
-      },
-    ]);
+    expect(cache.get('cnqs-app-user')).toEqual(
+      expect.objectContaining({
+        status: 'healthy',
+        sourceStatus: expect.objectContaining({
+          grpc: expect.objectContaining({
+            ok: true,
+            message: 'Not configured',
+          }),
+        }),
+        serviceInfo: {
+          target: null,
+          reachable: false,
+          healthCheckImplemented: false,
+          servingStatus: null,
+        },
+      }),
+    );
+    expect(packageSyncService.syncNodePackagesIfDue).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'cnqs-app-user' }),
+    );
   });
 });

@@ -11,6 +11,8 @@ export interface NodeUpdatesResponse {
   nodeId: string;
   label: string;
   limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
   updates: NodeUpdateEntry[];
 }
 

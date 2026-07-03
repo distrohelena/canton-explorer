@@ -26,6 +26,7 @@
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "canton-typescript-sdk": "file:/home/helena/env/daml/typescript-sdk",
     "dotenv": "^17.4.2",
     "pg": "^8.22.0",
     "protobufjs": "^7.5.5",

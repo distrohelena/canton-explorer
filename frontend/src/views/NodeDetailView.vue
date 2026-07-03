@@ -51,6 +51,12 @@ const installedPackages = computed(() =>
     })),
   })),
 );
+
+const modeLabel = computed(() =>
+  node.value?.mode === 'pqs_only' ? 'PQS Only' : 'PQS + gRPC',
+);
+
+const grpcNotConfigured = computed(() => node.value?.mode === 'pqs_only');
 </script>
 
 <template>
@@ -76,16 +82,30 @@ const installedPackages = computed(() =>
             <h3>Service Health</h3>
             <dl class="detail-grid">
               <div>
+                <dt>Mode</dt>
+                <dd>{{ modeLabel }}</dd>
+              </div>
+              <div>
                 <dt>Serving status</dt>
-                <dd>{{ node.serviceInfo.servingStatus ?? 'Health check unavailable' }}</dd>
+                <dd>{{
+                  grpcNotConfigured
+                    ? 'Not configured'
+                    : node.serviceInfo.servingStatus ?? 'Health check unavailable'
+                }}</dd>
               </div>
               <div>
                 <dt>gRPC target</dt>
-                <dd>{{ node.serviceInfo.target ?? 'not configured' }}</dd>
+                <dd>{{ grpcNotConfigured ? 'Not configured' : node.serviceInfo.target ?? 'Not configured' }}</dd>
               </div>
               <div>
                 <dt>Health probe</dt>
-                <dd>{{ node.serviceInfo.healthCheckImplemented ? 'Implemented' : 'Unavailable' }}</dd>
+                <dd>{{
+                  grpcNotConfigured
+                    ? 'Not configured'
+                    : node.serviceInfo.healthCheckImplemented
+                      ? 'Implemented'
+                      : 'Unavailable'
+                }}</dd>
               </div>
             </dl>
           </section>

@@ -278,19 +278,23 @@ function recentUpdatesQuery(
   after?: string,
   parties?: string[],
   mode?: string,
+  hideSplice?: boolean,
 ): string {
   const normalizedBefore = normalizeEventOffsetCursor(before);
   const normalizedAfter = normalizeEventOffsetCursor(after);
   const partyFilterClause = buildUpdatesPartyFilterClause(parties, mode);
+  const hideSpliceClause = hideSplice ? buildHideSpliceOffsetsClause() : null;
   const queryLimit = limit + 1;
 
   const afterFilters = [
     normalizedAfter ? `update_meta.event_offset::numeric > ${normalizedAfter}` : null,
     partyFilterClause,
+    hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
   const olderFilters = [
     normalizedBefore ? `update_meta.event_offset::numeric < ${normalizedBefore}` : null,
     partyFilterClause,
+    hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
 
   if (normalizedAfter && !normalizedBefore) {
@@ -333,19 +337,23 @@ function normalizedRecentUpdatesQuery(
   after?: string,
   parties?: string[],
   mode?: string,
+  hideSplice?: boolean,
 ): string {
   const normalizedBefore = normalizeEventOffsetCursor(before);
   const normalizedAfter = normalizeEventOffsetCursor(after);
   const partyFilterClause = buildNormalizedUpdatesPartyFilterClause(parties, mode);
+  const hideSpliceClause = hideSplice ? buildNormalizedHideSpliceOffsetsClause() : null;
   const queryLimit = limit + 1;
 
   const afterFilters = [
     normalizedAfter ? `update_meta.event_offset::numeric > ${normalizedAfter}` : null,
     partyFilterClause,
+    hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
   const olderFilters = [
     normalizedBefore ? `update_meta.event_offset::numeric < ${normalizedBefore}` : null,
     partyFilterClause,
+    hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
 
   if (normalizedAfter && !normalizedBefore) {
@@ -379,6 +387,76 @@ function normalizedRecentUpdatesQuery(
     ${whereClause}
     order by update_meta.event_offset::numeric desc
     limit ${queryLimit}
+  `;
+}
+
+function buildHideSpliceOffsetsClause(): string {
+  return `
+    exists (
+      select 1
+      from (
+        select create_event.template_id::text as template_id
+        from participant.lapi_events_create create_event
+        where create_event.update_id::text = update_meta.update_id::text
+
+        union all
+
+        select exercise_event.template_id::text as template_id
+        from participant.lapi_events_consuming_exercise exercise_event
+        where exercise_event.update_id::text = update_meta.update_id::text
+
+        union all
+
+        select exercise_event.template_id::text as template_id
+        from participant.lapi_events_non_consuming_exercise exercise_event
+        where exercise_event.update_id::text = update_meta.update_id::text
+      ) update_event_templates
+      where update_event_templates.template_id is null
+        or update_event_templates.template_id not like 'Splice.%'
+    )
+  `;
+}
+
+function buildNormalizedHideSpliceOffsetsClause(): string {
+  return `
+    exists (
+      select 1
+      from (
+        select regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_activate_contract activate_event
+        left join participant.par_contracts contract
+          on contract.internal_contract_id = activate_event.internal_contract_id
+        where encode(activate_event.update_id, 'hex') = encode(update_meta.update_id, 'hex')
+
+        union all
+
+        select regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_various_witnessed various_event
+        left join participant.par_contracts contract
+          on contract.internal_contract_id = various_event.internal_contract_id
+        where encode(various_event.update_id, 'hex') = encode(update_meta.update_id, 'hex')
+          and various_event.event_type = 6
+
+        union all
+
+        select regexp_replace(coalesce(template_string.external_string, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_deactivate_contract deactivate_event
+        left join participant.lapi_string_interning template_string
+          on template_string.internal_id = deactivate_event.template_id
+        where encode(deactivate_event.update_id, 'hex') = encode(update_meta.update_id, 'hex')
+
+        union all
+
+        select regexp_replace(coalesce(template_string.external_string, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_various_witnessed various_event
+        left join participant.lapi_string_interning template_string
+          on template_string.internal_id = various_event.template_id
+        where encode(various_event.update_id, 'hex') = encode(update_meta.update_id, 'hex')
+          and various_event.event_type in (5, 7)
+      ) update_event_templates
+      where update_event_templates.template_id = ''
+        or update_event_templates.template_id not like 'Splice.%'
+    )
   `;
 }
 
@@ -1191,7 +1269,14 @@ export class PqsSummaryService {
     node: NodeConfig,
     options:
       | number
-      | { limit?: number; before?: string; after?: string; parties?: string[]; mode?: string } = 25,
+      | {
+          limit?: number;
+          before?: string;
+          after?: string;
+          parties?: string[];
+          mode?: string;
+          hideSplice?: boolean;
+        } = 25,
   ): Promise<NodeRecentUpdatesResponse> {
     const client = this.clientFactory.getClient(node);
     const normalizedLimit =
@@ -1206,33 +1291,28 @@ export class PqsSummaryService {
     const after = typeof options === 'object' ? options.after : undefined;
     const parties = typeof options === 'object' ? options.parties : undefined;
     const mode = typeof options === 'object' ? options.mode : undefined;
+    const hideSplice = typeof options === 'object' ? options.hideSplice === true : false;
     const useAfterCursor = Boolean(after && !before);
-    let metaResult;
-
-    try {
-      metaResult = await client.query(recentUpdatesQuery(normalizedLimit, before, after, parties, mode));
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        throw error;
-      }
-
-      metaResult = await client.query(
-        normalizedRecentUpdatesQuery(normalizedLimit, before, after, parties, mode),
-      );
-    }
-
-    const rawMetaRows = (metaResult.rows as UpdateMetaRow[]) ?? [];
+    const query = client.query.bind(client);
+    const rawMetaRows = await this.queryRecentUpdateMetaRows(
+      query,
+      normalizedLimit,
+      before,
+      after,
+      parties,
+      mode,
+      hideSplice,
+    );
     const hasMoreInQuery = rawMetaRows.length > normalizedLimit;
     const trimmedMetaRows = rawMetaRows.slice(0, normalizedLimit);
-    const orderedMetaRows = useAfterCursor ? [...trimmedMetaRows].reverse() : trimmedMetaRows;
-    const updates = orderedMetaRows.map((row) => ({
+    const orderedUpdates = (useAfterCursor ? [...trimmedMetaRows].reverse() : trimmedMetaRows).map((row) => ({
       eventOffset: this.extractEventOffset(row),
       rawUpdateId: row.update_id,
       updateId: this.normalizeUpdateId(row.update_id),
       recordTime: row.record_time ?? null,
     }));
 
-    if (updates.length === 0) {
+    if (orderedUpdates.length === 0) {
       return {
         nodeId: node.id,
         label: node.label,
@@ -1244,8 +1324,8 @@ export class PqsSummaryService {
     }
 
     const partiesByUpdateId = await this.fetchPartiesByUpdateId(
-      client.query.bind(client),
-      updates.map((update) => update.rawUpdateId),
+      query,
+      orderedUpdates.map((update) => update.rawUpdateId),
     );
 
     return {
@@ -1253,22 +1333,48 @@ export class PqsSummaryService {
       label: node.label,
       limit: normalizedLimit,
       nextBefore:
-        useAfterCursor || hasMoreInQuery ? updates[updates.length - 1]?.eventOffset ?? null : null,
+        useAfterCursor || hasMoreInQuery
+          ? orderedUpdates[orderedUpdates.length - 1]?.eventOffset ?? null
+          : null,
       nextAfter:
         useAfterCursor
           ? hasMoreInQuery
-            ? updates[0]?.eventOffset ?? null
+            ? orderedUpdates[0]?.eventOffset ?? null
             : null
           : before
-            ? updates[0]?.eventOffset ?? null
+            ? orderedUpdates[0]?.eventOffset ?? null
             : null,
-      updates: updates.map((update) => ({
+      updates: orderedUpdates.map((update) => ({
         eventOffset: update.eventOffset,
         updateId: update.updateId,
         recordTime: update.recordTime,
         parties: partiesByUpdateId.get(update.updateId) ?? [],
       })),
     };
+  }
+
+  private async queryRecentUpdateMetaRows(
+    query: (sql: string) => Promise<{ rows: unknown[] }>,
+    limit: number,
+    before?: string,
+    after?: string,
+    parties?: string[],
+    mode?: string,
+    hideSplice?: boolean,
+  ): Promise<UpdateMetaRow[]> {
+    try {
+      const result = await query(recentUpdatesQuery(limit, before, after, parties, mode, hideSplice));
+      return (result.rows as UpdateMetaRow[]) ?? [];
+    } catch (error) {
+      if (!this.shouldFallbackToNormalizedEventTables(error)) {
+        throw error;
+      }
+    }
+
+    const fallbackResult = await query(
+      normalizedRecentUpdatesQuery(limit, before, after, parties, mode, hideSplice),
+    );
+    return (fallbackResult.rows as UpdateMetaRow[]) ?? [];
   }
 
   async fetchActivityBuckets(

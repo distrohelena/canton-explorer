@@ -1,7 +1,15 @@
-import { describe, expect, it } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { NodeCacheService } from '../../src/cache/node-cache.service';
 
 describe('NodeCacheService', () => {
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-02T12:45:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('initializes a 15 minute bucket baseline at zero activity', () => {
     const cache = new NodeCacheService();
 

@@ -3,8 +3,10 @@ import { NotFoundException } from '@nestjs/common';
 import { NodesController } from '../../src/api/nodes.controller';
 import { NodeCacheService } from '../../src/cache/node-cache.service';
 import { NodeConfigService } from '../../src/config/node-config.service';
+import { GrpcOperationsService } from '../../src/grpc/grpc-operations.service';
 import { PqsSummaryService } from '../../src/pqs/pqs-summary.service';
 import type {
+  PartyDetailResponse,
   NodePackagesResponse,
   PackageDetailResponse,
   PackageFamilyResponse,
@@ -81,6 +83,95 @@ const typedNodePackagesFixture = {
   ],
 } satisfies NodePackagesResponse;
 
+const typedPartyDetailFixture = {
+  partyId: 'Alice',
+  nodeCount: 2,
+  recentUpdateCount: 2,
+  recentContractCount: 2,
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+  ],
+  recentUpdates: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      eventOffset: '0000000000000001',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      recordTime: '2026-07-01T12:00:00.000Z',
+      parties: ['Alice', 'Bob'],
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      eventOffset: '0000000000000002',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+      recordTime: '2026-07-01T11:00:00.000Z',
+      parties: ['Alice'],
+    },
+  ],
+  recentContracts: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      contractId: '00abc',
+      templateId: 'Main:Asset',
+      packageId: 'main-package',
+      packageName: 'Main Package',
+      packageVersion: '1.2.3',
+      recordTime: '2026-07-01T12:00:00.000Z',
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      contractId: '00def',
+      templateId: 'Main:Asset',
+      packageId: 'main-package',
+      packageName: 'Main Package',
+      packageVersion: '1.2.3',
+      recordTime: '2026-07-01T11:00:00.000Z',
+    },
+  ],
+} satisfies PartyDetailResponse;
+
+const typedActivePartiesFixture = {
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_only',
+      parties: ['Alice', 'Bob'],
+    },
+  ],
+};
+
+const typedLocalPartiesFixture = {
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_only',
+      parties: [],
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      parties: ['LocalAlice', 'LocalBob'],
+    },
+  ],
+};
+
 describe('NodesController', () => {
   let controller: NodesController;
   let cache: NodeCacheService;
@@ -91,6 +182,11 @@ describe('NodesController', () => {
     fetchPackageDetail: jest.Mock;
     fetchPackagesByName: jest.Mock;
     fetchNodePackages: jest.Mock;
+    fetchActiveParties: jest.Mock;
+    fetchPartyDetail: jest.Mock;
+  };
+  let grpcOperationsService: {
+    listLocalParties: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -99,6 +195,8 @@ describe('NodesController', () => {
         nodeId: 'participant-1',
         label: 'Participant 1',
         limit: 25,
+        nextBefore: '000000000000000001',
+        nextAfter: null,
         updates: [
           {
             eventOffset: '000000000000000001',
@@ -157,6 +255,11 @@ describe('NodesController', () => {
       fetchPackageDetail: jest.fn().mockResolvedValue(typedPackageDetailFixture),
       fetchPackagesByName: jest.fn().mockResolvedValue(typedPackageFamilyFixture),
       fetchNodePackages: jest.fn().mockResolvedValue(typedNodePackagesFixture),
+      fetchActiveParties: jest.fn().mockResolvedValue(typedActivePartiesFixture),
+      fetchPartyDetail: jest.fn().mockResolvedValue(typedPartyDetailFixture),
+    };
+    grpcOperationsService = {
+      listLocalParties: jest.fn().mockResolvedValue(['LocalAlice', 'LocalBob']),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -171,11 +274,25 @@ describe('NodesController', () => {
                 id: 'participant-1',
                 label: 'Participant 1',
                 role: 'participant',
+                mode: 'pqs_only',
                 ledgerLabel: 'Retail Ledger',
                 pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
               },
+              {
+                id: 'participant-2',
+                label: 'Participant 2',
+                role: 'participant',
+                mode: 'pqs_with_grpc',
+                ledgerLabel: 'Retail Ledger 2',
+                pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL' },
+                grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+              },
             ],
           },
+        },
+        {
+          provide: GrpcOperationsService,
+          useValue: grpcOperationsService,
         },
         {
           provide: PqsSummaryService,
@@ -191,6 +308,7 @@ describe('NodesController', () => {
       id: 'participant-1',
       label: 'Participant 1',
       role: 'participant',
+      mode: 'pqs_only',
       ledgerLabel: 'Retail Ledger',
       status: 'healthy',
       latencyMs: 21,
@@ -309,6 +427,65 @@ describe('NodesController', () => {
     );
   });
 
+  it('exposes a party detail controller entry point', () => {
+    const maybeController = controller as {
+      getPartyDetail?: (partyId: string) => Promise<PartyDetailResponse>;
+    };
+
+    expect(typeof maybeController.getPartyDetail).toBe('function');
+  });
+
+  it('exposes an active parties controller entry point', () => {
+    const maybeController = controller as {
+      listActiveParties?: () => Promise<typeof typedActivePartiesFixture>;
+    };
+
+    expect(typeof maybeController.listActiveParties).toBe('function');
+  });
+
+  it('returns active parties grouped by node', async () => {
+    const maybeController = controller as {
+      listActiveParties?: () => Promise<typeof typedActivePartiesFixture>;
+    };
+
+    const response = await maybeController.listActiveParties?.();
+
+    expect(pqsSummaryService.fetchActiveParties).toHaveBeenCalledWith(expect.any(Array));
+    expect(response?.nodes[0].nodeId).toBe('participant-1');
+    expect(response).toEqual(typedActivePartiesFixture);
+  });
+
+  it('returns local parties grouped by node using the SDK-backed gRPC service', async () => {
+    const maybeController = controller as {
+      listLocalParties?: () => Promise<typeof typedLocalPartiesFixture>;
+    };
+
+    const response = await maybeController.listLocalParties?.();
+
+    expect(grpcOperationsService.listLocalParties).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+    );
+    expect(response).toEqual(typedLocalPartiesFixture);
+  });
+
+  it('returns party detail for a known party id', async () => {
+    const response = await controller.getPartyDetail('Alice');
+
+    expect(pqsSummaryService.fetchPartyDetail).toHaveBeenCalledWith(
+      expect.any(Array),
+      'Alice',
+    );
+    expect(response).toEqual(typedPartyDetailFixture);
+  });
+
+  it('returns 404 for an unknown party id', async () => {
+    pqsSummaryService.fetchPartyDetail.mockRejectedValueOnce(new Error('Party not found'));
+
+    await expect(controller.getPartyDetail('missing-party')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
   it('returns aggregated ledgers', () => {
     const response = controller.listLedgers();
 
@@ -393,12 +570,20 @@ describe('NodesController', () => {
         id: 'participant-1',
         label: 'Participant 1',
       }),
-      25,
+      {
+        limit: 25,
+        before: undefined,
+        after: undefined,
+        parties: undefined,
+        mode: undefined,
+      },
     );
     expect(response).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
       limit: 25,
+      nextBefore: '000000000000000001',
+      nextAfter: null,
       updates: [
         {
           eventOffset: '000000000000000001',
@@ -408,6 +593,80 @@ describe('NodesController', () => {
         },
       ],
     });
+  });
+
+  it('passes through offset cursors for updates pagination', async () => {
+    await controller.listNodeUpdates(
+      'participant-1',
+      '25',
+      '000000000000000100',
+      undefined,
+      undefined,
+      undefined,
+    );
+
+    expect(pqsSummaryService.fetchRecentUpdates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'participant-1',
+      }),
+      {
+        limit: 25,
+        before: '000000000000000100',
+        after: undefined,
+        parties: undefined,
+        mode: undefined,
+      },
+    );
+  });
+
+  it('passes through repeated party filters and global mode for updates pagination', async () => {
+    await controller.listNodeUpdates(
+      'participant-1',
+      '25',
+      undefined,
+      undefined,
+      ['Alice', 'Bob'],
+      'and',
+    );
+
+    expect(pqsSummaryService.fetchRecentUpdates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'participant-1',
+      }),
+      {
+        limit: 25,
+        before: undefined,
+        after: undefined,
+        parties: ['Alice', 'Bob'],
+        mode: 'and',
+      },
+    );
+  });
+
+  it('passes through the hide Splice flag for updates pagination', async () => {
+    await controller.listNodeUpdates(
+      'participant-1',
+      '25',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'true',
+    );
+
+    expect(pqsSummaryService.fetchRecentUpdates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'participant-1',
+      }),
+      {
+        limit: 25,
+        before: undefined,
+        after: undefined,
+        parties: undefined,
+        mode: undefined,
+        hideSplice: true,
+      },
+    );
   });
 
   it('returns 404 for updates on an unknown node', async () => {

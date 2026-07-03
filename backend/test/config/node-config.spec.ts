@@ -9,6 +9,7 @@ describe('parseNodeConfigFile', () => {
           id: 'participant-1',
           label: 'Participant 1',
           role: 'participant',
+          mode: 'pqs_with_grpc',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
           grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
@@ -29,10 +30,59 @@ describe('parseNodeConfigFile', () => {
             id: '',
             label: 'Broken',
             role: 'participant',
+            mode: 'pqs_only',
             pqs: { connectionUriEnv: 'BROKEN_URL' },
           },
         ],
       }),
     ).toThrow(/id/i);
+  });
+
+  it('rejects a config with no node mode', () => {
+    expect(() =>
+      parseNodeConfigFile({
+        nodes: [
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            role: 'participant',
+            pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+          },
+        ],
+      }),
+    ).toThrow(/mode/i);
+  });
+
+  it('rejects grpc settings for pqs_only nodes', () => {
+    expect(() =>
+      parseNodeConfigFile({
+        nodes: [
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            role: 'participant',
+            mode: 'pqs_only',
+            pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+            grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+          },
+        ],
+      }),
+    ).toThrow(/grpc/i);
+  });
+
+  it('requires grpc settings for pqs_with_grpc nodes', () => {
+    expect(() =>
+      parseNodeConfigFile({
+        nodes: [
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            role: 'participant',
+            mode: 'pqs_with_grpc',
+            pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+          },
+        ],
+      }),
+    ).toThrow(/grpc/i);
   });
 });
