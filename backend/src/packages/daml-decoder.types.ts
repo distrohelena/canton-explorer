@@ -1,3 +1,20 @@
+import type {
+  DamlLfChoice as SdkDamlLfChoice,
+  DamlLfCompilation as SdkDamlLfCompilation,
+  DamlLfDataType as SdkDamlLfDataType,
+  DamlLfPackage as SdkDamlLfPackage,
+  DamlLfPackageLoadResult as SdkDamlLfPackageLoadResult,
+  DamlLfSemanticModel as SdkDamlLfSemanticModel,
+  DamlLfTemplate as SdkDamlLfTemplate,
+} from 'canton-typescript-sdk/daml-lf';
+
+export type SdkRawPackage = SdkDamlLfPackageLoadResult['rawPackage'];
+export type SdkRawModule = SdkRawPackage['modules'][number];
+export type SdkRawTemplate = SdkRawModule['templates'][number];
+export type SdkRawTemplateChoice = SdkRawTemplate['choices'][number];
+export type SdkRawDataType = SdkRawModule['dataTypes'][number];
+export type SdkRawType = SdkRawPackage['internedTypes'][number];
+
 export type PackageRegistryFailureReason =
   | 'missing_package'
   | 'invalid_package'
@@ -9,103 +26,26 @@ export type PackageRegistryResult<T> =
   | { ok: true; definition: T }
   | { ok: false; reason: PackageRegistryFailureReason };
 
-export interface DamlLfInternedDottedName {
-  segments_interned_str?: number[];
-}
-
-export interface DamlLfTemplateChoice {
-  name_interned_str?: number;
-  consuming?: boolean;
-  arg_binder?: Record<string, unknown> | null;
-  ret_type?: Record<string, unknown> | null;
-}
-
-export interface DamlLfType {
-  interned_type?: number;
-  var_interned_str?: number;
-  con?: {
-    args?: DamlLfType[];
-    tycon?: {
-      module?: {
-        package_id?: {
-          self_package_id?: Record<string, unknown>;
-          imported_package_id_interned_str?: number;
-        };
-        module_name_interned_dname?: number;
-      };
-      name_interned_dname?: number;
-    };
-  } | null;
-  builtin?: {
-    args?: DamlLfType[];
-    builtin?: string;
-  } | null;
-}
-
-export interface DamlLfTypeParameter {
-  var_interned_str?: number;
-}
-
-export interface DamlLfRecordField {
-  type?: DamlLfType;
-  field_interned_str?: number;
-}
-
-export interface DamlLfVariantField {
-  type?: DamlLfType;
-  constructor_interned_str?: number;
-}
-
-export interface DamlLfTemplate {
-  tycon_interned_dname?: number;
-  choices?: DamlLfTemplateChoice[];
-}
-
-export interface DamlLfDataType {
-  params?: DamlLfTypeParameter[];
-  name_interned_dname?: number;
-  record?: Record<string, unknown> | null;
-  variant?: Record<string, unknown> | null;
-  enum?: Record<string, unknown> | null;
-}
-
-export interface DamlLfModule {
-  name_interned_dname?: number;
-  templates?: DamlLfTemplate[];
-  data_types?: DamlLfDataType[];
-}
-
-export interface DamlLfPackageMetadata {
-  name_interned_str?: number;
-  version_interned_str?: number;
-}
-
-export interface DamlLfPackage {
-  modules?: DamlLfModule[];
-  interned_strings?: string[];
-  interned_dotted_names?: DamlLfInternedDottedName[];
-  interned_types?: DamlLfType[];
-  metadata?: DamlLfPackageMetadata | null;
-}
-
 export interface ResolvedDataType {
   packageId: string;
   typeId: string;
   moduleName: string;
   entityName: string;
-  dataType: DamlLfDataType;
+  dataType: SdkRawDataType;
   packageRef: ResolvedPackage;
+  sdkDataType: SdkDamlLfDataType | null;
 }
 
 export interface ResolvedPackage {
   packageId: string;
   packageName: string | null;
   packageVersion: string | null;
-  strings: string[];
-  dottedNames: string[];
-  internedTypes: DamlLfType[];
+  rawPackage: SdkRawPackage;
   templatesById: Map<string, ResolvedTemplate>;
   dataTypesById: Map<string, ResolvedDataType>;
+  sdkPackage: SdkDamlLfPackage | null;
+  sdkCompilation: SdkDamlLfCompilation | null;
+  sdkSemanticModel: SdkDamlLfSemanticModel | null;
 }
 
 export interface ResolvedTemplate {
@@ -113,9 +53,10 @@ export interface ResolvedTemplate {
   templateId: string;
   moduleName: string;
   entityName: string;
-  template: DamlLfTemplate;
-  dataType: DamlLfDataType | null;
+  template: SdkRawTemplate;
+  dataType: SdkRawDataType | null;
   packageRef: ResolvedPackage;
+  sdkTemplate: SdkDamlLfTemplate | null;
 }
 
 export interface ResolvedChoice {
@@ -123,7 +64,8 @@ export interface ResolvedChoice {
   templateId: string;
   choice: string;
   template: ResolvedTemplate;
-  templateChoice: DamlLfTemplateChoice;
+  templateChoice: SdkRawTemplateChoice;
+  sdkChoice: SdkDamlLfChoice | null;
 }
 
 export interface ResolvedPackageInspection {

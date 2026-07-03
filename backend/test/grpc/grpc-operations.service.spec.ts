@@ -1,5 +1,8 @@
 import { describe, expect, it, jest } from '@jest/globals';
+import { resolve } from 'node:path';
 import { GrpcOperationsService } from '../../src/grpc/grpc-operations.service';
+import { PackageCacheService } from '../../src/packages/package-cache.service';
+import { SAMPLE_DAML_FIXTURE } from '../fixtures/daml/fixture-manifest';
 
 describe('GrpcOperationsService', () => {
   it('returns reachability metadata from the SDK health client', async () => {
@@ -123,5 +126,58 @@ describe('GrpcOperationsService', () => {
       }),
     ]);
     expect(disposeAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to ledger package listing when participant package admin RPC is unavailable', async () => {
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(
+      process.cwd(),
+      'test/fixtures/daml/package-cache.sqlite',
+    );
+    const cachedPackage = new PackageCacheService().getPackage(SAMPLE_DAML_FIXTURE.packageId);
+    if (!cachedPackage) {
+      throw new Error('Missing DAML fixture package');
+    }
+
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const service = new GrpcOperationsService({
+      create: () => ({
+        participantPackageService: {
+          listPackagesAsync: jest.fn().mockRejectedValue(
+            new Error(
+              'Method not found: com.digitalasset.canton.admin.participant.v30.PackageService/ListPackages',
+            ),
+          ),
+        },
+        packageService: {
+          listPackagesAsync: jest.fn().mockResolvedValue({
+            packageIds: [SAMPLE_DAML_FIXTURE.packageId],
+          }),
+          getPackageAsync: jest.fn().mockResolvedValue({
+            archivePayload: new Uint8Array(cachedPackage.data),
+          }),
+        },
+        disposeAsync,
+      }),
+    } as never);
+
+    const result = await service.fetchPackageRefs({
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+    });
+
+    expect(result).toEqual([
+      {
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        mainPackageId: SAMPLE_DAML_FIXTURE.packageId,
+        name: 'splice-amulet',
+        version: '0.1.18',
+        uploadedAt: null,
+        packageSize: cachedPackage.data.length,
+      },
+    ]);
   });
 });

@@ -193,4 +193,127 @@ describe('PackageSyncService', () => {
     ]);
     expect(pqsPackageService.fetchPackageRefs).not.toHaveBeenCalled();
   });
+
+  it('falls back to PQS package references when the gRPC package listing fails', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-sync-service-grpc-refs-fallback-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const grpcOperationsService = {
+      fetchPackageRefs: jest.fn().mockRejectedValue(new Error('grpc package listing failed')),
+      fetchPackagesByRefs: jest.fn(),
+    };
+    const pqsPackageService = {
+      fetchPackageRefs: jest.fn().mockResolvedValue([
+        {
+          packageId: 'package-a',
+          mainPackageId: 'package-a',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-03T10:00:00.000Z',
+          packageSize: 2048,
+        },
+      ]),
+      fetchPackagesById: jest.fn().mockResolvedValue([
+        {
+          packageId: 'package-a',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-03T10:00:00.000Z',
+          packageSize: 2048,
+          data: Buffer.from([1, 2, 3]),
+        },
+      ]),
+    };
+    const service = new PackageSyncService(
+      cacheService,
+      pqsPackageService as never,
+      grpcOperationsService as never,
+      15 * 60 * 1000,
+    );
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+    };
+
+    await expect(service.syncNodePackages(node as never)).resolves.toEqual({
+      fetchedPackageCount: 1,
+      missingPackageIds: ['package-a'],
+      skippedBecauseNotDue: false,
+    });
+
+    expect(pqsPackageService.fetchPackageRefs).toHaveBeenCalledWith(node);
+    expect(pqsPackageService.fetchPackagesById).toHaveBeenCalledWith(node, ['package-a']);
+    expect(grpcOperationsService.fetchPackagesByRefs).not.toHaveBeenCalled();
+  });
+
+  it('falls back to PQS package blobs when the gRPC package download fails', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-sync-service-grpc-packages-fallback-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const grpcOperationsService = {
+      fetchPackageRefs: jest.fn().mockResolvedValue([
+        {
+          packageId: 'package-a',
+          mainPackageId: 'package-a',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-03T10:00:00.000Z',
+          packageSize: 2048,
+        },
+      ]),
+      fetchPackagesByRefs: jest.fn().mockRejectedValue(new Error('grpc package download failed')),
+    };
+    const pqsPackageService = {
+      fetchPackageRefs: jest.fn(),
+      fetchPackagesById: jest.fn().mockResolvedValue([
+        {
+          packageId: 'package-a',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-03T10:00:00.000Z',
+          packageSize: 2048,
+          data: Buffer.from([1, 2, 3]),
+        },
+      ]),
+    };
+    const service = new PackageSyncService(
+      cacheService,
+      pqsPackageService as never,
+      grpcOperationsService as never,
+      15 * 60 * 1000,
+    );
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+    };
+
+    await expect(service.syncNodePackages(node as never)).resolves.toEqual({
+      fetchedPackageCount: 1,
+      missingPackageIds: ['package-a'],
+      skippedBecauseNotDue: false,
+    });
+
+    expect(grpcOperationsService.fetchPackageRefs).toHaveBeenCalledWith(node);
+    expect(grpcOperationsService.fetchPackagesByRefs).toHaveBeenCalledWith(node, [
+      {
+        packageId: 'package-a',
+        mainPackageId: 'package-a',
+        name: 'Main Package',
+        version: '1.2.3',
+        uploadedAt: '2026-07-03T10:00:00.000Z',
+        packageSize: 2048,
+      },
+    ]);
+    expect(pqsPackageService.fetchPackagesById).toHaveBeenCalledWith(node, ['package-a']);
+  });
 });

@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { loadValueRoot } from './daml-lf-loader';
+import {
+  flattenRawTypeApplication,
+  resolveRawBuiltinTypeName,
+  resolveRawDottedName,
+  resolveRawInternedString,
+  resolveRawReferencedPackageId,
+} from './daml-lf-raw.util';
 import { PackageRegistryService } from './package-registry.service';
 import type {
-  DamlLfDataType,
-  DamlLfRecordField,
-  DamlLfType,
-  DamlLfVariantField,
   ResolvedDataType,
   ResolvedPackage,
+  SdkRawDataType,
+  SdkRawType,
 } from './daml-decoder.types';
 import type {
   NodeDecodeFailureReason,
@@ -113,12 +118,12 @@ export class DamlValueDecoderService {
     const packageRef = choiceResult.definition.template.packageRef;
     const argumentType = this.resolveTypeReference(
       packageRef,
-      choiceResult.definition.templateChoice.arg_binder?.type as DamlLfType | undefined,
+      choiceResult.definition.templateChoice.argBinder?.type,
       new Map(),
     );
     const resultType = this.resolveTypeReference(
       packageRef,
-      choiceResult.definition.templateChoice.ret_type as DamlLfType | undefined,
+      choiceResult.definition.templateChoice.retType,
       new Map(),
     );
 
@@ -145,8 +150,8 @@ export class DamlValueDecoderService {
   private decodeVersionedValue(
     buffer: Buffer,
     packageRef: ResolvedPackage,
-    expectedType: DamlLfType | DamlLfDataType | null,
-    typeBindings: Map<number, DamlLfType>,
+    expectedType: SdkRawType | SdkRawDataType | null,
+    typeBindings: Map<number, SdkRawType>,
   ): NodeDecodeState<NodeDecodedDamlValue> {
     try {
       const decoded = this.versionedValueType.decode(buffer) as VersionedValueMessage;
@@ -168,8 +173,8 @@ export class DamlValueDecoderService {
   private decodeRawValue(
     buffer: Buffer,
     packageRef: ResolvedPackage,
-    expectedType: DamlLfType | DamlLfDataType | null,
-    typeBindings: Map<number, DamlLfType>,
+    expectedType: SdkRawType | SdkRawDataType | null,
+    typeBindings: Map<number, SdkRawType>,
   ): NodeDecodeState<NodeDecodedDamlValue> {
     try {
       const value = this.valueType.toObject(
@@ -196,8 +201,8 @@ export class DamlValueDecoderService {
   private decodeTypedValue(
     value: DecodedValueObject,
     packageRef: ResolvedPackage,
-    expectedType: DamlLfType | DamlLfDataType | null,
-    typeBindings: Map<number, DamlLfType>,
+    expectedType: SdkRawType | SdkRawDataType | null,
+    typeBindings: Map<number, SdkRawType>,
   ): NodeDecodedDamlValue | null {
     if (this.isDataType(expectedType)) {
       return this.decodeDataTypeValue(value, packageRef, expectedType, typeBindings);
@@ -208,31 +213,31 @@ export class DamlValueDecoderService {
       return this.decodeUntypedValue(value);
     }
 
-    if (resolvedType.var_interned_str !== undefined) {
-      const boundType = typeBindings.get(resolvedType.var_interned_str);
+    if (resolvedType.sum.oneofKind === 'var') {
+      const boundType = typeBindings.get(resolvedType.sum.var.varInternedStr);
       return boundType
         ? this.decodeTypedValue(value, packageRef, boundType, typeBindings)
         : this.decodeUntypedValue(value);
     }
 
-    if (resolvedType.builtin?.builtin) {
+    if (resolvedType.sum.oneofKind === 'builtin') {
       return this.decodeBuiltinValue(value, packageRef, resolvedType, typeBindings);
     }
 
-    if (resolvedType.con?.tycon) {
+    if (resolvedType.sum.oneofKind === 'con' && resolvedType.sum.con.tycon) {
       const resolvedDataType = this.resolveDataTypeReference(packageRef, resolvedType);
       if (!resolvedDataType) {
         return null;
       }
 
-      const nextBindings = new Map<number, DamlLfType>();
+      const nextBindings = new Map<number, SdkRawType>();
       const params = resolvedDataType.dataType.params ?? [];
-      const args = resolvedType.con.args ?? [];
+      const args = resolvedType.sum.con?.args ?? [];
 
       params.forEach((parameter, index) => {
-        if (parameter.var_interned_str !== undefined && args[index]) {
+        if (parameter.varInternedStr !== undefined && args[index]) {
           nextBindings.set(
-            parameter.var_interned_str,
+            parameter.varInternedStr,
             this.resolveTypeReference(packageRef, args[index], typeBindings) ?? args[index],
           );
         }
@@ -247,11 +252,11 @@ export class DamlValueDecoderService {
   private decodeDataTypeValue(
     value: DecodedValueObject,
     packageRef: ResolvedPackage,
-    dataType: DamlLfDataType,
-    typeBindings: Map<number, DamlLfType>,
+    dataType: SdkRawDataType,
+    typeBindings: Map<number, SdkRawType>,
   ): NodeDecodedDamlValue | null {
-    if (dataType.record && value.sum === 'record') {
-      const expectedFields = ((dataType.record as { fields?: DamlLfRecordField[] }).fields ?? []);
+    if (dataType.dataCons.oneofKind === 'record' && value.sum === 'record') {
+      const expectedFields = dataType.dataCons.record.fields;
       const actualFields = value.record?.fields ?? [];
       if (expectedFields.length !== actualFields.length) {
         return null;
@@ -260,7 +265,9 @@ export class DamlValueDecoderService {
       return {
         kind: 'record',
         fields: expectedFields.map((field, index) => ({
-          label: this.resolveInternedString(packageRef, field.field_interned_str) ?? `field${index + 1}`,
+          label:
+            resolveRawInternedString(packageRef.rawPackage, field.fieldInternedStr) ??
+            `field${index + 1}`,
           value:
             this.decodeTypedValue(
               actualFields[index]?.value ?? {},
@@ -272,17 +279,16 @@ export class DamlValueDecoderService {
       };
     }
 
-    if (dataType.variant && value.sum === 'variant') {
+    if (dataType.dataCons.oneofKind === 'variant' && value.sum === 'variant') {
       const constructor = value.variant?.constructor ?? null;
       if (!constructor) {
         return null;
       }
 
-      const variantFields =
-        ((dataType.variant as { fields?: DamlLfVariantField[] }).fields ?? []);
-      const variantField = variantFields.find(
+      const variantField = dataType.dataCons.variant.fields.find(
         (field) =>
-          this.resolveInternedString(packageRef, field.constructor_interned_str) === constructor,
+          resolveRawInternedString(packageRef.rawPackage, field.fieldInternedStr) ===
+          constructor,
       );
       if (!variantField) {
         return null;
@@ -297,7 +303,7 @@ export class DamlValueDecoderService {
       };
     }
 
-    if (dataType.enum && value.sum === 'enum' && value.enum?.value) {
+    if (dataType.dataCons.oneofKind === 'enum' && value.sum === 'enum' && value.enum?.value) {
       return {
         kind: 'enum',
         constructor: value.enum.value,
@@ -310,11 +316,15 @@ export class DamlValueDecoderService {
   private decodeBuiltinValue(
     value: DecodedValueObject,
     packageRef: ResolvedPackage,
-    expectedType: DamlLfType,
-    typeBindings: Map<number, DamlLfType>,
+    expectedType: SdkRawType,
+    typeBindings: Map<number, SdkRawType>,
   ): NodeDecodedDamlValue | null {
-    const builtin = expectedType.builtin?.builtin;
-    const args = expectedType.builtin?.args ?? [];
+    if (expectedType.sum.oneofKind !== 'builtin') {
+      return this.decodeUntypedValue(value);
+    }
+
+    const builtin = resolveRawBuiltinTypeName(expectedType.sum.builtin.builtin);
+    const args = expectedType.sum.builtin.args;
 
     switch (builtin) {
       case 'UNIT':
@@ -496,14 +506,18 @@ export class DamlValueDecoderService {
 
   private resolveDataTypeReference(
     packageRef: ResolvedPackage,
-    rawType: DamlLfType,
+    rawType: SdkRawType,
   ): ResolvedDataType | null {
-    const tycon = rawType.con?.tycon;
-    const moduleName = this.resolveDottedName(
-      packageRef,
-      tycon?.module?.module_name_interned_dname,
+    if (rawType.sum.oneofKind !== 'con') {
+      return null;
+    }
+
+    const tycon = rawType.sum.con.tycon;
+    const moduleName = resolveRawDottedName(
+      packageRef.rawPackage,
+      tycon?.module?.moduleNameInternedDname,
     );
-    const entityName = this.resolveDottedName(packageRef, tycon?.name_interned_dname);
+    const entityName = resolveRawDottedName(packageRef.rawPackage, tycon?.nameInternedDname);
     if (!moduleName || !entityName) {
       return null;
     }
@@ -534,56 +548,38 @@ export class DamlValueDecoderService {
 
   private resolveTypeReference(
     packageRef: ResolvedPackage,
-    rawType: DamlLfType | null | undefined,
-    typeBindings: Map<number, DamlLfType>,
-  ): DamlLfType | null {
+    rawType: SdkRawType | null | undefined,
+    typeBindings: Map<number, SdkRawType>,
+  ): SdkRawType | null {
     if (!rawType) {
       return null;
     }
 
-    if (typeof rawType.interned_type === 'number') {
-      return packageRef.internedTypes[rawType.interned_type] ?? null;
+    if (rawType.sum.oneofKind === 'internedType') {
+      return this.resolveTypeReference(
+        packageRef,
+        packageRef.rawPackage.internedTypes[rawType.sum.internedType],
+        typeBindings,
+      );
     }
 
-    if (typeof rawType.var_interned_str === 'number') {
-      return typeBindings.get(rawType.var_interned_str) ?? rawType;
+    if (rawType.sum.oneofKind === 'var') {
+      return typeBindings.get(rawType.sum.var.varInternedStr) ?? rawType;
     }
 
-    return rawType;
+    return flattenRawTypeApplication(rawType);
   }
 
-  private resolveDottedName(
-    packageRef: ResolvedPackage,
-    index: number | undefined,
-  ): string | null {
-    if (typeof index !== 'number') {
-      return null;
-    }
-
-    return packageRef.dottedNames[index] ?? null;
-  }
-
-  private resolveInternedString(
-    packageRef: ResolvedPackage,
-    index: number | undefined,
-  ): string | null {
-    if (typeof index !== 'number') {
-      return null;
-    }
-
-    return packageRef.strings[index] ?? null;
-  }
-
-  private resolveReferencedPackageId(packageRef: ResolvedPackage, rawType: DamlLfType): string {
-    const packageId = rawType.con?.tycon?.module?.package_id;
-    if (!packageId || packageId.self_package_id) {
+  private resolveReferencedPackageId(packageRef: ResolvedPackage, rawType: SdkRawType): string {
+    if (rawType.sum.oneofKind !== 'con') {
       return packageRef.packageId;
     }
 
-    const importedIndex = packageId.imported_package_id_interned_str;
-    return typeof importedIndex === 'number'
-      ? packageRef.strings[importedIndex] ?? packageRef.packageId
-      : packageRef.packageId;
+    return resolveRawReferencedPackageId(
+      packageRef.rawPackage,
+      packageRef.packageId,
+      rawType.sum.con.tycon?.module?.packageId,
+    );
   }
 
   private extractCreateArgument(contractInstance: Buffer): Buffer | null {
@@ -687,11 +683,11 @@ export class DamlValueDecoderService {
     return choice.replace(/^c\|/, '');
   }
 
-  private isDataType(value: DamlLfType | DamlLfDataType | null): value is DamlLfDataType {
+  private isDataType(value: SdkRawType | SdkRawDataType | null): value is SdkRawDataType {
     return Boolean(
       value &&
         typeof value === 'object' &&
-        ('record' in value || 'variant' in value || 'enum' in value),
+        'dataCons' in value,
     );
   }
 }

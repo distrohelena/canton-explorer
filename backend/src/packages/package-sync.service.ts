@@ -10,6 +10,11 @@ export interface PackageSyncResult {
   skippedBecauseNotDue: boolean;
 }
 
+interface PackageRefFetchResult {
+  source: 'grpc' | 'pqs';
+  packageRefs: Awaited<ReturnType<PqsPackageService['fetchPackageRefs']>>;
+}
+
 @Injectable()
 export class PackageSyncService {
   private readonly lastSyncStartedAtByNode = new Map<string, number>();
@@ -41,10 +46,7 @@ export class PackageSyncService {
   }
 
   async syncNodePackages(node: NodeConfig): Promise<PackageSyncResult> {
-    const packageRefs =
-      node.mode === 'pqs_with_grpc'
-        ? await this.grpcOperationsService.fetchPackageRefs(node)
-        : await this.pqsPackageService.fetchPackageRefs(node);
+    const { source, packageRefs } = await this.fetchPackageRefs(node);
     const missingPackageIds = this.cacheService.recordPackagePresence(
       node.id,
       packageRefs,
@@ -62,10 +64,12 @@ export class PackageSyncService {
     const missingPackageRefs = packageRefs.filter((packageRef) =>
       missingPackageIds.includes(packageRef.packageId),
     );
-    const packages =
-      node.mode === 'pqs_with_grpc'
-        ? await this.grpcOperationsService.fetchPackagesByRefs(node, missingPackageRefs)
-        : await this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+    const packages = await this.fetchPackages(
+      node,
+      source,
+      missingPackageIds,
+      missingPackageRefs,
+    );
     this.cacheService.storePackages(packages);
 
     return {
@@ -73,5 +77,43 @@ export class PackageSyncService {
       fetchedPackageCount: packages.length,
       skippedBecauseNotDue: false,
     };
+  }
+
+  private async fetchPackageRefs(node: NodeConfig): Promise<PackageRefFetchResult> {
+    if (node.mode !== 'pqs_with_grpc') {
+      return {
+        source: 'pqs',
+        packageRefs: await this.pqsPackageService.fetchPackageRefs(node),
+      };
+    }
+
+    try {
+      return {
+        source: 'grpc',
+        packageRefs: await this.grpcOperationsService.fetchPackageRefs(node),
+      };
+    } catch {
+      return {
+        source: 'pqs',
+        packageRefs: await this.pqsPackageService.fetchPackageRefs(node),
+      };
+    }
+  }
+
+  private async fetchPackages(
+    node: NodeConfig,
+    source: PackageRefFetchResult['source'],
+    missingPackageIds: string[],
+    missingPackageRefs: PackageRefFetchResult['packageRefs'],
+  ) {
+    if (node.mode !== 'pqs_with_grpc' || source === 'pqs') {
+      return this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+    }
+
+    try {
+      return await this.grpcOperationsService.fetchPackagesByRefs(node, missingPackageRefs);
+    } catch {
+      return this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+    }
   }
 }

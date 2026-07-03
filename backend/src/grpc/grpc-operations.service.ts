@@ -65,18 +65,44 @@ export class GrpcOperationsService {
     }
 
     return this.withClient(node, async (client) => {
-      const response = await client.participantPackageService.listPackagesAsync({});
+      try {
+        const response = await client.participantPackageService.listPackagesAsync({});
 
-      return (response.packageDescriptions ?? [])
-        .map((description) => ({
-          packageId: description.packageId,
-          mainPackageId: description.packageId,
-          name: description.name || null,
-          version: description.version || null,
-          uploadedAt: description.uploadedAt?.toISOString() ?? null,
-          packageSize: description.size ?? null,
-        }))
-        .sort((left, right) => left.packageId.localeCompare(right.packageId));
+        return (response.packageDescriptions ?? [])
+          .map((description) => ({
+            packageId: description.packageId,
+            mainPackageId: description.packageId,
+            name: description.name || null,
+            version: description.version || null,
+            uploadedAt: description.uploadedAt?.toISOString() ?? null,
+            packageSize: description.size ?? null,
+          }))
+          .sort((left, right) => left.packageId.localeCompare(right.packageId));
+      } catch (error) {
+        if (!this.shouldFallbackToLedgerPackageListing(error)) {
+          throw error;
+        }
+      }
+
+      const fallbackResponse = await client.packageService.listPackagesAsync({});
+      const packageRefs = await Promise.all(
+        (fallbackResponse.packageIds ?? []).map(async (packageId) => {
+          const packageResponse = await client.packageService.getPackageAsync({ packageId });
+          const archivePayload = Buffer.from(packageResponse.archivePayload);
+          const metadata = await this.decodePackageArchiveMetadata(archivePayload);
+
+          return {
+            packageId,
+            mainPackageId: packageId,
+            name: metadata.name,
+            version: metadata.version,
+            uploadedAt: null,
+            packageSize: archivePayload.length,
+          };
+        }),
+      );
+
+      return packageRefs.sort((left, right) => left.packageId.localeCompare(right.packageId));
     });
   }
 
@@ -121,6 +147,27 @@ export class GrpcOperationsService {
       default:
         return null;
     }
+  }
+
+  private shouldFallbackToLedgerPackageListing(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    return error.message.includes('Method not found:') && error.message.includes('PackageService/ListPackages');
+  }
+
+  private async decodePackageArchiveMetadata(
+    archivePayload: Buffer,
+  ): Promise<{ name: string | null; version: string | null }> {
+    const sdk = await import('canton-typescript-sdk/daml-lf');
+    const packageLoader = new sdk.DamlLfPackageLoader();
+    const decodedPackage = packageLoader.loadPackageOrThrow(archivePayload);
+
+    return {
+      name: decodedPackage.packageName || null,
+      version: decodedPackage.packageVersion || null,
+    };
   }
 
   private async withClient<T>(

@@ -3,28 +3,12 @@ import { resolve } from 'node:path';
 import protobuf, { Root } from 'protobufjs';
 import descriptor from 'protobufjs/ext/descriptor';
 
-let archiveRoot: Root | null = null;
 let valueRoot: Root | null = null;
 const rootFromDescriptor = (
   protobuf.Root as typeof protobuf.Root & {
     fromDescriptor(descriptorSet: unknown): Root;
   }
 ).fromDescriptor;
-
-export function loadArchiveRoot(): Root {
-  if (!archiveRoot) {
-    archiveRoot = rootFromDescriptor(
-      descriptor.FileDescriptorSet.create({
-        file: [
-          loadDescriptorFile('daml-lf-archive-v2.descriptor.pb'),
-          loadDescriptorFile('daml-lf-archive.descriptor.pb'),
-        ],
-      }),
-    );
-  }
-
-  return archiveRoot;
-}
 
 export function loadValueRoot(): Root {
   if (!valueRoot) {
