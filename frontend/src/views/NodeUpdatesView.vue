@@ -31,6 +31,14 @@ function readFilterMode(value: unknown): FilterMode {
   return value === 'and' ? 'and' : 'or';
 }
 
+function readHideSplice(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.includes('true');
+  }
+
+  return value === 'true';
+}
+
 function uniqueParties(parties: string[]): string[] {
   return Array.from(
     new Set(
@@ -43,9 +51,14 @@ function uniqueParties(parties: string[]): string[] {
 
 const activePartyFilters = computed(() => uniqueParties(readPartyFilters(route.query.party)));
 const activeFilterMode = computed<FilterMode>(() => readFilterMode(route.query.mode));
+const activeHideSplice = computed(() => readHideSplice(route.query.hideSplice));
 
 function hasAdvancedFilterQuery(): boolean {
-  return activePartyFilters.value.length > 0 || typeof route.query.mode === 'string';
+  return (
+    activePartyFilters.value.length > 0 ||
+    typeof route.query.mode === 'string' ||
+    activeHideSplice.value
+  );
 }
 
 async function loadUpdates() {
@@ -57,6 +70,7 @@ async function loadUpdates() {
     const after = readQueryCursor(route.query.after);
     const parties = activePartyFilters.value;
     const mode = activeFilterMode.value;
+    const hideSplice = readHideSplice(route.query.hideSplice);
     const options: Parameters<typeof fetchNodeUpdates>[1] = {};
 
     if (before) {
@@ -68,6 +82,9 @@ async function loadUpdates() {
     if (parties.length > 0) {
       options.parties = parties;
       options.mode = mode;
+    }
+    if (hideSplice) {
+      options.hideSplice = true;
     }
 
     updatesResponse.value =
@@ -90,7 +107,7 @@ watch(
 );
 
 watch(
-  () => [route.query.party, route.query.mode],
+  () => [route.query.party, route.query.mode, route.query.hideSplice],
   () => {
     if (hasAdvancedFilterQuery()) {
       showAdvancedFilter.value = true;
@@ -126,7 +143,11 @@ const renderedUpdates = computed(() =>
   })),
 );
 
-function buildUpdatesQuery(parties = activePartyFilters.value, mode = activeFilterMode.value) {
+function buildUpdatesQuery(
+  parties = activePartyFilters.value,
+  mode = activeFilterMode.value,
+  hideSplice = activeHideSplice.value,
+) {
   const query: Record<string, string | string[] | undefined> = {};
 
   if (parties.length > 0) {
@@ -134,6 +155,9 @@ function buildUpdatesQuery(parties = activePartyFilters.value, mode = activeFilt
     query.mode = mode;
   } else if (mode === 'and') {
     query.mode = 'and';
+  }
+  if (hideSplice) {
+    query.hideSplice = 'true';
   }
 
   return query;
@@ -202,6 +226,18 @@ async function setFilterMode(mode: FilterMode) {
     path: `/nodes/${props.id}/updates`,
     query: buildUpdatesQuery(activePartyFilters.value, mode),
   });
+}
+
+async function setHideSplice(hidden: boolean) {
+  await router.push({
+    path: `/nodes/${props.id}/updates`,
+    query: buildUpdatesQuery(activePartyFilters.value, activeFilterMode.value, hidden),
+  });
+}
+
+function handleHideSpliceChange(event: Event) {
+  const target = event.target;
+  void setHideSplice(target instanceof HTMLInputElement ? target.checked : false);
 }
 </script>
 
@@ -313,6 +349,15 @@ async function setFilterMode(mode: FilterMode) {
                   </button>
                 </div>
               </div>
+
+              <label class="node-updates__advanced-filter-toggle">
+                <input
+                  :checked="activeHideSplice"
+                  type="checkbox"
+                  @change="handleHideSpliceChange"
+                />
+                <span>Hide Splice Offsets</span>
+              </label>
             </div>
           </section>
         </Transition>
@@ -354,9 +399,18 @@ async function setFilterMode(mode: FilterMode) {
                 </template>
                 <template v-else>n/a</template>
               </span>
-              <span role="cell">{{
-                update.parties.length > 0 ? update.parties.join(', ') : 'No parties'
-              }}</span>
+              <span class="node-updates__parties" role="cell">
+                <template v-if="update.parties.length > 0">
+                  <span
+                    v-for="party in update.parties"
+                    :key="party"
+                    class="node-updates__party"
+                  >
+                    {{ party }}
+                  </span>
+                </template>
+                <template v-else>No parties</template>
+              </span>
             </RouterLink>
           </div>
         </section>

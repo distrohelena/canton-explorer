@@ -118,7 +118,10 @@ describe('NodeUpdatesView', () => {
     expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
     expect(screen.queryByText('Latest 25 updates')).not.toBeInTheDocument();
     expect(screen.getByText('000000000000000101')).toBeInTheDocument();
-    expect(screen.getByText('Alice, Bob')).toBeInTheDocument();
+    expect(screen.getAllByText('Alice')).toHaveLength(1);
+    expect(screen.getAllByText('Bob')).toHaveLength(1);
+    expect(screen.queryByText('Alice, Bob')).not.toBeInTheDocument();
+    expect(container.querySelector('.node-updates__parties')).not.toBeNull();
     expect(screen.getByText('No parties')).toBeInTheDocument();
     expect(screen.queryByText('Advanced Filter Parameters')).not.toBeInTheDocument();
 
@@ -251,7 +254,7 @@ describe('NodeUpdatesView', () => {
       }),
     );
 
-    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getAllByText('Alice').length).toBeGreaterThan(0);
 
     await fireEvent.update(screen.getByPlaceholderText('Party ID'), 'Bob');
     await fireEvent.click(screen.getByRole('button', { name: 'Add party filter' }));
@@ -263,7 +266,7 @@ describe('NodeUpdatesView', () => {
       }),
     );
 
-    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.getAllByText('Bob').length).toBeGreaterThan(0);
 
     await fireEvent.click(screen.getByRole('button', { name: 'AND' }));
 
@@ -283,12 +286,43 @@ describe('NodeUpdatesView', () => {
       }),
     );
 
-    expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove party filter Alice' })).not.toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Remove party filter Bob' }));
 
     await waitFor(() => expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1'));
-    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove party filter Bob' })).not.toBeInTheDocument();
+  });
+
+  it('applies and persists the hide Splice offsets filter', async () => {
+    vi.mocked(fetchNodeUpdates).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+
+    await renderAt('/nodes/participant-1/updates');
+
+    expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+
+    const hideSpliceToggle = screen.getByRole('checkbox', { name: 'Hide Splice Offsets' });
+    expect(hideSpliceToggle).not.toBeChecked();
+
+    await fireEvent.click(hideSpliceToggle);
+
+    await waitFor(() =>
+      expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        hideSplice: true,
+      }),
+    );
+
+    expect(hideSpliceToggle).toBeChecked();
   });
 
   it('toggles OR and AND mode state even before any party filter is added', async () => {
@@ -348,5 +382,25 @@ describe('NodeUpdatesView', () => {
     expect(screen.getByRole('button', { name: 'AND' })).toHaveClass(
       'node-updates__advanced-filter-mode--active',
     );
+  });
+
+  it('opens the advanced filter panel when hideSplice is present in the URL', async () => {
+    vi.mocked(fetchNodeUpdates).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+
+    await renderAt('/nodes/participant-1/updates?hideSplice=true');
+
+    expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+    expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Hide Splice Offsets' })).toBeChecked();
+    expect(fetchNodeUpdates).toHaveBeenCalledWith('participant-1', {
+      hideSplice: true,
+    });
   });
 });

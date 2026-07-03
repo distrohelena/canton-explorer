@@ -766,6 +766,22 @@ h3 {
   font-size: 0.9rem;
 }
 
+.node-updates__parties {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.node-updates__party {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .update-detail {
   display: flex;
   flex-direction: column;
