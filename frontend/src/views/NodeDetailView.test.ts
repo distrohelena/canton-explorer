@@ -41,6 +41,40 @@ vi.mock('../lib/api', () => ({
       },
     },
   }),
+  fetchNodePackages: vi.fn().mockResolvedValue({
+    nodeId: 'participant-1',
+    label: 'Participant 1',
+    packagesByName: [
+      {
+        packageName: 'main-package-name',
+        packages: [
+          {
+            packageId: 'main-package-v2',
+            version: '1.2.4',
+            uploadedAt: '2026-07-02T13:00:00.000Z',
+            seenAt: '2026-07-02T13:05:00.000Z',
+          },
+          {
+            packageId: 'main-package',
+            version: '1.2.3',
+            uploadedAt: '2026-07-02T12:00:00.000Z',
+            seenAt: '2026-07-02T12:05:00.000Z',
+          },
+        ],
+      },
+      {
+        packageName: 'daml-prim',
+        packages: [
+          {
+            packageId: 'daml-prim-package',
+            version: '0.0.0',
+            uploadedAt: '2026-07-02T12:00:00.000Z',
+            seenAt: '2026-07-02T12:05:00.000Z',
+          },
+        ],
+      },
+    ],
+  }),
 }));
 
 describe('NodeDetailView', () => {
@@ -62,7 +96,20 @@ describe('NodeDetailView', () => {
     expect(screen.queryByText('Back to overview')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Service Health' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ledger Snapshot' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Installed Packages' })).toBeInTheDocument();
     expect(screen.getByText(/SERVING/)).toBeInTheDocument();
     expect(screen.getByText(/participant1_pqs/)).toBeInTheDocument();
+    expect(screen.getByText('main-package-name')).toBeInTheDocument();
+    expect(screen.getByText('daml-prim')).toBeInTheDocument();
+    expect(screen.getByText('main-package-v2')).toBeInTheDocument();
+    expect(screen.getByText('1.2.4')).toBeInTheDocument();
+    expect(screen.getByText('main-package')).toBeInTheDocument();
+    expect(screen.getByText('1.2.3')).toBeInTheDocument();
+    expect(screen.getByText('daml-prim-package')).toBeInTheDocument();
+    expect(screen.getByText('0.0.0')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'main-package-v2' })).toHaveAttribute(
+      'href',
+      '/packages/main-package-v2',
+    );
   });
 });

@@ -4,6 +4,82 @@ import { NodesController } from '../../src/api/nodes.controller';
 import { NodeCacheService } from '../../src/cache/node-cache.service';
 import { NodeConfigService } from '../../src/config/node-config.service';
 import { PqsSummaryService } from '../../src/pqs/pqs-summary.service';
+import type {
+  NodePackagesResponse,
+  PackageDetailResponse,
+  PackageFamilyResponse,
+} from '../../src/domain/node.types';
+
+const typedPackageDetailFixture = {
+  packageId: 'main-package',
+  name: 'Main Package',
+  version: '1.2.3',
+  uploadedAt: '2026-07-02T12:00:00.000Z',
+  packageSize: 1024,
+  status: 'decoded',
+  seenOnNodes: [
+    {
+      nodeId: 'participant-1',
+      packageName: 'Main Package',
+      packageVersion: '1.2.3',
+      seenAt: '2026-07-02T12:05:00.000Z',
+    },
+  ],
+  moduleCount: 2,
+  templateCount: 3,
+  dataTypeCount: 5,
+  modules: ['Main.Module', 'Main.Other'],
+  templates: [
+    { templateId: 'Main.Module:Asset', moduleName: 'Main.Module', entityName: 'Asset' },
+  ],
+  dataTypes: [
+    { typeId: 'Main.Module:AssetData', moduleName: 'Main.Module', entityName: 'AssetData' },
+  ],
+} satisfies PackageDetailResponse;
+
+const typedPackageFamilyFixture = {
+  name: 'Main Package',
+  packages: [
+    {
+      packageId: 'main-package-v2',
+      name: 'Main Package',
+      version: '1.2.4',
+      uploadedAt: '2026-07-02T13:00:00.000Z',
+      packageSize: 2048,
+    },
+    {
+      packageId: 'main-package',
+      name: 'Main Package',
+      version: '1.2.3',
+      uploadedAt: '2026-07-02T12:00:00.000Z',
+      packageSize: 1024,
+    },
+  ],
+} satisfies PackageFamilyResponse;
+
+const typedNodePackagesFixture = {
+  nodeId: 'participant-1',
+  label: 'Participant 1',
+  packagesByName: [
+    {
+      packageName: 'Main Package',
+      packages: [
+        {
+          packageId: 'main-package-v2',
+          version: '1.2.4',
+          uploadedAt: '2026-07-02T13:00:00.000Z',
+          seenAt: '2026-07-02T13:05:00.000Z',
+        },
+        {
+          packageId: 'main-package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-02T12:00:00.000Z',
+          seenAt: '2026-07-02T12:05:00.000Z',
+        },
+      ],
+    },
+  ],
+} satisfies NodePackagesResponse;
 
 describe('NodesController', () => {
   let controller: NodesController;
@@ -12,6 +88,9 @@ describe('NodesController', () => {
     fetchRecentUpdates: jest.Mock;
     fetchUpdateDetail: jest.Mock;
     fetchContractDetail: jest.Mock;
+    fetchPackageDetail: jest.Mock;
+    fetchPackagesByName: jest.Mock;
+    fetchNodePackages: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -75,6 +154,9 @@ describe('NodesController', () => {
         archivedRecordTime: null,
         contractData: null,
       }),
+      fetchPackageDetail: jest.fn().mockResolvedValue(typedPackageDetailFixture),
+      fetchPackagesByName: jest.fn().mockResolvedValue(typedPackageFamilyFixture),
+      fetchNodePackages: jest.fn().mockResolvedValue(typedNodePackagesFixture),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -151,6 +233,80 @@ describe('NodesController', () => {
 
     expect(response).toHaveLength(1);
     expect(response[0].id).toBe('participant-1');
+  });
+
+  it('keeps the package detail fixture in sync with the response contract', () => {
+    expect(typedPackageDetailFixture.packageId).toBe('main-package');
+    expect(typedPackageDetailFixture.templates[0].templateId).toBe('Main.Module:Asset');
+  });
+
+  it('exposes a package detail controller entry point', () => {
+    const maybeController = controller as {
+      getPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+    };
+
+    expect(typeof maybeController.getPackageDetail).toBe('function');
+  });
+
+  it('returns package detail for a known package id', async () => {
+    const response = await controller.getPackageDetail('main-package');
+
+    expect(pqsSummaryService.fetchPackageDetail).toHaveBeenCalledWith('main-package');
+    expect(response).toEqual(typedPackageDetailFixture);
+  });
+
+  it('returns 404 for an unknown package id', async () => {
+    pqsSummaryService.fetchPackageDetail.mockRejectedValueOnce(new Error('Package not found'));
+
+    await expect(controller.getPackageDetail('missing-package')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('exposes a package-family controller entry point', () => {
+    const maybeController = controller as {
+      listPackagesByName?: (packageName: string) => Promise<PackageFamilyResponse>;
+    };
+
+    expect(typeof maybeController.listPackagesByName).toBe('function');
+  });
+
+  it('returns all known versions for a package name', async () => {
+    const response = await controller.listPackagesByName('Main Package');
+
+    expect(pqsSummaryService.fetchPackagesByName).toHaveBeenCalledWith('Main Package');
+    expect(response).toEqual(typedPackageFamilyFixture);
+  });
+
+  it('returns 404 for an unknown package name', async () => {
+    pqsSummaryService.fetchPackagesByName.mockRejectedValueOnce(new Error('Package family not found'));
+
+    await expect(controller.listPackagesByName('missing-package')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('exposes a node packages controller entry point', () => {
+    const maybeController = controller as {
+      listNodePackages?: (id: string) => Promise<NodePackagesResponse>;
+    };
+
+    expect(typeof maybeController.listNodePackages).toBe('function');
+  });
+
+  it('returns installed packages for a known node id', async () => {
+    const response = await controller.listNodePackages('participant-1');
+
+    expect(pqsSummaryService.fetchNodePackages).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-1', label: 'Participant 1' }),
+    );
+    expect(response).toEqual(typedNodePackagesFixture);
+  });
+
+  it('returns 404 when node package lookup uses an unknown node id', async () => {
+    await expect(controller.listNodePackages('missing-node')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('returns aggregated ledgers', () => {

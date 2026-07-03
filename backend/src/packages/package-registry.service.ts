@@ -8,6 +8,7 @@ import type {
   PackageRegistryResult,
   ResolvedChoice,
   ResolvedDataType,
+  ResolvedPackageInspection,
   ResolvedPackage,
   ResolvedTemplate,
 } from './daml-decoder.types';
@@ -99,6 +100,53 @@ export class PackageRegistryService {
     typeId: string;
   }): Promise<PackageRegistryResult<ResolvedDataType>> {
     return this.resolveDataTypeSync(input);
+  }
+
+  async inspectPackage(
+    packageId: string,
+  ): Promise<PackageRegistryResult<ResolvedPackageInspection>> {
+    const resolvedPackage = this.loadPackage(packageId);
+    if (typeof resolvedPackage === 'string') {
+      return { ok: false, reason: resolvedPackage };
+    }
+
+    const modules = Array.from(
+      new Set([
+        ...Array.from(resolvedPackage.templatesById.values()).map((template) => template.moduleName),
+        ...Array.from(resolvedPackage.dataTypesById.values()).map((dataType) => dataType.moduleName),
+      ]),
+    ).sort((left, right) => left.localeCompare(right));
+
+    const templates = Array.from(resolvedPackage.templatesById.values())
+      .map((template) => ({
+        templateId: template.templateId,
+        moduleName: template.moduleName,
+        entityName: template.entityName,
+      }))
+      .sort((left, right) => left.templateId.localeCompare(right.templateId));
+
+    const dataTypes = Array.from(resolvedPackage.dataTypesById.values())
+      .map((dataType) => ({
+        typeId: dataType.typeId,
+        moduleName: dataType.moduleName,
+        entityName: dataType.entityName,
+      }))
+      .sort((left, right) => left.typeId.localeCompare(right.typeId));
+
+    return {
+      ok: true,
+      definition: {
+        packageId: resolvedPackage.packageId,
+        packageName: resolvedPackage.packageName,
+        packageVersion: resolvedPackage.packageVersion,
+        modules,
+        templates,
+        dataTypes,
+        moduleCount: modules.length,
+        templateCount: templates.length,
+        dataTypeCount: dataTypes.length,
+      },
+    };
   }
 
   resolveDataTypeSync(input: {

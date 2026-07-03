@@ -115,6 +115,7 @@ describe('ContractDetailView', () => {
     expect(screen.getByText('20,000')).toBeInTheDocument();
     expect(screen.getByText('Reward Round')).toBeInTheDocument();
     expect(screen.getByText('258')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/packages/main-package"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/updates/0000000000000001"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/updates/0000000000000002"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00coupon"]')).not.toBeNull();
@@ -175,7 +176,7 @@ describe('ContractDetailView', () => {
       },
     });
 
-    const scoped = within(container);
+    const scoped = within(container as HTMLElement);
     expect(await scoped.findByText('Archived Event')).toBeInTheDocument();
     expect(scoped.getByText('Archived Record Time')).toBeInTheDocument();
     expect(scoped.getByText('Not Present')).toBeInTheDocument();

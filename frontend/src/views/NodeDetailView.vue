@@ -1,20 +1,56 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { fetchNode } from '../lib/api';
-import type { NodeSnapshot } from '../types/nodes';
+import { computed, onMounted, ref } from 'vue';
+import { fetchNode, fetchNodePackages } from '../lib/api';
+import type { NodePackagesResponse, NodeSnapshot } from '../types/nodes';
 
 const props = defineProps<{ id: string }>();
 
 const node = ref<NodeSnapshot | null>(null);
+const nodePackages = ref<NodePackagesResponse | null>(null);
 const error = ref<string | null>(null);
 
 onMounted(async () => {
   try {
-    node.value = await fetchNode(props.id);
+    const [nodeResponse, packagesResponse] = await Promise.all([
+      fetchNode(props.id),
+      fetchNodePackages(props.id),
+    ]);
+    node.value = nodeResponse;
+    nodePackages.value = packagesResponse;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   }
 });
+
+function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
+  if (!recordTime) {
+    return null;
+  }
+
+  const parsed = new Date(recordTime);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return {
+    date: new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+    }).format(parsed),
+    time: new Intl.DateTimeFormat(undefined, {
+      timeStyle: 'medium',
+    }).format(parsed),
+  };
+}
+
+const installedPackages = computed(() =>
+  (nodePackages.value?.packagesByName ?? []).map((group) => ({
+    ...group,
+    packages: group.packages.map((entry) => ({
+      ...entry,
+      uploadedAtLines: formatRecordTime(entry.uploadedAt),
+    })),
+  })),
+);
 </script>
 
 <template>
@@ -74,6 +110,41 @@ onMounted(async () => {
                 <dd>{{ node.ledgerSummary.activeContractCount }}</dd>
               </div>
             </dl>
+          </section>
+
+          <section class="node-detail__section node-detail__section--packages">
+            <h3>Installed Packages</h3>
+            <p v-if="installedPackages.length === 0" class="update-detail__empty">
+              No cached packages recorded for this node.
+            </p>
+            <div v-else class="node-packages">
+              <section
+                v-for="group in installedPackages"
+                :key="group.packageName"
+                class="node-packages__group"
+              >
+                <h4 class="node-packages__title">{{ group.packageName }}</h4>
+                <div class="node-packages__list">
+                  <div
+                    v-for="entry in group.packages"
+                    :key="entry.packageId"
+                    class="node-packages__row"
+                  >
+                    <div class="node-packages__primary">
+                      <span class="node-packages__version">{{ entry.version ?? 'n/a' }}</span>
+                      <RouterLink class="contract-detail__link" :to="`/packages/${entry.packageId}`">
+                        {{ entry.packageId }}
+                      </RouterLink>
+                    </div>
+                    <div v-if="entry.uploadedAtLines" class="update-detail__time">
+                      <span class="update-detail__time-date">{{ entry.uploadedAtLines.date }}</span>
+                      <span class="update-detail__time-clock">{{ entry.uploadedAtLines.time }}</span>
+                    </div>
+                    <div v-else class="node-packages__timestamp">n/a</div>
+                  </div>
+                </div>
+              </section>
+            </div>
           </section>
         </div>
       </div>

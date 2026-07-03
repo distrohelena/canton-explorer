@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { resolve } from 'node:path';
 import type {
   NodeContractDetailResponse,
+  NodePackagesResponse,
+  PackageDetailResponse,
+  PackageFamilyResponse,
   NodeUpdateDetailResponse,
 } from '../../src/domain/node.types';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
@@ -129,6 +132,96 @@ const typedContractDetailFixture = {
   },
 } satisfies NodeContractDetailResponse;
 
+const typedPackageDetailFixture = {
+  packageId: 'splice-amulet',
+  name: 'splice-amulet',
+  version: '0.1.24',
+  uploadedAt: '1782930571952849',
+  packageSize: 960436,
+  status: 'decoded',
+  seenOnNodes: [
+    {
+      nodeId: 'cnqs-sv',
+      packageName: 'splice-amulet',
+      packageVersion: '0.1.24',
+      seenAt: '2026-07-02T12:00:00.000Z',
+    },
+  ],
+  moduleCount: 1,
+  templateCount: 1,
+  dataTypeCount: 1,
+  modules: ['Splice.Amulet'],
+  templates: [
+    {
+      templateId: 'Splice.Amulet:SvRewardCoupon',
+      moduleName: 'Splice.Amulet',
+      entityName: 'SvRewardCoupon',
+    },
+  ],
+  dataTypes: [
+    {
+      typeId: 'Splice.Amulet:AmuletRules',
+      moduleName: 'Splice.Amulet',
+      entityName: 'AmuletRules',
+    },
+  ],
+} satisfies PackageDetailResponse;
+
+const typedPackageFamilyFixture = {
+  name: 'splice-amulet',
+  packages: [
+    {
+      packageId: 'splice-amulet-v2',
+      name: 'splice-amulet',
+      version: '0.1.24',
+      uploadedAt: '2026-07-02T12:00:00.000Z',
+      packageSize: 960436,
+    },
+    {
+      packageId: 'splice-amulet-v1',
+      name: 'splice-amulet',
+      version: '0.1.14',
+      uploadedAt: '2026-07-01T12:00:00.000Z',
+      packageSize: 950000,
+    },
+  ],
+} satisfies PackageFamilyResponse;
+
+const typedNodePackagesFixture = {
+  nodeId: 'cnqs-sv',
+  label: 'CNQS Super Validator',
+  packagesByName: [
+    {
+      packageName: 'daml-prim',
+      packages: [
+        {
+          packageId: 'daml-prim-package',
+          version: '0.0.0',
+          uploadedAt: '2026-07-02T12:00:00.000Z',
+          seenAt: '2026-07-02T12:05:00.000Z',
+        },
+      ],
+    },
+    {
+      packageName: 'splice-amulet',
+      packages: [
+        {
+          packageId: 'splice-amulet-v2',
+          version: '0.1.24',
+          uploadedAt: '2026-07-02T13:00:00.000Z',
+          seenAt: '2026-07-02T13:05:00.000Z',
+        },
+        {
+          packageId: 'splice-amulet-v1',
+          version: '0.1.14',
+          uploadedAt: '2026-07-01T12:00:00.000Z',
+          seenAt: '2026-07-02T12:05:00.000Z',
+        },
+      ],
+    },
+  ],
+} satisfies NodePackagesResponse;
+
 describe('PqsSummaryService', () => {
   const originalPackageCachePath = process.env.PACKAGE_CACHE_DB_PATH;
 
@@ -143,6 +236,207 @@ describe('PqsSummaryService', () => {
   it('keeps typed decode-state fixtures in sync with update and contract detail responses', () => {
     expect(typedUpdateDetailFixture.events[0].createData).toBeDefined();
     expect(typedContractDetailFixture.contractData).toBeDefined();
+    expect(typedPackageDetailFixture.templates[0].templateId).toBe('Splice.Amulet:SvRewardCoupon');
+    expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
+    expect(typedNodePackagesFixture.packagesByName[0].packageName).toBe('daml-prim');
+  });
+
+  it('returns all cached packages for a package name', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      { getClient: () => ({ query: jest.fn() }) } as never,
+      undefined,
+      {
+        listPackagesByName: jest.fn().mockReturnValue(typedPackageFamilyFixture.packages),
+      } as never,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchPackagesByName?: (packageName: string) => Promise<PackageFamilyResponse>;
+    };
+
+    expect(typeof service.fetchPackagesByName).toBe('function');
+
+    await expect(service.fetchPackagesByName?.('splice-amulet')).resolves.toEqual(
+      typedPackageFamilyFixture,
+    );
+  });
+
+  it('returns cached installed packages for a node grouped by package name', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      { getClient: () => ({ query: jest.fn() }) } as never,
+      undefined,
+      {
+        listPackagesForNode: jest.fn().mockReturnValue([
+          {
+            nodeId: 'cnqs-sv',
+            packageId: 'daml-prim-package',
+            mainPackageId: 'daml-prim-package',
+            packageName: 'daml-prim',
+            packageVersion: '0.0.0',
+            uploadedAt: '2026-07-02T12:00:00.000Z',
+            packageSize: 455515,
+            seenAt: '2026-07-02T12:05:00.000Z',
+          },
+          {
+            nodeId: 'cnqs-sv',
+            packageId: 'splice-amulet-v2',
+            mainPackageId: 'splice-amulet-v1',
+            packageName: 'splice-amulet',
+            packageVersion: '0.1.24',
+            uploadedAt: '2026-07-02T13:00:00.000Z',
+            packageSize: 960436,
+            seenAt: '2026-07-02T13:05:00.000Z',
+          },
+          {
+            nodeId: 'cnqs-sv',
+            packageId: 'splice-amulet-v1',
+            mainPackageId: 'splice-amulet-v1',
+            packageName: 'splice-amulet',
+            packageVersion: '0.1.14',
+            uploadedAt: '2026-07-01T12:00:00.000Z',
+            packageSize: 950000,
+            seenAt: '2026-07-02T12:05:00.000Z',
+          },
+        ]),
+      } as never,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchNodePackages?: (node: { id: string; label: string }) => Promise<NodePackagesResponse>;
+    };
+
+    expect(typeof service.fetchNodePackages).toBe('function');
+
+    await expect(
+      service.fetchNodePackages?.({ id: 'cnqs-sv', label: 'CNQS Super Validator' }),
+    ).resolves.toEqual(typedNodePackagesFixture);
+  });
+
+  it('returns decoded package detail with metadata, node presence, and decoded structure', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      { getClient: () => ({ query: jest.fn() }) } as never,
+      undefined,
+      {
+        getPackageMetadata: jest.fn().mockReturnValue({
+          packageId: 'splice-amulet',
+          name: 'splice-amulet',
+          version: '0.1.24',
+          uploadedAt: '1782930571952849',
+          packageSize: 960436,
+        }),
+        listNodesForPackage: jest.fn().mockReturnValue([
+          {
+            nodeId: 'cnqs-sv',
+            packageId: 'splice-amulet',
+            mainPackageId: 'splice-amulet',
+            packageName: 'splice-amulet',
+            packageVersion: '0.1.24',
+            uploadedAt: '1782930571952849',
+            packageSize: 960436,
+            seenAt: '2026-07-02T12:00:00.000Z',
+          },
+        ]),
+      } as never,
+      {
+        inspectPackage: jest.fn().mockResolvedValue({
+          ok: true,
+          definition: {
+            packageId: 'splice-amulet',
+            packageName: 'splice-amulet',
+            packageVersion: '0.1.24',
+            modules: ['Splice.Amulet'],
+            templates: [
+              {
+                templateId: 'Splice.Amulet:SvRewardCoupon',
+                moduleName: 'Splice.Amulet',
+                entityName: 'SvRewardCoupon',
+              },
+            ],
+            dataTypes: [
+              {
+                typeId: 'Splice.Amulet:AmuletRules',
+                moduleName: 'Splice.Amulet',
+                entityName: 'AmuletRules',
+              },
+            ],
+            moduleCount: 1,
+            templateCount: 1,
+            dataTypeCount: 1,
+          },
+        }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+    };
+
+    expect(typeof service.fetchPackageDetail).toBe('function');
+
+    await expect(service.fetchPackageDetail?.('splice-amulet')).resolves.toEqual(
+      typedPackageDetailFixture,
+    );
+  });
+
+  it('returns invalid package detail with metadata but empty decoded lists', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      { getClient: () => ({ query: jest.fn() }) } as never,
+      undefined,
+      {
+        getPackageMetadata: jest.fn().mockReturnValue({
+          packageId: 'broken-package',
+          name: 'broken-package',
+          version: '0.0.0',
+          uploadedAt: '1782930571952849',
+          packageSize: 4,
+        }),
+        listNodesForPackage: jest.fn().mockReturnValue([]),
+      } as never,
+      {
+        inspectPackage: jest.fn().mockResolvedValue({
+          ok: false,
+          reason: 'invalid_package',
+        }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+    };
+
+    expect(typeof service.fetchPackageDetail).toBe('function');
+
+    await expect(service.fetchPackageDetail?.('broken-package')).resolves.toEqual({
+      packageId: 'broken-package',
+      name: 'broken-package',
+      version: '0.0.0',
+      uploadedAt: '1782930571952849',
+      packageSize: 4,
+      status: 'invalid_package',
+      seenOnNodes: [],
+      moduleCount: 0,
+      templateCount: 0,
+      dataTypeCount: 0,
+      modules: [],
+      templates: [],
+      dataTypes: [],
+    });
+  });
+
+  it('throws Package not found for unknown package ids', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      { getClient: () => ({ query: jest.fn() }) } as never,
+      undefined,
+      {
+        getPackageMetadata: jest.fn().mockReturnValue(null),
+        listNodesForPackage: jest.fn(),
+      } as never,
+      {
+        inspectPackage: jest.fn(),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+    };
+
+    expect(typeof service.fetchPackageDetail).toBe('function');
+
+    await expect(service.fetchPackageDetail?.('missing-package')).rejects.toThrow(
+      'Package not found',
+    );
   });
 
   it('returns a normalized ledger summary from the active() query', async () => {
@@ -660,6 +954,7 @@ describe('PqsSummaryService', () => {
             eventKind: 'create',
             eventId: '#0:0',
             contractId: '00abc',
+            packageId: null,
             templateId: 'Main:Asset',
             choice: null,
             witnesses: ['Alice', 'Bob'],
@@ -678,6 +973,7 @@ describe('PqsSummaryService', () => {
             eventKind: 'consuming_exercise',
             eventId: '#0:1',
             contractId: '00abc',
+            packageId: null,
             templateId: 'Main:Asset',
             choice: 'Archive',
             witnesses: ['Alice'],

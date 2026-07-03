@@ -140,4 +140,179 @@ describe('PackageCacheService', () => {
       },
     ]);
   });
+
+  it('returns single-package metadata and node presence rows', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const service = new PackageCacheService();
+
+    service.storePackages([
+      {
+        packageId: 'package-a',
+        name: 'splice-amulet',
+        version: '0.1.14',
+        uploadedAt: '1782930510606316',
+        packageSize: 1466372,
+        data: Buffer.from('package-a-data'),
+      },
+    ]);
+    service.recordPackagePresence(
+      'cnqs-sv',
+      [
+        {
+          packageId: 'package-a',
+          mainPackageId: 'package-a',
+          name: 'splice-amulet',
+          version: '0.1.14',
+          uploadedAt: '1782930510606316',
+          packageSize: 1466372,
+        },
+      ],
+      '2026-07-02T17:20:00.000Z',
+    );
+
+    expect(service.getPackageMetadata('package-a')).toEqual({
+      packageId: 'package-a',
+      name: 'splice-amulet',
+      version: '0.1.14',
+      uploadedAt: '1782930510606316',
+      packageSize: 1466372,
+    });
+    expect(service.getPackageMetadata('missing')).toBeNull();
+    expect(service.listNodesForPackage('package-a')).toEqual([
+      {
+        nodeId: 'cnqs-sv',
+        packageId: 'package-a',
+        mainPackageId: 'package-a',
+        packageName: 'splice-amulet',
+        packageVersion: '0.1.14',
+        uploadedAt: '1782930510606316',
+        packageSize: 1466372,
+        seenAt: '2026-07-02T17:20:00.000Z',
+      },
+    ]);
+    expect(service.listNodesForPackage('missing')).toEqual([]);
+  });
+
+  it('lists all cached packages for a package name across versions', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const service = new PackageCacheService();
+
+    service.storePackages([
+      {
+        packageId: 'package-a',
+        name: 'splice-amulet',
+        version: '0.1.14',
+        uploadedAt: '2026-07-01T12:00:00.000Z',
+        packageSize: 1466372,
+        data: Buffer.from('package-a-data'),
+      },
+      {
+        packageId: 'package-b',
+        name: 'splice-amulet',
+        version: '0.1.24',
+        uploadedAt: '2026-07-02T12:00:00.000Z',
+        packageSize: 1467000,
+        data: Buffer.from('package-b-data'),
+      },
+      {
+        packageId: 'package-c',
+        name: 'daml-prim',
+        version: '0.0.0',
+        uploadedAt: '2026-07-02T12:00:00.000Z',
+        packageSize: 455515,
+        data: Buffer.from('package-c-data'),
+      },
+    ]);
+
+    expect(service.listPackagesByName('splice-amulet')).toEqual([
+      {
+        packageId: 'package-b',
+        name: 'splice-amulet',
+        version: '0.1.24',
+        uploadedAt: '2026-07-02T12:00:00.000Z',
+        packageSize: 1467000,
+      },
+      {
+        packageId: 'package-a',
+        name: 'splice-amulet',
+        version: '0.1.14',
+        uploadedAt: '2026-07-01T12:00:00.000Z',
+        packageSize: 1466372,
+      },
+    ]);
+    expect(service.listPackagesByName('missing-package')).toEqual([]);
+  });
+
+  it('lists all cached packages installed on a node', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const service = new PackageCacheService();
+
+    service.recordPackagePresence(
+      'cnqs-sv',
+      [
+        {
+          packageId: 'package-a',
+          mainPackageId: 'package-a',
+          name: 'splice-amulet',
+          version: '0.1.14',
+          uploadedAt: '2026-07-01T12:00:00.000Z',
+          packageSize: 1466372,
+        },
+        {
+          packageId: 'package-b',
+          mainPackageId: 'package-a',
+          name: 'splice-amulet',
+          version: '0.1.24',
+          uploadedAt: '2026-07-02T12:00:00.000Z',
+          packageSize: 1467000,
+        },
+        {
+          packageId: 'package-c',
+          mainPackageId: 'package-c',
+          name: 'daml-prim',
+          version: '0.0.0',
+          uploadedAt: '2026-07-02T12:00:00.000Z',
+          packageSize: 455515,
+        },
+      ],
+      '2026-07-02T17:20:00.000Z',
+    );
+
+    expect(service.listPackagesForNode('cnqs-sv')).toEqual([
+      {
+        nodeId: 'cnqs-sv',
+        packageId: 'package-c',
+        mainPackageId: 'package-c',
+        packageName: 'daml-prim',
+        packageVersion: '0.0.0',
+        uploadedAt: '2026-07-02T12:00:00.000Z',
+        packageSize: 455515,
+        seenAt: '2026-07-02T17:20:00.000Z',
+      },
+      {
+        nodeId: 'cnqs-sv',
+        packageId: 'package-b',
+        mainPackageId: 'package-a',
+        packageName: 'splice-amulet',
+        packageVersion: '0.1.24',
+        uploadedAt: '2026-07-02T12:00:00.000Z',
+        packageSize: 1467000,
+        seenAt: '2026-07-02T17:20:00.000Z',
+      },
+      {
+        nodeId: 'cnqs-sv',
+        packageId: 'package-a',
+        mainPackageId: 'package-a',
+        packageName: 'splice-amulet',
+        packageVersion: '0.1.14',
+        uploadedAt: '2026-07-01T12:00:00.000Z',
+        packageSize: 1466372,
+        seenAt: '2026-07-02T17:20:00.000Z',
+      },
+    ]);
+    expect(service.listPackagesForNode('missing-node')).toEqual([]);
+  });
 });

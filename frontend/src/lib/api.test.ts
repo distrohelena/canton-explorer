@@ -2,6 +2,8 @@ import * as api from './api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchActivityHistory, fetchNodeUpdates, fetchNodes } from './api';
 import type { NodeContractDetailResponse } from '../types/contracts';
+import type { NodePackagesResponse } from '../types/nodes';
+import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
 import type { NodeUpdateDetailResponse } from '../types/updates';
 
 const typedUpdateDetailFixture = {
@@ -63,6 +65,85 @@ const typedContractDetailFixture = {
   },
 } satisfies NodeContractDetailResponse;
 
+const typedPackageDetailFixture = {
+  packageId: 'splice-amulet',
+  name: 'splice-amulet',
+  version: '0.1.24',
+  uploadedAt: '1782930571952849',
+  packageSize: 960436,
+  status: 'decoded',
+  seenOnNodes: [
+    {
+      nodeId: 'cnqs-sv',
+      packageName: 'splice-amulet',
+      packageVersion: '0.1.24',
+      seenAt: '2026-07-02T12:00:00.000Z',
+    },
+  ],
+  moduleCount: 1,
+  templateCount: 1,
+  dataTypeCount: 1,
+  modules: ['Splice.Amulet'],
+  templates: [
+    {
+      templateId: 'Splice.Amulet:SvRewardCoupon',
+      moduleName: 'Splice.Amulet',
+      entityName: 'SvRewardCoupon',
+    },
+  ],
+  dataTypes: [
+    {
+      typeId: 'Splice.Amulet:AmuletRules',
+      moduleName: 'Splice.Amulet',
+      entityName: 'AmuletRules',
+    },
+  ],
+} satisfies PackageDetailResponse;
+
+const typedPackageFamilyFixture = {
+  name: 'splice-amulet',
+  packages: [
+    {
+      packageId: 'splice-amulet-v2',
+      name: 'splice-amulet',
+      version: '0.1.24',
+      uploadedAt: '2026-07-02T12:00:00.000Z',
+      packageSize: 960436,
+    },
+    {
+      packageId: 'splice-amulet-v1',
+      name: 'splice-amulet',
+      version: '0.1.14',
+      uploadedAt: '2026-07-01T12:00:00.000Z',
+      packageSize: 950000,
+    },
+  ],
+} satisfies PackageFamilyResponse;
+
+const typedNodePackagesFixture = {
+  nodeId: 'participant-1',
+  label: 'Participant 1',
+  packagesByName: [
+    {
+      packageName: 'main-package-name',
+      packages: [
+        {
+          packageId: 'main-package-v2',
+          version: '1.2.4',
+          uploadedAt: '2026-07-02T13:00:00.000Z',
+          seenAt: '2026-07-02T13:05:00.000Z',
+        },
+        {
+          packageId: 'main-package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-02T12:00:00.000Z',
+          seenAt: '2026-07-02T12:05:00.000Z',
+        },
+      ],
+    },
+  ],
+} satisfies NodePackagesResponse;
+
 describe('fetchNodes', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -71,6 +152,9 @@ describe('fetchNodes', () => {
   it('keeps typed update and contract detail fixtures in sync with API response contracts', () => {
     expect(typedUpdateDetailFixture.events[0].createData).toBeDefined();
     expect(typedContractDetailFixture.contractData).toBeDefined();
+    expect(typedPackageDetailFixture.templates[0].templateId).toBe('Splice.Amulet:SvRewardCoupon');
+    expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
+    expect(typedNodePackagesFixture.packagesByName[0].packages[0].packageId).toBe('main-package-v2');
   });
 
   it('loads node summaries from the backend API', async () => {
@@ -257,5 +341,78 @@ describe('fetchNodes', () => {
         templateId: 'Main:Asset',
       }),
     );
+  });
+
+  it('loads a global package detail from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedPackageDetailFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchPackageDetail = (
+      api as {
+        fetchPackageDetail?: (packageId: string) => Promise<unknown>;
+      }
+    ).fetchPackageDetail;
+
+    expect(fetchPackageDetail).toBeTypeOf('function');
+
+    const packageDetail = await fetchPackageDetail?.('splice-amulet');
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/packages/splice-amulet');
+    expect(packageDetail).toEqual(
+      expect.objectContaining({
+        packageId: 'splice-amulet',
+        status: 'decoded',
+        modules: ['Splice.Amulet'],
+      }),
+    );
+  });
+
+  it('loads all known versions for a package name from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedPackageFamilyFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchPackagesByName = (
+      api as {
+        fetchPackagesByName?: (packageName: string) => Promise<unknown>;
+      }
+    ).fetchPackagesByName;
+
+    expect(fetchPackagesByName).toBeTypeOf('function');
+
+    const packageFamily = await fetchPackagesByName?.('splice-amulet');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/packages/by-name/splice-amulet',
+    );
+    expect(packageFamily).toEqual(typedPackageFamilyFixture);
+  });
+
+  it('loads installed packages for a node from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedNodePackagesFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchNodePackages = (
+      api as {
+        fetchNodePackages?: (id: string) => Promise<unknown>;
+      }
+    ).fetchNodePackages;
+
+    expect(fetchNodePackages).toBeTypeOf('function');
+
+    const nodePackages = await fetchNodePackages?.('participant-1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/nodes/participant-1/packages',
+    );
+    expect(nodePackages).toEqual(typedNodePackagesFixture);
   });
 });

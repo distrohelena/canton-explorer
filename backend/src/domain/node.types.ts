@@ -101,6 +101,7 @@ export interface NodeUpdateDetailEvent {
   eventKind: 'create' | 'consuming_exercise' | 'non_consuming_exercise';
   eventId: string | null;
   contractId: string | null;
+  packageId?: string | null;
   templateId: string | null;
   choice: string | null;
   witnesses: string[];
@@ -135,4 +136,70 @@ export interface NodeContractDetailResponse {
   archivedEventOffset: string | null;
   archivedRecordTime: string | null;
   contractData: NodeDecodeState<NodeDecodedDamlValue> | null;
+}
+
+export interface PackageSeenOnNode {
+  nodeId: string;
+  packageName: string | null;
+  packageVersion: string | null;
+  seenAt: string;
+}
+
+export interface PackageTemplateSummary {
+  templateId: string;
+  moduleName: string;
+  entityName: string;
+}
+
+export interface PackageDataTypeSummary {
+  typeId: string;
+  moduleName: string;
+  entityName: string;
+}
+
+export interface PackageDetailResponse {
+  packageId: string;
+  name: string | null;
+  version: string | null;
+  uploadedAt: string | null;
+  packageSize: number | null;
+  status: 'decoded' | 'invalid_package' | 'missing_package';
+  seenOnNodes: PackageSeenOnNode[];
+  moduleCount: number;
+  templateCount: number;
+  dataTypeCount: number;
+  modules: string[];
+  templates: PackageTemplateSummary[];
+  dataTypes: PackageDataTypeSummary[];
+}
+
+export interface PackageFamilyEntry {
+  packageId: string;
+  name: string | null;
+  version: string | null;
+  uploadedAt: string | null;
+  packageSize: number | null;
+}
+
+export interface PackageFamilyResponse {
+  name: string;
+  packages: PackageFamilyEntry[];
+}
+
+export interface NodeInstalledPackageEntry {
+  packageId: string;
+  version: string | null;
+  uploadedAt: string | null;
+  seenAt: string;
+}
+
+export interface NodeInstalledPackageGroup {
+  packageName: string;
+  packages: NodeInstalledPackageEntry[];
+}
+
+export interface NodePackagesResponse {
+  nodeId: string;
+  label: string;
+  packagesByName: NodeInstalledPackageGroup[];
 }

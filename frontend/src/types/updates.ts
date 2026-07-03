@@ -29,6 +29,7 @@ export interface NodeUpdateDetailEvent {
   eventKind: 'create' | 'consuming_exercise' | 'non_consuming_exercise';
   eventId: string | null;
   contractId: string | null;
+  packageId?: string | null;
   templateId: string | null;
   choice: string | null;
   witnesses: string[];

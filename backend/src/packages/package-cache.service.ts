@@ -29,6 +29,17 @@ export interface CachedPackageMetadata {
   packageSize: number | null;
 }
 
+export interface CachedPackageNodePresence {
+  nodeId: string;
+  packageId: string;
+  mainPackageId: string;
+  packageName: string | null;
+  packageVersion: string | null;
+  uploadedAt: string | null;
+  packageSize: number | null;
+  seenAt: string;
+}
+
 @Injectable()
 export class PackageCacheService {
   private readonly database: DatabaseSync;
@@ -165,6 +176,41 @@ export class PackageCacheService {
     };
   }
 
+  getPackageMetadata(packageId: string): CachedPackageMetadata | null {
+    const row = this.database
+      .prepare(`
+        select
+          package_id,
+          package_name,
+          package_version,
+          uploaded_at,
+          package_size
+        from packages
+        where package_id = ?
+      `)
+      .get(packageId) as
+      | {
+          package_id: string;
+          package_name: string | null;
+          package_version: string | null;
+          uploaded_at: string | null;
+          package_size: number | null;
+        }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      packageId: row.package_id,
+      name: row.package_name,
+      version: row.package_version,
+      uploadedAt: row.uploaded_at,
+      packageSize: row.package_size,
+    };
+  }
+
   listPackages(): CachedPackageMetadata[] {
     const rows = this.database
       .prepare(`
@@ -191,6 +237,114 @@ export class PackageCacheService {
       version: row.package_version,
       uploadedAt: row.uploaded_at,
       packageSize: row.package_size,
+    }));
+  }
+
+  listPackagesByName(packageName: string): CachedPackageMetadata[] {
+    const rows = this.database
+      .prepare(`
+        select
+          package_id,
+          package_name,
+          package_version,
+          uploaded_at,
+          package_size
+        from packages
+        where package_name = ?
+        order by uploaded_at desc, package_version desc, package_id asc
+      `)
+      .all(packageName) as Array<{
+      package_id: string;
+      package_name: string | null;
+      package_version: string | null;
+      uploaded_at: string | null;
+      package_size: number | null;
+    }>;
+
+    return rows.map((row) => ({
+      packageId: row.package_id,
+      name: row.package_name,
+      version: row.package_version,
+      uploadedAt: row.uploaded_at,
+      packageSize: row.package_size,
+    }));
+  }
+
+  listNodesForPackage(packageId: string): CachedPackageNodePresence[] {
+    const rows = this.database
+      .prepare(`
+        select
+          node_id,
+          package_id,
+          main_package_id,
+          package_name,
+          package_version,
+          uploaded_at,
+          package_size,
+          seen_at
+        from node_packages
+        where package_id = ?
+        order by node_id asc
+      `)
+      .all(packageId) as Array<{
+      node_id: string;
+      package_id: string;
+      main_package_id: string;
+      package_name: string | null;
+      package_version: string | null;
+      uploaded_at: string | null;
+      package_size: number | null;
+      seen_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      nodeId: row.node_id,
+      packageId: row.package_id,
+      mainPackageId: row.main_package_id,
+      packageName: row.package_name,
+      packageVersion: row.package_version,
+      uploadedAt: row.uploaded_at,
+      packageSize: row.package_size,
+      seenAt: row.seen_at,
+    }));
+  }
+
+  listPackagesForNode(nodeId: string): CachedPackageNodePresence[] {
+    const rows = this.database
+      .prepare(`
+        select
+          node_id,
+          package_id,
+          main_package_id,
+          package_name,
+          package_version,
+          uploaded_at,
+          package_size,
+          seen_at
+        from node_packages
+        where node_id = ?
+        order by package_name asc, uploaded_at desc, package_version desc, package_id asc
+      `)
+      .all(nodeId) as Array<{
+      node_id: string;
+      package_id: string;
+      main_package_id: string;
+      package_name: string | null;
+      package_version: string | null;
+      uploaded_at: string | null;
+      package_size: number | null;
+      seen_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      nodeId: row.node_id,
+      packageId: row.package_id,
+      mainPackageId: row.main_package_id,
+      packageName: row.package_name,
+      packageVersion: row.package_version,
+      uploadedAt: row.uploaded_at,
+      packageSize: row.package_size,
+      seenAt: row.seen_at,
     }));
   }
 

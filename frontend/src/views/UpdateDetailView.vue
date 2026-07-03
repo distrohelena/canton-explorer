@@ -299,6 +299,18 @@ function getExerciseEntries(
                     <dt>Template ID</dt>
                     <dd>{{ event.templateId ?? 'n/a' }}</dd>
                   </div>
+                  <div class="update-detail__event-item">
+                    <dt>Package ID</dt>
+                    <dd v-if="event.packageId">
+                      <RouterLink
+                        class="contract-detail__link"
+                        :to="`/packages/${event.packageId}`"
+                      >
+                        {{ event.packageId }}
+                      </RouterLink>
+                    </dd>
+                    <dd v-else>n/a</dd>
+                  </div>
                   <div class="update-detail__event-item update-detail__event-item--choice">
                     <dt>Choice</dt>
                     <dd>{{ event.choice ?? 'n/a' }}</dd>

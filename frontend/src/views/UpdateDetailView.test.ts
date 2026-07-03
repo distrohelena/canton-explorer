@@ -46,6 +46,7 @@ describe('UpdateDetailView', () => {
           eventKind: 'create',
           eventId: '#0:0',
           contractId: '00abc',
+          packageId: 'main-package',
           templateId: 'Main:Asset',
           choice: null,
           witnesses: ['Alice', 'Bob'],
@@ -72,6 +73,7 @@ describe('UpdateDetailView', () => {
           eventKind: 'non_consuming_exercise',
           eventId: '#0:1',
           contractId: '00reward',
+          packageId: 'splice-dso-rules',
           templateId: 'Splice.DsoRules:DsoRules',
           choice: 'ReceiveSvRewardCoupon',
           witnesses: ['Alice'],
@@ -154,6 +156,9 @@ describe('UpdateDetailView', () => {
     expect(screen.getByText('Create')).toBeInTheDocument();
     expect(screen.getByText('Non-Consuming Exercise')).toBeInTheDocument();
     expect(screen.getByText('#0:0')).toBeInTheDocument();
+    expect(screen.getAllByText('Package ID')).toHaveLength(2);
+    expect(screen.getByText('main-package')).toBeInTheDocument();
+    expect(screen.getByText('splice-dso-rules')).toBeInTheDocument();
     expect(screen.getByText('00abc')).toBeInTheDocument();
     expect(screen.getByText('Main:Asset')).toBeInTheDocument();
     expect(screen.queryByText(/"template_id": "Main:Asset"/)).not.toBeInTheDocument();
@@ -169,6 +174,8 @@ describe('UpdateDetailView', () => {
     expect(screen.getByText('20,000')).toBeInTheDocument();
     expect(screen.getByText('Result / Reward Round')).toBeInTheDocument();
     expect(screen.getAllByText('258')).toHaveLength(2);
+    expect(container.querySelector('a[href="/packages/main-package"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/packages/splice-dso-rules"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00abc"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00coupon"]')).not.toBeNull();
     expect(screen.queryByText('Update Detail')).not.toBeInTheDocument();

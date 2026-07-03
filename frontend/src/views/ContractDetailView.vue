@@ -156,18 +156,21 @@ const archivedRecordTime = computed(() =>
 const contractDataEntries = computed(() => {
   const state = contractDetail.value?.contractData;
   if (!state) {
-    return [] as Array<[string, RenderableContractValue]>;
+    return [] as Array<{ key: string; value: RenderableContractValue }>;
   }
 
   if (state.status === 'invalid_data') {
-    return [['decodeStatus', `Invalid data (${formatDecodeFailureReason(state.reason)})`]];
+    return [{ key: 'decodeStatus', value: `Invalid data (${formatDecodeFailureReason(state.reason)})` }];
   }
 
   if (state.status !== 'decoded') {
-    return [] as Array<[string, RenderableContractValue]>;
+    return [] as Array<{ key: string; value: RenderableContractValue }>;
   }
 
-  return flattenDecodedValue('', state.value).map(([key, value]) => [key || 'value', value]);
+  return flattenDecodedValue('', state.value).map(([key, value]) => ({
+    key: key || 'value',
+    value,
+  }));
 });
 
 </script>
@@ -205,7 +208,15 @@ const contractDataEntries = computed(() => {
               </div>
               <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <dt>Package ID</dt>
-                <dd>{{ contractDetail.packageId ?? 'n/a' }}</dd>
+                <dd v-if="contractDetail.packageId">
+                  <RouterLink
+                    class="contract-detail__link"
+                    :to="`/packages/${contractDetail.packageId}`"
+                  >
+                    {{ contractDetail.packageId }}
+                  </RouterLink>
+                </dd>
+                <dd v-else>n/a</dd>
               </div>
               <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <div class="contract-detail__summary-pair contract-detail__summary-pair--package">
@@ -277,21 +288,21 @@ const contractDataEntries = computed(() => {
             </p>
             <dl v-else class="contract-detail__data">
               <div
-                v-for="[key, value] in contractDataEntries"
-                :key="`${contractDetail.contractId}-${key}`"
+                v-for="entry in contractDataEntries"
+                :key="`${contractDetail.contractId}-${entry.key}`"
                 class="contract-detail__data-row"
               >
-                <dt class="contract-detail__data-key">{{ formatDataLabel(key) }}</dt>
+                <dt class="contract-detail__data-key">{{ formatDataLabel(entry.key) }}</dt>
                 <dd class="contract-detail__data-value">
                   <RouterLink
-                    v-if="isContractReference(value)"
+                    v-if="isContractReference(entry.value)"
                     class="contract-detail__link"
-                    :to="`/nodes/${props.id}/contracts/${value.value}`"
+                    :to="`/nodes/${props.id}/contracts/${entry.value.value}`"
                   >
-                    {{ value.value }}
+                    {{ entry.value.value }}
                   </RouterLink>
                   <template v-else>
-                    {{ formatDataValue(value) }}
+                    {{ formatDataValue(entry.value) }}
                   </template>
                 </dd>
               </div>

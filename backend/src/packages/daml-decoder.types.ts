@@ -125,3 +125,23 @@ export interface ResolvedChoice {
   template: ResolvedTemplate;
   templateChoice: DamlLfTemplateChoice;
 }
+
+export interface ResolvedPackageInspection {
+  packageId: string;
+  packageName: string | null;
+  packageVersion: string | null;
+  modules: string[];
+  templates: Array<{
+    templateId: string;
+    moduleName: string;
+    entityName: string;
+  }>;
+  dataTypes: Array<{
+    typeId: string;
+    moduleName: string;
+    entityName: string;
+  }>;
+  moduleCount: number;
+  templateCount: number;
+  dataTypeCount: number;
+}

@@ -35,6 +35,16 @@ export class NodesController {
     return node;
   }
 
+  @Get('/nodes/:id/packages')
+  async listNodePackages(@Param('id') id: string) {
+    const node = this.configService.list().find((candidate) => candidate.id === id);
+    if (!node) {
+      throw new NotFoundException(`Unknown node: ${id}`);
+    }
+
+    return this.pqsSummaryService.fetchNodePackages(node);
+  }
+
   @Get('/nodes/:id/updates')
   async listNodeUpdates(
     @Param('id') id: string,
@@ -89,6 +99,32 @@ export class NodesController {
     } catch (error) {
       if (error instanceof Error && error.message === 'Contract not found') {
         throw new NotFoundException(`Unknown contract: ${contractId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/packages/by-name/:packageName')
+  async listPackagesByName(@Param('packageName') packageName: string) {
+    try {
+      return await this.pqsSummaryService.fetchPackagesByName(packageName);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package family not found') {
+        throw new NotFoundException(`Unknown package name: ${packageName}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/packages/:packageId')
+  async getPackageDetail(@Param('packageId') packageId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPackageDetail(packageId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
       }
 
       throw error;

@@ -32,3 +32,21 @@ export interface NodeSnapshot {
   };
   sourceStatus: Record<'pqs' | 'grpc', SourceStatus>;
 }
+
+export interface NodeInstalledPackageEntry {
+  packageId: string;
+  version: string | null;
+  uploadedAt: string | null;
+  seenAt: string;
+}
+
+export interface NodeInstalledPackageGroup {
+  packageName: string;
+  packages: NodeInstalledPackageEntry[];
+}
+
+export interface NodePackagesResponse {
+  nodeId: string;
+  label: string;
+  packagesByName: NodeInstalledPackageGroup[];
+}

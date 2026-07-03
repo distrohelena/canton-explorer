@@ -2,10 +2,13 @@ import { Injectable, Optional } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
 import type {
   NodeContractDetailResponse,
+  NodePackagesResponse,
   LedgerSummary,
   NodeDecodeState,
   NodeDecodedDamlValue,
   NodeExerciseDecodeState,
+  PackageDetailResponse,
+  PackageFamilyResponse,
   NodeUpdateDetailEvent,
   NodeUpdateDetailMeta,
   NodeUpdateDetailResponse,
@@ -15,6 +18,7 @@ import type {
 import { PqsClientFactory } from './pqs-client.factory';
 import { DamlValueDecoderService } from '../packages/daml-value-decoder.service';
 import { PackageCacheService } from '../packages/package-cache.service';
+import { PackageRegistryService } from '../packages/package-registry.service';
 
 interface SummaryRow {
   pqs_database: string;
@@ -678,6 +682,7 @@ export class PqsSummaryService {
     private readonly clientFactory: PqsClientFactory,
     @Optional() private readonly damlValueDecoder?: DamlValueDecoderService,
     @Optional() private readonly packageCacheService?: PackageCacheService,
+    @Optional() private readonly packageRegistryService?: PackageRegistryService,
   ) {}
 
   async fetchSummary(node: NodeConfig): Promise<LedgerSummary> {
@@ -755,6 +760,105 @@ export class PqsSummaryService {
         activityValue: Number(row.activity_value ?? 0),
         latestOffset: row.latest_offset ?? null,
       }));
+  }
+
+  async fetchPackageDetail(packageId: string): Promise<PackageDetailResponse> {
+    const metadata = this.packageCacheService?.getPackageMetadata(packageId) ?? null;
+    if (!metadata) {
+      throw new Error('Package not found');
+    }
+
+    const seenOnNodes = (this.packageCacheService?.listNodesForPackage(packageId) ?? []).map(
+      (row) => ({
+        nodeId: row.nodeId,
+        packageName: row.packageName,
+        packageVersion: row.packageVersion,
+        seenAt: row.seenAt,
+      }),
+    );
+
+    const inspection = this.packageRegistryService
+      ? await this.packageRegistryService.inspectPackage(packageId)
+      : { ok: false as const, reason: 'missing_package' as const };
+
+    if (!inspection.ok) {
+      return {
+        packageId: metadata.packageId,
+        name: metadata.name,
+        version: metadata.version,
+        uploadedAt: metadata.uploadedAt,
+        packageSize: metadata.packageSize,
+        status: inspection.reason === 'missing_package' ? 'missing_package' : 'invalid_package',
+        seenOnNodes,
+        moduleCount: 0,
+        templateCount: 0,
+        dataTypeCount: 0,
+        modules: [],
+        templates: [],
+        dataTypes: [],
+      };
+    }
+
+    return {
+      packageId: metadata.packageId,
+      name: metadata.name,
+      version: metadata.version,
+      uploadedAt: metadata.uploadedAt,
+      packageSize: metadata.packageSize,
+      status: 'decoded',
+      seenOnNodes,
+      moduleCount: inspection.definition.moduleCount,
+      templateCount: inspection.definition.templateCount,
+      dataTypeCount: inspection.definition.dataTypeCount,
+      modules: [...inspection.definition.modules].sort((left, right) => left.localeCompare(right)),
+      templates: [...inspection.definition.templates].sort((left, right) =>
+        left.templateId.localeCompare(right.templateId),
+      ),
+      dataTypes: [...inspection.definition.dataTypes].sort((left, right) =>
+        left.typeId.localeCompare(right.typeId),
+      ),
+    };
+  }
+
+  async fetchPackagesByName(packageName: string): Promise<PackageFamilyResponse> {
+    const packages = this.packageCacheService?.listPackagesByName(packageName) ?? [];
+    if (packages.length === 0) {
+      throw new Error('Package family not found');
+    }
+
+    return {
+      name: packageName,
+      packages,
+    };
+  }
+
+  async fetchNodePackages(node: NodeConfig): Promise<NodePackagesResponse> {
+    const rows = this.packageCacheService?.listPackagesForNode(node.id) ?? [];
+    const groupedPackages = new Map<
+      string,
+      Array<{ packageId: string; version: string | null; uploadedAt: string | null; seenAt: string }>
+    >();
+
+    for (const row of rows) {
+      const packageName = row.packageName ?? row.packageId;
+      const group = groupedPackages.get(packageName) ?? [];
+      group.push({
+        packageId: row.packageId,
+        version: row.packageVersion,
+        uploadedAt: row.uploadedAt,
+        seenAt: row.seenAt,
+      });
+      groupedPackages.set(packageName, group);
+    }
+
+    return {
+      nodeId: node.id,
+      label: node.label,
+      packagesByName: Array.from(groupedPackages.entries()).map(([packageName, packages]) => ({
+        packageName,
+        packages,
+      })),
+    };
   }
 
   async fetchUpdateDetail(
@@ -1026,6 +1130,7 @@ export class PqsSummaryService {
       eventKind: row.event_kind,
       eventId: typeof row.event_id === 'string' ? row.event_id : null,
       contractId: typeof row.contract_id === 'string' ? row.contract_id : null,
+      packageId,
       templateId,
       choice: this.normalizeChoiceIdentifier(row.choice),
       witnesses: this.normalizeParties(row.witnesses),

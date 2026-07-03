@@ -187,4 +187,75 @@ describe('PackageRegistryService', () => {
       reason: 'unknown_choice',
     });
   });
+
+  it('inspects a decoded package with modules, templates, and data types', async () => {
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(
+      process.cwd(),
+      'test/fixtures/daml/package-cache.sqlite',
+    );
+    const cacheService = new PackageCacheService();
+    const registry = new PackageRegistryService(cacheService) as PackageRegistryService & {
+      inspectPackage?: (packageId: string) => Promise<unknown>;
+    };
+
+    expect(typeof registry.inspectPackage).toBe('function');
+
+    await expect(registry.inspectPackage?.(SAMPLE_DAML_FIXTURE.packageId)).resolves.toMatchObject({
+      ok: true,
+      definition: {
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        templates: expect.arrayContaining([
+          expect.objectContaining({
+            templateId: SAMPLE_DAML_FIXTURE.templateId,
+            moduleName: 'Splice.Amulet',
+          }),
+        ]),
+        modules: expect.arrayContaining(['Splice.Amulet']),
+        templateCount: expect.any(Number),
+        dataTypeCount: expect.any(Number),
+      },
+    });
+  });
+
+  it('returns missing_package from package inspection for unknown ids', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-registry-service-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const registry = new PackageRegistryService(cacheService) as PackageRegistryService & {
+      inspectPackage?: (packageId: string) => Promise<unknown>;
+    };
+
+    expect(typeof registry.inspectPackage).toBe('function');
+
+    await expect(registry.inspectPackage?.('missing-package')).resolves.toEqual({
+      ok: false,
+      reason: 'missing_package',
+    });
+  });
+
+  it('returns invalid_package from package inspection for undecodable blobs', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-registry-service-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    cacheService.storePackages([
+      {
+        packageId: 'broken-package',
+        name: 'broken-package',
+        version: '0.0.0',
+        uploadedAt: '1783039200000000',
+        packageSize: 4,
+        data: Buffer.from([1, 2, 3, 4]),
+      },
+    ]);
+    const registry = new PackageRegistryService(cacheService) as PackageRegistryService & {
+      inspectPackage?: (packageId: string) => Promise<unknown>;
+    };
+
+    expect(typeof registry.inspectPackage).toBe('function');
+
+    await expect(registry.inspectPackage?.('broken-package')).resolves.toEqual({
+      ok: false,
+      reason: 'invalid_package',
+    });
+  });
 });
