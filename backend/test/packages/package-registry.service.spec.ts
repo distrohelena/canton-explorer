@@ -204,16 +204,59 @@ describe('PackageRegistryService', () => {
       ok: true,
       definition: {
         packageId: SAMPLE_DAML_FIXTURE.packageId,
+        packageName: 'splice-amulet',
+        packageVersion: '0.1.18',
         templates: expect.arrayContaining([
           expect.objectContaining({
             templateId: SAMPLE_DAML_FIXTURE.templateId,
             moduleName: 'Splice.Amulet',
           }),
         ]),
+        dataTypes: expect.arrayContaining([
+          expect.objectContaining({
+            typeId: SAMPLE_DAML_FIXTURE.templateId,
+            moduleName: 'Splice.Amulet',
+            entityName: 'SvRewardCoupon',
+          }),
+        ]),
         modules: expect.arrayContaining(['Splice.Amulet']),
         templateCount: expect.any(Number),
         dataTypeCount: expect.any(Number),
       },
+    });
+  });
+
+  it('resolves data types and returns unknown_data_type for missing identifiers', async () => {
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(
+      process.cwd(),
+      'test/fixtures/daml/package-cache.sqlite',
+    );
+    const cacheService = new PackageCacheService();
+    const registry = new PackageRegistryService(cacheService);
+
+    await expect(
+      registry.resolveDataType({
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        typeId: SAMPLE_DAML_FIXTURE.templateId,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      definition: expect.objectContaining({
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        typeId: SAMPLE_DAML_FIXTURE.templateId,
+        moduleName: 'Splice.Amulet',
+        entityName: 'SvRewardCoupon',
+      }),
+    });
+
+    await expect(
+      registry.resolveDataType({
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        typeId: 'Splice.Amulet:MissingType',
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: 'unknown_data_type',
     });
   });
 
