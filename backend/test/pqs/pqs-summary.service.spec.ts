@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { resolve } from 'node:path';
 import type {
+  ActivePartiesResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
+  PartyDetailResponse,
   PackageDetailResponse,
   PackageFamilyResponse,
   NodeUpdateDetailResponse,
@@ -222,6 +224,67 @@ const typedNodePackagesFixture = {
   ],
 } satisfies NodePackagesResponse;
 
+const typedPartyDetailFixture = {
+  partyId: 'Alice',
+  nodeCount: 2,
+  recentUpdateCount: 2,
+  recentContractCount: 2,
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+  ],
+  recentUpdates: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      eventOffset: '0000000000000001',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      recordTime: '2026-07-01T12:00:00.000Z',
+      parties: ['Alice', 'Bob'],
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      eventOffset: '0000000000000002',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+      recordTime: '2026-07-01T11:00:00.000Z',
+      parties: ['Alice'],
+    },
+  ],
+  recentContracts: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      contractId: '00abc',
+      templateId: 'Main:Asset',
+      packageId: 'main-package',
+      packageName: 'Main Package',
+      packageVersion: '1.2.3',
+      recordTime: '2026-07-01T12:00:00.000Z',
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      contractId: '00def',
+      templateId: 'Main:Asset',
+      packageId: 'main-package',
+      packageName: 'Main Package',
+      packageVersion: '1.2.3',
+      recordTime: '2026-07-01T11:00:00.000Z',
+    },
+  ],
+} satisfies PartyDetailResponse;
+
 describe('PqsSummaryService', () => {
   const originalPackageCachePath = process.env.PACKAGE_CACHE_DB_PATH;
 
@@ -239,6 +302,7 @@ describe('PqsSummaryService', () => {
     expect(typedPackageDetailFixture.templates[0].templateId).toBe('Splice.Amulet:SvRewardCoupon');
     expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
     expect(typedNodePackagesFixture.packagesByName[0].packageName).toBe('daml-prim');
+    expect(typedPartyDetailFixture.recentContracts[0].contractId).toBe('00abc');
   });
 
   it('returns all cached packages for a package name', async () => {
@@ -308,6 +372,307 @@ describe('PqsSummaryService', () => {
     await expect(
       service.fetchNodePackages?.({ id: 'cnqs-sv', label: 'CNQS Super Validator' }),
     ).resolves.toEqual(typedNodePackagesFixture);
+  });
+
+  it('returns active parties grouped by node and keeps empty nodes', async () => {
+    const participant1Query = jest.fn(async (sql: string) => {
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              parties: ['p|Alice', 'Bob'],
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+    const participant2Query = jest.fn(async () => ({ rows: [] }));
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      undefined,
+      undefined,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchActiveParties?: (
+        nodes: Array<{ id: string; label: string; mode: 'pqs_only' | 'pqs_with_grpc' }>,
+      ) => Promise<ActivePartiesResponse>;
+    };
+
+    await expect(
+      service.fetchActiveParties?.([
+        { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+        { id: 'participant-2', label: 'Participant 2', mode: 'pqs_with_grpc' },
+      ]),
+    ).resolves.toEqual({
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          mode: 'pqs_only',
+          parties: ['Alice', 'Bob'],
+        },
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          mode: 'pqs_with_grpc',
+          parties: [],
+        },
+      ],
+    });
+  });
+
+  it('returns a party summary aggregated across nodes', async () => {
+    const participant1Query = jest.fn(async (sql: string) => {
+      if (
+        sql.includes('from participant.lapi_update_meta update_meta') &&
+        sql.includes('participant.lapi_events_create create_event') &&
+        sql.includes('event_offset') &&
+        sql.includes("'Alice'") &&
+        sql.includes("'p|Alice'")
+      ) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_offset: '0000000000000001',
+              record_time: '2026-07-01T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              parties: ['Alice', 'Bob'],
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('create_event.contract_id::text as contract_id')) {
+        return {
+          rows: [
+            {
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              package_id: 'main-package',
+              record_time: '2026-07-01T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const participant2Query = jest.fn(async (sql: string) => {
+      if (
+        sql.includes('from participant.lapi_update_meta update_meta') &&
+        sql.includes('participant.lapi_events_create create_event') &&
+        sql.includes('event_offset') &&
+        sql.includes("'Alice'") &&
+        sql.includes("'p|Alice'")
+      ) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+              event_offset: '0000000000000002',
+              record_time: '2026-07-01T11:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+              parties: ['Alice'],
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('create_event.contract_id::text as contract_id')) {
+        return {
+          rows: [
+            {
+              contract_id: '00def',
+              template_id: 'Main:Asset',
+              package_id: 'main-package',
+              record_time: '2026-07-01T11:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      undefined,
+      {
+        getPackage: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-01T10:00:00.000Z',
+          packageSize: 1024,
+          data: Buffer.from('package'),
+        }),
+      } as never,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchPartyDetail?: (
+        nodes: Array<{ id: string; label: string }>,
+        partyId: string,
+      ) => Promise<PartyDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPartyDetail?.(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ],
+        'Alice',
+      ),
+    ).resolves.toEqual(typedPartyDetailFixture);
+  });
+
+  it('matches both stripped and prefixed party identifiers for party detail lookups', async () => {
+    const strippedPartyId =
+      'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df';
+    const prefixedPartyId = `p|${strippedPartyId}`;
+    const participantQuery = jest.fn(async (sql: string) => {
+      if (
+        sql.includes('from participant.lapi_update_meta update_meta') &&
+        sql.includes("'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
+        sql.includes("'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
+        sql.includes('event_offset')
+      ) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_offset: '39',
+              record_time: '2026-07-02T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              parties: [prefixedPartyId],
+            },
+          ],
+        };
+      }
+
+      if (
+        sql.includes('create_event.contract_id::text as contract_id') &&
+        sql.includes("'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
+        sql.includes("'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'")
+      ) {
+        return {
+          rows: [
+            {
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              package_id: 'main-package',
+              record_time: '2026-07-02T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({
+          query: participantQuery,
+        }),
+      } as never,
+      undefined,
+      {
+        getPackage: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-01T10:00:00.000Z',
+          packageSize: 1024,
+          data: Buffer.from('package'),
+        }),
+      } as never,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchPartyDetail?: (
+        nodes: Array<{ id: string; label: string }>,
+        partyId: string,
+      ) => Promise<PartyDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPartyDetail?.([{ id: 'participant-1', label: 'Participant 1' }], strippedPartyId),
+    ).resolves.toEqual({
+      partyId: strippedPartyId,
+      nodeCount: 1,
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          recentUpdateCount: 1,
+          recentContractCount: 1,
+        },
+      ],
+      recentUpdates: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '39',
+          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          recordTime: '2026-07-02T12:00:00.000Z',
+          parties: [strippedPartyId],
+        },
+      ],
+      recentContracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          packageId: 'main-package',
+          packageName: 'Main Package',
+          packageVersion: '1.2.3',
+          recordTime: '2026-07-02T12:00:00.000Z',
+        },
+      ],
+    });
   });
 
   it('returns decoded package detail with metadata, node presence, and decoded structure', async () => {
@@ -459,7 +824,8 @@ describe('PqsSummaryService', () => {
     const summary = await service.fetchSummary({
       id: 'participant-1',
       label: 'Participant 1',
-      role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     });
@@ -495,7 +861,8 @@ describe('PqsSummaryService', () => {
     const summary = await service.fetchSummary({
       id: 'participant-2',
       label: 'Participant 2',
-      role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
       ledgerLabel: 'Quickstart App User',
       pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL' },
     });
@@ -551,7 +918,8 @@ describe('PqsSummaryService', () => {
     const updates = await service.fetchRecentUpdates({
       id: 'participant-1',
       label: 'Participant 1',
-      role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     });
@@ -560,7 +928,11 @@ describe('PqsSummaryService', () => {
       1,
       expect.stringContaining('from participant.lapi_update_meta'),
     );
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 25'));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('order by update_meta.event_offset::numeric desc'),
+    );
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 26'));
     expect(query).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('participant.lapi_events_create'),
@@ -569,6 +941,8 @@ describe('PqsSummaryService', () => {
       nodeId: 'participant-1',
       label: 'Participant 1',
       limit: 25,
+      nextBefore: null,
+      nextAfter: null,
       updates: [
         {
           eventOffset: '000000000000000101',
@@ -586,6 +960,218 @@ describe('PqsSummaryService', () => {
           parties: [],
         },
       ],
+    });
+  });
+
+  it('falls back to normalized participant event tables for recent updates when legacy event tables are unavailable', async () => {
+    const missingLegacyRelation = Object.assign(
+      new Error('relation "participant.lapi_events_create" does not exist'),
+      { code: '42P01' },
+    );
+    const query = jest
+      .fn()
+      .mockRejectedValueOnce(missingLegacyRelation)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            event_offset: '9130',
+            record_time: '2026-07-03T12:00:00.000Z',
+          },
+        ],
+      })
+      .mockRejectedValueOnce(missingLegacyRelation)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            parties: ['Alice'],
+          },
+        ],
+      });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchRecentUpdates(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+role: 'participant',
+mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        {
+          limit: 25,
+          parties: ['Alice'],
+          mode: 'and',
+        },
+      ),
+    ).resolves.toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [
+        {
+          eventOffset: '9130',
+          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          recordTime: '2026-07-03T12:00:00.000Z',
+          parties: ['Alice'],
+        },
+      ],
+    });
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('participant.lapi_events_create create_event'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('participant.lapi_events_activate_contract activate_event'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('participant.lapi_filter_activate_witness'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("'Alice'"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('participant.lapi_events_create'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining('participant.lapi_events_activate_contract'),
+    );
+  });
+
+  it('returns cursor metadata for older update pagination windows', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '\\x00000000000000000000000000000009',
+            event_offset: '109',
+            record_time: '2026-07-01T12:09:00.000Z',
+          },
+          {
+            update_id: '\\x00000000000000000000000000000008',
+            event_offset: '108',
+            record_time: '2026-07-01T12:08:00.000Z',
+          },
+          {
+            update_id: '\\x00000000000000000000000000000007',
+            event_offset: '107',
+            record_time: '2026-07-01T12:07:00.000Z',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [],
+      });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    const updates = await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+role: 'participant',
+mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      {
+        limit: 2,
+        before: '110',
+      },
+    );
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('event_offset::numeric < 110'),
+    );
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 3'));
+    expect(updates).toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 2,
+      nextBefore: '108',
+      nextAfter: '109',
+      updates: [
+        {
+          eventOffset: '109',
+          updateId: '00000000000000000000000000000009',
+          recordTime: '2026-07-01T12:09:00.000Z',
+          parties: [],
+        },
+        {
+          eventOffset: '108',
+          updateId: '00000000000000000000000000000008',
+          recordTime: '2026-07-01T12:08:00.000Z',
+          parties: [],
+        },
+      ],
+    });
+  });
+
+  it('applies global AND party filters to the updates query', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [],
+    });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    const updates = await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+role: 'participant',
+mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      {
+        limit: 25,
+        parties: ['Alice', 'Bob'],
+        mode: 'and',
+      },
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('participant.lapi_events_create create_event'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('participant.lapi_events_consuming_exercise exercise_event'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('participant.lapi_events_non_consuming_exercise exercise_event'),
+    );
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Alice'"));
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Bob'"));
+    expect(updates).toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
     });
   });
 
@@ -624,7 +1210,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'participant-1',
           label: 'Participant 1',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -731,7 +1318,8 @@ describe('PqsSummaryService', () => {
     const node = {
       id: 'participant-1',
       label: 'Participant 1',
-      role: 'participant' as const,
+role: 'participant',
+mode: 'pqs_only',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     };
@@ -814,7 +1402,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'participant-1',
           label: 'Participant 1',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -856,7 +1445,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'participant-1',
           label: 'Participant 1',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -940,7 +1530,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'participant-1',
           label: 'Participant 1',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -1106,7 +1697,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'participant-1',
           label: 'Participant 1',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -1219,7 +1811,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'participant-1',
           label: 'Participant 1',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -1313,7 +1906,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'cnqs-sv',
           label: 'CNQS Super Validator',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Quickstart Super Validator',
           pqs: { connectionUriEnv: 'CNQS_PQS_SV_URL' },
         },
@@ -1429,7 +2023,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'cnqs-sv',
           label: 'CNQS Super Validator',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Quickstart Super Validator',
           pqs: { connectionUriEnv: 'CNQS_PQS_SV_URL' },
         },
@@ -1537,7 +2132,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'cnqs-sv',
           label: 'CNQS Super Validator',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Quickstart Super Validator',
           pqs: { connectionUriEnv: 'CNQS_PQS_SV_URL' },
         },
@@ -1620,7 +2216,8 @@ describe('PqsSummaryService', () => {
         {
           id: 'cnqs-app-user',
           label: 'CNQS App User',
-          role: 'participant',
+role: 'participant',
+mode: 'pqs_only',
           ledgerLabel: 'Quickstart App User',
           pqs: { connectionUriEnv: 'CNQS_PQS_APP_USER_URL' },
         },

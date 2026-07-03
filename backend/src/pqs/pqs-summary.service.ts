@@ -1,8 +1,10 @@
 import { Injectable, Optional } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
 import type {
+  ActivePartiesResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
+  PartyDetailResponse,
   LedgerSummary,
   NodeDecodeState,
   NodeDecodedDamlValue,
@@ -51,6 +53,17 @@ interface UpdateDetailRow {
 
 interface UpdatePartiesRow {
   update_id: string;
+  parties: string[] | string | null;
+}
+
+interface PartyContractRow {
+  contract_id: string | null;
+  template_id: string | null;
+  package_id: string | null;
+  record_time: string | null;
+}
+
+interface ActivePartiesRow {
   parties: string[] | string | null;
 }
 
@@ -147,17 +160,351 @@ function activityBucketsQuery(days: number, bucketMinutes: number): string {
   `;
 }
 
-function recentUpdatesQuery(limit: number): string {
+function normalizePartyFilters(parties?: string[]): string[] {
+  if (!parties) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      parties
+        .map((party) => party.trim())
+        .filter((party) => party.length > 0),
+    ),
+  );
+}
+
+function normalizePartyFilterMode(mode?: string): 'or' | 'and' {
+  return mode === 'and' ? 'and' : 'or';
+}
+
+function buildUpdatePartyExistsCondition(partyId: string): string {
+  const createMatch = partyWitnessArrayMatchCondition('create_event.tree_event_witnesses', partyId);
+  const consumingMatch = partyWitnessArrayMatchCondition(
+    'exercise_event.tree_event_witnesses',
+    partyId,
+  );
+  const nonConsumingMatch = partyWitnessArrayMatchCondition(
+    'exercise_event.tree_event_witnesses',
+    partyId,
+  );
+
+  return `(
+    exists (
+      select 1
+      from participant.lapi_events_create create_event
+      where create_event.update_id = update_meta.update_id
+        and ${createMatch}
+    )
+    or exists (
+      select 1
+      from participant.lapi_events_consuming_exercise exercise_event
+      where exercise_event.update_id = update_meta.update_id
+        and ${consumingMatch}
+    )
+    or exists (
+      select 1
+      from participant.lapi_events_non_consuming_exercise exercise_event
+      where exercise_event.update_id = update_meta.update_id
+        and ${nonConsumingMatch}
+    )
+  )`;
+}
+
+function buildNormalizedUpdatePartyExistsCondition(partyId: string): string {
+  const partyMatch = partyScalarMatchCondition('party_string.external_string', partyId);
+
+  return `(
+    exists (
+      select 1
+      from participant.lapi_events_activate_contract activate_event
+      join participant.lapi_filter_activate_witness witness_filter
+        on witness_filter.event_sequential_id = activate_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      where activate_event.update_id = update_meta.update_id
+        and ${partyMatch}
+    )
+    or exists (
+      select 1
+      from participant.lapi_events_deactivate_contract deactivate_event
+      join participant.lapi_filter_deactivate_witness witness_filter
+        on witness_filter.event_sequential_id = deactivate_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      where deactivate_event.update_id = update_meta.update_id
+        and ${partyMatch}
+    )
+    or exists (
+      select 1
+      from participant.lapi_events_various_witnessed various_event
+      join participant.lapi_filter_various_witness witness_filter
+        on witness_filter.event_sequential_id = various_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      where various_event.update_id = update_meta.update_id
+        and ${partyMatch}
+    )
+  )`;
+}
+
+function buildUpdatesPartyFilterClause(parties?: string[], mode?: string): string | null {
+  const normalizedParties = normalizePartyFilters(parties);
+  if (normalizedParties.length === 0) {
+    return null;
+  }
+
+  const joiner = normalizePartyFilterMode(mode) === 'and' ? '\n      and ' : '\n      or ';
+  const conditions = normalizedParties.map((party) => buildUpdatePartyExistsCondition(party));
+  return `(\n      ${conditions.join(joiner)}\n    )`;
+}
+
+function buildNormalizedUpdatesPartyFilterClause(parties?: string[], mode?: string): string | null {
+  const normalizedParties = normalizePartyFilters(parties);
+  if (normalizedParties.length === 0) {
+    return null;
+  }
+
+  const joiner = normalizePartyFilterMode(mode) === 'and' ? '\n      and ' : '\n      or ';
+  const conditions = normalizedParties.map((party) =>
+    buildNormalizedUpdatePartyExistsCondition(party),
+  );
+  return `(\n      ${conditions.join(joiner)}\n    )`;
+}
+
+function recentUpdatesQuery(
+  limit: number,
+  before?: string,
+  after?: string,
+  parties?: string[],
+  mode?: string,
+): string {
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const partyFilterClause = buildUpdatesPartyFilterClause(parties, mode);
+  const queryLimit = limit + 1;
+
+  const afterFilters = [
+    normalizedAfter ? `update_meta.event_offset::numeric > ${normalizedAfter}` : null,
+    partyFilterClause,
+  ].filter((value): value is string => Boolean(value));
+  const olderFilters = [
+    normalizedBefore ? `update_meta.event_offset::numeric < ${normalizedBefore}` : null,
+    partyFilterClause,
+  ].filter((value): value is string => Boolean(value));
+
+  if (normalizedAfter && !normalizedBefore) {
+    const whereClause = afterFilters.length > 0 ? `where ${afterFilters.join('\n      and ')}` : '';
+    return `
+      select
+        update_meta.update_id::text as update_id,
+        update_meta.event_offset::text as event_offset,
+        to_char(
+          to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as record_time
+      from participant.lapi_update_meta update_meta
+      ${whereClause}
+      order by update_meta.event_offset::numeric asc
+      limit ${queryLimit}
+    `;
+  }
+
+  const whereClause = olderFilters.length > 0 ? `where ${olderFilters.join('\n      and ')}` : '';
+
   return `
     select
-      update_id::text as update_id,
-      event_offset::text as event_offset,
+      update_meta.update_id::text as update_id,
+      update_meta.event_offset::text as event_offset,
       to_char(
-        to_timestamp(record_time / 1000000.0) at time zone 'UTC',
+        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
         'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
       ) as record_time
-    from participant.lapi_update_meta
-    order by record_time desc
+    from participant.lapi_update_meta update_meta
+    ${whereClause}
+    order by update_meta.event_offset::numeric desc
+  limit ${queryLimit}
+  `;
+}
+
+function normalizedRecentUpdatesQuery(
+  limit: number,
+  before?: string,
+  after?: string,
+  parties?: string[],
+  mode?: string,
+): string {
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const partyFilterClause = buildNormalizedUpdatesPartyFilterClause(parties, mode);
+  const queryLimit = limit + 1;
+
+  const afterFilters = [
+    normalizedAfter ? `update_meta.event_offset::numeric > ${normalizedAfter}` : null,
+    partyFilterClause,
+  ].filter((value): value is string => Boolean(value));
+  const olderFilters = [
+    normalizedBefore ? `update_meta.event_offset::numeric < ${normalizedBefore}` : null,
+    partyFilterClause,
+  ].filter((value): value is string => Boolean(value));
+
+  if (normalizedAfter && !normalizedBefore) {
+    const whereClause = afterFilters.length > 0 ? `where ${afterFilters.join('\n      and ')}` : '';
+    return `
+      select
+        encode(update_meta.update_id, 'hex') as update_id,
+        update_meta.event_offset::text as event_offset,
+        to_char(
+          to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as record_time
+      from participant.lapi_update_meta update_meta
+      ${whereClause}
+      order by update_meta.event_offset::numeric asc
+      limit ${queryLimit}
+    `;
+  }
+
+  const whereClause = olderFilters.length > 0 ? `where ${olderFilters.join('\n      and ')}` : '';
+
+  return `
+    select
+      encode(update_meta.update_id, 'hex') as update_id,
+      update_meta.event_offset::text as event_offset,
+      to_char(
+        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ) as record_time
+    from participant.lapi_update_meta update_meta
+    ${whereClause}
+    order by update_meta.event_offset::numeric desc
+    limit ${queryLimit}
+  `;
+}
+
+function buildQuotedPartyIdentifiers(partyId: string): string[] {
+  const trimmed = partyId.trim();
+
+  if (!trimmed) {
+    return [];
+  }
+
+  const normalized = trimmed.replace(/^p\|/, '');
+  const identifiers = new Set([trimmed, normalized]);
+
+  if (normalized) {
+    identifiers.add(`p|${normalized}`);
+  }
+
+  return Array.from(identifiers).map((identifier) => `'${escapeSqlLiteral(identifier)}'`);
+}
+
+function partyWitnessArrayMatchCondition(arrayExpression: string, partyId: string): string {
+  const quotedIdentifiers = buildQuotedPartyIdentifiers(partyId);
+
+  if (quotedIdentifiers.length === 0) {
+    return 'false';
+  }
+
+  return `array[${quotedIdentifiers.join(', ')}]::text[] && ${arrayExpression}`;
+}
+
+function partyScalarMatchCondition(columnExpression: string, partyId: string): string {
+  const quotedIdentifiers = buildQuotedPartyIdentifiers(partyId);
+
+  if (quotedIdentifiers.length === 0) {
+    return 'false';
+  }
+
+  return `${columnExpression} in (${quotedIdentifiers.join(', ')})`;
+}
+
+function partyRecentUpdatesQuery(partyId: string, limit: number): string {
+  const witnessMatch = partyWitnessArrayMatchCondition('create_event.tree_event_witnesses', partyId);
+  const consumingWitnessMatch = partyWitnessArrayMatchCondition(
+    'exercise_event.tree_event_witnesses',
+    partyId,
+  );
+  const nonConsumingWitnessMatch = partyWitnessArrayMatchCondition(
+    'exercise_event.tree_event_witnesses',
+    partyId,
+  );
+
+  return `
+    select
+      update_meta.update_id::text as update_id,
+      update_meta.event_offset::text as event_offset,
+      to_char(
+        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ) as record_time
+    from participant.lapi_update_meta update_meta
+    where update_meta.update_id::text in (
+      select create_event.update_id::text
+      from participant.lapi_events_create create_event
+      where ${witnessMatch}
+
+      union
+
+      select exercise_event.update_id::text
+      from participant.lapi_events_consuming_exercise exercise_event
+      where ${consumingWitnessMatch}
+
+      union
+
+      select exercise_event.update_id::text
+      from participant.lapi_events_non_consuming_exercise exercise_event
+      where ${nonConsumingWitnessMatch}
+    )
+    order by update_meta.record_time desc
+    limit ${limit}
+  `;
+}
+
+function normalizedPartyRecentUpdatesQuery(partyId: string, limit: number): string {
+  const partyMatch = partyScalarMatchCondition('party_string.external_string', partyId);
+
+  return `
+    with matching_updates as (
+      select distinct activate_event.update_id
+      from participant.lapi_events_activate_contract activate_event
+      join participant.lapi_filter_activate_witness witness_filter
+        on witness_filter.event_sequential_id = activate_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      where ${partyMatch}
+
+      union
+
+      select distinct deactivate_event.update_id
+      from participant.lapi_events_deactivate_contract deactivate_event
+      join participant.lapi_filter_deactivate_witness witness_filter
+        on witness_filter.event_sequential_id = deactivate_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      where ${partyMatch}
+
+      union
+
+      select distinct various_event.update_id
+      from participant.lapi_events_various_witnessed various_event
+      join participant.lapi_filter_various_witness witness_filter
+        on witness_filter.event_sequential_id = various_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      where ${partyMatch}
+    )
+    select
+      encode(update_meta.update_id, 'hex') as update_id,
+      update_meta.event_offset::text as event_offset,
+      to_char(
+        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ) as record_time
+    from participant.lapi_update_meta update_meta
+    join matching_updates
+      on matching_updates.update_id = update_meta.update_id
+    order by update_meta.record_time desc
     limit ${limit}
   `;
 }
@@ -241,6 +588,133 @@ function normalizedRecentUpdatePartiesQuery(updateIds: string[]): string {
       where encode(various_event.update_id, 'hex') in (${quotedIds})
     ) update_parties
     group by update_id
+  `;
+}
+
+function activePartiesQuery(): string {
+  return `
+    select
+      array_agg(distinct party order by party) as parties
+    from (
+      select unnest(tree_event_witnesses) as party
+      from participant.lapi_events_create
+
+      union
+
+      select unnest(tree_event_witnesses) as party
+      from participant.lapi_events_consuming_exercise
+
+      union
+
+      select unnest(tree_event_witnesses) as party
+      from participant.lapi_events_non_consuming_exercise
+    ) observed_parties
+  `;
+}
+
+function normalizedActivePartiesQuery(): string {
+  return `
+    select
+      array_agg(distinct party order by party) as parties
+    from (
+      select party_string.external_string as party
+      from participant.lapi_filter_activate_witness witness_filter
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+
+      union
+
+      select party_string.external_string as party
+      from participant.lapi_filter_deactivate_witness witness_filter
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+
+      union
+
+      select party_string.external_string as party
+      from participant.lapi_filter_various_witness witness_filter
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+    ) observed_parties
+  `;
+}
+
+function partyRecentContractsQuery(partyId: string, limit: number): string {
+  const witnessMatch = partyWitnessArrayMatchCondition('create_event.tree_event_witnesses', partyId);
+
+  return `
+    select
+      create_event.contract_id::text as contract_id,
+      create_event.template_id::text as template_id,
+      null::text as package_id,
+      to_char(
+        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ) as record_time
+    from participant.lapi_events_create create_event
+    join participant.lapi_update_meta update_meta
+      on update_meta.update_id = create_event.update_id
+    where ${witnessMatch}
+    order by update_meta.record_time desc
+    limit ${limit}
+  `;
+}
+
+function normalizedPartyRecentContractsQuery(partyId: string, limit: number): string {
+  const partyMatch = partyScalarMatchCondition('party_string.external_string', partyId);
+
+  return `
+    select
+      contract_id,
+      template_id,
+      package_id,
+      record_time
+    from (
+      select
+        encode(contract.contract_id, 'hex') as contract_id,
+        contract.template_id::text as template_id,
+        package_string.external_string as package_id,
+        to_char(
+          to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as record_time,
+        activate_event.event_sequential_id as sort_event_sequential_id
+      from participant.lapi_events_activate_contract activate_event
+      join participant.lapi_filter_activate_witness witness_filter
+        on witness_filter.event_sequential_id = activate_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      left join participant.par_contracts contract
+        on contract.internal_contract_id = activate_event.internal_contract_id
+      left join participant.lapi_string_interning package_string
+        on package_string.internal_id = activate_event.representative_package_id
+      where ${partyMatch}
+
+      union all
+
+      select
+        encode(contract.contract_id, 'hex') as contract_id,
+        contract.template_id::text as template_id,
+        package_string.external_string as package_id,
+        to_char(
+          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as record_time,
+        various_event.event_sequential_id as sort_event_sequential_id
+      from participant.lapi_events_various_witnessed various_event
+      join participant.lapi_filter_various_witness witness_filter
+        on witness_filter.event_sequential_id = various_event.event_sequential_id
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      left join participant.par_contracts contract
+        on contract.internal_contract_id = various_event.internal_contract_id
+      left join participant.lapi_string_interning package_string
+        on package_string.internal_id = various_event.package_id
+      where ${partyMatch}
+        and various_event.event_type = 6
+    ) recent_contracts
+    order by sort_event_sequential_id desc
+    limit ${limit}
   `;
 }
 
@@ -672,6 +1146,19 @@ function escapeSqlLiteral(value: string): string {
   return value.replaceAll("'", "''");
 }
 
+function normalizeEventOffsetCursor(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed.replace(/^0+(?=\d)/, '');
+}
+
 function normalizeByteaHex(value: string): string {
   return value.startsWith('\\x') ? value.slice(2) : value;
 }
@@ -702,13 +1189,43 @@ export class PqsSummaryService {
 
   async fetchRecentUpdates(
     node: NodeConfig,
-    limit = 25,
+    options:
+      | number
+      | { limit?: number; before?: string; after?: string; parties?: string[]; mode?: string } = 25,
   ): Promise<NodeRecentUpdatesResponse> {
     const client = this.clientFactory.getClient(node);
-    const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : 25;
-    const metaResult = await client.query(recentUpdatesQuery(normalizedLimit));
-    const metaRows = (metaResult.rows as UpdateMetaRow[]) ?? [];
-    const updates = metaRows.map((row) => ({
+    const normalizedLimit =
+      typeof options === 'number'
+        ? Number.isFinite(options) && options > 0
+          ? Math.trunc(options)
+          : 25
+        : Number.isFinite(options.limit) && Number(options.limit) > 0
+          ? Math.trunc(Number(options.limit))
+          : 25;
+    const before = typeof options === 'object' ? options.before : undefined;
+    const after = typeof options === 'object' ? options.after : undefined;
+    const parties = typeof options === 'object' ? options.parties : undefined;
+    const mode = typeof options === 'object' ? options.mode : undefined;
+    const useAfterCursor = Boolean(after && !before);
+    let metaResult;
+
+    try {
+      metaResult = await client.query(recentUpdatesQuery(normalizedLimit, before, after, parties, mode));
+    } catch (error) {
+      if (!this.shouldFallbackToNormalizedEventTables(error)) {
+        throw error;
+      }
+
+      metaResult = await client.query(
+        normalizedRecentUpdatesQuery(normalizedLimit, before, after, parties, mode),
+      );
+    }
+
+    const rawMetaRows = (metaResult.rows as UpdateMetaRow[]) ?? [];
+    const hasMoreInQuery = rawMetaRows.length > normalizedLimit;
+    const trimmedMetaRows = rawMetaRows.slice(0, normalizedLimit);
+    const orderedMetaRows = useAfterCursor ? [...trimmedMetaRows].reverse() : trimmedMetaRows;
+    const updates = orderedMetaRows.map((row) => ({
       eventOffset: this.extractEventOffset(row),
       rawUpdateId: row.update_id,
       updateId: this.normalizeUpdateId(row.update_id),
@@ -720,6 +1237,8 @@ export class PqsSummaryService {
         nodeId: node.id,
         label: node.label,
         limit: normalizedLimit,
+        nextBefore: null,
+        nextAfter: null,
         updates: [],
       };
     }
@@ -733,6 +1252,16 @@ export class PqsSummaryService {
       nodeId: node.id,
       label: node.label,
       limit: normalizedLimit,
+      nextBefore:
+        useAfterCursor || hasMoreInQuery ? updates[updates.length - 1]?.eventOffset ?? null : null,
+      nextAfter:
+        useAfterCursor
+          ? hasMoreInQuery
+            ? updates[0]?.eventOffset ?? null
+            : null
+          : before
+            ? updates[0]?.eventOffset ?? null
+            : null,
       updates: updates.map((update) => ({
         eventOffset: update.eventOffset,
         updateId: update.updateId,
@@ -861,6 +1390,99 @@ export class PqsSummaryService {
     };
   }
 
+  async fetchActiveParties(nodes: NodeConfig[]): Promise<ActivePartiesResponse> {
+    return {
+      nodes: await Promise.all(
+        nodes.map(async (node) => ({
+          nodeId: node.id,
+          label: node.label,
+          mode: node.mode,
+          parties: await this.fetchActivePartiesForNode(node),
+        })),
+      ),
+    };
+  }
+
+  async fetchPartyDetail(nodes: NodeConfig[], partyId: string): Promise<PartyDetailResponse> {
+    const normalizedPartyId = this.normalizePartyIdentifier(partyId);
+    const recentUpdatesByNode = await Promise.all(
+      nodes.map(async (node) => ({
+        node,
+        updates: await this.fetchPartyRecentUpdatesForNode(node, normalizedPartyId, 10),
+      })),
+    );
+    const recentContractsByNode = await Promise.all(
+      nodes.map(async (node) => ({
+        node,
+        contracts: await this.fetchPartyRecentContractsForNode(node, normalizedPartyId, 10),
+      })),
+    );
+
+    const nodesById = new Map<
+      string,
+      {
+        nodeId: string;
+        label: string;
+        recentUpdateCount: number;
+        recentContractCount: number;
+      }
+    >();
+
+    for (const { node, updates } of recentUpdatesByNode) {
+      if (updates.length === 0) {
+        continue;
+      }
+
+      const existing = nodesById.get(node.id);
+      nodesById.set(node.id, {
+        nodeId: node.id,
+        label: node.label,
+        recentUpdateCount: updates.length,
+        recentContractCount: existing?.recentContractCount ?? 0,
+      });
+    }
+
+    for (const { node, contracts } of recentContractsByNode) {
+      if (contracts.length === 0) {
+        continue;
+      }
+
+      const existing = nodesById.get(node.id);
+      nodesById.set(node.id, {
+        nodeId: node.id,
+        label: node.label,
+        recentUpdateCount: existing?.recentUpdateCount ?? 0,
+        recentContractCount: contracts.length,
+      });
+    }
+
+    const recentUpdates = recentUpdatesByNode
+      .flatMap(({ updates }) => updates)
+      .sort((left, right) => Date.parse(right.recordTime ?? '') - Date.parse(left.recordTime ?? ''))
+      .slice(0, 10);
+    const recentContracts = recentContractsByNode
+      .flatMap(({ contracts }) => contracts)
+      .sort((left, right) => Date.parse(right.recordTime ?? '') - Date.parse(left.recordTime ?? ''))
+      .slice(0, 10);
+    const observedNodes = Array.from(nodesById.values()).sort((left, right) =>
+      left.label.localeCompare(right.label),
+    );
+
+    if (observedNodes.length === 0 && recentUpdates.length === 0 && recentContracts.length === 0) {
+      throw new Error('Party not found');
+    }
+
+    return {
+      partyId: normalizedPartyId,
+      nodeCount: observedNodes.length,
+      recentUpdateCount: recentUpdates.length,
+      recentContractCount: recentContracts.length,
+      nodes: observedNodes,
+      recentUpdates,
+      recentContracts,
+    };
+  }
+
   async fetchUpdateDetail(
     node: NodeConfig,
     eventOffset: string,
@@ -948,6 +1570,86 @@ export class PqsSummaryService {
     return query(PARTICIPANT_FALLBACK_QUERY);
   }
 
+  private async fetchPartyRecentUpdatesForNode(
+    node: NodeConfig,
+    partyId: string,
+    limit: number,
+  ): Promise<PartyDetailResponse['recentUpdates']> {
+    const client = this.clientFactory.getClient(node);
+    let rows: UpdateMetaRow[] = [];
+
+    try {
+      const result = await client.query(partyRecentUpdatesQuery(partyId, limit));
+      rows = (result.rows as UpdateMetaRow[]) ?? [];
+    } catch (error) {
+      if (!this.shouldFallbackToNormalizedEventTables(error)) {
+        throw error;
+      }
+
+      const result = await client.query(normalizedPartyRecentUpdatesQuery(partyId, limit));
+      rows = (result.rows as UpdateMetaRow[]) ?? [];
+    }
+
+    const rawUpdateIds = rows.map((row) => row.update_id);
+    const partiesByUpdateId =
+      rawUpdateIds.length > 0
+        ? await this.fetchPartiesByUpdateId(client.query.bind(client), rawUpdateIds)
+        : new Map<string, string[]>();
+
+    return rows.map((row) => {
+      const updateId = this.normalizeUpdateId(row.update_id);
+
+      return {
+        nodeId: node.id,
+        label: node.label,
+        eventOffset: this.extractEventOffset(row),
+        updateId,
+        recordTime: typeof row.record_time === 'string' ? row.record_time : null,
+        parties: partiesByUpdateId.get(updateId) ?? [],
+      };
+    });
+  }
+
+  private async fetchPartyRecentContractsForNode(
+    node: NodeConfig,
+    partyId: string,
+    limit: number,
+  ): Promise<PartyDetailResponse['recentContracts']> {
+    const client = this.clientFactory.getClient(node);
+    let rows: PartyContractRow[] = [];
+
+    try {
+      const result = await client.query(partyRecentContractsQuery(partyId, limit));
+      rows = (result.rows as PartyContractRow[]) ?? [];
+    } catch (error) {
+      if (!this.shouldFallbackToNormalizedEventTables(error)) {
+        throw error;
+      }
+
+      const result = await client.query(normalizedPartyRecentContractsQuery(partyId, limit));
+      rows = (result.rows as PartyContractRow[]) ?? [];
+    }
+
+    return rows
+      .filter((row): row is PartyContractRow & { contract_id: string } => typeof row.contract_id === 'string')
+      .map((row) => {
+        const packageId = this.normalizePackageIdentifier(row.package_id ?? null);
+        const packageMetadata =
+          packageId && this.packageCacheService ? this.packageCacheService.getPackage(packageId) : null;
+
+        return {
+          nodeId: node.id,
+          label: node.label,
+          contractId: row.contract_id,
+          templateId: this.normalizeTemplateIdentifier(row.template_id),
+          packageId,
+          packageName: packageMetadata?.name ?? null,
+          packageVersion: packageMetadata?.version ?? null,
+          recordTime: typeof row.record_time === 'string' ? row.record_time : null,
+        };
+      });
+  }
+
   private shouldFallbackToParticipantTables(error: unknown): boolean {
     if (!(error instanceof Error)) {
       return false;
@@ -964,6 +1666,24 @@ export class PqsSummaryService {
 
     const code = (error as Error & { code?: string }).code;
     return code === '42P01' || error.message.includes('does not exist');
+  }
+
+  private async fetchActivePartiesForNode(node: NodeConfig): Promise<string[]> {
+    const client = this.clientFactory.getClient(node);
+
+    try {
+      const result = await client.query(activePartiesQuery());
+      const row = (result.rows as ActivePartiesRow[])[0];
+      return this.normalizeParties(row?.parties ?? null);
+    } catch (error) {
+      if (!this.shouldFallbackToNormalizedEventTables(error)) {
+        throw error;
+      }
+    }
+
+    const fallbackResult = await client.query(normalizedActivePartiesQuery());
+    const fallbackRow = (fallbackResult.rows as ActivePartiesRow[])[0];
+    return this.normalizeParties(fallbackRow?.parties ?? null);
   }
 
   private async fetchPartiesByUpdateId(
