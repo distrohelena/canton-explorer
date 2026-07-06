@@ -7,9 +7,12 @@ import { GrpcOperationsService } from '../../src/grpc/grpc-operations.service';
 import { PqsSummaryService } from '../../src/pqs/pqs-summary.service';
 import type {
   PartyDetailResponse,
+  NodeContractsResponse,
+  NodeParticipantStatusResponse,
   NodePackagesResponse,
   PackageDetailResponse,
   PackageFamilyResponse,
+  TemplateFilterResponse,
 } from '../../src/domain/node.types';
 
 const typedPackageDetailFixture = {
@@ -82,6 +85,70 @@ const typedNodePackagesFixture = {
     },
   ],
 } satisfies NodePackagesResponse;
+
+const typedNodeContractsFixture = {
+  nodeId: 'participant-1',
+  label: 'Participant 1',
+  limit: 25,
+  nextBefore: '000000000000000099',
+  nextAfter: null,
+  contracts: [
+    {
+      contractId: '00abc',
+      templateId: 'Main:Asset',
+      createdRecordTime: '2026-07-01T12:00:00.000Z',
+    },
+  ],
+} satisfies NodeContractsResponse;
+
+const typedTemplateFilterFixture = {
+  templates: [
+    { templateId: 'Main:Asset' },
+    { templateId: 'Main:Wallet' },
+  ],
+} satisfies TemplateFilterResponse;
+
+const typedNodeParticipantStatusFixture = {
+  nodeId: 'participant-2',
+  label: 'Participant 2',
+  mode: 'pqs_with_grpc',
+  participantStatusStatus: 'ok',
+  participantStatus: {
+    uid: 'participant2::1220abc',
+    uptime: '3600s',
+    ports: {
+      admin: 5012,
+      ledger: 5011,
+    },
+    active: true,
+    commonStatusActive: true,
+    version: '3.4.0',
+    supportedProtocolVersions: [30, 31],
+    topologyQueues: {
+      manager: 1,
+      dispatcher: 2,
+      clients: 3,
+    },
+    components: [
+      {
+        name: 'sync-service',
+        severity: 'ok',
+        description: 'running',
+      },
+    ],
+    connectedSynchronizers: [
+      {
+        physicalSynchronizerId: 'physical::1220def',
+        health: 'healthy',
+      },
+    ],
+  },
+  notInitialized: null,
+  participantStatusError: null,
+  participantStatusErrorCode: null,
+  participantStatusErrorDetails: null,
+  participantStatusErrorTid: null,
+} satisfies NodeParticipantStatusResponse;
 
 const typedPartyDetailFixture = {
   partyId: 'Alice',
@@ -162,12 +229,22 @@ const typedLocalPartiesFixture = {
       label: 'Participant 1',
       mode: 'pqs_only',
       parties: [],
+      localPartiesStatus: 'grpc_not_configured',
+      localPartiesError: null,
+      localPartiesErrorCode: null,
+      localPartiesErrorDetails: null,
+      localPartiesErrorTid: null,
     },
     {
       nodeId: 'participant-2',
       label: 'Participant 2',
       mode: 'pqs_with_grpc',
       parties: ['LocalAlice', 'LocalBob'],
+      localPartiesStatus: 'ok',
+      localPartiesError: null,
+      localPartiesErrorCode: null,
+      localPartiesErrorDetails: null,
+      localPartiesErrorTid: null,
     },
   ],
 };
@@ -176,21 +253,51 @@ describe('NodesController', () => {
   let controller: NodesController;
   let cache: NodeCacheService;
   let pqsSummaryService: {
+    fetchGlobalRecentUpdates: jest.Mock;
     fetchRecentUpdates: jest.Mock;
     fetchUpdateDetail: jest.Mock;
     fetchContractDetail: jest.Mock;
     fetchPackageDetail: jest.Mock;
     fetchPackagesByName: jest.Mock;
+    fetchTemplates: jest.Mock;
     fetchNodePackages: jest.Mock;
+    fetchNodeTemplates: jest.Mock;
+    fetchNodeContracts: jest.Mock;
     fetchActiveParties: jest.Mock;
     fetchPartyDetail: jest.Mock;
+    fetchPartyUpdates: jest.Mock;
+    fetchPartyContracts: jest.Mock;
   };
   let grpcOperationsService: {
     listLocalParties: jest.Mock;
+    fetchParticipantStatus: jest.Mock;
   };
 
   beforeEach(async () => {
     pqsSummaryService = {
+      fetchGlobalRecentUpdates: jest.fn().mockResolvedValue({
+        limit: 25,
+        nextBefore: null,
+        nextAfter: null,
+        updates: [
+          {
+            nodeId: 'participant-2',
+            label: 'Participant 2',
+            eventOffset: '000000000000000002',
+            updateId: '00000000000000000000000000000002',
+            recordTime: '2026-07-01T12:01:00.000Z',
+            parties: ['Bob'],
+          },
+          {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            eventOffset: '000000000000000001',
+            updateId: '00000000000000000000000000000001',
+            recordTime: '2026-07-01T12:00:00.000Z',
+            parties: ['Alice'],
+          },
+        ],
+      }),
       fetchRecentUpdates: jest.fn().mockResolvedValue({
         nodeId: 'participant-1',
         label: 'Participant 1',
@@ -254,12 +361,31 @@ describe('NodesController', () => {
       }),
       fetchPackageDetail: jest.fn().mockResolvedValue(typedPackageDetailFixture),
       fetchPackagesByName: jest.fn().mockResolvedValue(typedPackageFamilyFixture),
+      fetchTemplates: jest.fn().mockResolvedValue(typedTemplateFilterFixture),
       fetchNodePackages: jest.fn().mockResolvedValue(typedNodePackagesFixture),
+      fetchNodeTemplates: jest.fn().mockResolvedValue(typedTemplateFilterFixture),
+      fetchNodeContracts: jest.fn().mockResolvedValue(typedNodeContractsFixture),
       fetchActiveParties: jest.fn().mockResolvedValue(typedActivePartiesFixture),
       fetchPartyDetail: jest.fn().mockResolvedValue(typedPartyDetailFixture),
+      fetchPartyUpdates: jest.fn().mockResolvedValue({
+        limit: 25,
+        nextBefore: null,
+        nextAfter: null,
+        updates: typedPartyDetailFixture.recentUpdates,
+      }),
+      fetchPartyContracts: jest.fn().mockResolvedValue({
+        limit: 25,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: typedPartyDetailFixture.recentContracts,
+      }),
     };
     grpcOperationsService = {
       listLocalParties: jest.fn().mockResolvedValue(['LocalAlice', 'LocalBob']),
+      fetchParticipantStatus: jest.fn().mockResolvedValue({
+        participantStatus: typedNodeParticipantStatusFixture.participantStatus,
+        notInitialized: null,
+      }),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -285,7 +411,13 @@ describe('NodesController', () => {
                 mode: 'pqs_with_grpc',
                 ledgerLabel: 'Retail Ledger 2',
                 pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL' },
-                grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+                grpc: {
+                  ledgerTarget: 'localhost:5012',
+                  ledgerAdminTarget: 'localhost:5013',
+                  participantAdminTarget: 'localhost:5014',
+                  useTls: false,
+                  connectTimeoutMs: 5000,
+                },
               },
             ],
           },
@@ -421,10 +553,93 @@ describe('NodesController', () => {
     expect(response).toEqual(typedNodePackagesFixture);
   });
 
+  it('returns known templates for a known node id', async () => {
+    const response = await controller.listNodeTemplates('participant-1');
+
+    expect(pqsSummaryService.fetchNodeTemplates).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-1', label: 'Participant 1' }),
+    );
+    expect(response).toEqual(typedTemplateFilterFixture);
+  });
+
+  it('returns active contracts for a known node id', async () => {
+    const response = await controller.listNodeContracts('participant-1');
+
+    expect(pqsSummaryService.fetchNodeContracts).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-1', label: 'Participant 1' }),
+      {
+        limit: 25,
+        before: undefined,
+        after: undefined,
+      },
+    );
+    expect(response).toEqual(typedNodeContractsFixture);
+  });
+
+  it('returns filtered active contracts for a known node id', async () => {
+    const maybeController = controller as {
+      listNodeContracts?: (
+        id: string,
+        limit?: string,
+        before?: string,
+        after?: string,
+        party?: string | string[],
+        template?: string | string[],
+        partyMode?: string,
+        mode?: string,
+        hideSplice?: string,
+      ) => Promise<NodeContractsResponse>;
+    };
+
+    expect(typeof maybeController.listNodeContracts).toBe('function');
+
+    const response = await maybeController.listNodeContracts!(
+      'participant-1',
+      '25',
+      'cursor-1',
+      undefined,
+      ['Alice', 'Bob'],
+      'Main:Asset',
+      'and',
+      undefined,
+      'true',
+    );
+
+    expect(pqsSummaryService.fetchNodeContracts).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-1', label: 'Participant 1' }),
+      {
+        limit: 25,
+        before: 'cursor-1',
+        after: undefined,
+        parties: ['Alice', 'Bob'],
+        templates: ['Main:Asset'],
+        partyMode: 'and',
+        hideSplice: true,
+      },
+    );
+    expect(response).toEqual(typedNodeContractsFixture);
+  });
+
+  it('returns participant status for a known grpc-enabled node id', async () => {
+    const response = await controller.getNodeParticipantStatus('participant-2');
+
+    expect(grpcOperationsService.fetchParticipantStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2', label: 'Participant 2' }),
+    );
+    expect(response).toEqual(typedNodeParticipantStatusFixture);
+  });
+
   it('returns 404 when node package lookup uses an unknown node id', async () => {
     await expect(controller.listNodePackages('missing-node')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('returns all known templates', async () => {
+    const response = await controller.listTemplates();
+
+    expect(pqsSummaryService.fetchTemplates).toHaveBeenCalled();
+    expect(response).toEqual(typedTemplateFilterFixture);
   });
 
   it('exposes a party detail controller entry point', () => {
@@ -455,6 +670,21 @@ describe('NodesController', () => {
     expect(response).toEqual(typedActivePartiesFixture);
   });
 
+  it('returns active parties for a single known node id', async () => {
+    const response = await controller.listNodeActiveParties('participant-1');
+
+    expect(pqsSummaryService.fetchActiveParties).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'participant-1' }),
+    ]);
+    expect(response).toEqual(typedActivePartiesFixture.nodes[0]);
+  });
+
+  it('returns 404 for active-party lookup on an unknown node id', async () => {
+    await expect(controller.listNodeActiveParties('missing-node')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
   it('returns local parties grouped by node using the SDK-backed gRPC service', async () => {
     const maybeController = controller as {
       listLocalParties?: () => Promise<typeof typedLocalPartiesFixture>;
@@ -468,6 +698,71 @@ describe('NodesController', () => {
     expect(response).toEqual(typedLocalPartiesFixture);
   });
 
+  it('returns local parties for a single known node id', async () => {
+    const response = await controller.listNodeLocalParties('participant-2');
+
+    expect(grpcOperationsService.listLocalParties).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+    );
+    expect(response).toEqual(typedLocalPartiesFixture.nodes[1]);
+  });
+
+  it('returns grpc_not_configured for local-party lookup on a pqs-only node', async () => {
+    const response = await controller.listNodeLocalParties('participant-1');
+
+    expect(response).toEqual(typedLocalPartiesFixture.nodes[0]);
+  });
+
+  it('marks grpc failures separately from empty local-party results', async () => {
+    grpcOperationsService.listLocalParties.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          'An error occurred. Please contact the operator and inquire about the request 66f620d5014db408ba2d552b8d78b99f with tid 66f620d5014db408ba2d552b8d78b99f',
+        ),
+        {
+          code: 13,
+          details:
+            'An error occurred. Please contact the operator and inquire about the request 66f620d5014db408ba2d552b8d78b99f with tid 66f620d5014db408ba2d552b8d78b99f',
+        },
+      ),
+    );
+
+    const maybeController = controller as {
+      listLocalParties?: () => Promise<typeof typedLocalPartiesFixture>;
+    };
+
+    const response = await maybeController.listLocalParties?.();
+
+    expect(response).toEqual({
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          mode: 'pqs_only',
+          parties: [],
+          localPartiesStatus: 'grpc_not_configured',
+          localPartiesError: null,
+          localPartiesErrorCode: null,
+          localPartiesErrorDetails: null,
+          localPartiesErrorTid: null,
+        },
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          mode: 'pqs_with_grpc',
+          parties: [],
+          localPartiesStatus: 'grpc_error',
+          localPartiesError:
+            'An error occurred. Please contact the operator and inquire about the request 66f620d5014db408ba2d552b8d78b99f with tid 66f620d5014db408ba2d552b8d78b99f',
+          localPartiesErrorCode: '13',
+          localPartiesErrorDetails:
+            'An error occurred. Please contact the operator and inquire about the request 66f620d5014db408ba2d552b8d78b99f with tid 66f620d5014db408ba2d552b8d78b99f',
+          localPartiesErrorTid: '66f620d5014db408ba2d552b8d78b99f',
+        },
+      ],
+    });
+  });
+
   it('returns party detail for a known party id', async () => {
     const response = await controller.getPartyDetail('Alice');
 
@@ -476,6 +771,72 @@ describe('NodesController', () => {
       'Alice',
     );
     expect(response).toEqual(typedPartyDetailFixture);
+  });
+
+  it('returns party-scoped updates for a known party id', async () => {
+    await (
+      controller as unknown as {
+        listPartyUpdates: (
+          partyId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+          template?: string | string[],
+          partyMode?: string,
+          mode?: string,
+          hideSplice?: string,
+        ) => Promise<unknown>;
+      }
+    ).listPartyUpdates(
+      'Alice',
+      '25',
+      'cursor-before-0',
+      undefined,
+      ['Main:Asset'],
+      undefined,
+      undefined,
+      'true',
+    );
+
+    expect(pqsSummaryService.fetchPartyUpdates).toHaveBeenCalledWith(
+      expect.any(Array),
+      'Alice',
+      {
+        limit: 25,
+        before: 'cursor-before-0',
+        after: undefined,
+        templates: ['Main:Asset'],
+        partyMode: undefined,
+        hideSplice: true,
+      },
+    );
+  });
+
+  it('returns party-scoped contracts for a known party id', async () => {
+    await (
+      controller as unknown as {
+        listPartyContracts: (
+          partyId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+          template?: string | string[],
+          hideSplice?: string,
+        ) => Promise<unknown>;
+      }
+    ).listPartyContracts('Alice', '25', 'cursor-contract-0', undefined, 'Main:Asset', 'true');
+
+    expect(pqsSummaryService.fetchPartyContracts).toHaveBeenCalledWith(
+      expect.any(Array),
+      'Alice',
+      {
+        limit: 25,
+        before: 'cursor-contract-0',
+        after: undefined,
+        templates: ['Main:Asset'],
+        hideSplice: true,
+      },
+    );
   });
 
   it('returns 404 for an unknown party id', async () => {
@@ -575,7 +936,7 @@ describe('NodesController', () => {
         before: undefined,
         after: undefined,
         parties: undefined,
-        mode: undefined,
+        partyMode: undefined,
       },
     );
     expect(response).toEqual({
@@ -593,6 +954,106 @@ describe('NodesController', () => {
         },
       ],
     });
+  });
+
+  it('returns globally merged recent updates across all known nodes', async () => {
+    const response = await (
+      controller as unknown as {
+        listGlobalRecentUpdates: (
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<unknown>;
+      }
+    ).listGlobalRecentUpdates();
+
+    expect(pqsSummaryService.fetchGlobalRecentUpdates).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      25,
+      {
+        before: undefined,
+        after: undefined,
+      },
+    );
+    expect(response).toEqual({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          eventOffset: '000000000000000002',
+          updateId: '00000000000000000000000000000002',
+          recordTime: '2026-07-01T12:01:00.000Z',
+          parties: ['Bob'],
+        },
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '000000000000000001',
+          updateId: '00000000000000000000000000000001',
+          recordTime: '2026-07-01T12:00:00.000Z',
+          parties: ['Alice'],
+        },
+      ],
+    });
+  });
+
+  it('passes global update cursors through to the PQS summary service', async () => {
+    await (
+      controller as unknown as {
+        listGlobalRecentUpdates: (
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<unknown>;
+      }
+    ).listGlobalRecentUpdates('25', '000000000000000099', '000000000000000120');
+
+    expect(pqsSummaryService.fetchGlobalRecentUpdates).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      25,
+      {
+        before: '000000000000000099',
+        after: '000000000000000120',
+      },
+    );
+  });
+
+  it('passes global update filters through to the PQS summary service', async () => {
+    await controller.listGlobalRecentUpdates(
+      '25',
+      undefined,
+      undefined,
+      ['Alice', 'Bob'],
+      ['Main:Asset', 'Main:Wallet'],
+      'and',
+      undefined,
+      'true',
+    );
+
+    expect(pqsSummaryService.fetchGlobalRecentUpdates).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      25,
+      {
+        before: undefined,
+        after: undefined,
+        parties: ['Alice', 'Bob'],
+        templates: ['Main:Asset', 'Main:Wallet'],
+        partyMode: 'and',
+        hideSplice: true,
+      },
+    );
   });
 
   it('passes through offset cursors for updates pagination', async () => {
@@ -614,18 +1075,19 @@ describe('NodesController', () => {
         before: '000000000000000100',
         after: undefined,
         parties: undefined,
-        mode: undefined,
+        partyMode: undefined,
       },
     );
   });
 
-  it('passes through repeated party filters and global mode for updates pagination', async () => {
+  it('passes through repeated party filters and party mode for updates pagination', async () => {
     await controller.listNodeUpdates(
       'participant-1',
       '25',
       undefined,
       undefined,
       ['Alice', 'Bob'],
+      ['Main:Asset'],
       'and',
     );
 
@@ -638,7 +1100,8 @@ describe('NodesController', () => {
         before: undefined,
         after: undefined,
         parties: ['Alice', 'Bob'],
-        mode: 'and',
+        templates: ['Main:Asset'],
+        partyMode: 'and',
       },
     );
   });
@@ -647,6 +1110,8 @@ describe('NodesController', () => {
     await controller.listNodeUpdates(
       'participant-1',
       '25',
+      undefined,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -663,7 +1128,7 @@ describe('NodesController', () => {
         before: undefined,
         after: undefined,
         parties: undefined,
-        mode: undefined,
+        partyMode: undefined,
         hideSplice: true,
       },
     );

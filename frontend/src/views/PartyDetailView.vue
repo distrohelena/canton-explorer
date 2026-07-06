@@ -1,63 +1,41 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { ref, watch } from 'vue';
+import ContractsBrowser from '../components/ContractsBrowser.vue';
+import UpdatesBrowser from '../components/UpdatesBrowser.vue';
 import { fetchPartyDetail } from '../lib/api';
 import type { PartyDetailResponse } from '../types/parties';
 
 const props = defineProps<{ partyId: string }>();
 
 const partyDetail = ref<PartyDetailResponse | null>(null);
-const error = ref<string | null>(null);
+const detailError = ref<string | null>(null);
 
-onMounted(async () => {
+async function loadPartyDetail() {
+  detailError.value = null;
+
   try {
     partyDetail.value = await fetchPartyDetail(props.partyId);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    detailError.value = err instanceof Error ? err.message : 'Unknown error';
   }
-});
-
-function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
-  if (!recordTime) {
-    return null;
-  }
-
-  const parsed = new Date(recordTime);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return {
-    date: new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-    }).format(parsed),
-    time: new Intl.DateTimeFormat(undefined, {
-      timeStyle: 'medium',
-    }).format(parsed),
-  };
 }
 
-const recentUpdates = computed(() =>
-  (partyDetail.value?.recentUpdates ?? []).map((update) => ({
-    ...update,
-    recordTimeLines: formatRecordTime(update.recordTime),
-  })),
-);
-
-const recentContracts = computed(() =>
-  (partyDetail.value?.recentContracts ?? []).map((contract) => ({
-    ...contract,
-    recordTimeLines: formatRecordTime(contract.recordTime),
-  })),
+watch(
+  () => props.partyId,
+  () => {
+    void loadPartyDetail();
+  },
+  { immediate: true },
 );
 </script>
 
 <template>
   <section class="party-detail">
-    <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
+    <p v-if="detailError" class="node-detail__message node-detail__message--error">{{ detailError }}</p>
     <p v-else-if="!partyDetail" class="node-detail__message">Loading party detail...</p>
     <div v-else class="node-page">
       <div class="node-page__rail">
-        <RouterLink class="node-detail__back" to="/" aria-label="Back to overview">←</RouterLink>
+        <RouterLink class="node-detail__back" to="/parties" aria-label="Back to overview">←</RouterLink>
       </div>
 
       <div class="node-page__main node-detail__content">
@@ -112,59 +90,40 @@ const recentContracts = computed(() =>
           </section>
 
           <section class="node-detail__section party-detail__section--updates">
-            <h3>Recent Updates</h3>
-            <div class="package-detail__list">
-              <div
-                v-for="update in recentUpdates"
-                :key="`${update.nodeId}-${update.eventOffset}`"
-                class="package-detail__list-row"
-              >
-                <div class="party-detail__row-main">
-                  <RouterLink
-                    class="contract-detail__link"
-                    :to="`/nodes/${update.nodeId}/updates/${update.eventOffset}`"
-                  >
-                    {{ update.eventOffset }}
-                  </RouterLink>
-                  <p class="package-detail__seen-meta party-detail__row-text">{{ update.label }}</p>
-                  <p class="package-detail__seen-meta party-detail__row-text">
-                    {{ update.parties.join(', ') }}
-                  </p>
-                </div>
-                <div v-if="update.recordTimeLines" class="update-detail__time">
-                  <span class="update-detail__time-date">{{ update.recordTimeLines.date }}</span>
-                  <span class="update-detail__time-clock">{{ update.recordTimeLines.time }}</span>
-                </div>
-              </div>
-            </div>
+            <UpdatesBrowser
+              scope="party"
+              :path="`/parties/${encodeURIComponent(props.partyId)}`"
+              :party-id="props.partyId"
+              title="Recent Updates"
+              eyebrow="Updates"
+              show-node-column
+              :show-party-filters="false"
+              source-tag="party"
+              query-prefix="updates"
+              advanced-filter-id="party-updates-advanced-filter"
+              loading-message="Loading party updates..."
+              empty-message="No updates found for this party."
+              table-aria-label="Recent party updates"
+              spinner-label="Updating party updates"
+            />
           </section>
 
           <section class="node-detail__section party-detail__section--contracts">
-            <h3>Recent Contracts</h3>
-            <div class="package-detail__list">
-              <div
-                v-for="contract in recentContracts"
-                :key="`${contract.nodeId}-${contract.contractId}`"
-                class="package-detail__list-row"
-              >
-                <div class="party-detail__row-main">
-                  <RouterLink
-                    class="contract-detail__link"
-                    :to="`/nodes/${contract.nodeId}/contracts/${contract.contractId}`"
-                  >
-                    {{ contract.contractId }}
-                  </RouterLink>
-                  <p class="package-detail__seen-meta party-detail__row-text">
-                    {{ contract.templateId ?? 'n/a' }}
-                  </p>
-                  <p class="package-detail__seen-meta party-detail__row-text">{{ contract.label }}</p>
-                </div>
-                <div v-if="contract.recordTimeLines" class="update-detail__time">
-                  <span class="update-detail__time-date">{{ contract.recordTimeLines.date }}</span>
-                  <span class="update-detail__time-clock">{{ contract.recordTimeLines.time }}</span>
-                </div>
-              </div>
-            </div>
+            <ContractsBrowser
+              scope="party"
+              :path="`/parties/${encodeURIComponent(props.partyId)}`"
+              :party-id="props.partyId"
+              title="Recent Contracts"
+              eyebrow="Contracts"
+              query-prefix="contracts"
+              show-node-column
+              :show-party-filters="false"
+              advanced-filter-id="party-contracts-advanced-filter"
+              loading-message="Loading party contracts..."
+              empty-message="No contracts found for this party."
+              table-aria-label="Recent party contracts"
+              spinner-label="Updating party contracts"
+            />
           </section>
         </div>
       </div>

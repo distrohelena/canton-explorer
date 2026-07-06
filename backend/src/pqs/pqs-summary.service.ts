@@ -2,6 +2,8 @@ import { Injectable, Optional } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
 import type {
   ActivePartiesResponse,
+  GlobalRecentUpdatesResponse,
+  NodeContractsResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
   PartyDetailResponse,
@@ -16,6 +18,8 @@ import type {
   NodeUpdateDetailResponse,
   NodeRecentUpdate,
   NodeRecentUpdatesResponse,
+  PartyContractsResponse,
+  TemplateFilterResponse,
 } from '../domain/node.types';
 import { PqsClientFactory } from './pqs-client.factory';
 import { DamlValueDecoderService } from '../packages/daml-value-decoder.service';
@@ -61,6 +65,7 @@ interface PartyContractRow {
   template_id: string | null;
   package_id: string | null;
   record_time: string | null;
+  created_event_offset?: string | number | null;
 }
 
 interface ActivePartiesRow {
@@ -99,6 +104,42 @@ interface ContractDetailRow {
   archived_record_time: string | null;
 }
 
+interface ActiveContractRow {
+  contract_id: string;
+  template_id: string | null;
+  created_record_time: string | null;
+  created_event_offset: string | number | null;
+}
+
+interface GlobalUpdateCursor {
+  recordTime: string | null;
+  nodeId: string;
+  eventOffset: string;
+  updateId: string;
+}
+
+interface GlobalMergedUpdate extends NodeRecentUpdate {
+  nodeId: string;
+  label: string;
+}
+
+interface GlobalContractCursor {
+  recordTime: string | null;
+  nodeId: string;
+  contractId: string;
+}
+
+interface GlobalMergedContract {
+  nodeId: string;
+  label: string;
+  contractId: string;
+  templateId: string | null;
+  packageId: string | null;
+  packageName: string | null;
+  packageVersion: string | null;
+  recordTime: string | null;
+}
+
 const ACTIVE_QUERY = `
   select
     current_database() as pqs_database,
@@ -111,6 +152,114 @@ const ACTIVE_QUERY = `
     ) as total_update_count
   from active()
 `;
+
+function compareGlobalMergedUpdates(left: GlobalUpdateCursor, right: GlobalUpdateCursor): number {
+  const leftRecordTimeMs = Date.parse(left.recordTime ?? '');
+  const rightRecordTimeMs = Date.parse(right.recordTime ?? '');
+  const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
+  const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
+
+  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+    return rightRecordTimeMs - leftRecordTimeMs;
+  }
+
+  if (leftHasRecordTime !== rightHasRecordTime) {
+    return leftHasRecordTime ? -1 : 1;
+  }
+
+  if (left.nodeId !== right.nodeId) {
+    return left.nodeId.localeCompare(right.nodeId);
+  }
+
+  if (left.eventOffset !== right.eventOffset) {
+    return right.eventOffset.localeCompare(left.eventOffset);
+  }
+
+  return right.updateId.localeCompare(left.updateId);
+}
+
+function encodeGlobalUpdateCursor(update: GlobalUpdateCursor): string {
+  return Buffer.from(JSON.stringify(update), 'utf8').toString('base64url');
+}
+
+function decodeGlobalUpdateCursor(cursor?: string): GlobalUpdateCursor | null {
+  if (!cursor || !cursor.trim()) {
+    return null;
+  }
+
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Partial<GlobalUpdateCursor>;
+
+    if (
+      (decoded.recordTime === null || typeof decoded.recordTime === 'string') &&
+      typeof decoded.nodeId === 'string' &&
+      typeof decoded.eventOffset === 'string' &&
+      typeof decoded.updateId === 'string'
+    ) {
+      return {
+        recordTime: decoded.recordTime ?? null,
+        nodeId: decoded.nodeId,
+        eventOffset: decoded.eventOffset,
+        updateId: decoded.updateId,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function compareGlobalMergedContracts(left: GlobalContractCursor, right: GlobalContractCursor): number {
+  const leftRecordTimeMs = Date.parse(left.recordTime ?? '');
+  const rightRecordTimeMs = Date.parse(right.recordTime ?? '');
+  const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
+  const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
+
+  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+    return rightRecordTimeMs - leftRecordTimeMs;
+  }
+
+  if (leftHasRecordTime !== rightHasRecordTime) {
+    return leftHasRecordTime ? -1 : 1;
+  }
+
+  if (left.nodeId !== right.nodeId) {
+    return left.nodeId.localeCompare(right.nodeId);
+  }
+
+  return right.contractId.localeCompare(left.contractId);
+}
+
+function encodeGlobalContractCursor(contract: GlobalContractCursor): string {
+  return Buffer.from(JSON.stringify(contract), 'utf8').toString('base64url');
+}
+
+function decodeGlobalContractCursor(cursor?: string): GlobalContractCursor | null {
+  if (!cursor || !cursor.trim()) {
+    return null;
+  }
+
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Partial<GlobalContractCursor>;
+
+    if (
+      (decoded.recordTime === null || typeof decoded.recordTime === 'string') &&
+      typeof decoded.nodeId === 'string' &&
+      typeof decoded.contractId === 'string'
+    ) {
+      return {
+        recordTime: decoded.recordTime ?? null,
+        nodeId: decoded.nodeId,
+        contractId: decoded.contractId,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 const PARTICIPANT_FALLBACK_QUERY = `
   select
@@ -174,8 +323,26 @@ function normalizePartyFilters(parties?: string[]): string[] {
   );
 }
 
-function normalizePartyFilterMode(mode?: string): 'or' | 'and' {
-  return mode === 'and' ? 'and' : 'or';
+function normalizePartyFilterMode(partyMode?: string): 'or' | 'and' {
+  return partyMode === 'and' ? 'and' : 'or';
+}
+
+function normalizeTemplateFilterValue(templateId: string): string {
+  return templateId.trim().replace(/^t\|#[^:]+:/, '');
+}
+
+function normalizeTemplateFilters(templates?: string[]): string[] {
+  if (!templates) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      templates
+        .map((templateId) => normalizeTemplateFilterValue(templateId))
+        .filter((templateId) => templateId.length > 0),
+    ),
+  );
 }
 
 function buildUpdatePartyExistsCondition(partyId: string): string {
@@ -248,28 +415,154 @@ function buildNormalizedUpdatePartyExistsCondition(partyId: string): string {
   )`;
 }
 
-function buildUpdatesPartyFilterClause(parties?: string[], mode?: string): string | null {
-  const normalizedParties = normalizePartyFilters(parties);
-  if (normalizedParties.length === 0) {
-    return null;
-  }
+function buildUpdateTemplateExistsCondition(templateId: string): string {
+  const normalizedTemplateId = normalizeTemplateFilterValue(templateId);
+  const quotedTemplateId = `'${escapeSqlLiteral(normalizedTemplateId)}'`;
 
-  const joiner = normalizePartyFilterMode(mode) === 'and' ? '\n      and ' : '\n      or ';
-  const conditions = normalizedParties.map((party) => buildUpdatePartyExistsCondition(party));
-  return `(\n      ${conditions.join(joiner)}\n    )`;
+  return `(
+    exists (
+      select 1
+      from (
+        select regexp_replace(coalesce(create_event.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_create create_event
+        where create_event.update_id = update_meta.update_id
+
+        union all
+
+        select regexp_replace(coalesce(exercise_event.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_consuming_exercise exercise_event
+        where exercise_event.update_id = update_meta.update_id
+
+        union all
+
+        select regexp_replace(coalesce(exercise_event.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_non_consuming_exercise exercise_event
+        where exercise_event.update_id = update_meta.update_id
+      ) update_event_templates
+      where update_event_templates.template_id = ${quotedTemplateId}
+    )
+  )`;
 }
 
-function buildNormalizedUpdatesPartyFilterClause(parties?: string[], mode?: string): string | null {
-  const normalizedParties = normalizePartyFilters(parties);
-  if (normalizedParties.length === 0) {
+function buildNormalizedUpdateTemplateExistsCondition(templateId: string): string {
+  const normalizedTemplateId = normalizeTemplateFilterValue(templateId);
+  const quotedTemplateId = `'${escapeSqlLiteral(normalizedTemplateId)}'`;
+
+  return `(
+    exists (
+      select 1
+      from (
+        select regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_activate_contract activate_event
+        left join participant.par_contracts contract
+          on contract.internal_contract_id = activate_event.internal_contract_id
+        where activate_event.update_id = update_meta.update_id
+
+        union all
+
+        select regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_various_witnessed various_event
+        left join participant.par_contracts contract
+          on contract.internal_contract_id = various_event.internal_contract_id
+        where various_event.update_id = update_meta.update_id
+          and various_event.event_type = 6
+
+        union all
+
+        select regexp_replace(coalesce(template_string.external_string, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_deactivate_contract deactivate_event
+        left join participant.lapi_string_interning template_string
+          on template_string.internal_id = deactivate_event.template_id
+        where deactivate_event.update_id = update_meta.update_id
+
+        union all
+
+        select regexp_replace(coalesce(template_string.external_string, ''), '^t\\\\|#[^:]+:', '') as template_id
+        from participant.lapi_events_various_witnessed various_event
+        left join participant.lapi_string_interning template_string
+          on template_string.internal_id = various_event.template_id
+        where various_event.update_id = update_meta.update_id
+          and various_event.event_type in (5, 7)
+      ) update_event_templates
+      where update_event_templates.template_id = ${quotedTemplateId}
+    )
+  )`;
+}
+
+function buildUpdatesFilterClause(
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+): string | null {
+  const partyConditions = normalizePartyFilters(parties).map((party) =>
+    buildUpdatePartyExistsCondition(party),
+  );
+  const templateConditions = normalizeTemplateFilters(templates).map((templateId) =>
+    buildUpdateTemplateExistsCondition(templateId),
+  );
+  const groups: string[] = [];
+
+  if (partyConditions.length > 0) {
+    const partyJoiner =
+      normalizePartyFilterMode(partyMode) === 'and' ? '\n      and ' : '\n      or ';
+    groups.push(
+      partyConditions.length === 1
+        ? partyConditions[0]
+        : `(\n      ${partyConditions.join(partyJoiner)}\n    )`,
+    );
+  }
+
+  if (templateConditions.length > 0) {
+    groups.push(
+      templateConditions.length === 1
+        ? templateConditions[0]
+        : `(\n      ${templateConditions.join('\n      or ')}\n    )`,
+    );
+  }
+
+  if (groups.length === 0) {
     return null;
   }
 
-  const joiner = normalizePartyFilterMode(mode) === 'and' ? '\n      and ' : '\n      or ';
-  const conditions = normalizedParties.map((party) =>
+  return groups.length === 1 ? groups[0] : `(\n      ${groups.join('\n      and ')}\n    )`;
+}
+
+function buildNormalizedUpdatesFilterClause(
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+): string | null {
+  const partyConditions = normalizePartyFilters(parties).map((party) =>
     buildNormalizedUpdatePartyExistsCondition(party),
   );
-  return `(\n      ${conditions.join(joiner)}\n    )`;
+  const templateConditions = normalizeTemplateFilters(templates).map((templateId) =>
+    buildNormalizedUpdateTemplateExistsCondition(templateId),
+  );
+  const groups: string[] = [];
+
+  if (partyConditions.length > 0) {
+    const partyJoiner =
+      normalizePartyFilterMode(partyMode) === 'and' ? '\n      and ' : '\n      or ';
+    groups.push(
+      partyConditions.length === 1
+        ? partyConditions[0]
+        : `(\n      ${partyConditions.join(partyJoiner)}\n    )`,
+    );
+  }
+
+  if (templateConditions.length > 0) {
+    groups.push(
+      templateConditions.length === 1
+        ? templateConditions[0]
+        : `(\n      ${templateConditions.join('\n      or ')}\n    )`,
+    );
+  }
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return groups.length === 1 ? groups[0] : `(\n      ${groups.join('\n      and ')}\n    )`;
 }
 
 function recentUpdatesQuery(
@@ -277,23 +570,24 @@ function recentUpdatesQuery(
   before?: string,
   after?: string,
   parties?: string[],
-  mode?: string,
+  templates?: string[],
+  partyMode?: string,
   hideSplice?: boolean,
 ): string {
   const normalizedBefore = normalizeEventOffsetCursor(before);
   const normalizedAfter = normalizeEventOffsetCursor(after);
-  const partyFilterClause = buildUpdatesPartyFilterClause(parties, mode);
+  const filterClause = buildUpdatesFilterClause(parties, templates, partyMode);
   const hideSpliceClause = hideSplice ? buildHideSpliceOffsetsClause() : null;
   const queryLimit = limit + 1;
 
   const afterFilters = [
     normalizedAfter ? `update_meta.event_offset::numeric > ${normalizedAfter}` : null,
-    partyFilterClause,
+    filterClause,
     hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
   const olderFilters = [
     normalizedBefore ? `update_meta.event_offset::numeric < ${normalizedBefore}` : null,
-    partyFilterClause,
+    filterClause,
     hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
 
@@ -336,23 +630,24 @@ function normalizedRecentUpdatesQuery(
   before?: string,
   after?: string,
   parties?: string[],
-  mode?: string,
+  templates?: string[],
+  partyMode?: string,
   hideSplice?: boolean,
 ): string {
   const normalizedBefore = normalizeEventOffsetCursor(before);
   const normalizedAfter = normalizeEventOffsetCursor(after);
-  const partyFilterClause = buildNormalizedUpdatesPartyFilterClause(parties, mode);
+  const filterClause = buildNormalizedUpdatesFilterClause(parties, templates, partyMode);
   const hideSpliceClause = hideSplice ? buildNormalizedHideSpliceOffsetsClause() : null;
   const queryLimit = limit + 1;
 
   const afterFilters = [
     normalizedAfter ? `update_meta.event_offset::numeric > ${normalizedAfter}` : null,
-    partyFilterClause,
+    filterClause,
     hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
   const olderFilters = [
     normalizedBefore ? `update_meta.event_offset::numeric < ${normalizedBefore}` : null,
-    partyFilterClause,
+    filterClause,
     hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
 
@@ -717,8 +1012,39 @@ function normalizedActivePartiesQuery(): string {
   `;
 }
 
-function partyRecentContractsQuery(partyId: string, limit: number): string {
+function partyRecentContractsQuery(
+  partyId: string,
+  limit: number,
+  before?: string,
+  after?: string,
+): string {
   const witnessMatch = partyWitnessArrayMatchCondition('create_event.tree_event_witnesses', partyId);
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const queryLimit = limit + 1;
+  const afterClause = normalizedAfter ? `and create_event.event_offset::numeric > ${normalizedAfter}` : '';
+  const beforeClause = normalizedBefore ? `and create_event.event_offset::numeric < ${normalizedBefore}` : '';
+
+  if (normalizedAfter && !normalizedBefore) {
+    return `
+      select
+        create_event.contract_id::text as contract_id,
+        create_event.template_id::text as template_id,
+        null::text as package_id,
+        to_char(
+          to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as record_time,
+        create_event.event_offset::text as created_event_offset
+      from participant.lapi_events_create create_event
+      join participant.lapi_update_meta update_meta
+        on update_meta.update_id = create_event.update_id
+      where ${witnessMatch}
+        ${afterClause}
+      order by create_event.event_offset::numeric asc
+      limit ${queryLimit}
+    `;
+  }
 
   return `
     select
@@ -729,24 +1055,43 @@ function partyRecentContractsQuery(partyId: string, limit: number): string {
         to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
         'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
       ) as record_time
+      ,
+      create_event.event_offset::text as created_event_offset
     from participant.lapi_events_create create_event
     join participant.lapi_update_meta update_meta
       on update_meta.update_id = create_event.update_id
     where ${witnessMatch}
-    order by update_meta.record_time desc
-    limit ${limit}
+      ${beforeClause}
+    order by create_event.event_offset::numeric desc
+    limit ${queryLimit}
   `;
 }
 
-function normalizedPartyRecentContractsQuery(partyId: string, limit: number): string {
+function normalizedPartyRecentContractsQuery(
+  partyId: string,
+  limit: number,
+  before?: string,
+  after?: string,
+): string {
   const partyMatch = partyScalarMatchCondition('party_string.external_string', partyId);
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const queryLimit = limit + 1;
+  const afterFilter =
+    normalizedAfter && !normalizedBefore
+      ? `where created_event_offset::numeric > ${normalizedAfter}`
+      : normalizedBefore
+        ? `where created_event_offset::numeric < ${normalizedBefore}`
+        : '';
+  const sortDirection = normalizedAfter && !normalizedBefore ? 'asc' : 'desc';
 
   return `
     select
       contract_id,
       template_id,
       package_id,
-      record_time
+      record_time,
+      created_event_offset
     from (
       select
         encode(contract.contract_id, 'hex') as contract_id,
@@ -756,7 +1101,8 @@ function normalizedPartyRecentContractsQuery(partyId: string, limit: number): st
           to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
           'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
         ) as record_time,
-        activate_event.event_sequential_id as sort_event_sequential_id
+        activate_event.event_sequential_id as sort_event_sequential_id,
+        activate_event.event_offset::text as created_event_offset
       from participant.lapi_events_activate_contract activate_event
       join participant.lapi_filter_activate_witness witness_filter
         on witness_filter.event_sequential_id = activate_event.event_sequential_id
@@ -778,7 +1124,8 @@ function normalizedPartyRecentContractsQuery(partyId: string, limit: number): st
           to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
           'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
         ) as record_time,
-        various_event.event_sequential_id as sort_event_sequential_id
+        various_event.event_sequential_id as sort_event_sequential_id,
+        various_event.event_offset::text as created_event_offset
       from participant.lapi_events_various_witnessed various_event
       join participant.lapi_filter_various_witness witness_filter
         on witness_filter.event_sequential_id = various_event.event_sequential_id
@@ -791,8 +1138,9 @@ function normalizedPartyRecentContractsQuery(partyId: string, limit: number): st
       where ${partyMatch}
         and various_event.event_type = 6
     ) recent_contracts
-    order by sort_event_sequential_id desc
-    limit ${limit}
+    ${afterFilter}
+    order by created_event_offset::numeric ${sortDirection}
+    limit ${queryLimit}
   `;
 }
 
@@ -1220,6 +1568,156 @@ function contractDetailQuery(contractId: string): string {
   `;
 }
 
+function buildActiveContractsFilterClause(
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+  hideSplice?: boolean,
+): string | null {
+  const partyConditions = normalizePartyFilters(parties).map((party) =>
+    partyWitnessArrayMatchCondition('create_events.witnesses', party),
+  );
+  const templateExpression =
+    "regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '')";
+  const templateConditions = normalizeTemplateFilters(templates).map((templateId) => {
+    const quotedTemplateId = `'${escapeSqlLiteral(templateId)}'`;
+    return `${templateExpression} = ${quotedTemplateId}`;
+  });
+  const groups: string[] = [];
+
+  if (partyConditions.length > 0) {
+    const partyJoiner =
+      normalizePartyFilterMode(partyMode) === 'and' ? '\n      and ' : '\n      or ';
+    groups.push(
+      partyConditions.length === 1
+        ? partyConditions[0]
+        : `(\n      ${partyConditions.join(partyJoiner)}\n    )`,
+    );
+  }
+
+  if (templateConditions.length > 0) {
+    groups.push(
+      templateConditions.length === 1
+        ? templateConditions[0]
+        : `(\n      ${templateConditions.join('\n      or ')}\n    )`,
+    );
+  }
+
+  if (hideSplice) {
+    groups.push(`${templateExpression} not like 'Splice.%'`);
+  }
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return groups.length === 1 ? groups[0] : `(\n      ${groups.join('\n      and ')}\n    )`;
+}
+
+function activeContractsQuery(
+  limit: number,
+  before?: string,
+  after?: string,
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+  hideSplice?: boolean,
+): string {
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const queryLimit = limit + 1;
+  const useAfterCursor = Boolean(normalizedAfter && !normalizedBefore);
+  const cursorFilter = useAfterCursor
+    ? `create_event_offset::numeric > ${normalizedAfter}`
+    : normalizedBefore
+      ? `create_event_offset::numeric < ${normalizedBefore}`
+      : null;
+  const orderDirection = useAfterCursor ? 'asc' : 'desc';
+  const filterClause = buildActiveContractsFilterClause(parties, templates, partyMode, hideSplice);
+  const whereConditions = [
+    `not exists (
+      select 1
+      from archived_contracts archived_contract
+      where archived_contract.internal_contract_id = create_events.internal_contract_id
+    )`,
+    cursorFilter,
+    filterClause,
+  ].filter((value): value is string => Boolean(value));
+  const whereClause =
+    whereConditions.length > 0 ? `where ${whereConditions.join('\n      and ')}` : '';
+
+  return `
+    with activate_witnesses as (
+      select
+        witness_filter.event_sequential_id,
+        array_agg(distinct party_string.external_string order by party_string.external_string) as witnesses
+      from participant.lapi_filter_activate_witness witness_filter
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      group by witness_filter.event_sequential_id
+    ),
+    various_witnesses as (
+      select
+        witness_filter.event_sequential_id,
+        array_agg(distinct party_string.external_string order by party_string.external_string) as witnesses
+      from participant.lapi_filter_various_witness witness_filter
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      group by witness_filter.event_sequential_id
+    ),
+    create_events as (
+      select
+        activate_event.internal_contract_id,
+        activate_event.event_offset::text as create_event_offset,
+        to_char(
+          to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as created_record_time,
+        coalesce(activate_witnesses.witnesses, array[]::text[]) as witnesses
+      from participant.lapi_events_activate_contract activate_event
+      left join activate_witnesses
+        on activate_witnesses.event_sequential_id = activate_event.event_sequential_id
+
+      union all
+
+      select
+        various_event.internal_contract_id,
+        various_event.event_offset::text as create_event_offset,
+        to_char(
+          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as created_record_time,
+        coalesce(various_witnesses.witnesses, array[]::text[]) as witnesses
+      from participant.lapi_events_various_witnessed various_event
+      left join various_witnesses
+        on various_witnesses.event_sequential_id = various_event.event_sequential_id
+      where various_event.event_type = 6
+    ),
+    archived_contracts as (
+      select distinct deactivate_event.internal_contract_id
+      from participant.lapi_events_deactivate_contract deactivate_event
+
+      union
+
+      select distinct various_event.internal_contract_id
+      from participant.lapi_events_various_witnessed various_event
+      where various_event.event_type in (5, 7)
+        and various_event.consuming
+    )
+    select
+      encode(contract.contract_id, 'hex') as contract_id,
+      regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id,
+      create_events.created_record_time,
+      create_events.create_event_offset as created_event_offset
+    from create_events
+    join participant.par_contracts contract
+      on contract.internal_contract_id = create_events.internal_contract_id
+    ${whereClause}
+    order by create_event_offset::numeric ${orderDirection}
+    limit ${queryLimit}
+  `;
+}
+
 function escapeSqlLiteral(value: string): string {
   return value.replaceAll("'", "''");
 }
@@ -1274,6 +1772,8 @@ export class PqsSummaryService {
           before?: string;
           after?: string;
           parties?: string[];
+          templates?: string[];
+          partyMode?: string;
           mode?: string;
           hideSplice?: boolean;
         } = 25,
@@ -1290,7 +1790,9 @@ export class PqsSummaryService {
     const before = typeof options === 'object' ? options.before : undefined;
     const after = typeof options === 'object' ? options.after : undefined;
     const parties = typeof options === 'object' ? options.parties : undefined;
-    const mode = typeof options === 'object' ? options.mode : undefined;
+    const templates = typeof options === 'object' ? options.templates : undefined;
+    const partyMode =
+      typeof options === 'object' ? (options.partyMode ?? options.mode) : undefined;
     const hideSplice = typeof options === 'object' ? options.hideSplice === true : false;
     const useAfterCursor = Boolean(after && !before);
     const query = client.query.bind(client);
@@ -1300,7 +1802,8 @@ export class PqsSummaryService {
       before,
       after,
       parties,
-      mode,
+      templates,
+      partyMode,
       hideSplice,
     );
     const hasMoreInQuery = rawMetaRows.length > normalizedLimit;
@@ -1353,17 +1856,140 @@ export class PqsSummaryService {
     };
   }
 
+  async fetchGlobalRecentUpdates(
+    nodes: NodeConfig[],
+    limit = 25,
+    options?: {
+      before?: string;
+      after?: string;
+      parties?: string[];
+      templates?: string[];
+      partyMode?: string;
+      mode?: string;
+      hideSplice?: boolean;
+    },
+  ): Promise<GlobalRecentUpdatesResponse> {
+    const normalizedLimit =
+      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+    const beforeCursor = decodeGlobalUpdateCursor(options?.before);
+    const afterCursor = beforeCursor === null ? decodeGlobalUpdateCursor(options?.after) : null;
+    const parties = options?.parties;
+    const templates = options?.templates;
+    const partyMode = options?.partyMode ?? options?.mode;
+    const hideSplice = options?.hideSplice === true;
+    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
+    const nodeStates = nodes.map((node) => ({
+      node,
+      nextBefore: undefined as string | undefined,
+      exhausted: false,
+    }));
+    const mergedUpdatesByKey = new Map<string, GlobalMergedUpdate>();
+
+    const filterUpdates = (updates: GlobalMergedUpdate[]): GlobalMergedUpdate[] => {
+      if (beforeCursor !== null) {
+        return updates.filter(
+          (update) =>
+            compareGlobalMergedUpdates(update, beforeCursor) > 0,
+        );
+      }
+
+      if (afterCursor !== null) {
+        return updates.filter(
+          (update) =>
+            compareGlobalMergedUpdates(update, afterCursor) < 0,
+        );
+      }
+
+      return updates;
+    };
+
+    let filteredUpdates: GlobalMergedUpdate[] = [];
+    let hasMoreInDirection = false;
+
+    while (true) {
+      const nodesToFetch = nodeStates.filter((state) => !state.exhausted);
+
+      if (nodesToFetch.length === 0) {
+        break;
+      }
+
+      const responses = await Promise.all(
+        nodesToFetch.map((state) =>
+          this.fetchRecentUpdates(state.node, {
+            limit: pageSize,
+            parties,
+            templates,
+            partyMode,
+            hideSplice,
+            before: state.nextBefore,
+          }),
+        ),
+      );
+
+      responses.forEach((response, index) => {
+        const state = nodesToFetch[index];
+
+        for (const update of response.updates) {
+          mergedUpdatesByKey.set(`${state.node.id}:${update.eventOffset}:${update.updateId}`, {
+            nodeId: state.node.id,
+            label: state.node.label,
+            eventOffset: update.eventOffset,
+            updateId: update.updateId,
+            recordTime: update.recordTime,
+            parties: update.parties,
+          });
+        }
+
+        state.nextBefore = response.nextBefore ?? undefined;
+        state.exhausted = response.nextBefore === null;
+      });
+
+      const sortedUpdates = Array.from(mergedUpdatesByKey.values()).sort(compareGlobalMergedUpdates);
+      filteredUpdates = filterUpdates(sortedUpdates);
+      hasMoreInDirection = filteredUpdates.length > normalizedLimit;
+
+      if (hasMoreInDirection || nodeStates.every((state) => state.exhausted)) {
+        break;
+      }
+    }
+
+    const updates = filteredUpdates.slice(0, normalizedLimit);
+
+    return {
+      limit: normalizedLimit,
+      nextBefore:
+        updates.length > 0 && (useAfterCursor || hasMoreInDirection)
+          ? encodeGlobalUpdateCursor(updates[updates.length - 1]!)
+          : null,
+      nextAfter:
+        updates.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInDirection
+              ? encodeGlobalUpdateCursor(updates[0]!)
+              : null
+            : beforeCursor
+              ? encodeGlobalUpdateCursor(updates[0]!)
+              : null,
+      updates,
+    };
+  }
+
   private async queryRecentUpdateMetaRows(
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     limit: number,
     before?: string,
     after?: string,
     parties?: string[],
+    templates?: string[],
     mode?: string,
     hideSplice?: boolean,
   ): Promise<UpdateMetaRow[]> {
     try {
-      const result = await query(recentUpdatesQuery(limit, before, after, parties, mode, hideSplice));
+      const result = await query(
+        recentUpdatesQuery(limit, before, after, parties, templates, mode, hideSplice),
+      );
       return (result.rows as UpdateMetaRow[]) ?? [];
     } catch (error) {
       if (!this.shouldFallbackToNormalizedEventTables(error)) {
@@ -1372,9 +1998,82 @@ export class PqsSummaryService {
     }
 
     const fallbackResult = await query(
-      normalizedRecentUpdatesQuery(limit, before, after, parties, mode, hideSplice),
+      normalizedRecentUpdatesQuery(limit, before, after, parties, templates, mode, hideSplice),
     );
     return (fallbackResult.rows as UpdateMetaRow[]) ?? [];
+  }
+
+  async fetchNodeContracts(
+    node: NodeConfig,
+    options?: {
+      limit?: number;
+      before?: string;
+      after?: string;
+      parties?: string[];
+      templates?: string[];
+      partyMode?: string;
+      hideSplice?: boolean;
+    },
+  ): Promise<NodeContractsResponse> {
+    const client = this.clientFactory.getClient(node);
+    const normalizedLimit =
+      typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+        ? Math.trunc(options.limit)
+        : 25;
+    const before = options?.before;
+    const after = options?.after;
+    const parties = options?.parties;
+    const templates = options?.templates;
+    const partyMode = options?.partyMode;
+    const hideSplice = options?.hideSplice === true;
+    const useAfterCursor = Boolean(after && !before);
+    const result = await client.query(
+      activeContractsQuery(
+        normalizedLimit,
+        before,
+        after,
+        parties,
+        templates,
+        partyMode,
+        hideSplice,
+      ),
+    );
+    const rawRows = (result.rows as ActiveContractRow[]) ?? [];
+    const hasMoreInQuery = rawRows.length > normalizedLimit;
+    const trimmedRows = rawRows.slice(0, normalizedLimit);
+    const orderedContracts = (useAfterCursor ? [...trimmedRows].reverse() : trimmedRows).map(
+      (row) => ({
+        contractId: row.contract_id,
+        templateId: this.normalizeTemplateIdentifier(row.template_id),
+        createdRecordTime: row.created_record_time ?? null,
+        createdEventOffset: this.normalizeOptionalScalar(row.created_event_offset),
+      }),
+    );
+
+    return {
+      nodeId: node.id,
+      label: node.label,
+      limit: normalizedLimit,
+      nextBefore:
+        orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
+          ? orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null
+          : null,
+      nextAfter:
+        orderedContracts.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInQuery
+              ? orderedContracts[0]?.createdEventOffset ?? null
+              : null
+            : before
+              ? orderedContracts[0]?.createdEventOffset ?? null
+              : null,
+      contracts: orderedContracts.map((contract) => ({
+        contractId: contract.contractId,
+        templateId: contract.templateId,
+        createdRecordTime: contract.createdRecordTime,
+      })),
+    };
   }
 
   async fetchActivityBuckets(
@@ -1496,6 +2195,18 @@ export class PqsSummaryService {
     };
   }
 
+  async fetchTemplates(): Promise<TemplateFilterResponse> {
+    const packageIds = (this.packageCacheService?.listPackages() ?? []).map((pkg) => pkg.packageId);
+    return this.buildTemplateFilterResponse(packageIds);
+  }
+
+  async fetchNodeTemplates(node: NodeConfig): Promise<TemplateFilterResponse> {
+    const packageIds = Array.from(
+      new Set((this.packageCacheService?.listPackagesForNode(node.id) ?? []).map((pkg) => pkg.packageId)),
+    );
+    return this.buildTemplateFilterResponse(packageIds);
+  }
+
   async fetchActiveParties(nodes: NodeConfig[]): Promise<ActivePartiesResponse> {
     return {
       nodes: await Promise.all(
@@ -1586,6 +2297,141 @@ export class PqsSummaryService {
       nodes: observedNodes,
       recentUpdates,
       recentContracts,
+    };
+  }
+
+  async fetchPartyUpdates(
+    nodes: NodeConfig[],
+    partyId: string,
+    options?: {
+      limit?: number;
+      before?: string;
+      after?: string;
+      templates?: string[];
+      partyMode?: string;
+      hideSplice?: boolean;
+    },
+  ): Promise<GlobalRecentUpdatesResponse> {
+    return this.fetchGlobalRecentUpdates(nodes, options?.limit ?? 25, {
+      before: options?.before,
+      after: options?.after,
+      parties: [this.normalizePartyIdentifier(partyId)],
+      templates: options?.templates,
+      partyMode: options?.partyMode,
+      hideSplice: options?.hideSplice,
+    });
+  }
+
+  async fetchPartyContracts(
+    nodes: NodeConfig[],
+    partyId: string,
+    options?: {
+      limit?: number;
+      before?: string;
+      after?: string;
+      templates?: string[];
+      hideSplice?: boolean;
+    },
+  ): Promise<PartyContractsResponse> {
+    const normalizedPartyId = this.normalizePartyIdentifier(partyId);
+    const normalizedLimit =
+      typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+        ? Math.trunc(options.limit)
+        : 25;
+    const beforeCursor = decodeGlobalContractCursor(options?.before);
+    const afterCursor = beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
+    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
+    const nodeStates = nodes.map((node) => ({
+      node,
+      nextBefore: undefined as string | undefined,
+      exhausted: false,
+    }));
+    const mergedContractsByKey = new Map<string, GlobalMergedContract>();
+    const activeTemplateFilters = this.normalizeTemplateFilters(options?.templates);
+    const hideSplice = options?.hideSplice === true;
+
+    const filterContracts = (contracts: GlobalMergedContract[]): GlobalMergedContract[] => {
+      return contracts.filter((contract) => {
+        if (beforeCursor !== null && compareGlobalMergedContracts(contract, beforeCursor) <= 0) {
+          return false;
+        }
+
+        if (afterCursor !== null && compareGlobalMergedContracts(contract, afterCursor) >= 0) {
+          return false;
+        }
+
+        const normalizedTemplateId = this.normalizeTemplateIdentifier(contract.templateId);
+        if (activeTemplateFilters.length > 0 && !activeTemplateFilters.includes(normalizedTemplateId)) {
+          return false;
+        }
+
+        if (hideSplice && normalizedTemplateId.startsWith('Splice.')) {
+          return false;
+        }
+
+        return true;
+      });
+    };
+
+    let filteredContracts: GlobalMergedContract[] = [];
+    let hasMoreInDirection = false;
+
+    while (true) {
+      const nodesToFetch = nodeStates.filter((state) => !state.exhausted);
+
+      if (nodesToFetch.length === 0) {
+        break;
+      }
+
+      const responses = await Promise.all(
+        nodesToFetch.map((state) =>
+          this.fetchPartyContractsForNode(state.node, normalizedPartyId, {
+            limit: pageSize,
+            before: state.nextBefore,
+          }),
+        ),
+      );
+
+      responses.forEach((response, index) => {
+        const state = nodesToFetch[index];
+
+        for (const contract of response.contracts) {
+          mergedContractsByKey.set(`${contract.nodeId}:${contract.contractId}`, contract);
+        }
+
+        state.nextBefore = response.nextBefore ?? undefined;
+        state.exhausted = response.nextBefore === null;
+      });
+
+      const sortedContracts = Array.from(mergedContractsByKey.values()).sort(compareGlobalMergedContracts);
+      filteredContracts = filterContracts(sortedContracts);
+      hasMoreInDirection = filteredContracts.length > normalizedLimit;
+
+      if (hasMoreInDirection || nodeStates.every((state) => state.exhausted)) {
+        break;
+      }
+    }
+
+    const contracts = filteredContracts.slice(0, normalizedLimit);
+
+    return {
+      limit: normalizedLimit,
+      nextBefore:
+        contracts.length > 0 && (useAfterCursor || hasMoreInDirection)
+          ? encodeGlobalContractCursor(contracts[contracts.length - 1]!)
+          : null,
+      nextAfter:
+        contracts.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInDirection
+              ? encodeGlobalContractCursor(contracts[0]!)
+              : null
+            : beforeCursor
+              ? encodeGlobalContractCursor(contracts[0]!)
+              : null,
+      contracts,
     };
   }
 
@@ -1721,22 +2567,52 @@ export class PqsSummaryService {
     partyId: string,
     limit: number,
   ): Promise<PartyDetailResponse['recentContracts']> {
+    const response = await this.fetchPartyContractsForNode(node, partyId, { limit });
+    return response.contracts;
+  }
+
+  private async fetchPartyContractsForNode(
+    node: NodeConfig,
+    partyId: string,
+    options?: {
+      limit?: number;
+      before?: string;
+      after?: string;
+    },
+  ): Promise<{
+    nextBefore: string | null;
+    nextAfter: string | null;
+    contracts: GlobalMergedContract[];
+  }> {
     const client = this.clientFactory.getClient(node);
+    const normalizedLimit =
+      typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+        ? Math.trunc(options.limit)
+        : 25;
+    const before = options?.before;
+    const after = options?.after;
+    const useAfterCursor = Boolean(after && !before);
     let rows: PartyContractRow[] = [];
 
     try {
-      const result = await client.query(partyRecentContractsQuery(partyId, limit));
+      const result = await client.query(
+        partyRecentContractsQuery(partyId, normalizedLimit, before, after),
+      );
       rows = (result.rows as PartyContractRow[]) ?? [];
     } catch (error) {
       if (!this.shouldFallbackToNormalizedEventTables(error)) {
         throw error;
       }
 
-      const result = await client.query(normalizedPartyRecentContractsQuery(partyId, limit));
+      const result = await client.query(
+        normalizedPartyRecentContractsQuery(partyId, normalizedLimit, before, after),
+      );
       rows = (result.rows as PartyContractRow[]) ?? [];
     }
 
-    return rows
+    const hasMoreInQuery = rows.length > normalizedLimit;
+    const trimmedRows = rows.slice(0, normalizedLimit);
+    const orderedContracts = (useAfterCursor ? [...trimmedRows].reverse() : trimmedRows)
       .filter((row): row is PartyContractRow & { contract_id: string } => typeof row.contract_id === 'string')
       .map((row) => {
         const packageId = this.normalizePackageIdentifier(row.package_id ?? null);
@@ -1752,8 +2628,27 @@ export class PqsSummaryService {
           packageName: packageMetadata?.name ?? null,
           packageVersion: packageMetadata?.version ?? null,
           recordTime: typeof row.record_time === 'string' ? row.record_time : null,
+          createdEventOffset: this.normalizeOptionalScalar(row.created_event_offset),
         };
       });
+
+    return {
+      nextBefore:
+        orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
+          ? orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null
+          : null,
+      nextAfter:
+        orderedContracts.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInQuery
+              ? orderedContracts[0]?.createdEventOffset ?? null
+              : null
+            : before
+              ? orderedContracts[0]?.createdEventOffset ?? null
+              : null,
+      contracts: orderedContracts.map(({ createdEventOffset: _, ...contract }) => contract),
+    };
   }
 
   private shouldFallbackToParticipantTables(error: unknown): boolean {
@@ -2206,6 +3101,32 @@ export class PqsSummaryService {
     }
 
     return { value, next };
+  }
+
+  private async buildTemplateFilterResponse(packageIds: string[]): Promise<TemplateFilterResponse> {
+    const templates = new Set<string>();
+
+    for (const packageId of packageIds) {
+      const inspection = this.packageRegistryService
+        ? await this.packageRegistryService.inspectPackage(packageId)
+        : { ok: false as const, reason: 'missing_package' as const };
+
+      if (!inspection.ok) {
+        continue;
+      }
+
+      for (const template of inspection.definition.templates) {
+        if (template.templateId.trim()) {
+          templates.add(template.templateId);
+        }
+      }
+    }
+
+    return {
+      templates: Array.from(templates)
+        .sort((left, right) => left.localeCompare(right))
+        .map((templateId) => ({ templateId })),
+    };
   }
 
   private normalizeOptionalScalar(value: string | number | null | undefined): string | null {

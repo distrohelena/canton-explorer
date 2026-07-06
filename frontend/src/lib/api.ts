@@ -1,10 +1,24 @@
 import type { ActivePartiesResponse } from '../types/active-parties';
 import type { ActivityHistoryResponse } from '../types/activity';
-import type { NodeContractDetailResponse } from '../types/contracts';
-import type { NodePackagesResponse, NodeSnapshot } from '../types/nodes';
+import type {
+  NodeContractDetailResponse,
+  NodeContractsQueryOptions,
+  NodeContractsResponse,
+} from '../types/contracts';
+import type {
+  NodePackagesResponse,
+  NodeParticipantStatusResponse,
+  NodeSnapshot,
+} from '../types/nodes';
 import type { PartyDetailResponse } from '../types/parties';
+import type { PartyContractsResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
-import type { NodeUpdateDetailResponse, NodeUpdatesResponse } from '../types/updates';
+import type { TemplateFilterResponse } from '../types/templates';
+import type {
+  GlobalUpdatesResponse,
+  NodeUpdateDetailResponse,
+  NodeUpdatesResponse,
+} from '../types/updates';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
 
@@ -29,6 +43,49 @@ export function fetchLocalParties(): Promise<ActivePartiesResponse> {
   return fetchJson<ActivePartiesResponse>('/parties/local');
 }
 
+export function fetchNodeActiveParties(id: string): Promise<ActivePartiesResponse['nodes'][number]> {
+  return fetchJson<ActivePartiesResponse['nodes'][number]>(`/nodes/${id}/parties`);
+}
+
+export function fetchNodeLocalParties(id: string): Promise<ActivePartiesResponse['nodes'][number]> {
+  return fetchJson<ActivePartiesResponse['nodes'][number]>(`/nodes/${id}/parties/local`);
+}
+
+export function fetchNodeContracts(
+  id: string,
+  options?: NodeContractsQueryOptions,
+): Promise<NodeContractsResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  for (const party of options?.parties ?? []) {
+    if (party.trim()) {
+      params.append('party', party);
+    }
+  }
+  for (const template of options?.templates ?? []) {
+    if (template.trim()) {
+      params.append('template', template);
+    }
+  }
+  if (options?.partyMode) {
+    params.set('partyMode', options.partyMode);
+  }
+  if (options?.hideSplice) {
+    params.set('hideSplice', 'true');
+  }
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set('limit', String(Math.trunc(options.limit)));
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return fetchJson<NodeContractsResponse>(`/nodes/${id}/contracts${suffix}`);
+}
+
 export function fetchNode(id: string): Promise<NodeSnapshot> {
   return fetchJson<NodeSnapshot>(`/nodes/${id}`);
 }
@@ -37,8 +94,55 @@ export function fetchNodePackages(id: string): Promise<NodePackagesResponse> {
   return fetchJson<NodePackagesResponse>(`/nodes/${id}/packages`);
 }
 
+export function fetchNodeTemplates(id: string): Promise<TemplateFilterResponse> {
+  return fetchJson<TemplateFilterResponse>(`/nodes/${id}/templates`);
+}
+
+export function fetchNodeParticipantStatus(id: string): Promise<NodeParticipantStatusResponse> {
+  return fetchJson<NodeParticipantStatusResponse>(`/nodes/${id}/participant-status`);
+}
+
 export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse> {
   return fetchJson<ActivityHistoryResponse>(`/nodes/activity-history?days=${days}`);
+}
+
+export function fetchLatestUpdates(
+  limit = 25,
+  options?: {
+    before?: string;
+    after?: string;
+    parties?: string[];
+    templates?: string[];
+    partyMode?: 'or' | 'and';
+    hideSplice?: boolean;
+  },
+): Promise<GlobalUpdatesResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  for (const party of options?.parties ?? []) {
+    if (party.trim()) {
+      params.append('party', party);
+    }
+  }
+  for (const template of options?.templates ?? []) {
+    if (template.trim()) {
+      params.append('template', template);
+    }
+  }
+  if (options?.partyMode) {
+    params.set('partyMode', options.partyMode);
+  }
+  if (options?.hideSplice) {
+    params.set('hideSplice', 'true');
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(limit))));
+
+  return fetchJson<GlobalUpdatesResponse>(`/updates?${params.toString()}`);
 }
 
 export function fetchNodeUpdates(
@@ -47,7 +151,8 @@ export function fetchNodeUpdates(
     before?: string;
     after?: string;
     parties?: string[];
-    mode?: 'or' | 'and';
+    templates?: string[];
+    partyMode?: 'or' | 'and';
     hideSplice?: boolean;
   },
 ): Promise<NodeUpdatesResponse> {
@@ -63,8 +168,13 @@ export function fetchNodeUpdates(
       params.append('party', party);
     }
   }
-  if (options?.mode) {
-    params.set('mode', options.mode);
+  for (const template of options?.templates ?? []) {
+    if (template.trim()) {
+      params.append('template', template);
+    }
+  }
+  if (options?.partyMode) {
+    params.set('partyMode', options.partyMode);
   }
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
@@ -92,10 +202,78 @@ export function fetchPackageDetail(packageId: string): Promise<PackageDetailResp
   return fetchJson<PackageDetailResponse>(`/packages/${packageId}`);
 }
 
+export function fetchTemplates(): Promise<TemplateFilterResponse> {
+  return fetchJson<TemplateFilterResponse>('/templates');
+}
+
 export function fetchPackagesByName(packageName: string): Promise<PackageFamilyResponse> {
   return fetchJson<PackageFamilyResponse>(`/packages/by-name/${encodeURIComponent(packageName)}`);
 }
 
 export function fetchPartyDetail(partyId: string): Promise<PartyDetailResponse> {
   return fetchJson<PartyDetailResponse>(`/parties/${encodeURIComponent(partyId)}`);
+}
+
+export function fetchPartyUpdates(
+  partyId: string,
+  options?: {
+    before?: string;
+    after?: string;
+    templates?: string[];
+    hideSplice?: boolean;
+    limit?: number;
+  },
+): Promise<GlobalUpdatesResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  for (const template of options?.templates ?? []) {
+    if (template.trim()) {
+      params.append('template', template);
+    }
+  }
+  if (options?.hideSplice) {
+    params.set('hideSplice', 'true');
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 25))));
+
+  return fetchJson<GlobalUpdatesResponse>(
+    `/parties/${encodeURIComponent(partyId)}/updates?${params.toString()}`,
+  );
+}
+
+export function fetchPartyContracts(
+  partyId: string,
+  options?: {
+    before?: string;
+    after?: string;
+    templates?: string[];
+    hideSplice?: boolean;
+    limit?: number;
+  },
+): Promise<PartyContractsResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  for (const template of options?.templates ?? []) {
+    if (template.trim()) {
+      params.append('template', template);
+    }
+  }
+  if (options?.hideSplice) {
+    params.set('hideSplice', 'true');
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 25))));
+
+  return fetchJson<PartyContractsResponse>(
+    `/parties/${encodeURIComponent(partyId)}/contracts?${params.toString()}`,
+  );
 }

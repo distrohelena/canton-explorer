@@ -1,6 +1,7 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { NodeCacheService } from '../cache/node-cache.service';
 import { NodeConfigService } from '../config/node-config.service';
+import { describeGrpcError } from '../grpc/grpc-error.util';
 import { GrpcOperationsService } from '../grpc/grpc-operations.service';
 import { PqsSummaryService } from '../pqs/pqs-summary.service';
 
@@ -27,6 +28,33 @@ export class NodesController {
     );
   }
 
+  @Get('/updates')
+  listGlobalRecentUpdates(
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('party') party?: string | string[],
+    @Query('template') template?: string | string[],
+    @Query('partyMode') partyMode?: string,
+    @Query('mode') mode?: string,
+    @Query('hideSplice') hideSplice?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    return this.pqsSummaryService.fetchGlobalRecentUpdates(
+      this.configService.list(),
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      {
+        before,
+        after,
+        parties: Array.isArray(party) ? party : party ? [party] : undefined,
+        templates: Array.isArray(template) ? template : template ? [template] : undefined,
+        partyMode: partyMode ?? mode,
+        hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      },
+    );
+  }
+
   @Get('/nodes/:id')
   getNode(@Param('id') id: string) {
     const node = this.cacheService.get(id);
@@ -39,12 +67,61 @@ export class NodesController {
 
   @Get('/nodes/:id/packages')
   async listNodePackages(@Param('id') id: string) {
-    const node = this.configService.list().find((candidate) => candidate.id === id);
-    if (!node) {
-      throw new NotFoundException(`Unknown node: ${id}`);
-    }
+    const node = this.getNodeConfig(id);
 
     return this.pqsSummaryService.fetchNodePackages(node);
+  }
+
+  @Get('/nodes/:id/templates')
+  async listNodeTemplates(@Param('id') id: string) {
+    const node = this.getNodeConfig(id);
+
+    return this.pqsSummaryService.fetchNodeTemplates(node);
+  }
+
+  @Get('/nodes/:id/participant-status')
+  async getNodeParticipantStatus(@Param('id') id: string) {
+    const node = this.getNodeConfig(id);
+    return this.buildParticipantStatusEntry(node);
+  }
+
+  @Get('/nodes/:id/contracts')
+  async listNodeContracts(
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('party') party?: string | string[],
+    @Query('template') template?: string | string[],
+    @Query('partyMode') partyMode?: string,
+    @Query('mode') mode?: string,
+    @Query('hideSplice') hideSplice?: string,
+  ) {
+    const node = this.getNodeConfig(id);
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    return this.pqsSummaryService.fetchNodeContracts(node, {
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      before,
+      after,
+      parties: Array.isArray(party) ? party : party ? [party] : undefined,
+      templates: Array.isArray(template) ? template : template ? [template] : undefined,
+      partyMode: partyMode ?? mode,
+      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+    });
+  }
+
+  @Get('/nodes/:id/parties')
+  async listNodeActiveParties(@Param('id') id: string) {
+    const node = this.getNodeConfig(id);
+    const response = await this.pqsSummaryService.fetchActiveParties([node]);
+    return response.nodes[0];
+  }
+
+  @Get('/nodes/:id/parties/local')
+  async listNodeLocalParties(@Param('id') id: string) {
+    const node = this.getNodeConfig(id);
+    return this.buildLocalPartiesEntry(node);
   }
 
   @Get('/nodes/:id/updates')
@@ -54,13 +131,12 @@ export class NodesController {
     @Query('before') before?: string,
     @Query('after') after?: string,
     @Query('party') party?: string | string[],
+    @Query('template') template?: string | string[],
+    @Query('partyMode') partyMode?: string,
     @Query('mode') mode?: string,
     @Query('hideSplice') hideSplice?: string,
   ) {
-    const node = this.configService.list().find((candidate) => candidate.id === id);
-    if (!node) {
-      throw new NotFoundException(`Unknown node: ${id}`);
-    }
+    const node = this.getNodeConfig(id);
 
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
 
@@ -71,7 +147,8 @@ export class NodesController {
         before,
         after,
         parties: Array.isArray(party) ? party : party ? [party] : undefined,
-        mode,
+        templates: Array.isArray(template) ? template : template ? [template] : undefined,
+        partyMode: partyMode ?? mode,
         hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
       },
     );
@@ -82,10 +159,7 @@ export class NodesController {
     @Param('id') id: string,
     @Param('updateId') updateId: string,
   ) {
-    const node = this.configService.list().find((candidate) => candidate.id === id);
-    if (!node) {
-      throw new NotFoundException(`Unknown node: ${id}`);
-    }
+    const node = this.getNodeConfig(id);
 
     try {
       return await this.pqsSummaryService.fetchUpdateDetail(node, updateId);
@@ -103,10 +177,7 @@ export class NodesController {
     @Param('id') id: string,
     @Param('contractId') contractId: string,
   ) {
-    const node = this.configService.list().find((candidate) => candidate.id === id);
-    if (!node) {
-      throw new NotFoundException(`Unknown node: ${id}`);
-    }
+    const node = this.getNodeConfig(id);
 
     try {
       return await this.pqsSummaryService.fetchContractDetail(node, contractId);
@@ -117,6 +188,25 @@ export class NodesController {
 
       throw error;
     }
+  }
+
+  @Get('/parties')
+  async listActiveParties() {
+    return this.pqsSummaryService.fetchActiveParties(this.configService.list());
+  }
+
+  @Get('/templates')
+  async listTemplates() {
+    return this.pqsSummaryService.fetchTemplates();
+  }
+
+  @Get('/parties/local')
+  async listLocalParties() {
+    const nodes = await Promise.all(
+      this.configService.list().map(async (node) => this.buildLocalPartiesEntry(node)),
+    );
+
+    return { nodes };
   }
 
   @Get('/parties/:partyId')
@@ -132,28 +222,47 @@ export class NodesController {
     }
   }
 
-  @Get('/parties')
-  async listActiveParties() {
-    return this.pqsSummaryService.fetchActiveParties(this.configService.list());
+  @Get('/parties/:partyId/updates')
+  async listPartyUpdates(
+    @Param('partyId') partyId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('template') template?: string | string[],
+    @Query('partyMode') partyMode?: string,
+    @Query('mode') mode?: string,
+    @Query('hideSplice') hideSplice?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    return this.pqsSummaryService.fetchPartyUpdates(this.configService.list(), partyId, {
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      before,
+      after,
+      templates: Array.isArray(template) ? template : template ? [template] : undefined,
+      partyMode: partyMode ?? mode,
+      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+    });
   }
 
-  @Get('/parties/local')
-  async listLocalParties() {
-    const nodes = await Promise.all(
-      this.configService.list().map(async (node) => ({
-        nodeId: node.id,
-        label: node.label,
-        mode: node.mode,
-        parties:
-          node.mode === 'pqs_with_grpc'
-            ? await this.grpcOperationsService
-                .listLocalParties(node)
-                .catch(() => [])
-            : [],
-      })),
-    );
+  @Get('/parties/:partyId/contracts')
+  async listPartyContracts(
+    @Param('partyId') partyId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('template') template?: string | string[],
+    @Query('hideSplice') hideSplice?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
 
-    return { nodes };
+    return this.pqsSummaryService.fetchPartyContracts(this.configService.list(), partyId, {
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      before,
+      after,
+      templates: Array.isArray(template) ? template : template ? [template] : undefined,
+      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+    });
   }
 
   @Get('/packages/by-name/:packageName')
@@ -185,5 +294,107 @@ export class NodesController {
   @Get('/ledgers')
   listLedgers() {
     return this.cacheService.list().map((node) => node.ledgerSummary);
+  }
+
+  private getNodeConfig(id: string) {
+    const node = this.configService.list().find((candidate) => candidate.id === id);
+    if (!node) {
+      throw new NotFoundException(`Unknown node: ${id}`);
+    }
+
+    return node;
+  }
+
+  private async buildLocalPartiesEntry(node: ReturnType<NodesController['getNodeConfig']>) {
+    if (node.mode !== 'pqs_with_grpc') {
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        parties: [],
+        localPartiesStatus: 'grpc_not_configured' as const,
+        localPartiesError: null,
+        localPartiesErrorCode: null,
+        localPartiesErrorDetails: null,
+        localPartiesErrorTid: null,
+      };
+    }
+
+    try {
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        parties: await this.grpcOperationsService.listLocalParties(node),
+        localPartiesStatus: 'ok' as const,
+        localPartiesError: null,
+        localPartiesErrorCode: null,
+        localPartiesErrorDetails: null,
+        localPartiesErrorTid: null,
+      };
+    } catch (error) {
+      const grpcError = describeGrpcError(error);
+
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        parties: [],
+        localPartiesStatus: 'grpc_error' as const,
+        localPartiesError: grpcError.message,
+        localPartiesErrorCode: grpcError.code,
+        localPartiesErrorDetails: grpcError.details,
+        localPartiesErrorTid: grpcError.tid,
+      };
+    }
+  }
+
+  private async buildParticipantStatusEntry(node: ReturnType<NodesController['getNodeConfig']>) {
+    if (node.mode !== 'pqs_with_grpc') {
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        participantStatusStatus: 'grpc_not_configured' as const,
+        participantStatus: null,
+        notInitialized: null,
+        participantStatusError: null,
+        participantStatusErrorCode: null,
+        participantStatusErrorDetails: null,
+        participantStatusErrorTid: null,
+      };
+    }
+
+    try {
+      const result = await this.grpcOperationsService.fetchParticipantStatus(node);
+
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        participantStatusStatus: result.participantStatus ? ('ok' as const) : ('not_initialized' as const),
+        participantStatus: result.participantStatus,
+        notInitialized: result.notInitialized,
+        participantStatusError: null,
+        participantStatusErrorCode: null,
+        participantStatusErrorDetails: null,
+        participantStatusErrorTid: null,
+      };
+    } catch (error) {
+      const grpcError = describeGrpcError(error);
+
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        participantStatusStatus: 'grpc_error' as const,
+        participantStatus: null,
+        notInitialized: null,
+        participantStatusError: grpcError.message,
+        participantStatusErrorCode: grpcError.code,
+        participantStatusErrorDetails: grpcError.details,
+        participantStatusErrorTid: grpcError.tid,
+      };
+    }
   }
 }
