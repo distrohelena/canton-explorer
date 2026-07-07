@@ -170,17 +170,21 @@ export interface TokensResponse {
   tokens: TokenSummary[];
 }
 
-export interface TokenTransferSummary {
+export interface TokenTransferObservedNode {
   nodeId: string;
   label: string;
+  eventOffset: string;
+}
+
+export interface TokenTransferSummary {
   tokenId: string;
   tokenName: string;
   amount: string | null;
   sender: string | null;
   receiver: string | null;
-  eventOffset: string;
   updateId: string;
   recordTime: string | null;
+  nodes: TokenTransferObservedNode[];
 }
 
 export interface TokenTransfersResponse {

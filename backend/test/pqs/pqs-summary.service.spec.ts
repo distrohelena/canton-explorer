@@ -9,6 +9,8 @@ import type {
   PackageDetailResponse,
   PackageFamilyResponse,
   SearchResultsResponse,
+  TokenTransfersResponse,
+  TokensResponse,
   NodeUpdateDetailResponse,
 } from '../../src/domain/node.types';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
@@ -1952,7 +1954,7 @@ mode: 'pqs_only',
           expect.objectContaining({
             limit: 4,
             parties: ['Alice'],
-            mode: 'and',
+            partyMode: 'and',
             hideSplice: true,
           }),
         );
@@ -3411,5 +3413,344 @@ mode: 'pqs_only',
         },
       }),
     );
+  });
+
+  it('returns Canton Coin in the discovered token list', async () => {
+    const service = new PqsSummaryService({
+      getClient: jest.fn(),
+    } as never);
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([
+      { id: 'participant-1', label: 'Participant 1' } as never,
+      { id: 'participant-2', label: 'Participant 2' } as never,
+    ]);
+
+    expect(response).toEqual({
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+  });
+
+  it('merges decoded Canton Coin transfers across nodes, paginates them, and reuses the in-memory cache', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-1',
+          event_offset: '101',
+          record_time: '2026-07-07T11:00:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('transfer-1'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-2',
+          event_offset: '202',
+          record_time: '2026-07-07T12:00:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('transfer-2'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => ({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              {
+                label: 'transfer',
+                value:
+                  contractInstance.toString() === 'transfer-2'
+                    ? {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Alice' },
+                          { label: 'receiver', value: 'Bob' },
+                          { label: 'amount', value: '42.0' },
+                        ],
+                      }
+                    : {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Carol' },
+                          { label: 'receiver', value: 'Dave' },
+                          { label: 'amount', value: '12.5' },
+                        ],
+                      },
+              },
+            ],
+          },
+        })),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [
+      { id: 'participant-1', label: 'Participant 1' },
+      { id: 'participant-2', label: 'Participant 2' },
+    ] as never;
+
+    const firstPage = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: typeof nodes,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers(nodes, 1);
+
+    expect(firstPage).toEqual({
+      limit: 1,
+      nextBefore: expect.any(String),
+      nextAfter: null,
+      transfers: [
+        {
+          tokenId: 'canton-coin',
+          tokenName: 'Canton Coin',
+          amount: '42.0',
+          sender: 'Alice',
+          receiver: 'Bob',
+          updateId: 'token-update-2',
+          recordTime: '2026-07-07T12:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+              eventOffset: '202',
+            },
+          ],
+        },
+      ],
+    });
+
+    const secondPage = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: typeof nodes,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers(nodes, 1, {
+      before: firstPage.nextBefore ?? undefined,
+    });
+
+    expect(secondPage).toEqual({
+      limit: 1,
+      nextBefore: null,
+      nextAfter: expect.any(String),
+      transfers: [
+        {
+          tokenId: 'canton-coin',
+          tokenName: 'Canton Coin',
+          amount: '12.5',
+          sender: 'Carol',
+          receiver: 'Dave',
+          updateId: 'token-update-1',
+          recordTime: '2026-07-07T11:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+              eventOffset: '101',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(participant1Query).toHaveBeenCalledTimes(1);
+    expect(participant2Query).toHaveBeenCalledTimes(1);
+    expect(decoder.decodeContractInstance).toHaveBeenCalledTimes(2);
+  });
+
+  it('includes decoded Amulet creates as inbound Canton Coin movements', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-amulet',
+          event_offset: '303',
+          record_time: '2026-07-07T13:00:00.000Z',
+          template_id: 'Splice.Amulet:Amulet',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('amulet-1'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'dso', value: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df' },
+            { label: 'owner', value: 'RewardReceiver' },
+            {
+              label: 'amount',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'initialAmount', value: '20000' },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: Array<{ id: string; label: string }>,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers([{ id: 'cnqs-sv', label: 'CNQS Super Validator' }], 25);
+
+    expect(response.transfers).toEqual([
+      {
+        tokenId: 'canton-coin',
+        tokenName: 'Canton Coin',
+        amount: '20000',
+        sender: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
+        receiver: 'RewardReceiver',
+        updateId: 'token-update-amulet',
+        recordTime: '2026-07-07T13:00:00.000Z',
+        nodes: [
+          {
+            nodeId: 'cnqs-sv',
+            label: 'CNQS Super Validator',
+            eventOffset: '303',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('dedupes identical token transfers seen on multiple nodes into a single row', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'shared-update-1',
+          event_offset: '29615',
+          record_time: '2026-07-07T12:54:23.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('shared-transfer'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'shared-update-1',
+          event_offset: '58393',
+          record_time: '2026-07-07T12:54:23.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('shared-transfer'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            {
+              label: 'transfer',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'sender', value: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df' },
+                  { label: 'receiver', value: 'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf' },
+                  { label: 'amount', value: '455660.1600000000' },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: Array<{ id: string; label: string }>,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers(
+      [
+        { id: 'participant-1', label: 'CNQS App Provider' },
+        { id: 'participant-2', label: 'CNQS Super Validator' },
+      ],
+      25,
+    );
+
+    expect(response.transfers).toEqual([
+      {
+        tokenId: 'canton-coin',
+        tokenName: 'Canton Coin',
+        amount: '455660.1600000000',
+        sender: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
+        receiver: 'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf',
+        updateId: 'shared-update-1',
+        recordTime: '2026-07-07T12:54:23.000Z',
+        nodes: [
+          {
+            nodeId: 'participant-1',
+            label: 'CNQS App Provider',
+            eventOffset: '29615',
+          },
+          {
+            nodeId: 'participant-2',
+            label: 'CNQS Super Validator',
+            eventOffset: '58393',
+          },
+        ],
+      },
+    ]);
   });
 });

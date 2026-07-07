@@ -29,6 +29,10 @@ import type {
   SearchResultsResponse,
   SearchUpdateResult,
   TemplateFilterResponse,
+  TokenSummary,
+  TokensResponse,
+  TokenTransferSummary,
+  TokenTransfersResponse,
 } from '../domain/node.types';
 import { PqsClientFactory } from './pqs-client.factory';
 import { DamlValueDecoderService } from '../packages/daml-value-decoder.service';
@@ -150,6 +154,42 @@ interface GlobalMergedContract {
   recordTime: string | null;
 }
 
+interface TokenTransferRow {
+  update_id: string;
+  event_offset: string | number | null;
+  record_time: string | null;
+  template_id: string | null;
+  package_id: string | null;
+  contract_instance: Buffer | null;
+}
+
+interface NodeTokenTransferObservation {
+  nodeId: string;
+  label: string;
+  tokenId: string;
+  tokenName: string;
+  amount: string | null;
+  sender: string | null;
+  receiver: string | null;
+  eventOffset: string;
+  updateId: string;
+  recordTime: string | null;
+}
+
+interface GlobalTokenTransferCursor {
+  recordTime: string | null;
+  updateId: string;
+  tokenId: string;
+  amount: string | null;
+  sender: string | null;
+  receiver: string | null;
+}
+
+interface CachedNodeTokenTransfers {
+  cachedAt: number;
+  transfers: NodeTokenTransferObservation[];
+}
+
 interface SearchMatchedUpdate extends SearchUpdateResult {
   exact: boolean;
 }
@@ -171,6 +211,13 @@ interface SearchMatchedPackageName extends SearchPackageNameResult {
 }
 
 const SEARCH_GROUP_LIMIT = 25;
+const CANTON_COIN_TOKEN_ID = 'canton-coin';
+const CANTON_COIN_TOKEN_NAME = 'Canton Coin';
+const CANTON_COIN_TRANSFER_TEMPLATE_ID =
+  'Splice.AmuletTransferInstruction:AmuletTransferInstruction';
+const CANTON_COIN_AMULET_TEMPLATE_ID = 'Splice.Amulet:Amulet';
+const TOKEN_TRANSFER_CACHE_TTL_MS = 5 * 60 * 1000;
+const TOKEN_TRANSFER_CACHE_LIMIT = 250;
 
 const ACTIVE_QUERY = `
   select
@@ -341,6 +388,90 @@ function compareSearchContracts(left: SearchMatchedContract, right: SearchMatche
   }
 
   return left.contractId.localeCompare(right.contractId);
+}
+
+function compareGlobalTokenTransfers(
+  left: GlobalTokenTransferCursor,
+  right: GlobalTokenTransferCursor,
+): number {
+  const leftRecordTimeMs = Date.parse(left.recordTime ?? '');
+  const rightRecordTimeMs = Date.parse(right.recordTime ?? '');
+  const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
+  const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
+
+  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+    return rightRecordTimeMs - leftRecordTimeMs;
+  }
+
+  if (leftHasRecordTime !== rightHasRecordTime) {
+    return leftHasRecordTime ? -1 : 1;
+  }
+
+  if (left.updateId !== right.updateId) {
+    return right.updateId.localeCompare(left.updateId);
+  }
+
+  if (left.tokenId !== right.tokenId) {
+    return right.tokenId.localeCompare(left.tokenId);
+  }
+
+  if ((left.sender ?? '') !== (right.sender ?? '')) {
+    return (right.sender ?? '').localeCompare(left.sender ?? '');
+  }
+
+  if ((left.receiver ?? '') !== (right.receiver ?? '')) {
+    return (right.receiver ?? '').localeCompare(left.receiver ?? '');
+  }
+
+  return (right.amount ?? '').localeCompare(left.amount ?? '');
+}
+
+function encodeGlobalTokenTransferCursor(transfer: GlobalTokenTransferCursor): string {
+  return Buffer.from(
+    JSON.stringify({
+      recordTime: transfer.recordTime,
+      updateId: transfer.updateId,
+      tokenId: transfer.tokenId,
+      amount: transfer.amount,
+      sender: transfer.sender,
+      receiver: transfer.receiver,
+    } satisfies GlobalTokenTransferCursor),
+    'utf8',
+  ).toString('base64url');
+}
+
+function decodeGlobalTokenTransferCursor(cursor?: string): GlobalTokenTransferCursor | null {
+  if (!cursor || !cursor.trim()) {
+    return null;
+  }
+
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as Partial<GlobalTokenTransferCursor>;
+
+    if (
+      (decoded.recordTime === null || typeof decoded.recordTime === 'string') &&
+      typeof decoded.updateId === 'string' &&
+      typeof decoded.tokenId === 'string' &&
+      (decoded.amount === null || typeof decoded.amount === 'string') &&
+      (decoded.sender === null || typeof decoded.sender === 'string') &&
+      (decoded.receiver === null || typeof decoded.receiver === 'string')
+    ) {
+      return {
+        recordTime: decoded.recordTime ?? null,
+        updateId: decoded.updateId,
+        tokenId: decoded.tokenId,
+        amount: decoded.amount ?? null,
+        sender: decoded.sender ?? null,
+        receiver: decoded.receiver ?? null,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 function compareSearchParties(left: SearchMatchedParty, right: SearchMatchedParty): number {
@@ -1727,6 +1858,67 @@ function contractDetailQuery(contractId: string): string {
   `;
 }
 
+function tokenTransferRowsQuery(limit: number): string {
+  const normalizedLimit =
+    Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(limit) : TOKEN_TRANSFER_CACHE_LIMIT;
+
+  return `
+    select
+      update_id,
+      event_offset,
+      record_time,
+      template_id,
+      package_id,
+      contract_instance
+    from (
+      select
+        encode(activate_event.update_id, 'hex') as update_id,
+        activate_event.event_offset::text as event_offset,
+        to_char(
+          to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as record_time,
+        contract.template_id::text as template_id,
+        package_string.external_string as package_id,
+        contract.instance as contract_instance
+      from participant.lapi_events_activate_contract activate_event
+      join participant.par_contracts contract
+        on contract.internal_contract_id = activate_event.internal_contract_id
+      left join participant.lapi_string_interning package_string
+        on package_string.internal_id = activate_event.representative_package_id
+      where contract.template_id in (
+        '${CANTON_COIN_TRANSFER_TEMPLATE_ID}',
+        '${CANTON_COIN_AMULET_TEMPLATE_ID}'
+      )
+
+      union all
+
+      select
+        encode(various_event.update_id, 'hex') as update_id,
+        various_event.event_offset::text as event_offset,
+        to_char(
+          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as record_time,
+        contract.template_id::text as template_id,
+        package_string.external_string as package_id,
+        contract.instance as contract_instance
+      from participant.lapi_events_various_witnessed various_event
+      join participant.par_contracts contract
+        on contract.internal_contract_id = various_event.internal_contract_id
+      left join participant.lapi_string_interning package_string
+        on package_string.internal_id = various_event.package_id
+      where various_event.event_type = 6
+        and contract.template_id in (
+          '${CANTON_COIN_TRANSFER_TEMPLATE_ID}',
+          '${CANTON_COIN_AMULET_TEMPLATE_ID}'
+        )
+    ) token_transfer_rows
+    order by event_offset::numeric desc
+    limit ${normalizedLimit}
+  `;
+}
+
 function buildActiveContractsFilterClause(
   parties?: string[],
   templates?: string[],
@@ -1979,6 +2171,8 @@ function normalizeByteaHex(value: string): string {
 
 @Injectable()
 export class PqsSummaryService {
+  private readonly tokenTransfersByNode = new Map<string, CachedNodeTokenTransfers>();
+
   constructor(
     private readonly clientFactory: PqsClientFactory,
     @Optional() private readonly damlValueDecoder?: DamlValueDecoderService,
@@ -3184,6 +3378,94 @@ export class PqsSummaryService {
     };
   }
 
+  async fetchTokens(_nodes: NodeConfig[]): Promise<TokensResponse> {
+    const tokens: TokenSummary[] = [
+      {
+        tokenId: CANTON_COIN_TOKEN_ID,
+        name: CANTON_COIN_TOKEN_NAME,
+        symbol: null,
+        source: 'pqs',
+      },
+    ];
+
+    return { tokens };
+  }
+
+  async fetchLatestTokenTransfers(
+    nodes: NodeConfig[],
+    limit = 25,
+    options?: { before?: string; after?: string },
+  ): Promise<TokenTransfersResponse> {
+    const normalizedLimit =
+      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+    const beforeCursor = decodeGlobalTokenTransferCursor(options?.before);
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalTokenTransferCursor(options?.after) : null;
+    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const refreshResults = await Promise.allSettled(
+      nodes.map(async (node) => ({
+        node,
+        transfers: await this.loadCachedTokenTransfers(node),
+      })),
+    );
+    const successfulTransfers = refreshResults
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          transfers: NodeTokenTransferObservation[];
+        }> => result.status === 'fulfilled',
+      )
+      .flatMap((result) => result.value.transfers);
+
+    if (successfulTransfers.length === 0) {
+      const firstFailure = refreshResults.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      if (firstFailure) {
+        throw firstFailure.reason;
+      }
+    }
+
+    const mergedTransfers = this.mergeTokenTransfers(successfulTransfers);
+    const filteredTransfers = mergedTransfers
+      .sort(compareGlobalTokenTransfers)
+      .filter((transfer) => {
+        if (beforeCursor !== null) {
+          return compareGlobalTokenTransfers(transfer, beforeCursor) > 0;
+        }
+
+        if (afterCursor !== null) {
+          return compareGlobalTokenTransfers(transfer, afterCursor) < 0;
+        }
+
+        return true;
+      });
+
+    const hasMoreInDirection = filteredTransfers.length > normalizedLimit;
+    const transfers = filteredTransfers.slice(0, normalizedLimit);
+
+    return {
+      limit: normalizedLimit,
+      nextBefore:
+        transfers.length > 0 && (useAfterCursor || hasMoreInDirection)
+          ? encodeGlobalTokenTransferCursor(transfers[transfers.length - 1]!)
+          : null,
+      nextAfter:
+        transfers.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInDirection
+              ? encodeGlobalTokenTransferCursor(transfers[0]!)
+              : null
+            : beforeCursor
+              ? encodeGlobalTokenTransferCursor(transfers[0]!)
+              : null,
+      transfers,
+    };
+  }
+
   async fetchUpdateDetail(
     node: NodeConfig,
     eventOffset: string,
@@ -3471,8 +3753,159 @@ export class PqsSummaryService {
     }
   }
 
+  private async loadCachedTokenTransfers(node: NodeConfig): Promise<NodeTokenTransferObservation[]> {
+    const cached = this.tokenTransfersByNode.get(node.id);
+    if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
+      return cached.transfers;
+    }
+
+    const transfers = await this.fetchTokenTransfersForNode(node, TOKEN_TRANSFER_CACHE_LIMIT);
+    this.tokenTransfersByNode.set(node.id, {
+      cachedAt: Date.now(),
+      transfers,
+    });
+    return transfers;
+  }
+
+  private async fetchTokenTransfersForNode(
+    node: NodeConfig,
+    limit: number,
+  ): Promise<NodeTokenTransferObservation[]> {
+    const client = this.clientFactory.getClient(node);
+    const result = await client.query(tokenTransferRowsQuery(limit));
+    const rows = (result.rows as TokenTransferRow[]) ?? [];
+    const transfers: NodeTokenTransferObservation[] = [];
+
+    for (const row of rows) {
+      const transfer = await this.normalizeTokenTransferRow(node, row);
+      if (transfer) {
+        transfers.push(transfer);
+      }
+    }
+
+    return transfers.sort(compareGlobalTokenTransfers);
+  }
+
+  private async normalizeTokenTransferRow(
+    node: NodeConfig,
+    row: TokenTransferRow,
+  ): Promise<NodeTokenTransferObservation | null> {
+    const templateId = this.normalizeTemplateIdentifier(row.template_id);
+    const decoded = await this.decodeContractData(
+      this.normalizePackageIdentifier(row.package_id),
+      templateId,
+      row.contract_instance,
+    );
+    const decodedTransfer = this.extractCantonCoinMovement(templateId, decoded);
+    if (!decodedTransfer) {
+      return null;
+    }
+
+    return {
+      nodeId: node.id,
+      label: node.label,
+      tokenId: CANTON_COIN_TOKEN_ID,
+      tokenName: CANTON_COIN_TOKEN_NAME,
+      amount: decodedTransfer.amount,
+      sender: decodedTransfer.sender,
+      receiver: decodedTransfer.receiver,
+      eventOffset: this.normalizeOptionalScalar(row.event_offset) ?? '',
+      updateId: this.normalizeUpdateId(row.update_id),
+      recordTime: typeof row.record_time === 'string' ? row.record_time : null,
+    };
+  }
+
+  private mergeTokenTransfers(
+    transfers: NodeTokenTransferObservation[],
+  ): TokenTransferSummary[] {
+    const deduped = new Map<string, TokenTransferSummary>();
+
+    for (const transfer of transfers) {
+      const key = this.buildTokenTransferDedupKey(transfer);
+      const existing = deduped.get(key);
+      const observedNode = {
+        nodeId: transfer.nodeId,
+        label: transfer.label,
+        eventOffset: transfer.eventOffset,
+      };
+
+      if (!existing) {
+        deduped.set(key, {
+          tokenId: transfer.tokenId,
+          tokenName: transfer.tokenName,
+          amount: transfer.amount,
+          sender: transfer.sender,
+          receiver: transfer.receiver,
+          updateId: transfer.updateId,
+          recordTime: transfer.recordTime,
+          nodes: [observedNode],
+        });
+        continue;
+      }
+
+      if (!existing.nodes.some((node) => node.nodeId === observedNode.nodeId)) {
+        existing.nodes.push(observedNode);
+      }
+    }
+
+    return Array.from(deduped.values()).map((transfer) => ({
+      ...transfer,
+      nodes: [...transfer.nodes].sort((left, right) => left.label.localeCompare(right.label)),
+    }));
+  }
+
+  private buildTokenTransferDedupKey(transfer: {
+    tokenId: string;
+    amount: string | null;
+    sender: string | null;
+    receiver: string | null;
+    updateId: string;
+    recordTime: string | null;
+  }): string {
+    return JSON.stringify([
+      transfer.updateId,
+      transfer.tokenId,
+      transfer.amount ?? '',
+      transfer.sender ?? '',
+      transfer.receiver ?? '',
+      transfer.recordTime ?? '',
+    ]);
+  }
+
   private normalizeUpdateId(updateId: string): string {
     return updateId.startsWith('\\x') ? updateId.slice(2) : updateId;
+  }
+
+  private extractCantonCoinMovement(
+    templateId: string | null,
+    decoded: NodeDecodeState<NodeDecodedDamlValue> | null,
+  ): { sender: string | null; receiver: string | null; amount: string | null } | null {
+    if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
+      return null;
+    }
+
+    if (templateId === CANTON_COIN_TRANSFER_TEMPLATE_ID) {
+      const transferRecord = this.findRecordField(decoded.value, 'transfer');
+      if (!transferRecord) {
+        return null;
+      }
+
+      return {
+        sender: this.readScalarField(transferRecord, 'sender'),
+        receiver: this.readScalarField(transferRecord, 'receiver'),
+        amount: this.readScalarField(transferRecord, 'amount'),
+      };
+    }
+
+    if (templateId === CANTON_COIN_AMULET_TEMPLATE_ID) {
+      return {
+        sender: this.readScalarField(decoded.value, 'dso'),
+        receiver: this.readScalarField(decoded.value, 'owner'),
+        amount: this.readNestedScalarField(decoded.value, ['amount', 'initialAmount']),
+      };
+    }
+
+    return null;
   }
 
   private async fetchEventsByUpdateId(
@@ -3745,6 +4178,74 @@ export class PqsSummaryService {
     value: NodeDecodedDamlValue,
   ): value is Extract<NodeDecodedDamlValue, { kind: 'record' }> {
     return typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'record';
+  }
+
+  private findRecordField(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    label: string,
+  ): Extract<NodeDecodedDamlValue, { kind: 'record' }> | null {
+    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    return field && this.isRecordValue(field) ? field : null;
+  }
+
+  private readScalarField(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    label: string,
+  ): string | null {
+    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    if (field === null || field === undefined) {
+      return null;
+    }
+
+    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+      return String(field);
+    }
+
+    if (typeof field === 'object' && field !== null && 'kind' in field && field.kind === 'contract_id') {
+      return field.value;
+    }
+
+    return null;
+  }
+
+  private readNestedScalarField(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    path: string[],
+  ): string | null {
+    let current: NodeDecodedDamlValue | null = value;
+
+    for (let index = 0; index < path.length; index += 1) {
+      if (!current || !this.isRecordValue(current)) {
+        return null;
+      }
+
+      const field: NodeDecodedDamlValue | undefined = current.fields.find(
+        (candidate) => candidate.label === path[index],
+      )?.value;
+      if (field === undefined) {
+        return null;
+      }
+
+      if (index === path.length - 1) {
+        if (
+          typeof field === 'string' ||
+          typeof field === 'number' ||
+          typeof field === 'boolean'
+        ) {
+          return String(field);
+        }
+
+        if (typeof field === 'object' && field !== null && 'kind' in field && field.kind === 'contract_id') {
+          return field.value;
+        }
+
+        return null;
+      }
+
+      current = field;
+    }
+
+    return null;
   }
 
   private getFirstLengthDelimitedField(message: Buffer, fieldNumber: number): Buffer | null {

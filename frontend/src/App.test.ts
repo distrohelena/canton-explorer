@@ -20,6 +20,10 @@ const ContractsStub = defineComponent({
   template: '<div>Contracts View</div>',
 });
 
+const TokensStub = defineComponent({
+  template: '<div>Tokens View</div>',
+});
+
 const NodeUpdatesStub = defineComponent({
   template: '<div>Node Updates View</div>',
 });
@@ -56,6 +60,7 @@ async function renderAt(path: string) {
       { path: '/nodes', component: NodesStub },
       { path: '/parties', component: PartiesStub },
       { path: '/contracts', component: ContractsStub },
+      { path: '/tokens', component: TokensStub },
       { path: '/search', component: SearchResultsStub },
       { path: '/nodes/:id/updates', component: NodeUpdatesStub, props: true },
       { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailStub, props: true },
@@ -106,6 +111,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText('Search'),
     ).toBeInTheDocument();
@@ -129,6 +135,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
     expect(screen.getByText('Nodes View')).toBeInTheDocument();
   });
 
@@ -139,6 +146,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
     expect(screen.getByText('Parties View')).toBeInTheDocument();
   });
 
@@ -149,7 +157,19 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
     expect(screen.getByText('Contracts View')).toBeInTheDocument();
+  });
+
+  it('keeps the shared shell on the tokens route', async () => {
+    await renderAt('/tokens');
+
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByText('Tokens View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a node detail route', async () => {

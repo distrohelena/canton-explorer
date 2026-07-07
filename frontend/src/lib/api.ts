@@ -16,6 +16,7 @@ import type { PartyContractsResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
 import type { SearchResultsResponse } from '../types/search';
 import type { TemplateFilterResponse } from '../types/templates';
+import type { TokenTransfersResponse, TokensResponse } from '../types/tokens';
 import type {
   GlobalUpdatesResponse,
   NodeUpdateDetailResponse,
@@ -149,6 +150,29 @@ export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse>
 
 export function fetchSearchResults(query: string): Promise<SearchResultsResponse> {
   return fetchJson<SearchResultsResponse>(`/search?q=${encodeURIComponent(query.trim())}`);
+}
+
+export function fetchTokens(): Promise<TokensResponse> {
+  return fetchJson<TokensResponse>('/tokens');
+}
+
+export function fetchLatestTokenTransfers(
+  limit = 25,
+  options?: {
+    before?: string;
+    after?: string;
+  },
+): Promise<TokenTransfersResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(limit))));
+
+  return fetchJson<TokenTransfersResponse>(`/tokens/transfers?${params.toString()}`);
 }
 
 export function fetchLatestUpdates(

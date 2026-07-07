@@ -134,6 +134,7 @@ onBeforeUnmount(() => {
               <RouterLink class="nav-button" to="/nodes">Nodes</RouterLink>
               <RouterLink class="nav-button" to="/parties">Parties</RouterLink>
               <RouterLink class="nav-button" to="/contracts">Contracts</RouterLink>
+              <RouterLink class="nav-button" to="/tokens">Tokens</RouterLink>
             </nav>
             <form class="app-search-form" @submit.prevent="submitSearch">
               <input

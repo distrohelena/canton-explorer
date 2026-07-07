@@ -334,16 +334,20 @@ const typedTokenTransfersFixture = {
   nextAfter: null,
   transfers: [
     {
-      nodeId: 'participant-2',
-      label: 'Participant 2',
       tokenId: 'canton-coin',
       tokenName: 'Canton Coin',
       amount: '42.0',
       sender: 'Alice',
       receiver: 'Bob',
-      eventOffset: '000000000000000002',
       updateId: '00000000000000000000000000000002',
       recordTime: '2026-07-01T12:01:00.000Z',
+      nodes: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          eventOffset: '000000000000000002',
+        },
+      ],
     },
   ],
 } satisfies TokenTransfersResponse;

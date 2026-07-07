@@ -2049,6 +2049,123 @@ h3 {
   gap: 12px;
 }
 
+.tokens-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tokens-page__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tokens-page__known-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tokens-page__known-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+
+.tokens-page__known-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tokens-page__known-main h4 {
+  margin: 0;
+  color: var(--text-900);
+  font-size: 1rem;
+}
+
+.tokens-page__known-id {
+  margin: 0;
+  color: var(--text-500);
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.84rem;
+}
+
+.tokens-page__row {
+  display: grid;
+  grid-template-columns:
+    minmax(130px, 1fr)
+    minmax(90px, 0.6fr)
+    minmax(126px, 0.84fr)
+    minmax(100px, 0.78fr)
+    minmax(100px, 0.78fr)
+    minmax(140px, 0.9fr);
+  gap: 16px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line-soft);
+  align-items: center;
+}
+
+.tokens-page__row--head {
+  border-top: none;
+  background: var(--surface-muted);
+  color: var(--text-500);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tokens-page__cell {
+  min-width: 0;
+  color: var(--text-700);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tokens-page__token {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  white-space: normal;
+}
+
+.tokens-page__nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  white-space: normal;
+}
+
+.tokens-page__nodes-item {
+  display: block;
+}
+
+.tokens-page__token strong {
+  color: var(--text-900);
+  font-size: 0.95rem;
+}
+
+.tokens-page__token span {
+  color: var(--text-500);
+  font-size: 0.82rem;
+}
+
+.tokens-page__time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+}
+
 @media (max-width: 720px) {
   .parties-page__results {
     padding-top: 72px;

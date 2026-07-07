@@ -51,6 +51,10 @@ const backTarget = computed(() => {
     return '/';
   }
 
+  if (source === 'tokens') {
+    return '/tokens';
+  }
+
   if (source === 'party' && typeof partyId === 'string' && partyId.trim().length > 0) {
     return `/parties/${encodeURIComponent(partyId)}`;
   }

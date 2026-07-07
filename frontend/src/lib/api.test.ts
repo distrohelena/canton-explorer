@@ -4,18 +4,21 @@ import {
   fetchActiveParties,
   fetchActivityHistory,
   fetchLocalParties,
+  fetchLatestTokenTransfers,
   fetchNodeActiveParties,
   fetchNodeContracts,
   fetchNodeLocalParties,
   fetchNodeParticipantStatus,
   fetchNodeUpdates,
   fetchNodes,
+  fetchTokens,
 } from './api';
 import type { NodeContractDetailResponse, NodeContractsResponse } from '../types/contracts';
 import type { NodePackagesResponse, NodeParticipantStatusResponse } from '../types/nodes';
 import type { ActivePartiesResponse } from '../types/active-parties';
 import type { PartyDetailResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
+import type { TokenTransfersResponse, TokensResponse } from '../types/tokens';
 import type { NodeUpdateDetailResponse } from '../types/updates';
 
 const typedUpdateDetailFixture = {
@@ -310,6 +313,41 @@ const typedActivePartiesFixture = {
   ],
 } satisfies ActivePartiesResponse;
 
+const typedTokensFixture = {
+  tokens: [
+    {
+      tokenId: 'canton-coin',
+      name: 'Canton Coin',
+      symbol: null,
+      source: 'pqs',
+    },
+  ],
+} satisfies TokensResponse;
+
+const typedTokenTransfersFixture = {
+  limit: 25,
+  nextBefore: 'cursor-token-1',
+  nextAfter: null,
+  transfers: [
+    {
+      tokenId: 'canton-coin',
+      tokenName: 'Canton Coin',
+      amount: '42.0',
+      sender: 'Alice',
+      receiver: 'Bob',
+      updateId: 'token-update-2',
+      recordTime: '2026-07-07T12:00:00.000Z',
+      nodes: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          eventOffset: '202',
+        },
+      ],
+    },
+  ],
+} satisfies TokenTransfersResponse;
+
 describe('fetchNodes', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -439,6 +477,34 @@ describe('fetchNodes', () => {
     expect(result.participantStatus?.uid).toBe('participant2::1220abc');
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:3100/api/nodes/participant-2/participant-status',
+    );
+  });
+
+  it('loads discovered tokens from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokensFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokens();
+
+    expect(result.tokens[0]?.tokenId).toBe('canton-coin');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/tokens');
+  });
+
+  it('loads latest token transfers with cursor pagination from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchLatestTokenTransfers(25, { before: 'cursor-token-0' });
+
+    expect(result.transfers[0]?.updateId).toBe('token-update-2');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/transfers?before=cursor-token-0&limit=25',
     );
   });
 
