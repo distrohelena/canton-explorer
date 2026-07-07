@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import ContractsBrowser from '../components/ContractsBrowser.vue';
+import QuerySourcePill from '../components/QuerySourcePill.vue';
 import UpdatesBrowser from '../components/UpdatesBrowser.vue';
 import { fetchPartyDetail } from '../lib/api';
 import type { PartyDetailResponse } from '../types/parties';
@@ -86,6 +87,90 @@ watch(
                   {{ node.recentUpdateCount }} updates / {{ node.recentContractCount }} contracts
                 </span>
               </div>
+            </div>
+          </section>
+
+          <section class="node-detail__section party-detail__section--topology">
+            <h3>Party Topology</h3>
+            <div class="party-topology__list">
+              <article
+                v-for="topology in partyDetail.partyTopologyByNode"
+                :key="topology.nodeId"
+                class="party-topology__card"
+              >
+                <div class="party-topology__header">
+                  <p class="party-topology__node">{{ topology.label }}</p>
+                  <QuerySourcePill source="grpc" />
+                </div>
+
+                <p
+                  v-if="topology.status === 'grpc_not_configured'"
+                  class="party-topology__state"
+                >
+                  gRPC not configured for this node.
+                </p>
+                <p
+                  v-else-if="topology.status === 'grpc_error'"
+                  class="party-topology__state party-topology__state--error"
+                >
+                  {{ topology.errorMessage ?? 'Topology read failed.' }}
+                </p>
+                <template v-else>
+                  <div class="party-topology__group">
+                    <h4>Party to Participant</h4>
+                    <p v-if="topology.partyToParticipants.length === 0" class="party-topology__state">
+                      Not Present
+                    </p>
+                    <div v-else class="party-topology__rows">
+                      <div
+                        v-for="participant in topology.partyToParticipants"
+                        :key="`${topology.nodeId}-${participant.participantUid ?? participant.participantId ?? 'participant'}`"
+                        class="party-topology__row"
+                      >
+                        <span class="party-topology__field">
+                          <strong>Participant ID</strong>
+                          {{ participant.participantId ?? 'Not Present' }}
+                        </span>
+                        <span class="party-topology__field">
+                          <strong>Participant UID</strong>
+                          {{ participant.participantUid ?? 'Not Present' }}
+                        </span>
+                        <span class="party-topology__field">
+                          <strong>Permission</strong>
+                          {{ participant.permission ?? 'Not Present' }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="party-topology__group">
+                    <h4>Party to Key</h4>
+                    <p v-if="topology.partyToKeyMappings.length === 0" class="party-topology__state">
+                      Not Present
+                    </p>
+                    <div v-else class="party-topology__rows">
+                      <div
+                        v-for="keyMapping in topology.partyToKeyMappings"
+                        :key="`${topology.nodeId}-${keyMapping.keyFingerprint ?? keyMapping.keyType ?? 'key'}`"
+                        class="party-topology__row"
+                      >
+                        <span class="party-topology__field">
+                          <strong>Fingerprint</strong>
+                          {{ keyMapping.keyFingerprint ?? 'Not Present' }}
+                        </span>
+                        <span class="party-topology__field">
+                          <strong>Purpose</strong>
+                          {{ keyMapping.purpose ?? 'Not Present' }}
+                        </span>
+                        <span class="party-topology__field">
+                          <strong>Key Type</strong>
+                          {{ keyMapping.keyType ?? 'Not Present' }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </article>
             </div>
           </section>
 

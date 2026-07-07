@@ -96,6 +96,38 @@ describe('PartyDetailView', () => {
           recordTime: '2026-07-01T12:00:00.000Z',
         },
       ],
+      partyTopologyByNode: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          partyToParticipants: [
+            {
+              participantId: 'participant-1',
+              participantUid: 'participant-1::1220abc',
+              permission: 'submission',
+              synchronizerIds: [],
+            },
+          ],
+          partyToKeyMappings: [
+            {
+              keyFingerprint: 'fingerprint-1',
+              purpose: 'namespace',
+              keyType: 'ed25519',
+              synchronizerIds: [],
+            },
+          ],
+        },
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          status: 'grpc_not_configured',
+          errorMessage: null,
+          partyToParticipants: [],
+          partyToKeyMappings: [],
+        },
+      ],
     });
     vi.mocked(
       (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
@@ -203,6 +235,7 @@ describe('PartyDetailView', () => {
     );
     expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Observed Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent Updates' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent Contracts' })).toBeInTheDocument();
     expect(api.fetchPartyUpdates).toHaveBeenCalledWith('Alice');
@@ -216,6 +249,15 @@ describe('PartyDetailView', () => {
       'href',
       '/nodes/participant-2',
     );
+    expect(screen.getAllByText('gRPC')).toHaveLength(2);
+    expect(screen.getByText('Party to Participant')).toBeInTheDocument();
+    expect(screen.getByText('Party to Key')).toBeInTheDocument();
+    expect(screen.getByText('participant-1::1220abc')).toBeInTheDocument();
+    expect(screen.getByText('submission')).toBeInTheDocument();
+    expect(screen.getByText('fingerprint-1')).toBeInTheDocument();
+    expect(screen.getByText('namespace')).toBeInTheDocument();
+    expect(screen.getByText('ed25519')).toBeInTheDocument();
+    expect(screen.getByText('gRPC not configured for this node.')).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: '0000000000000001' })).toHaveAttribute(
       'href',
       '/nodes/participant-1/updates/0000000000000001?from=party&partyId=Alice',
@@ -280,5 +322,71 @@ describe('PartyDetailView', () => {
       'href',
       '/nodes/participant-2/contracts/00def',
     );
+  });
+
+  it('renders node-local topology empty and error states without breaking the party page', async () => {
+    vi.mocked(api.fetchPartyDetail).mockResolvedValue({
+      partyId: 'Alice',
+      nodeCount: 1,
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          recentUpdateCount: 1,
+          recentContractCount: 1,
+        },
+      ],
+      recentUpdates: [],
+      recentContracts: [],
+      partyTopologyByNode: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          partyToParticipants: [],
+          partyToKeyMappings: [],
+        },
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          status: 'grpc_error',
+          errorMessage: 'Topology read failed',
+          partyToParticipants: [],
+          partyToKeyMappings: [],
+        },
+      ],
+    });
+    vi.mocked(
+      (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
+        .fetchPartyUpdates,
+    ).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+    vi.mocked(
+      (api as { fetchPartyContracts: (partyId: string, options?: unknown) => Promise<unknown> })
+        .fetchPartyContracts,
+    ).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+    vi.mocked(
+      (api as { fetchTemplates: () => Promise<{ templates: Array<{ templateId: string }> }> }).fetchTemplates,
+    ).mockResolvedValue({
+      templates: [],
+    });
+
+    await renderAt('/parties/Alice');
+
+    expect(await screen.findByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();
+    expect(screen.getAllByText('Not Present').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Topology read failed')).toBeInTheDocument();
   });
 });
