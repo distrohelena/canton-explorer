@@ -464,6 +464,31 @@ export interface PartyContractsResponse {
   contracts: PartyRecentContract[];
 }
 
+export interface PartyTopologyParticipantMapping {
+  participantId: string | null;
+  participantUid: string | null;
+  permission: string | null;
+  synchronizerIds: string[];
+}
+
+export interface PartyTopologyKeyMapping {
+  keyFingerprint: string | null;
+  purpose: string | null;
+  keyType: string | null;
+  synchronizerIds: string[];
+}
+
+export type PartyTopologyNodeStatus = 'ok' | 'grpc_not_configured' | 'grpc_error';
+
+export interface PartyTopologyNodeEntry {
+  nodeId: string;
+  label: string;
+  status: PartyTopologyNodeStatus;
+  errorMessage: string | null;
+  partyToParticipants: PartyTopologyParticipantMapping[];
+  partyToKeyMappings: PartyTopologyKeyMapping[];
+}
+
 export interface PartyDetailResponse {
   partyId: string;
   nodeCount: number;
@@ -472,4 +497,5 @@ export interface PartyDetailResponse {
   nodes: PartyNodeSummary[];
   recentUpdates: PartyRecentUpdate[];
   recentContracts: PartyRecentContract[];
+  partyTopologyByNode: PartyTopologyNodeEntry[];
 }

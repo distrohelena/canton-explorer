@@ -243,6 +243,38 @@ const typedPartyDetailFixture = {
       recordTime: '2026-07-01T11:00:00.000Z',
     },
   ],
+  partyTopologyByNode: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      status: 'ok',
+      errorMessage: null,
+      partyToParticipants: [
+        {
+          participantId: 'participant-1',
+          participantUid: 'participant-1::1220abc',
+          permission: 'submission',
+          synchronizerIds: [],
+        },
+      ],
+      partyToKeyMappings: [
+        {
+          keyFingerprint: 'fingerprint-1',
+          purpose: 'namespace',
+          keyType: 'ed25519',
+          synchronizerIds: [],
+        },
+      ],
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      status: 'ok',
+      errorMessage: null,
+      partyToParticipants: [],
+      partyToKeyMappings: [],
+    },
+  ],
 } satisfies PartyDetailResponse;
 
 const typedActivePartiesFixture = {

@@ -331,6 +331,38 @@ const typedPartyDetailFixture = {
       recordTime: '2026-07-01T11:00:00.000Z',
     },
   ],
+  partyTopologyByNode: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      status: 'ok',
+      errorMessage: null,
+      partyToParticipants: [
+        {
+          participantId: 'participant-1',
+          participantUid: 'participant-1::1220abc',
+          permission: 'submission',
+          synchronizerIds: [],
+        },
+      ],
+      partyToKeyMappings: [
+        {
+          keyFingerprint: 'fingerprint-1',
+          purpose: 'namespace',
+          keyType: 'ed25519',
+          synchronizerIds: [],
+        },
+      ],
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      status: 'ok',
+      errorMessage: null,
+      partyToParticipants: [],
+      partyToKeyMappings: [],
+    },
+  ],
 } satisfies PartyDetailResponse;
 
 describe('PqsSummaryService', () => {
@@ -351,6 +383,7 @@ describe('PqsSummaryService', () => {
     expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
     expect(typedNodePackagesFixture.packagesByName[0].packageName).toBe('daml-prim');
     expect(typedPartyDetailFixture.recentContracts[0].contractId).toBe('00abc');
+    expect(typedPartyDetailFixture.partyTopologyByNode[0].status).toBe('ok');
   });
 
   it('returns empty successful search groups without querying nodes for a blank query', async () => {
@@ -982,6 +1015,13 @@ describe('PqsSummaryService', () => {
         }),
       } as never,
       undefined,
+      undefined,
+      {
+        fetchPartyTopology: jest
+          .fn()
+          .mockResolvedValueOnce(typedPartyDetailFixture.partyTopologyByNode[0])
+          .mockResolvedValueOnce(typedPartyDetailFixture.partyTopologyByNode[1]),
+      } as never,
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
         nodes: Array<{ id: string; label: string }>,
@@ -1113,6 +1153,159 @@ describe('PqsSummaryService', () => {
           packageName: 'Main Package',
           packageVersion: '1.2.3',
           recordTime: '2026-07-02T12:00:00.000Z',
+        },
+      ],
+      partyTopologyByNode: [],
+    });
+  });
+
+  it('keeps party detail available when topology fails for one node', async () => {
+    const participant1Query = jest.fn(async (sql: string) => {
+      if (
+        sql.includes('from participant.lapi_update_meta update_meta') &&
+        sql.includes('participant.lapi_events_create create_event') &&
+        sql.includes('event_offset') &&
+        sql.includes("'Alice'") &&
+        sql.includes("'p|Alice'")
+      ) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_offset: '0000000000000001',
+              record_time: '2026-07-01T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              parties: ['Alice'],
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('create_event.contract_id::text as contract_id')) {
+        return {
+          rows: [
+            {
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              package_id: 'main-package',
+              record_time: '2026-07-01T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: (node: { id: string }) => ({
+          query:
+            node.id === 'participant-1'
+              ? participant1Query
+              : jest.fn(async () => ({ rows: [] })),
+        }),
+      } as never,
+      undefined,
+      {
+        getPackage: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-01T10:00:00.000Z',
+          packageSize: 1024,
+          data: Buffer.from('package'),
+        }),
+      } as never,
+      undefined,
+      undefined,
+      {
+        fetchPartyTopology: jest
+          .fn()
+          .mockResolvedValueOnce({
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            status: 'ok',
+            errorMessage: null,
+            partyToParticipants: [],
+            partyToKeyMappings: [],
+          })
+          .mockResolvedValueOnce({
+            nodeId: 'participant-2',
+            label: 'Participant 2',
+            status: 'grpc_error',
+            errorMessage: 'Topology read failed',
+            partyToParticipants: [],
+            partyToKeyMappings: [],
+          }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchPartyDetail?: (
+        nodes: Array<{ id: string; label: string }>,
+        partyId: string,
+      ) => Promise<PartyDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPartyDetail?.(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ],
+        'Alice',
+      ),
+    ).resolves.toEqual({
+      partyId: 'Alice',
+      nodeCount: 1,
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          recentUpdateCount: 1,
+          recentContractCount: 1,
+        },
+      ],
+      recentUpdates: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '0000000000000001',
+          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          recordTime: '2026-07-01T12:00:00.000Z',
+          parties: ['Alice'],
+        },
+      ],
+      recentContracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          packageId: 'main-package',
+          packageName: 'Main Package',
+          packageVersion: '1.2.3',
+          recordTime: '2026-07-01T12:00:00.000Z',
+        },
+      ],
+      partyTopologyByNode: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          partyToParticipants: [],
+          partyToKeyMappings: [],
         },
       ],
     });

@@ -33,6 +33,7 @@ import { PqsClientFactory } from './pqs-client.factory';
 import { DamlValueDecoderService } from '../packages/daml-value-decoder.service';
 import { PackageCacheService } from '../packages/package-cache.service';
 import { PackageRegistryService } from '../packages/package-registry.service';
+import { GrpcOperationsService } from '../grpc/grpc-operations.service';
 
 interface SummaryRow {
   pqs_database: string;
@@ -1983,6 +1984,7 @@ export class PqsSummaryService {
     @Optional() private readonly packageCacheService?: PackageCacheService,
     @Optional() private readonly packageRegistryService?: PackageRegistryService,
     @Optional() private readonly nodeConfigService?: NodeConfigService,
+    @Optional() private readonly grpcOperationsService?: GrpcOperationsService,
   ) {}
 
   async fetchSummary(node: NodeConfig): Promise<LedgerSummary> {
@@ -2884,6 +2886,23 @@ export class PqsSummaryService {
       throw new Error('Party not found');
     }
 
+    const partyTopologyByNode = this.grpcOperationsService
+      ? (
+          await Promise.all(
+            observedNodes.map(async (observedNode) => {
+              const node = nodes.find((candidate) => candidate.id === observedNode.nodeId);
+              if (!node) {
+                return null;
+              }
+
+              return this.grpcOperationsService.fetchPartyTopology(node, normalizedPartyId);
+            }),
+          )
+        )
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+          .sort((left, right) => left.label.localeCompare(right.label))
+      : [];
+
     return {
       partyId: normalizedPartyId,
       nodeCount: observedNodes.length,
@@ -2892,6 +2911,7 @@ export class PqsSummaryService {
       nodes: observedNodes,
       recentUpdates,
       recentContracts,
+      partyTopologyByNode,
     };
   }
 
