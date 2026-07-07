@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { RouterLink, RouterView, useRouter } from 'vue-router';
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 
 const router = useRouter();
+const route = useRoute();
 const searchTerm = ref('');
 const THEME_STORAGE_KEY = 'canton-explorer-theme';
 type ThemePreference = 'system' | 'light' | 'dark';
@@ -31,7 +32,10 @@ async function submitSearch() {
     return;
   }
 
-  await router.push(`/parties/${encodeURIComponent(trimmed)}`);
+  await router.push({
+    path: '/search',
+    query: { q: trimmed },
+  });
 }
 
 function readStoredThemePreference(): ThemePreference {
@@ -60,6 +64,19 @@ watch(themePreference, (preference) => {
 
   window.localStorage.setItem(THEME_STORAGE_KEY, preference);
 });
+
+watch(
+  () => [route.path, route.query.q] as const,
+  ([path, rawQuery]) => {
+    if (path !== '/search') {
+      return;
+    }
+
+    const queryValue = Array.isArray(rawQuery) ? rawQuery[0] : rawQuery;
+    searchTerm.value = typeof queryValue === 'string' ? queryValue.trim() : '';
+  },
+  { immediate: true },
+);
 
 watch(
   resolvedTheme,
@@ -113,9 +130,10 @@ onBeforeUnmount(() => {
           </RouterLink>
           <div class="app-toolbar">
             <nav class="app-nav" aria-label="Primary">
-              <RouterLink class="nav-button" to="/">Home</RouterLink>
+              <RouterLink class="nav-button" to="/">Updates</RouterLink>
               <RouterLink class="nav-button" to="/nodes">Nodes</RouterLink>
               <RouterLink class="nav-button" to="/parties">Parties</RouterLink>
+              <RouterLink class="nav-button" to="/contracts">Contracts</RouterLink>
             </nav>
             <form class="app-search-form" @submit.prevent="submitSearch">
               <input

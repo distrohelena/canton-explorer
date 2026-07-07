@@ -13,6 +13,7 @@ import type {
 import type { PartyDetailResponse } from '../types/parties';
 import type { PartyContractsResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
+import type { SearchResultsResponse } from '../types/search';
 import type { TemplateFilterResponse } from '../types/templates';
 import type {
   GlobalUpdatesResponse,
@@ -104,6 +105,10 @@ export function fetchNodeParticipantStatus(id: string): Promise<NodeParticipantS
 
 export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse> {
   return fetchJson<ActivityHistoryResponse>(`/nodes/activity-history?days=${days}`);
+}
+
+export function fetchSearchResults(query: string): Promise<SearchResultsResponse> {
+  return fetchJson<SearchResultsResponse>(`/search?q=${encodeURIComponent(query.trim())}`);
 }
 
 export function fetchLatestUpdates(

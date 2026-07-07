@@ -62,6 +62,88 @@ export interface NodeRecentUpdatesResponse {
   updates: NodeRecentUpdate[];
 }
 
+export interface GlobalRecentUpdate extends NodeRecentUpdate {
+  nodeId: string;
+  label: string;
+}
+
+export interface GlobalRecentUpdatesResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  updates: GlobalRecentUpdate[];
+}
+
+export interface SearchResultGroup<T> {
+  items: T[];
+  displayedCount: number;
+  truncated: boolean;
+  status: 'ok' | 'partial' | 'failed';
+  warnings: string[];
+}
+
+export interface SearchUpdateResult {
+  nodeId: string;
+  label: string;
+  eventOffset: string;
+  updateId: string;
+  recordTime: string | null;
+  parties: string[];
+}
+
+export interface SearchContractResult {
+  nodeId: string;
+  label: string;
+  contractId: string;
+  templateId: string | null;
+  createdRecordTime: string | null;
+}
+
+export interface SearchPartyResult {
+  partyId: string;
+  nodeIds: string[];
+}
+
+export interface SearchPackageIdResult {
+  packageId: string;
+  name: string | null;
+  version: string | null;
+}
+
+export interface SearchPackageNameResult {
+  name: string;
+  packages: Array<{
+    packageId: string;
+    version: string | null;
+  }>;
+}
+
+export interface SearchResultsResponse {
+  query: string;
+  updates: SearchResultGroup<SearchUpdateResult>;
+  contracts: SearchResultGroup<SearchContractResult>;
+  parties: SearchResultGroup<SearchPartyResult>;
+  packages: {
+    packageIds: SearchResultGroup<SearchPackageIdResult>;
+    packageNames: SearchResultGroup<SearchPackageNameResult>;
+  };
+}
+
+export interface NodeActiveContractSummary {
+  contractId: string;
+  templateId: string | null;
+  createdRecordTime: string | null;
+}
+
+export interface NodeContractsResponse {
+  nodeId: string;
+  label: string;
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  contracts: NodeActiveContractSummary[];
+}
+
 export interface NodeUpdateDetailMeta {
   update_id: string;
   record_time: string | number | null;
@@ -148,16 +230,70 @@ export interface PackageSeenOnNode {
   seenAt: string;
 }
 
+export interface PackageTypeField {
+  name: string;
+  type: PackageTypeNode;
+}
+
+export interface PackageTypeConstructor {
+  name: string;
+  type: PackageTypeNode | null;
+}
+
+export interface PackageInterfaceMethod {
+  name: string;
+  type: PackageTypeNode | null;
+}
+
+export interface PackageInterfaceChoice {
+  name: string;
+  consuming: boolean;
+  argumentType: PackageTypeNode | null;
+  resultType: PackageTypeNode | null;
+}
+
+export interface PackageTypeNode {
+  kind:
+    | 'builtin'
+    | 'type_var'
+    | 'type_con'
+    | 'record'
+    | 'variant'
+    | 'enum'
+    | 'interface'
+    | 'struct'
+    | 'forall'
+    | 'nat'
+    | 'synonym'
+    | 'unknown';
+  label: string;
+  packageId?: string | null;
+  typeId?: string | null;
+  arguments?: PackageTypeNode[];
+  typeParameters?: string[];
+  fields?: PackageTypeField[];
+  constructors?: PackageTypeConstructor[];
+  view?: PackageTypeNode | null;
+  requires?: PackageTypeNode[];
+  methods?: PackageInterfaceMethod[];
+  choices?: PackageInterfaceChoice[];
+  body?: PackageTypeNode | null;
+  definition?: PackageTypeNode | null;
+  note?: 'recursive_reference' | 'missing_definition' | 'unsupported';
+}
+
 export interface PackageTemplateSummary {
   templateId: string;
   moduleName: string;
   entityName: string;
+  createType: PackageTypeNode | null;
 }
 
 export interface PackageDataTypeSummary {
   typeId: string;
   moduleName: string;
   entityName: string;
+  definition: PackageTypeNode | null;
 }
 
 export interface PackageDetailResponse {
@@ -189,6 +325,14 @@ export interface PackageFamilyResponse {
   packages: PackageFamilyEntry[];
 }
 
+export interface TemplateFilterEntry {
+  templateId: string;
+}
+
+export interface TemplateFilterResponse {
+  templates: TemplateFilterEntry[];
+}
+
 export interface NodeInstalledPackageEntry {
   packageId: string;
   version: string | null;
@@ -199,6 +343,69 @@ export interface NodeInstalledPackageEntry {
 export interface NodeInstalledPackageGroup {
   packageName: string;
   packages: NodeInstalledPackageEntry[];
+}
+
+export type NodeParticipantStatusState =
+  | 'ok'
+  | 'not_initialized'
+  | 'grpc_not_configured'
+  | 'grpc_error';
+
+export type NodeParticipantStatusComponentSeverity = 'ok' | 'degraded' | 'failed' | 'fatal';
+export type NodeParticipantSynchronizerHealth = 'unspecified' | 'healthy' | 'unhealthy';
+export type NodeParticipantWaitingForExternalInput =
+  | 'unspecified'
+  | 'id'
+  | 'node_topology'
+  | 'initialization';
+
+export interface NodeParticipantStatusComponent {
+  name: string;
+  severity: NodeParticipantStatusComponentSeverity;
+  description: string | null;
+}
+
+export interface NodeParticipantTopologyQueues {
+  manager: number;
+  dispatcher: number;
+  clients: number;
+}
+
+export interface NodeParticipantConnectedSynchronizer {
+  physicalSynchronizerId: string | null;
+  health: NodeParticipantSynchronizerHealth;
+}
+
+export interface NodeParticipantStatusSummary {
+  uid: string | null;
+  uptime: string | null;
+  ports: Record<string, number>;
+  active: boolean;
+  commonStatusActive: boolean | null;
+  version: string | null;
+  supportedProtocolVersions: number[];
+  topologyQueues: NodeParticipantTopologyQueues | null;
+  components: NodeParticipantStatusComponent[];
+  connectedSynchronizers: NodeParticipantConnectedSynchronizer[];
+}
+
+export interface NodeParticipantNotInitializedSummary {
+  active: boolean;
+  waitingForExternalInput: NodeParticipantWaitingForExternalInput;
+  version: string | null;
+}
+
+export interface NodeParticipantStatusResponse {
+  nodeId: string;
+  label: string;
+  mode: NodeMode;
+  participantStatusStatus: NodeParticipantStatusState;
+  participantStatus: NodeParticipantStatusSummary | null;
+  notInitialized: NodeParticipantNotInitializedSummary | null;
+  participantStatusError: string | null;
+  participantStatusErrorCode: string | null;
+  participantStatusErrorDetails: string | null;
+  participantStatusErrorTid: string | null;
 }
 
 export interface NodePackagesResponse {
@@ -212,6 +419,11 @@ export interface ActivePartiesNodeEntry {
   label: string;
   mode: NodeMode;
   parties: string[];
+  localPartiesStatus?: 'ok' | 'grpc_not_configured' | 'grpc_error';
+  localPartiesError?: string | null;
+  localPartiesErrorCode?: string | null;
+  localPartiesErrorDetails?: string | null;
+  localPartiesErrorTid?: string | null;
 }
 
 export interface ActivePartiesResponse {
@@ -243,6 +455,13 @@ export interface PartyRecentContract {
   packageName: string | null;
   packageVersion: string | null;
   recordTime: string | null;
+}
+
+export interface PartyContractsResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  contracts: PartyRecentContract[];
 }
 
 export interface PartyDetailResponse {

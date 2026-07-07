@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
+import { NodeConfigService } from '../config/node-config.service';
 import type {
   ActivePartiesResponse,
   GlobalRecentUpdatesResponse,
@@ -19,6 +20,13 @@ import type {
   NodeRecentUpdate,
   NodeRecentUpdatesResponse,
   PartyContractsResponse,
+  SearchContractResult,
+  SearchPackageIdResult,
+  SearchPackageNameResult,
+  SearchPartyResult,
+  SearchResultGroup,
+  SearchResultsResponse,
+  SearchUpdateResult,
   TemplateFilterResponse,
 } from '../domain/node.types';
 import { PqsClientFactory } from './pqs-client.factory';
@@ -140,6 +148,28 @@ interface GlobalMergedContract {
   recordTime: string | null;
 }
 
+interface SearchMatchedUpdate extends SearchUpdateResult {
+  exact: boolean;
+}
+
+interface SearchMatchedContract extends SearchContractResult {
+  exact: boolean;
+}
+
+interface SearchMatchedParty extends SearchPartyResult {
+  exact: boolean;
+}
+
+interface SearchMatchedPackageId extends SearchPackageIdResult {
+  exact: boolean;
+}
+
+interface SearchMatchedPackageName extends SearchPackageNameResult {
+  exact: boolean;
+}
+
+const SEARCH_GROUP_LIMIT = 25;
+
 const ACTIVE_QUERY = `
   select
     current_database() as pqs_database,
@@ -259,6 +289,95 @@ function decodeGlobalContractCursor(cursor?: string): GlobalContractCursor | nul
   }
 
   return null;
+}
+
+function compareSearchUpdates(left: SearchMatchedUpdate, right: SearchMatchedUpdate): number {
+  if (left.exact !== right.exact) {
+    return left.exact ? -1 : 1;
+  }
+
+  const leftRecordTimeMs = Date.parse(left.recordTime ?? '');
+  const rightRecordTimeMs = Date.parse(right.recordTime ?? '');
+  const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
+  const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
+
+  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+    return rightRecordTimeMs - leftRecordTimeMs;
+  }
+
+  if (leftHasRecordTime !== rightHasRecordTime) {
+    return leftHasRecordTime ? -1 : 1;
+  }
+
+  if (left.label !== right.label) {
+    return left.label.localeCompare(right.label);
+  }
+
+  return right.eventOffset.localeCompare(left.eventOffset);
+}
+
+function compareSearchContracts(left: SearchMatchedContract, right: SearchMatchedContract): number {
+  if (left.exact !== right.exact) {
+    return left.exact ? -1 : 1;
+  }
+
+  const leftRecordTimeMs = Date.parse(left.createdRecordTime ?? '');
+  const rightRecordTimeMs = Date.parse(right.createdRecordTime ?? '');
+  const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
+  const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
+
+  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+    return rightRecordTimeMs - leftRecordTimeMs;
+  }
+
+  if (leftHasRecordTime !== rightHasRecordTime) {
+    return leftHasRecordTime ? -1 : 1;
+  }
+
+  if (left.label !== right.label) {
+    return left.label.localeCompare(right.label);
+  }
+
+  return left.contractId.localeCompare(right.contractId);
+}
+
+function compareSearchParties(left: SearchMatchedParty, right: SearchMatchedParty): number {
+  if (left.exact !== right.exact) {
+    return left.exact ? -1 : 1;
+  }
+
+  return left.partyId.localeCompare(right.partyId);
+}
+
+function compareSearchPackageIds(left: SearchMatchedPackageId, right: SearchMatchedPackageId): number {
+  if (left.exact !== right.exact) {
+    return left.exact ? -1 : 1;
+  }
+
+  const leftName = left.name ?? '';
+  const rightName = right.name ?? '';
+  if (leftName !== rightName) {
+    return leftName.localeCompare(rightName);
+  }
+
+  const leftVersion = left.version ?? '';
+  const rightVersion = right.version ?? '';
+  if (leftVersion !== rightVersion) {
+    return rightVersion.localeCompare(leftVersion);
+  }
+
+  return left.packageId.localeCompare(right.packageId);
+}
+
+function compareSearchPackageNames(
+  left: SearchMatchedPackageName,
+  right: SearchMatchedPackageName,
+): number {
+  if (left.exact !== right.exact) {
+    return left.exact ? -1 : 1;
+  }
+
+  return left.name.localeCompare(right.name);
 }
 
 const PARTICIPANT_FALLBACK_QUERY = `
@@ -625,6 +744,25 @@ function recentUpdatesQuery(
   `;
 }
 
+function searchUpdatesQuery(searchQuery: string, limit: number): string {
+  const quotedQuery = escapeSqlLiteral(searchQuery);
+
+  return `
+    select
+      update_meta.update_id::text as update_id,
+      update_meta.event_offset::text as event_offset,
+      to_char(
+        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ) as record_time
+    from participant.lapi_update_meta update_meta
+    where update_meta.event_offset::text like '${quotedQuery}%'
+      or regexp_replace(update_meta.update_id::text, '^\\\\x', '') like '${quotedQuery}%'
+    order by update_meta.record_time desc, update_meta.event_offset::numeric desc
+    limit ${limit}
+  `;
+}
+
 function normalizedRecentUpdatesQuery(
   limit: number,
   before?: string,
@@ -682,6 +820,25 @@ function normalizedRecentUpdatesQuery(
     ${whereClause}
     order by update_meta.event_offset::numeric desc
     limit ${queryLimit}
+  `;
+}
+
+function normalizedSearchUpdatesQuery(searchQuery: string, limit: number): string {
+  const quotedQuery = escapeSqlLiteral(searchQuery);
+
+  return `
+    select
+      encode(update_meta.update_id, 'hex') as update_id,
+      update_meta.event_offset::text as event_offset,
+      to_char(
+        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ) as record_time
+    from participant.lapi_update_meta update_meta
+    where update_meta.event_offset::text like '${quotedQuery}%'
+      or encode(update_meta.update_id, 'hex') like '${quotedQuery}%'
+    order by update_meta.record_time desc, update_meta.event_offset::numeric desc
+    limit ${limit}
   `;
 }
 
@@ -1718,6 +1875,85 @@ function activeContractsQuery(
   `;
 }
 
+function searchContractsQuery(searchQuery: string, limit: number): string {
+  const quotedQuery = escapeSqlLiteral(searchQuery);
+
+  return `
+    with activate_witnesses as (
+      select
+        witness_filter.event_sequential_id,
+        array_agg(distinct party_string.external_string order by party_string.external_string) as witnesses
+      from participant.lapi_filter_activate_witness witness_filter
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      group by witness_filter.event_sequential_id
+    ),
+    various_witnesses as (
+      select
+        witness_filter.event_sequential_id,
+        array_agg(distinct party_string.external_string order by party_string.external_string) as witnesses
+      from participant.lapi_filter_various_witness witness_filter
+      join participant.lapi_string_interning party_string
+        on party_string.internal_id = witness_filter.party_id
+      group by witness_filter.event_sequential_id
+    ),
+    create_events as (
+      select
+        activate_event.internal_contract_id,
+        activate_event.event_offset::text as create_event_offset,
+        to_char(
+          to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as created_record_time,
+        coalesce(activate_witnesses.witnesses, array[]::text[]) as witnesses
+      from participant.lapi_events_activate_contract activate_event
+      left join activate_witnesses
+        on activate_witnesses.event_sequential_id = activate_event.event_sequential_id
+
+      union all
+
+      select
+        various_event.internal_contract_id,
+        various_event.event_offset::text as create_event_offset,
+        to_char(
+          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) as created_record_time,
+        coalesce(various_witnesses.witnesses, array[]::text[]) as witnesses
+      from participant.lapi_events_various_witnessed various_event
+      left join various_witnesses
+        on various_witnesses.event_sequential_id = various_event.event_sequential_id
+      where various_event.event_type = 6
+    ),
+    archived_contracts as (
+      select distinct deactivate_event.internal_contract_id
+      from participant.lapi_events_deactivate_contract deactivate_event
+
+      union
+
+      select distinct various_event.internal_contract_id
+      from participant.lapi_events_various_witnessed various_event
+      where various_event.event_type in (5, 7)
+        and various_event.consuming
+    )
+    select
+      encode(contract.contract_id, 'hex') as contract_id,
+      regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') as template_id,
+      create_events.created_record_time
+    from create_events
+    join participant.par_contracts contract
+      on contract.internal_contract_id = create_events.internal_contract_id
+    where encode(contract.contract_id, 'hex') like '${quotedQuery}%'
+      and not exists (
+        select 1
+        from archived_contracts archived_contract
+        where archived_contract.internal_contract_id = create_events.internal_contract_id
+      )
+    order by create_events.created_record_time desc nulls last, contract_id asc
+    limit ${limit}
+  `;
+}
+
 function escapeSqlLiteral(value: string): string {
   return value.replaceAll("'", "''");
 }
@@ -1746,6 +1982,7 @@ export class PqsSummaryService {
     @Optional() private readonly damlValueDecoder?: DamlValueDecoderService,
     @Optional() private readonly packageCacheService?: PackageCacheService,
     @Optional() private readonly packageRegistryService?: PackageRegistryService,
+    @Optional() private readonly nodeConfigService?: NodeConfigService,
   ) {}
 
   async fetchSummary(node: NodeConfig): Promise<LedgerSummary> {
@@ -1760,6 +1997,36 @@ export class PqsSummaryService {
       latestOffset: row.latest_offset ?? null,
       latestEventAt: row.latest_event_at ?? null,
       totalUpdateCount: Number(row.total_update_count ?? 0),
+    };
+  }
+
+  async search(query: string): Promise<SearchResultsResponse> {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      return {
+        query: '',
+        updates: this.emptySearchGroup<SearchUpdateResult>(),
+        contracts: this.emptySearchGroup<SearchContractResult>(),
+        parties: this.emptySearchGroup<SearchPartyResult>(),
+        packages: {
+          packageIds: this.emptySearchGroup<SearchPackageIdResult>(),
+          packageNames: this.emptySearchGroup<SearchPackageNameResult>(),
+        },
+      };
+    }
+
+    const nodes = this.nodeConfigService?.list() ?? [];
+    const updates = await this.searchUpdates(nodes, trimmedQuery);
+    const contracts = await this.searchContracts(nodes, trimmedQuery);
+    const parties = await this.searchParties(nodes, trimmedQuery);
+    const packages = await this.searchPackages(trimmedQuery);
+
+    return {
+      query: trimmedQuery,
+      updates,
+      contracts,
+      parties,
+      packages,
     };
   }
 
@@ -1974,6 +2241,334 @@ export class PqsSummaryService {
               : null,
       updates,
     };
+  }
+
+  private emptySearchGroup<T>(): SearchResultGroup<T> {
+    return {
+      items: [],
+      displayedCount: 0,
+      truncated: false,
+      status: 'ok',
+      warnings: [],
+    };
+  }
+
+  private finalizeSearchGroup<T>(options: {
+    items: T[];
+    totalCount?: number;
+    status?: SearchResultGroup<T>['status'];
+    warnings?: string[];
+  }): SearchResultGroup<T> {
+    const totalCount = options.totalCount ?? options.items.length;
+    return {
+      items: options.items,
+      displayedCount: options.items.length,
+      truncated: totalCount > options.items.length,
+      status: options.status ?? 'ok',
+      warnings: options.warnings ?? [],
+    };
+  }
+
+  private resolveNodeSearchStatus<T>(
+    settled: PromiseSettledResult<T>[],
+    subject: string,
+    nodes: NodeConfig[],
+  ): {
+    status: SearchResultGroup<unknown>['status'];
+    warnings: string[];
+    hasSuccess: boolean;
+  } {
+    const warnings = settled.flatMap((result, index) =>
+      result.status === 'rejected'
+        ? [`Failed to search ${subject} on ${nodes[index]?.label ?? nodes[index]?.id ?? 'unknown node'}`]
+        : [],
+    );
+    const hasSuccess = settled.some((result) => result.status === 'fulfilled');
+
+    return {
+      status: warnings.length === 0 ? 'ok' : hasSuccess ? 'partial' : 'failed',
+      warnings,
+      hasSuccess,
+    };
+  }
+
+  private isExactMatch(query: string, values: Array<string | null | undefined>): boolean {
+    return values.some((value) => typeof value === 'string' && value === query);
+  }
+
+  private hasPrefixMatch(query: string, values: Array<string | null | undefined>): boolean {
+    return values.some((value) => typeof value === 'string' && value.startsWith(query));
+  }
+
+  private async searchUpdates(
+    nodes: NodeConfig[],
+    query: string,
+  ): Promise<SearchResultGroup<SearchUpdateResult>> {
+    if (nodes.length === 0) {
+      return this.emptySearchGroup<SearchUpdateResult>();
+    }
+
+    const settled = await Promise.allSettled(
+      nodes.map((node) => this.searchUpdatesForNode(node, query, SEARCH_GROUP_LIMIT + 1)),
+    );
+    const deduped = new Map<string, SearchMatchedUpdate>();
+
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') {
+        continue;
+      }
+
+      for (const item of result.value) {
+        const key = `${item.nodeId}:${item.eventOffset}`;
+        const existing = deduped.get(key);
+        if (!existing || (item.exact && !existing.exact)) {
+          deduped.set(key, item);
+        }
+      }
+    }
+
+    const ordered = Array.from(deduped.values()).sort(compareSearchUpdates);
+    const { status, warnings } = this.resolveNodeSearchStatus(settled, 'updates', nodes);
+
+    return this.finalizeSearchGroup<SearchUpdateResult>({
+      items: ordered.slice(0, SEARCH_GROUP_LIMIT).map(({ exact: _exact, ...item }) => item),
+      totalCount: ordered.length,
+      status,
+      warnings,
+    });
+  }
+
+  private async searchUpdatesForNode(
+    node: NodeConfig,
+    query: string,
+    limit: number,
+  ): Promise<SearchMatchedUpdate[]> {
+    const client = this.clientFactory.getClient(node);
+    const rows = await this.querySearchUpdateMetaRows(client.query.bind(client), query, limit);
+    const dedupedRows = new Map<string, UpdateMetaRow>();
+
+    for (const row of rows) {
+      const eventOffset = this.extractEventOffset(row);
+      if (!dedupedRows.has(eventOffset)) {
+        dedupedRows.set(eventOffset, row);
+      }
+    }
+
+    const rawRows = Array.from(dedupedRows.values());
+    const rawUpdateIds = rawRows.map((row) => row.update_id);
+    const partiesByUpdateId =
+      rawUpdateIds.length > 0
+        ? await this.fetchPartiesByUpdateId(client.query.bind(client), rawUpdateIds)
+        : new Map<string, string[]>();
+
+    return rawRows
+      .map((row) => {
+        const normalizedUpdateId = this.normalizeUpdateId(row.update_id);
+        const eventOffset = this.extractEventOffset(row);
+        const exact = this.isExactMatch(query, [eventOffset, normalizedUpdateId]);
+        const matches = exact || this.hasPrefixMatch(query, [eventOffset, normalizedUpdateId]);
+
+        if (!matches) {
+          return null;
+        }
+
+        return {
+          nodeId: node.id,
+          label: node.label,
+          eventOffset,
+          updateId: normalizedUpdateId,
+          recordTime: row.record_time ?? null,
+          parties: partiesByUpdateId.get(normalizedUpdateId) ?? [],
+          exact,
+        } satisfies SearchMatchedUpdate;
+      })
+      .filter((item): item is SearchMatchedUpdate => item !== null);
+  }
+
+  private async searchContracts(
+    nodes: NodeConfig[],
+    query: string,
+  ): Promise<SearchResultGroup<SearchContractResult>> {
+    if (nodes.length === 0) {
+      return this.emptySearchGroup<SearchContractResult>();
+    }
+
+    const settled = await Promise.allSettled(
+      nodes.map((node) => this.searchContractsForNode(node, query, SEARCH_GROUP_LIMIT + 1)),
+    );
+    const deduped = new Map<string, SearchMatchedContract>();
+
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') {
+        continue;
+      }
+
+      for (const item of result.value) {
+        deduped.set(`${item.nodeId}:${item.contractId}`, item);
+      }
+    }
+
+    const ordered = Array.from(deduped.values()).sort(compareSearchContracts);
+    const { status, warnings } = this.resolveNodeSearchStatus(settled, 'contracts', nodes);
+
+    return this.finalizeSearchGroup<SearchContractResult>({
+      items: ordered.slice(0, SEARCH_GROUP_LIMIT).map(({ exact: _exact, ...item }) => item),
+      totalCount: ordered.length,
+      status,
+      warnings,
+    });
+  }
+
+  private async searchContractsForNode(
+    node: NodeConfig,
+    query: string,
+    limit: number,
+  ): Promise<SearchMatchedContract[]> {
+    const client = this.clientFactory.getClient(node);
+    const result = await client.query(searchContractsQuery(query, limit));
+    const rows = (result.rows as ActiveContractRow[]) ?? [];
+
+    return rows
+      .filter((row) => this.hasPrefixMatch(query, [row.contract_id]))
+      .map((row) => ({
+        nodeId: node.id,
+        label: node.label,
+        contractId: row.contract_id,
+        templateId: this.normalizeTemplateIdentifier(row.template_id),
+        createdRecordTime: row.created_record_time ?? null,
+        exact: this.isExactMatch(query, [row.contract_id]),
+      }));
+  }
+
+  private async searchParties(
+    nodes: NodeConfig[],
+    query: string,
+  ): Promise<SearchResultGroup<SearchPartyResult>> {
+    if (nodes.length === 0) {
+      return this.emptySearchGroup<SearchPartyResult>();
+    }
+
+    const normalizedQuery = this.normalizePartyIdentifier(query);
+    const settled = await Promise.allSettled(
+      nodes.map(async (node) => ({
+        node,
+        parties: await this.fetchActivePartiesForNode(node),
+      })),
+    );
+    const merged = new Map<string, SearchMatchedParty>();
+
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') {
+        continue;
+      }
+
+      for (const partyId of result.value.parties) {
+        if (!partyId.startsWith(normalizedQuery)) {
+          continue;
+        }
+
+        const existing = merged.get(partyId);
+        if (existing) {
+          existing.nodeIds = Array.from(new Set([...existing.nodeIds, result.value.node.id])).sort();
+          continue;
+        }
+
+        merged.set(partyId, {
+          partyId,
+          nodeIds: [result.value.node.id],
+          exact: partyId === normalizedQuery,
+        });
+      }
+    }
+
+    const ordered = Array.from(merged.values()).sort(compareSearchParties);
+    const { status, warnings } = this.resolveNodeSearchStatus(settled, 'parties', nodes);
+
+    return this.finalizeSearchGroup<SearchPartyResult>({
+      items: ordered.slice(0, SEARCH_GROUP_LIMIT).map(({ exact: _exact, ...item }) => item),
+      totalCount: ordered.length,
+      status,
+      warnings,
+    });
+  }
+
+  private async searchPackages(query: string): Promise<{
+    packageIds: SearchResultGroup<SearchPackageIdResult>;
+    packageNames: SearchResultGroup<SearchPackageNameResult>;
+  }> {
+    const packages = this.packageCacheService?.listPackages() ?? [];
+    const packageIdMatches = packages
+      .filter((pkg) => pkg.packageId.startsWith(query))
+      .map((pkg) => ({
+        packageId: pkg.packageId,
+        name: pkg.name,
+        version: pkg.version,
+        exact: pkg.packageId === query,
+      }))
+      .sort(compareSearchPackageIds);
+
+    const groupedNames = new Map<string, SearchMatchedPackageName>();
+    for (const pkg of packages) {
+      if (!pkg.name || !pkg.name.startsWith(query)) {
+        continue;
+      }
+
+      const existing = groupedNames.get(pkg.name);
+      if (existing) {
+        existing.packages.push({ packageId: pkg.packageId, version: pkg.version });
+        continue;
+      }
+
+      groupedNames.set(pkg.name, {
+        name: pkg.name,
+        packages: [{ packageId: pkg.packageId, version: pkg.version }],
+        exact: pkg.name === query,
+      });
+    }
+
+    const packageNameMatches = Array.from(groupedNames.values())
+      .map((entry) => ({
+        ...entry,
+        packages: [...entry.packages].sort(
+          (left, right) =>
+            (right.version ?? '').localeCompare(left.version ?? '') ||
+            left.packageId.localeCompare(right.packageId),
+        ),
+      }))
+      .sort(compareSearchPackageNames);
+
+    return {
+      packageIds: this.finalizeSearchGroup<SearchPackageIdResult>({
+        items: packageIdMatches
+          .slice(0, SEARCH_GROUP_LIMIT)
+          .map(({ exact: _exact, ...item }) => item),
+        totalCount: packageIdMatches.length,
+      }),
+      packageNames: this.finalizeSearchGroup<SearchPackageNameResult>({
+        items: packageNameMatches
+          .slice(0, SEARCH_GROUP_LIMIT)
+          .map(({ exact: _exact, ...item }) => item),
+        totalCount: packageNameMatches.length,
+      }),
+    };
+  }
+
+  private async querySearchUpdateMetaRows(
+    queryFn: (sql: string) => Promise<{ rows: unknown[] }>,
+    searchQuery: string,
+    limit: number,
+  ): Promise<UpdateMetaRow[]> {
+    try {
+      const result = await queryFn(searchUpdatesQuery(searchQuery, limit));
+      return (result.rows as UpdateMetaRow[]) ?? [];
+    } catch (error) {
+      if (!this.shouldFallbackToNormalizedEventTables(error)) {
+        throw error;
+      }
+    }
+
+    const fallbackResult = await queryFn(normalizedSearchUpdatesQuery(searchQuery, limit));
+    return (fallbackResult.rows as UpdateMetaRow[]) ?? [];
   }
 
   private async queryRecentUpdateMetaRows(
@@ -2348,7 +2943,7 @@ export class PqsSummaryService {
       exhausted: false,
     }));
     const mergedContractsByKey = new Map<string, GlobalMergedContract>();
-    const activeTemplateFilters = this.normalizeTemplateFilters(options?.templates);
+    const activeTemplateFilters = normalizeTemplateFilters(options?.templates);
     const hideSplice = options?.hideSplice === true;
 
     const filterContracts = (contracts: GlobalMergedContract[]): GlobalMergedContract[] => {
@@ -2362,11 +2957,14 @@ export class PqsSummaryService {
         }
 
         const normalizedTemplateId = this.normalizeTemplateIdentifier(contract.templateId);
-        if (activeTemplateFilters.length > 0 && !activeTemplateFilters.includes(normalizedTemplateId)) {
+        if (
+          activeTemplateFilters.length > 0 &&
+          (!normalizedTemplateId || !activeTemplateFilters.includes(normalizedTemplateId))
+        ) {
           return false;
         }
 
-        if (hideSplice && normalizedTemplateId.startsWith('Splice.')) {
+        if (hideSplice && normalizedTemplateId?.startsWith('Splice.')) {
           return false;
         }
 

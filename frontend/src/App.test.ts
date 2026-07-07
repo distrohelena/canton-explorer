@@ -16,6 +16,10 @@ const PartiesStub = defineComponent({
   template: '<div>Parties View</div>',
 });
 
+const ContractsStub = defineComponent({
+  template: '<div>Contracts View</div>',
+});
+
 const NodeUpdatesStub = defineComponent({
   template: '<div>Node Updates View</div>',
 });
@@ -36,6 +40,10 @@ const PartyDetailStub = defineComponent({
   template: '<div>Party Detail View</div>',
 });
 
+const SearchResultsStub = defineComponent({
+  template: '<div>Search Results View</div>',
+});
+
 const themePreference = {
   matches: false,
 };
@@ -47,6 +55,8 @@ async function renderAt(path: string) {
       { path: '/', component: HomeStub },
       { path: '/nodes', component: NodesStub },
       { path: '/parties', component: PartiesStub },
+      { path: '/contracts', component: ContractsStub },
+      { path: '/search', component: SearchResultsStub },
       { path: '/nodes/:id/updates', component: NodeUpdatesStub, props: true },
       { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailStub, props: true },
       { path: '/nodes/:id/contracts/:contractId', component: ContractDetailStub, props: true },
@@ -92,9 +102,10 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(container.querySelector('img[src="/cantonexplorer.png"]')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText('Search'),
     ).toBeInTheDocument();
@@ -108,25 +119,37 @@ describe('App', () => {
   it('keeps the shared shell on the nodes route', async () => {
     await renderAt('/nodes');
 
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByText('Nodes View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on the parties route', async () => {
     await renderAt('/parties');
 
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByText('Parties View')).toBeInTheDocument();
+  });
+
+  it('keeps the shared shell on the contracts route', async () => {
+    await renderAt('/contracts');
+
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByText('Contracts View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a node detail route', async () => {
     await renderAt('/nodes/participant-1');
 
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(screen.queryByText('Current Node')).not.toBeInTheDocument();
@@ -135,7 +158,7 @@ describe('App', () => {
   it('keeps the shared shell on a node updates route', async () => {
     await renderAt('/nodes/participant-1/updates');
 
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Node Updates View')).toBeInTheDocument();
   });
@@ -145,7 +168,7 @@ describe('App', () => {
       '/nodes/participant-1/updates/1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
     );
 
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Update Detail View')).toBeInTheDocument();
   });
@@ -153,7 +176,7 @@ describe('App', () => {
   it('keeps the shared shell on a contract detail route', async () => {
     await renderAt('/nodes/participant-1/contracts/00abc');
 
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByText('Contract Detail View')).toBeInTheDocument();
   });
@@ -170,14 +193,43 @@ describe('App', () => {
     expect(await screen.findByText('Home Activity View')).toBeInTheDocument();
   });
 
-  it('routes titlebar search input to the party page on submit', async () => {
+  it('routes titlebar search input to the search page on submit', async () => {
     await renderAt('/');
 
     const searchInput = screen.getByPlaceholderText('Search');
     await fireEvent.update(searchInput, 'Alice');
     await fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
 
-    expect(await screen.findByText('Party Detail View')).toBeInTheDocument();
+    expect(await screen.findByText('Search Results View')).toBeInTheDocument();
+  });
+
+  it('trims the titlebar search input before routing to the search page', async () => {
+    await renderAt('/');
+
+    const searchInput = screen.getByPlaceholderText('Search');
+    await fireEvent.update(searchInput, ' Alice ');
+    await fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+    expect(await screen.findByText('Search Results View')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Alice')).toBeInTheDocument();
+  });
+
+  it('does not navigate on whitespace-only titlebar search input', async () => {
+    await renderAt('/');
+
+    const searchInput = screen.getByPlaceholderText('Search');
+    await fireEvent.update(searchInput, '   ');
+    await fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+    expect(screen.getByText('Home Activity View')).toBeInTheDocument();
+    expect(screen.queryByText('Search Results View')).not.toBeInTheDocument();
+  });
+
+  it('restores the titlebar search input from the search query string', async () => {
+    await renderAt('/search?q=Alice');
+
+    expect(screen.getByText('Search Results View')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Alice')).toBeInTheDocument();
   });
 
   it('defaults to dark mode when the system preference is dark', async () => {

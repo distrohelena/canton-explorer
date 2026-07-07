@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { resolve } from 'node:path';
 import type {
   ActivePartiesResponse,
+  NodeContractsResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
   PartyDetailResponse,
   PackageDetailResponse,
   PackageFamilyResponse,
+  SearchResultsResponse,
   NodeUpdateDetailResponse,
 } from '../../src/domain/node.types';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
@@ -134,6 +136,26 @@ const typedContractDetailFixture = {
   },
 } satisfies NodeContractDetailResponse;
 
+const typedNodeContractsFixture = {
+  nodeId: 'participant-1',
+  label: 'Participant 1',
+  limit: 2,
+  nextBefore: '102',
+  nextAfter: null,
+  contracts: [
+    {
+      contractId: '00c',
+      templateId: 'Main:C',
+      createdRecordTime: '2026-07-01T12:02:00.000Z',
+    },
+    {
+      contractId: '00b',
+      templateId: 'Main:B',
+      createdRecordTime: '2026-07-01T12:01:00.000Z',
+    },
+  ],
+} satisfies NodeContractsResponse;
+
 const typedPackageDetailFixture = {
   packageId: 'splice-amulet',
   name: 'splice-amulet',
@@ -158,6 +180,19 @@ const typedPackageDetailFixture = {
       templateId: 'Splice.Amulet:SvRewardCoupon',
       moduleName: 'Splice.Amulet',
       entityName: 'SvRewardCoupon',
+      createType: {
+        kind: 'record',
+        label: 'Splice.Amulet:SvRewardCoupon',
+        fields: [
+          {
+            name: 'dso',
+            type: {
+              kind: 'builtin',
+              label: 'Party',
+            },
+          },
+        ],
+      },
     },
   ],
   dataTypes: [
@@ -165,6 +200,19 @@ const typedPackageDetailFixture = {
       typeId: 'Splice.Amulet:AmuletRules',
       moduleName: 'Splice.Amulet',
       entityName: 'AmuletRules',
+      definition: {
+        kind: 'record',
+        label: 'Splice.Amulet:AmuletRules',
+        fields: [
+          {
+            name: 'transferConfigUsd',
+            type: {
+              kind: 'builtin',
+              label: 'Text',
+            },
+          },
+        ],
+      },
     },
   ],
 } satisfies PackageDetailResponse;
@@ -303,6 +351,401 @@ describe('PqsSummaryService', () => {
     expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
     expect(typedNodePackagesFixture.packagesByName[0].packageName).toBe('daml-prim');
     expect(typedPartyDetailFixture.recentContracts[0].contractId).toBe('00abc');
+  });
+
+  it('returns empty successful search groups without querying nodes for a blank query', async () => {
+    const query = jest.fn();
+    const list = jest.fn().mockReturnValue([
+      { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+    ]);
+    const packageCache = {
+      listPackages: jest.fn(),
+    };
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      undefined,
+      packageCache as never,
+      undefined,
+      { list } as never,
+    ) as PqsSummaryService & {
+      search?: (query: string) => Promise<SearchResultsResponse>;
+    };
+
+    await expect(service.search?.('   ')).resolves.toEqual({
+      query: '',
+      updates: {
+        items: [],
+        displayedCount: 0,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      contracts: {
+        items: [],
+        displayedCount: 0,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      parties: {
+        items: [],
+        displayedCount: 0,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      packages: {
+        packageIds: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        packageNames: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+      },
+    });
+
+    expect(list).not.toHaveBeenCalled();
+    expect(packageCache.listPackages).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('searches updates by event offset exact and prefix match, deduping duplicate rows', async () => {
+    const participantQuery = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '\\xabc123',
+            event_offset: '39',
+            record_time: '2026-07-02T12:00:00.000Z',
+          },
+          {
+            update_id: '\\xabc123',
+            event_offset: '39',
+            record_time: '2026-07-02T12:00:00.000Z',
+          },
+          {
+            update_id: '\\xdef456',
+            event_offset: '390',
+            record_time: '2026-07-02T11:00:00.000Z',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { update_id: '\\xabc123', parties: ['p|Alice', 'Bob'] },
+          { update_id: '\\xdef456', parties: ['Alice'] },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ parties: [] }] });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({ query: participantQuery }),
+      } as never,
+      undefined,
+      {
+        listPackages: jest.fn().mockReturnValue([]),
+      } as never,
+      undefined,
+      {
+        list: jest.fn().mockReturnValue([
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+        ]),
+      } as never,
+    ) as PqsSummaryService & {
+      search?: (query: string) => Promise<SearchResultsResponse>;
+    };
+
+    const response = await service.search?.('39');
+
+    expect(response?.updates).toEqual({
+      items: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '39',
+          updateId: 'abc123',
+          recordTime: '2026-07-02T12:00:00.000Z',
+          parties: ['Alice', 'Bob'],
+        },
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '390',
+          updateId: 'def456',
+          recordTime: '2026-07-02T11:00:00.000Z',
+          parties: ['Alice'],
+        },
+      ],
+      displayedCount: 2,
+      truncated: false,
+      status: 'ok',
+      warnings: [],
+    });
+  });
+
+  it('normalizes prefixed party queries and merges matching nodes into one party result', async () => {
+    const participant1Query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ parties: ['p|Alice', 'Bob'] }] });
+    const participant2Query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ parties: ['Alice'] }] });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      undefined,
+      {
+        listPackages: jest.fn().mockReturnValue([]),
+      } as never,
+      undefined,
+      {
+        list: jest.fn().mockReturnValue([
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
+        ]),
+      } as never,
+    ) as PqsSummaryService & {
+      search?: (query: string) => Promise<SearchResultsResponse>;
+    };
+
+    const response = await service.search?.('p|Alice');
+
+    expect(response?.parties).toEqual({
+      items: [
+        {
+          partyId: 'Alice',
+          nodeIds: ['participant-1', 'participant-2'],
+        },
+      ],
+      displayedCount: 1,
+      truncated: false,
+      status: 'ok',
+      warnings: [],
+    });
+  });
+
+  it('orders exact contract-id matches before prefix matches', async () => {
+    const participantQuery = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00ab',
+            template_id: 'Main:Asset',
+            created_record_time: '2026-07-02T12:00:00.000Z',
+          },
+          {
+            contract_id: '00a',
+            template_id: 'Main:Asset',
+            created_record_time: '2026-07-02T11:00:00.000Z',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ parties: [] }] });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({ query: participantQuery }),
+      } as never,
+      undefined,
+      {
+        listPackages: jest.fn().mockReturnValue([]),
+      } as never,
+      undefined,
+      {
+        list: jest.fn().mockReturnValue([
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+        ]),
+      } as never,
+    ) as PqsSummaryService & {
+      search?: (query: string) => Promise<SearchResultsResponse>;
+    };
+
+    const response = await service.search?.('00a');
+
+    expect(response?.contracts).toEqual({
+      items: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00a',
+          templateId: 'Main:Asset',
+          createdRecordTime: '2026-07-02T11:00:00.000Z',
+        },
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00ab',
+          templateId: 'Main:Asset',
+          createdRecordTime: '2026-07-02T12:00:00.000Z',
+        },
+      ],
+      displayedCount: 2,
+      truncated: false,
+      status: 'ok',
+      warnings: [],
+    });
+  });
+
+  it('searches package ids and package names from the cache only', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      { getClient: () => ({ query: jest.fn() }) } as never,
+      undefined,
+      {
+        listPackages: jest.fn().mockReturnValue([
+          {
+            packageId: 'splice-amulet-v2',
+            name: 'splice-amulet',
+            version: '0.1.24',
+            uploadedAt: '2026-07-02T12:00:00.000Z',
+            packageSize: 960436,
+          },
+          {
+            packageId: 'splice-wallet-v1',
+            name: 'splice-wallet',
+            version: '0.1.10',
+            uploadedAt: '2026-07-01T12:00:00.000Z',
+            packageSize: 950000,
+          },
+          {
+            packageId: 'orphan-package',
+            name: null,
+            version: '1.0.0',
+            uploadedAt: '2026-07-01T12:00:00.000Z',
+            packageSize: 123,
+          },
+        ]),
+      } as never,
+      undefined,
+      {
+        list: jest.fn().mockReturnValue([]),
+      } as never,
+    ) as PqsSummaryService & {
+      search?: (query: string) => Promise<SearchResultsResponse>;
+    };
+
+    const response = await service.search?.('splice');
+
+    expect(response?.packages).toEqual({
+      packageIds: {
+        items: [
+          {
+            packageId: 'splice-amulet-v2',
+            name: 'splice-amulet',
+            version: '0.1.24',
+          },
+          {
+            packageId: 'splice-wallet-v1',
+            name: 'splice-wallet',
+            version: '0.1.10',
+          },
+        ],
+        displayedCount: 2,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      packageNames: {
+        items: [
+          {
+            name: 'splice-amulet',
+            packages: [{ packageId: 'splice-amulet-v2', version: '0.1.24' }],
+          },
+          {
+            name: 'splice-wallet',
+            packages: [{ packageId: 'splice-wallet-v1', version: '0.1.10' }],
+          },
+        ],
+        displayedCount: 2,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+    });
+  });
+
+  it('marks updates as partial when one node search fails and another succeeds', async () => {
+    const participant1Query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '\\xabc123',
+            event_offset: '39',
+            record_time: '2026-07-02T12:00:00.000Z',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ update_id: '\\xabc123', parties: ['Alice'] }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ parties: [] }] });
+    const participant2Query = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('participant-2 update query failed'))
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ parties: [] }] });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      undefined,
+      {
+        listPackages: jest.fn().mockReturnValue([]),
+      } as never,
+      undefined,
+      {
+        list: jest.fn().mockReturnValue([
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
+        ]),
+      } as never,
+    ) as PqsSummaryService & {
+      search?: (query: string) => Promise<SearchResultsResponse>;
+    };
+
+    const response = await service.search?.('39');
+
+    expect(response?.updates.status).toBe('partial');
+    expect(response?.updates.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('Participant 2')]),
+    );
+    expect(response?.updates.items).toEqual([
+      {
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        eventOffset: '39',
+        updateId: 'abc123',
+        recordTime: '2026-07-02T12:00:00.000Z',
+        parties: ['Alice'],
+      },
+    ]);
   });
 
   it('returns all cached packages for a package name', async () => {
@@ -713,6 +1156,19 @@ describe('PqsSummaryService', () => {
                 templateId: 'Splice.Amulet:SvRewardCoupon',
                 moduleName: 'Splice.Amulet',
                 entityName: 'SvRewardCoupon',
+                createType: {
+                  kind: 'record',
+                  label: 'Splice.Amulet:SvRewardCoupon',
+                  fields: [
+                    {
+                      name: 'dso',
+                      type: {
+                        kind: 'builtin',
+                        label: 'Party',
+                      },
+                    },
+                  ],
+                },
               },
             ],
             dataTypes: [
@@ -720,6 +1176,19 @@ describe('PqsSummaryService', () => {
                 typeId: 'Splice.Amulet:AmuletRules',
                 moduleName: 'Splice.Amulet',
                 entityName: 'AmuletRules',
+                definition: {
+                  kind: 'record',
+                  label: 'Splice.Amulet:AmuletRules',
+                  fields: [
+                    {
+                      name: 'transferConfigUsd',
+                      type: {
+                        kind: 'builtin',
+                        label: 'Text',
+                      },
+                    },
+                  ],
+                },
               },
             ],
             moduleCount: 1,
@@ -1052,6 +1521,68 @@ mode: 'pqs_only',
     );
   });
 
+  it('applies template filters when fetching recent updates from normalized participant event tables', async () => {
+    const missingLegacyRelation = Object.assign(
+      new Error('relation "participant.lapi_events_create" does not exist'),
+      { code: '42P01' },
+    );
+    const query = jest
+      .fn()
+      .mockRejectedValueOnce(missingLegacyRelation)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            event_offset: '9130',
+            record_time: '2026-07-03T12:00:00.000Z',
+          },
+        ],
+      })
+      .mockRejectedValueOnce(missingLegacyRelation)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            parties: ['Alice'],
+          },
+        ],
+      });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchRecentUpdates(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+role: 'participant',
+mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        {
+          limit: 25,
+          templates: ['Splice.DsoRules:DsoRules'],
+        },
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        updates: [
+          expect.objectContaining({
+            eventOffset: '9130',
+          }),
+        ],
+      }),
+    );
+
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("where update_event_templates.template_id = 'Splice.DsoRules:DsoRules'"),
+    );
+  });
+
   it('pushes hide Splice filtering into normalized recent updates queries without per-update event lookups', async () => {
     const missingLegacyRelation = Object.assign(
       new Error('relation "participant.lapi_events_create" does not exist'),
@@ -1215,6 +1746,346 @@ mode: 'pqs_only',
         },
       ],
     });
+  });
+
+  it('paginates merged global updates with opaque cross-node cursors', async () => {
+    const service = new PqsSummaryService({
+      getClient: () => ({ query: jest.fn() }),
+    } as never);
+
+    jest.spyOn(service, 'fetchRecentUpdates').mockImplementation(
+      async (node, options) => {
+        expect(options).toEqual(
+          expect.objectContaining({
+            limit: 4,
+            parties: ['Alice'],
+            mode: 'and',
+            hideSplice: true,
+          }),
+        );
+        expect(options).not.toHaveProperty('before', '202');
+        expect(options).not.toHaveProperty('after', '202');
+
+        if (node.id === 'participant-1') {
+          return {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            limit: 4,
+            nextBefore: null,
+            nextAfter: null,
+            updates: [
+              {
+                eventOffset: '103',
+                updateId: '00000000000000000000000000000003',
+                recordTime: '2026-07-01T12:03:00.000Z',
+                parties: ['Alice'],
+              },
+              {
+                eventOffset: '101',
+                updateId: '00000000000000000000000000000001',
+                recordTime: '2026-07-01T12:01:00.000Z',
+                parties: ['Alice'],
+              },
+              {
+                eventOffset: '099',
+                updateId: '00000000000000000000000000000000',
+                recordTime: '2026-07-01T11:59:00.000Z',
+                parties: ['Alice'],
+              },
+            ],
+          };
+        }
+
+        return {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          limit: 4,
+          nextBefore: null,
+          nextAfter: null,
+          updates: [
+            {
+              eventOffset: '202',
+              updateId: '00000000000000000000000000000012',
+              recordTime: '2026-07-01T12:02:00.000Z',
+              parties: ['Alice'],
+            },
+            {
+              eventOffset: '201',
+              updateId: '00000000000000000000000000000011',
+              recordTime: '2026-07-01T12:01:00.000Z',
+              parties: ['Alice'],
+            },
+            {
+              eventOffset: '198',
+              updateId: '00000000000000000000000000000010',
+              recordTime: '2026-07-01T11:58:00.000Z',
+              parties: ['Alice'],
+            },
+          ],
+        };
+      },
+    );
+
+    const nodes = [
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant' as const,
+        mode: 'pqs_only' as const,
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant' as const,
+        mode: 'pqs_only' as const,
+        ledgerLabel: 'Retail Ledger 2',
+        pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL' },
+      },
+    ];
+
+    const firstPage = await service.fetchGlobalRecentUpdates(nodes, 2, {
+      parties: ['Alice'],
+      mode: 'and',
+      hideSplice: true,
+    });
+
+    expect(firstPage.updates.map((update) => `${update.nodeId}:${update.eventOffset}`)).toEqual([
+      'participant-1:103',
+      'participant-2:202',
+    ]);
+    expect(firstPage.nextBefore).toEqual(expect.any(String));
+    expect(firstPage.nextBefore).not.toBe('202');
+    expect(firstPage.nextAfter).toBeNull();
+
+    const olderPage = await service.fetchGlobalRecentUpdates(nodes, 2, {
+      before: firstPage.nextBefore ?? undefined,
+      parties: ['Alice'],
+      mode: 'and',
+      hideSplice: true,
+    });
+
+    expect(olderPage.updates.map((update) => `${update.nodeId}:${update.eventOffset}`)).toEqual([
+      'participant-1:101',
+      'participant-2:201',
+    ]);
+    expect(olderPage.nextAfter).toEqual(expect.any(String));
+    expect(olderPage.nextBefore).toEqual(expect.any(String));
+  });
+
+  it('returns active contracts newest first with an older-page cursor', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          contract_id: '00c',
+          template_id: 'Main:C',
+          created_record_time: '2026-07-01T12:02:00.000Z',
+          created_event_offset: '103',
+        },
+        {
+          contract_id: '00b',
+          template_id: 'Main:B',
+          created_record_time: '2026-07-01T12:01:00.000Z',
+          created_event_offset: '102',
+        },
+        {
+          contract_id: '00a',
+          template_id: 'Main:A',
+          created_record_time: '2026-07-01T12:00:00.000Z',
+          created_event_offset: '101',
+        },
+      ],
+    });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchNodeContracts(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        { limit: 2 },
+      ),
+    ).resolves.toEqual(typedNodeContractsFixture);
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by create_event_offset::numeric desc'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('limit 3'));
+  });
+
+  it('reverses newer ACS pages when an after cursor is used', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          contract_id: '00b',
+          template_id: 'Main:B',
+          created_record_time: '2026-07-01T12:01:00.000Z',
+          created_event_offset: '102',
+        },
+        {
+          contract_id: '00c',
+          template_id: 'Main:C',
+          created_record_time: '2026-07-01T12:02:00.000Z',
+          created_event_offset: '103',
+        },
+        {
+          contract_id: '00d',
+          template_id: 'Main:D',
+          created_record_time: '2026-07-01T12:03:00.000Z',
+          created_event_offset: '104',
+        },
+      ],
+    });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchNodeContracts(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        { limit: 2, after: '101' },
+      ),
+    ).resolves.toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 2,
+      nextBefore: '102',
+      nextAfter: '103',
+      contracts: [
+        {
+          contractId: '00c',
+          templateId: 'Main:C',
+          createdRecordTime: '2026-07-01T12:02:00.000Z',
+        },
+        {
+          contractId: '00b',
+          templateId: 'Main:B',
+          createdRecordTime: '2026-07-01T12:01:00.000Z',
+        },
+      ],
+    });
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('create_event_offset::numeric > 101'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by create_event_offset::numeric asc'));
+  });
+
+  it('adds template and hide-splice filters to the ACS query', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          contract_id: '00b',
+          template_id: 'Main:Asset',
+          created_record_time: '2026-07-01T12:01:00.000Z',
+          created_event_offset: '102',
+        },
+      ],
+    });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { limit: 25, templates: ['Main:Asset'], hideSplice: true },
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') = 'Main:Asset'"),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '') not like 'Splice.%'"),
+    );
+  });
+
+  it('joins ACS party filters with OR by default', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          contract_id: '00b',
+          template_id: 'Main:Asset',
+          created_record_time: '2026-07-01T12:01:00.000Z',
+          created_event_offset: '102',
+        },
+      ],
+    });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { limit: 25, parties: ['Alice', 'Bob'] },
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("array['Alice', 'p|Alice']::text[] && create_events.witnesses"),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("array['Bob', 'p|Bob']::text[] && create_events.witnesses"),
+    );
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('\n      or '));
+  });
+
+  it('joins ACS party filters with AND when requested', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          contract_id: '00b',
+          template_id: 'Main:Asset',
+          created_record_time: '2026-07-01T12:01:00.000Z',
+          created_event_offset: '102',
+        },
+      ],
+    });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { limit: 25, parties: ['Alice', 'Bob'], partyMode: 'and' },
+    );
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('\n      and '));
   });
 
   it('applies global AND party filters to the updates query', async () => {

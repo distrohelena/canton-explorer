@@ -116,6 +116,19 @@ const typedPackageDetailFixture = {
       templateId: 'Splice.Amulet:SvRewardCoupon',
       moduleName: 'Splice.Amulet',
       entityName: 'SvRewardCoupon',
+      createType: {
+        kind: 'record',
+        label: 'Splice.Amulet:SvRewardCoupon',
+        fields: [
+          {
+            name: 'dso',
+            type: {
+              kind: 'builtin',
+              label: 'Party',
+            },
+          },
+        ],
+      },
     },
   ],
   dataTypes: [
@@ -123,6 +136,19 @@ const typedPackageDetailFixture = {
       typeId: 'Splice.Amulet:AmuletRules',
       moduleName: 'Splice.Amulet',
       entityName: 'AmuletRules',
+      definition: {
+        kind: 'record',
+        label: 'Splice.Amulet:AmuletRules',
+        fields: [
+          {
+            name: 'transferConfigUsd',
+            type: {
+              kind: 'builtin',
+              label: 'Text',
+            },
+          },
+        ],
+      },
     },
   ],
 } satisfies PackageDetailResponse;
@@ -1042,5 +1068,104 @@ describe('fetchNodes', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:3100/api/parties/Alice/contracts?before=cursor-contract-0&template=Main%3AAsset&hideSplice=true&limit=25',
     );
+  });
+
+  it('loads grouped search results from the backend API using the trimmed query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        query: 'Alice',
+        updates: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        contracts: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        parties: {
+          items: [{ partyId: 'Alice', nodeIds: ['participant-1'] }],
+          displayedCount: 1,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        packages: {
+          packageIds: {
+            items: [],
+            displayedCount: 0,
+            truncated: false,
+            status: 'ok',
+            warnings: [],
+          },
+          packageNames: {
+            items: [],
+            displayedCount: 0,
+            truncated: false,
+            status: 'ok',
+            warnings: [],
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchSearchResults = (
+      api as {
+        fetchSearchResults?: (query: string) => Promise<unknown>;
+      }
+    ).fetchSearchResults;
+
+    expect(fetchSearchResults).toBeTypeOf('function');
+
+    const results = await fetchSearchResults?.(' Alice ');
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/search?q=Alice');
+    expect(results).toEqual({
+      query: 'Alice',
+      updates: {
+        items: [],
+        displayedCount: 0,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      contracts: {
+        items: [],
+        displayedCount: 0,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      parties: {
+        items: [{ partyId: 'Alice', nodeIds: ['participant-1'] }],
+        displayedCount: 1,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      packages: {
+        packageIds: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        packageNames: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+      },
+    });
   });
 });

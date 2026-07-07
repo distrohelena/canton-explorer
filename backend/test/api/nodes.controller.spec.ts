@@ -35,10 +35,44 @@ const typedPackageDetailFixture = {
   dataTypeCount: 5,
   modules: ['Main.Module', 'Main.Other'],
   templates: [
-    { templateId: 'Main.Module:Asset', moduleName: 'Main.Module', entityName: 'Asset' },
+    {
+      templateId: 'Main.Module:Asset',
+      moduleName: 'Main.Module',
+      entityName: 'Asset',
+      createType: {
+        kind: 'record',
+        label: 'Main.Module:Asset',
+        fields: [
+          {
+            name: 'owner',
+            type: {
+              kind: 'builtin',
+              label: 'Party',
+            },
+          },
+        ],
+      },
+    },
   ],
   dataTypes: [
-    { typeId: 'Main.Module:AssetData', moduleName: 'Main.Module', entityName: 'AssetData' },
+    {
+      typeId: 'Main.Module:AssetData',
+      moduleName: 'Main.Module',
+      entityName: 'AssetData',
+      definition: {
+        kind: 'record',
+        label: 'Main.Module:AssetData',
+        fields: [
+          {
+            name: 'description',
+            type: {
+              kind: 'builtin',
+              label: 'Text',
+            },
+          },
+        ],
+      },
+    },
   ],
 } satisfies PackageDetailResponse;
 
@@ -257,6 +291,7 @@ describe('NodesController', () => {
     fetchRecentUpdates: jest.Mock;
     fetchUpdateDetail: jest.Mock;
     fetchContractDetail: jest.Mock;
+    search: jest.Mock;
     fetchPackageDetail: jest.Mock;
     fetchPackagesByName: jest.Mock;
     fetchTemplates: jest.Mock;
@@ -358,6 +393,46 @@ describe('NodesController', () => {
         archivedEventOffset: null,
         archivedRecordTime: null,
         contractData: null,
+      }),
+      search: jest.fn().mockResolvedValue({
+        query: 'Alice',
+        updates: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        contracts: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        parties: {
+          items: [{ partyId: 'Alice', nodeIds: ['participant-1'] }],
+          displayedCount: 1,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        packages: {
+          packageIds: {
+            items: [],
+            displayedCount: 0,
+            truncated: false,
+            status: 'ok',
+            warnings: [],
+          },
+          packageNames: {
+            items: [],
+            displayedCount: 0,
+            truncated: false,
+            status: 'ok',
+            warnings: [],
+          },
+        },
       }),
       fetchPackageDetail: jest.fn().mockResolvedValue(typedPackageDetailFixture),
       fetchPackagesByName: jest.fn().mockResolvedValue(typedPackageFamilyFixture),
@@ -640,6 +715,64 @@ describe('NodesController', () => {
 
     expect(pqsSummaryService.fetchTemplates).toHaveBeenCalled();
     expect(response).toEqual(typedTemplateFilterFixture);
+  });
+
+  it('exposes a grouped search controller entry point', () => {
+    const maybeController = controller as {
+      search?: (query?: string) => Promise<unknown>;
+    };
+
+    expect(typeof maybeController.search).toBe('function');
+  });
+
+  it('returns grouped search results from the summary service', async () => {
+    const maybeController = controller as {
+      search?: (query?: string) => Promise<unknown>;
+    };
+
+    const response = await maybeController.search?.(' Alice ');
+
+    expect(pqsSummaryService.search).toHaveBeenCalledWith(' Alice ');
+    expect(response).toEqual({
+      query: 'Alice',
+      updates: {
+        items: [],
+        displayedCount: 0,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      contracts: {
+        items: [],
+        displayedCount: 0,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      parties: {
+        items: [{ partyId: 'Alice', nodeIds: ['participant-1'] }],
+        displayedCount: 1,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      packages: {
+        packageIds: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+        packageNames: {
+          items: [],
+          displayedCount: 0,
+          truncated: false,
+          status: 'ok',
+          warnings: [],
+        },
+      },
+    });
   });
 
   it('exposes a party detail controller entry point', () => {

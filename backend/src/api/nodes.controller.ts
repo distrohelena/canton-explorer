@@ -55,6 +55,15 @@ export class NodesController {
     );
   }
 
+  @Get('/search')
+  search(@Query('q') query?: string) {
+    return (
+      this.pqsSummaryService as PqsSummaryService & {
+        search: (searchQuery: string) => unknown;
+      }
+    ).search(query ?? '');
+  }
+
   @Get('/nodes/:id')
   getNode(@Param('id') id: string) {
     const node = this.cacheService.get(id);
