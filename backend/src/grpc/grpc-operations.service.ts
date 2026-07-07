@@ -108,12 +108,14 @@ export class GrpcOperationsService {
 
     try {
       return await this.withClient(node, async (client) => {
-        const [partyToParticipantResponse, partyToKeyMappingResponse] = await Promise.all([
-          client.topologyManagerReadService.listPartyToParticipantAsync({
+        const [partyTopologyResponse, keyOwnerResponse] = await Promise.all([
+          client.topologyAggregationService.listPartiesAsync({
             filterParty: partyId,
+            synchronizerIds: [],
           }),
-          client.topologyManagerReadService.listPartyToKeyMappingAsync({
-            filterParty: partyId,
+          client.topologyAggregationService.listKeyOwnersAsync({
+            filterKeyOwnerUid: partyId,
+            synchronizerIds: [],
           }),
         ]);
 
@@ -122,27 +124,49 @@ export class GrpcOperationsService {
           label: node.label,
           status: 'ok',
           errorMessage: null,
-          partyToParticipants: (partyToParticipantResponse.results ?? [])
-            .filter((result) => result.item?.party === partyId)
+          partyToParticipants: (partyTopologyResponse.results ?? [])
+            .filter((result) => result.party === partyId)
             .flatMap((result) =>
-              (result.item?.participants ?? []).map((participant) => ({
+              (result.participants ?? []).map((participant) => ({
                 participantId: this.extractParticipantId(participant.participantUid),
                 participantUid: this.nullIfEmptyString(participant.participantUid),
-                permission: this.nullIfEmptyString(participant.permission),
-                synchronizerIds: [],
+                permission: this.joinDistinctValues(
+                  (participant.synchronizers ?? []).map((synchronizer) => synchronizer.permission),
+                ),
+                synchronizerIds: this.uniqueNonEmptyStrings(
+                  (participant.synchronizers ?? []).map(
+                    (synchronizer) =>
+                      synchronizer.synchronizerId ?? synchronizer.physicalSynchronizerId,
+                  ),
+                ),
               })),
             ),
-          partyToKeyMappings: (partyToKeyMappingResponse.results ?? [])
-            .filter((result) => result.item?.party === partyId)
-            .flatMap((result) =>
-              (result.item?.signingKeys ?? []).map((signingKey) => ({
-                keyFingerprint: this.nullIfEmptyString(
-                  result.context?.signedByFingerprints?.[0],
-                ),
-                purpose: this.nullIfEmptyString(signingKey.usage?.[0]),
+          partyToKeyMappings: (keyOwnerResponse.results ?? [])
+            .filter((result) => result.keyOwner === partyId)
+            .flatMap((result) => [
+              ...(result.signingKeys ?? []).map((signingKey) => ({
+                keyFingerprint: this.bytesToHex(signingKey.publicKey),
+                purpose: this.joinDistinctValues(signingKey.usage ?? []),
                 keyType: this.nullIfEmptyString(signingKey.scheme),
-                synchronizerIds: [],
+                synchronizerIds: this.uniqueNonEmptyStrings([
+                  result.synchronizerId ?? result.physicalSynchronizerId,
+                ]),
               })),
+              ...(result.encryptionKeys ?? []).map((encryptionKey) => ({
+                keyFingerprint: this.bytesToHex(encryptionKey.publicKey),
+                purpose: 'encryption',
+                keyType: this.nullIfEmptyString(encryptionKey.scheme),
+                synchronizerIds: this.uniqueNonEmptyStrings([
+                  result.synchronizerId ?? result.physicalSynchronizerId,
+                ]),
+              })),
+            ])
+            .filter(
+              (mapping) =>
+                mapping.keyFingerprint !== null
+                || mapping.purpose !== null
+                || mapping.keyType !== null
+                || mapping.synchronizerIds.length > 0,
             ),
         };
       });
@@ -331,6 +355,29 @@ export class GrpcOperationsService {
 
   private nullIfEmptyString(value: unknown): string | null {
     return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  }
+
+  private uniqueNonEmptyStrings(values: unknown[]): string[] {
+    return Array.from(
+      new Set(
+        values
+          .map((value) => this.nullIfEmptyString(value))
+          .filter((value): value is string => value !== null),
+      ),
+    );
+  }
+
+  private joinDistinctValues(values: unknown[]): string | null {
+    const normalizedValues = this.uniqueNonEmptyStrings(values);
+    return normalizedValues.length > 0 ? normalizedValues.join(', ') : null;
+  }
+
+  private bytesToHex(value: Uint8Array | null | undefined): string | null {
+    if (!value || value.length === 0) {
+      return null;
+    }
+
+    return Buffer.from(value).toString('hex');
   }
 
   private extractParticipantId(participantUid: unknown): string | null {

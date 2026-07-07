@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import ContractsBrowser from '../components/ContractsBrowser.vue';
 import UpdatesBrowser from '../components/UpdatesBrowser.vue';
 import { useActivityHistory } from '../composables/useActivityHistory';
 import type { ActivitySample, ActivitySeries } from '../types/activity';
@@ -7,6 +8,7 @@ import type { ActivitySample, ActivitySeries } from '../types/activity';
 const { history, loading, error, refresh, selectedDays, selectDays } = useActivityHistory();
 const windowOptions = [1, 7, 30] as const;
 const updatesBrowser = ref<{ reload: () => Promise<void> } | null>(null);
+const contractsBrowser = ref<{ reload: () => Promise<void> } | null>(null);
 
 const nodes = computed(() => history.value?.nodes ?? []);
 const windowMinutesLabel = computed(() => history.value?.windowMinutes ?? 0);
@@ -14,7 +16,11 @@ const chartWidth = 320;
 const chartHeight = 96;
 
 async function refreshPage() {
-  await Promise.all([refresh(), updatesBrowser.value?.reload() ?? Promise.resolve()]);
+  await Promise.all([
+    refresh(),
+    updatesBrowser.value?.reload() ?? Promise.resolve(),
+    contractsBrowser.value?.reload() ?? Promise.resolve(),
+  ]);
 }
 
 interface ChartDomain {
@@ -394,6 +400,23 @@ function verticalScaleLabels(
           table-aria-label="Latest updates across all nodes"
           spinner-label="Updating latest updates"
           row-class="activity-home__updates-row"
+        />
+      </section>
+
+      <section class="activity-home__updates-section">
+        <ContractsBrowser
+          ref="contractsBrowser"
+          scope="global"
+          path="/"
+          title="Latest Contracts"
+          eyebrow="Contracts"
+          query-prefix="contracts"
+          show-node-column
+          advanced-filter-id="home-contracts-advanced-filter"
+          loading-message="Loading latest contracts..."
+          empty-message="No contracts available yet."
+          table-aria-label="Latest contracts across all nodes"
+          spinner-label="Updating latest contracts"
         />
       </section>
 

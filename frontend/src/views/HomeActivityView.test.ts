@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { nextTick, reactive, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomeActivityView from './HomeActivityView.vue';
-import { fetchLatestUpdates, fetchTemplates } from '../lib/api';
+import { fetchLatestContracts, fetchLatestUpdates, fetchTemplates } from '../lib/api';
 
 const pushMock = vi.fn();
 const routeState = reactive<{
@@ -49,6 +49,27 @@ const selectDays = vi.fn(async (days: 1 | 7 | 30) => {
 });
 
 vi.mock('../lib/api', () => ({
+  fetchLatestContracts: vi.fn().mockResolvedValue({
+    limit: 25,
+    nextBefore: 'contract-cursor-before-1',
+    nextAfter: null,
+    contracts: [
+      {
+        nodeId: 'participant-2',
+        label: 'Participant 2',
+        contractId: '00def',
+        templateId: 'Main:Wallet',
+        recordTime: '2026-07-01T12:02:00.000Z',
+      },
+      {
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        contractId: '00abc',
+        templateId: 'Main:Asset',
+        recordTime: '2026-07-01T12:00:00.000Z',
+      },
+    ],
+  }),
   fetchTemplates: vi.fn().mockResolvedValue({
     templates: [
       { templateId: 'Main:Asset' },
@@ -192,6 +213,27 @@ describe('HomeActivityView', () => {
         },
       ],
     });
+    vi.mocked(fetchLatestContracts).mockResolvedValue({
+      limit: 25,
+      nextBefore: 'contract-cursor-before-1',
+      nextAfter: null,
+      contracts: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          contractId: '00def',
+          templateId: 'Main:Wallet',
+          recordTime: '2026-07-01T12:02:00.000Z',
+        },
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          recordTime: '2026-07-01T12:00:00.000Z',
+        },
+      ],
+    });
   });
 
   it('renders per-node activity history on the home page', async () => {
@@ -263,11 +305,13 @@ describe('HomeActivityView', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Latest Updates' })).toBeInTheDocument();
-    expect(await screen.findByText('Participant 2')).toBeInTheDocument();
     expect(fetchLatestUpdates).toHaveBeenCalledWith(25);
-    const updatesTable = screen.getByRole('table', { name: 'Latest updates across all nodes' });
+    const updatesTable = await screen.findByRole('table', { name: 'Latest updates across all nodes' });
     const updatesScope = within(updatesTable);
+    const updatesSection = screen.getByRole('heading', { name: 'Latest Updates' }).closest('section')!;
+    const updatesSectionScope = within(updatesSection);
 
+    expect(updatesScope.getByText('Participant 2')).toBeInTheDocument();
     expect(updatesScope.getByText('000000000000000002')).toBeInTheDocument();
     expect(updatesScope.getByText('Bob')).toBeInTheDocument();
     expect(updatesScope.getByText('Participant 1')).toBeInTheDocument();
@@ -281,15 +325,75 @@ describe('HomeActivityView', () => {
     expect(firstRow?.children).toHaveLength(4);
     expect(container.querySelector('a[href="/parties/Bob"]')).not.toBeNull();
     expect(container.querySelector('a[href="/parties/Alice"]')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(updatesSectionScope.getByRole('button', { name: 'Advanced Filter' })).toBeInTheDocument();
+    expect(updatesSectionScope.getByRole('button', { name: 'Newer' })).toBeDisabled();
+    expect(updatesSectionScope.getByRole('button', { name: 'Older' })).not.toBeDisabled();
 
     await fireEvent.click(firstRow as Element);
 
     expect(pushMock).toHaveBeenCalledWith(
       '/nodes/participant-2/updates/000000000000000002?from=updates',
     );
+  });
+
+  it('renders a merged latest-contracts list across all nodes on the home page', async () => {
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+      function MockDateTimeFormat(
+        _locale?: string | string[],
+        options?: Intl.DateTimeFormatOptions,
+      ) {
+        return {
+          format: (value: string | number | Date) => {
+            const resolvedOptions = options ?? {};
+            const isoValue = new Date(value).toISOString();
+
+            if ('dateStyle' in resolvedOptions && resolvedOptions.dateStyle === 'medium') {
+              return 'Jul 1, 2026';
+            }
+
+            if ('timeStyle' in resolvedOptions && resolvedOptions.timeStyle === 'medium') {
+              return isoValue.includes('12:02:00.000Z') ? '12:02:00 PM' : '12:00:00 PM';
+            }
+
+            return 'Axis';
+          },
+        } as unknown as Intl.DateTimeFormat;
+      } as unknown as typeof Intl.DateTimeFormat,
+    );
+
+    const { container } = render(HomeActivityView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Latest Contracts' })).toBeInTheDocument();
+    expect(fetchLatestContracts).toHaveBeenCalled();
+    expect(screen.getAllByText('PQS').at(-1)).toHaveAttribute('title', 'Data sourced from PQS');
+
+    const contractsTable = await screen.findByRole('table', { name: 'Latest contracts across all nodes' });
+    const contractsScope = within(contractsTable);
+
+    expect(contractsScope.getByText('Participant 2')).toBeInTheDocument();
+    expect(contractsScope.getByText('00def')).toBeInTheDocument();
+    expect(
+      contractsScope.getByText((_, element) => element?.textContent === 'MainWallet'),
+    ).toBeInTheDocument();
+    expect(contractsScope.getByText('Participant 1')).toBeInTheDocument();
+    expect(contractsScope.getByText('00abc')).toBeInTheDocument();
+    expect(
+      contractsScope.getByText((_, element) => element?.textContent === 'MainAsset'),
+    ).toBeInTheDocument();
+    expect(contractsScope.getAllByText('Jul 1, 2026')).toHaveLength(2);
+    expect(contractsScope.getByText('12:02:00 PM')).toBeInTheDocument();
+    expect(contractsScope.getByText('12:00:00 PM')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/nodes/participant-2/contracts/00def"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/nodes/participant-1/contracts/00abc"]')).not.toBeNull();
   });
 
   it('pages the merged latest-updates feed with opaque global cursors', async () => {
@@ -376,9 +480,12 @@ describe('HomeActivityView', () => {
       },
     });
 
-    expect(await screen.findByText('Participant 2')).toBeInTheDocument();
+    const updatesSection = screen.getByRole('heading', { name: 'Latest Updates' }).closest('section')!;
+    const updatesSectionScope = within(updatesSection);
+    const updatesTable = await screen.findByRole('table', { name: 'Latest updates across all nodes' });
+    expect(within(updatesTable).getByText('Participant 2')).toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+    await fireEvent.click(updatesSectionScope.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
       expect(fetchLatestUpdates).toHaveBeenLastCalledWith(25, {
@@ -386,8 +493,8 @@ describe('HomeActivityView', () => {
       }),
     );
     expect(await screen.findByText('Carol')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
+    expect(updatesSectionScope.getByRole('button', { name: 'Older' })).toBeDisabled();
+    expect(updatesSectionScope.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
     expect(routeState.query.before).toBe('cursor-before-1');
   });
 
@@ -413,7 +520,10 @@ describe('HomeActivityView', () => {
     expect(await screen.findByRole('heading', { name: 'Latest Updates' })).toBeInTheDocument();
     expect(screen.queryByText('Advanced Filter Parameters')).not.toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    const updatesSection = screen.getByRole('heading', { name: 'Latest Updates' }).closest('section')!;
+    const updatesSectionScope = within(updatesSection);
+
+    await fireEvent.click(updatesSectionScope.getByRole('button', { name: 'Advanced Filter' }));
 
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
     await fireEvent.update(screen.getByPlaceholderText('Party ID'), 'Alice');
@@ -515,7 +625,10 @@ describe('HomeActivityView', () => {
 
     expect(await screen.findByRole('heading', { name: 'Latest Updates' })).toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    const updatesSection = screen.getByRole('heading', { name: 'Latest Updates' }).closest('section')!;
+    const updatesSectionScope = within(updatesSection);
+
+    await fireEvent.click(updatesSectionScope.getByRole('button', { name: 'Advanced Filter' }));
     await waitFor(() => expect(fetchTemplates).toHaveBeenCalled());
 
     const input = screen.getByRole('combobox', { name: 'Template ID' });

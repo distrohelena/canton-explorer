@@ -32,6 +32,35 @@ type TopologyPartyToKeyMappingItem = {
   party?: string;
   signingKeys?: TopologySigningKey[];
 };
+type AggregatedTopologyPartySynchronizer = {
+  synchronizerId?: string;
+  permission?: unknown;
+  physicalSynchronizerId?: string;
+};
+type AggregatedTopologyPartyParticipant = {
+  participantUid?: string;
+  synchronizers?: AggregatedTopologyPartySynchronizer[];
+};
+type AggregatedTopologyPartyResult = {
+  party?: string;
+  participants?: AggregatedTopologyPartyParticipant[];
+};
+type AggregatedTopologySigningKey = {
+  usage?: string[];
+  scheme?: string;
+  publicKey?: Uint8Array;
+};
+type AggregatedTopologyEncryptionKey = {
+  scheme?: string;
+  publicKey?: Uint8Array;
+};
+type AggregatedTopologyKeyOwnerResult = {
+  keyOwner?: string;
+  synchronizerId?: string;
+  physicalSynchronizerId?: string;
+  signingKeys?: AggregatedTopologySigningKey[];
+  encryptionKeys?: AggregatedTopologyEncryptionKey[];
+};
 type LedgerPackageResponse = { archivePayload: Uint8Array };
 type SdkCantonClient = {
   healthService: {
@@ -100,6 +129,26 @@ type SdkCantonClient = {
         context?: TopologyMappingContext;
         item?: TopologyPartyToKeyMappingItem;
       }>;
+    }>;
+  };
+  topologyAggregationService: {
+    listPartiesAsync(input: {
+      asOf?: Date;
+      limit?: number;
+      synchronizerIds: string[];
+      filterParty?: string;
+      filterParticipant?: string;
+    }): Promise<{
+      results?: AggregatedTopologyPartyResult[];
+    }>;
+    listKeyOwnersAsync(input: {
+      asOf?: Date;
+      limit?: number;
+      synchronizerIds: string[];
+      filterKeyOwnerType?: string;
+      filterKeyOwnerUid?: string;
+    }): Promise<{
+      results?: AggregatedTopologyKeyOwnerResult[];
     }>;
   };
   disposeAsync?(): Promise<void>;

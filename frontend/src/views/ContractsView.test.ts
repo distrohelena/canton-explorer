@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ContractsView from './ContractsView.vue';
-import { fetchNodeContracts, fetchNodeTemplates, fetchNodes } from '../lib/api';
+import { fetchLatestContracts, fetchNodeContracts, fetchNodeTemplates, fetchNodes } from '../lib/api';
 
 vi.mock('../lib/api', () => ({
+  fetchLatestContracts: vi.fn(),
   fetchNodes: vi.fn(),
   fetchNodeContracts: vi.fn(),
   fetchNodeTemplates: vi.fn(),
@@ -77,6 +78,117 @@ describe('ContractsView', () => {
     await renderAt('/contracts');
 
     expect(screen.getByText('Loading contracts...')).toBeInTheDocument();
+  });
+
+  it('shows an All Nodes selector first and switches to the global contracts browser', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: null,
+          reachable: false,
+          healthCheckImplemented: false,
+          servingStatus: null,
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger',
+          pqsDatabase: 'participant_1',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: false, checkedAt: '', latencyMs: null, message: null },
+        },
+      },
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+        ledgerLabel: 'Retail Ledger 2',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: 'localhost:5012',
+          reachable: true,
+          healthCheckImplemented: true,
+          servingStatus: 'SERVING',
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger 2',
+          pqsDatabase: 'participant_2',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+        },
+      },
+    ]);
+    vi.mocked(fetchNodeContracts).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          createdRecordTime: '2026-07-01T12:00:00.000Z',
+        },
+      ],
+    });
+    vi.mocked(fetchLatestContracts).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          contractId: '00def',
+          templateId: 'Main:Wallet',
+          recordTime: '2026-07-01T12:05:00.000Z',
+        },
+      ],
+    });
+
+    await renderAt('/contracts');
+
+    await screen.findByRole('button', { name: 'Participant 1' });
+
+    const nodeSelector = screen.getByRole('tablist', { name: 'Node selectors' });
+    const buttons = within(nodeSelector).getAllByRole('button');
+    expect(buttons[0]).toHaveTextContent('All Nodes');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'All Nodes' }));
+
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledWith(25, {}));
+    expect(screen.getByRole('button', { name: 'All Nodes' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'All Nodes' })).toBeInTheDocument();
+    const contractsTable = await screen.findByRole('table', { name: 'All node contracts' });
+    expect(within(contractsTable).getByText('Participant 2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '00def' })).toHaveAttribute(
+      'href',
+      '/nodes/participant-2/contracts/00def',
+    );
   });
 
   it('renders a reusable contracts browser with advanced filters and preserves filters across node changes', async () => {

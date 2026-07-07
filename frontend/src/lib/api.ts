@@ -1,6 +1,7 @@
 import type { ActivePartiesResponse } from '../types/active-parties';
 import type { ActivityHistoryResponse } from '../types/activity';
 import type {
+  GlobalContractsResponse,
   NodeContractDetailResponse,
   NodeContractsQueryOptions,
   NodeContractsResponse,
@@ -85,6 +86,45 @@ export function fetchNodeContracts(
 
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
   return fetchJson<NodeContractsResponse>(`/nodes/${id}/contracts${suffix}`);
+}
+
+export function fetchLatestContracts(
+  limit = 25,
+  options?: {
+    before?: string;
+    after?: string;
+    parties?: string[];
+    templates?: string[];
+    partyMode?: 'or' | 'and';
+    hideSplice?: boolean;
+  },
+): Promise<GlobalContractsResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  for (const party of options?.parties ?? []) {
+    if (party.trim()) {
+      params.append('party', party);
+    }
+  }
+  for (const template of options?.templates ?? []) {
+    if (template.trim()) {
+      params.append('template', template);
+    }
+  }
+  if (options?.partyMode) {
+    params.set('partyMode', options.partyMode);
+  }
+  if (options?.hideSplice) {
+    params.set('hideSplice', 'true');
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(limit))));
+
+  return fetchJson<GlobalContractsResponse>(`/contracts?${params.toString()}`);
 }
 
 export function fetchNode(id: string): Promise<NodeSnapshot> {

@@ -144,6 +144,21 @@ export interface NodeContractsResponse {
   contracts: NodeActiveContractSummary[];
 }
 
+export interface GlobalContractSummary {
+  nodeId: string;
+  label: string;
+  contractId: string;
+  templateId: string | null;
+  recordTime: string | null;
+}
+
+export interface GlobalContractsResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  contracts: GlobalContractSummary[];
+}
+
 export interface NodeUpdateDetailMeta {
   update_id: string;
   record_time: string | number | null;

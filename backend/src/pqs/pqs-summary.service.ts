@@ -3,6 +3,7 @@ import type { NodeConfig } from '../config/node-config.schema';
 import { NodeConfigService } from '../config/node-config.service';
 import type {
   ActivePartiesResponse,
+  GlobalContractsResponse,
   GlobalRecentUpdatesResponse,
   NodeContractsResponse,
   NodeContractDetailResponse,
@@ -2936,6 +2937,135 @@ export class PqsSummaryService {
       partyMode: options?.partyMode,
       hideSplice: options?.hideSplice,
     });
+  }
+
+  async fetchGlobalContracts(
+    nodes: NodeConfig[],
+    limit = 25,
+    options?: {
+      before?: string;
+      after?: string;
+      parties?: string[];
+      templates?: string[];
+      partyMode?: string;
+      hideSplice?: boolean;
+    },
+  ): Promise<GlobalContractsResponse> {
+    const normalizedLimit =
+      typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+        ? Math.trunc(limit)
+        : 25;
+    const beforeCursor = decodeGlobalContractCursor(options?.before);
+    const afterCursor = beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
+    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
+    const nodeStates = nodes.map((node) => ({
+      node,
+      nextBefore: undefined as string | undefined,
+      exhausted: false,
+    }));
+    const mergedContractsByKey = new Map<string, GlobalContractsResponse['contracts'][number]>();
+    const activePartyFilters = normalizePartyFilters(options?.parties);
+    const activeTemplateFilters = normalizeTemplateFilters(options?.templates);
+    const partyMode = normalizePartyFilterMode(options?.partyMode);
+    const hideSplice = options?.hideSplice === true;
+
+    const filterContracts = (
+      contracts: GlobalContractsResponse['contracts'],
+    ): GlobalContractsResponse['contracts'] =>
+      contracts.filter((contract) => {
+        if (beforeCursor !== null && compareGlobalMergedContracts(contract, beforeCursor) <= 0) {
+          return false;
+        }
+
+        if (afterCursor !== null && compareGlobalMergedContracts(contract, afterCursor) >= 0) {
+          return false;
+        }
+
+        const normalizedTemplateId = this.normalizeTemplateIdentifier(contract.templateId);
+        if (
+          activeTemplateFilters.length > 0 &&
+          (!normalizedTemplateId || !activeTemplateFilters.includes(normalizedTemplateId))
+        ) {
+          return false;
+        }
+
+        if (hideSplice && normalizedTemplateId?.startsWith('Splice.')) {
+          return false;
+        }
+
+        return true;
+      });
+
+    let filteredContracts: GlobalContractsResponse['contracts'] = [];
+    let hasMoreInDirection = false;
+
+    while (true) {
+      const nodesToFetch = nodeStates.filter((state) => !state.exhausted);
+
+      if (nodesToFetch.length === 0) {
+        break;
+      }
+
+      const responses = await Promise.all(
+        nodesToFetch.map((state) =>
+          this.fetchNodeContracts(state.node, {
+            limit: pageSize,
+            before: state.nextBefore,
+            parties: activePartyFilters.length > 0 ? activePartyFilters : undefined,
+            templates: activeTemplateFilters.length > 0 ? activeTemplateFilters : undefined,
+            partyMode,
+            hideSplice,
+          }),
+        ),
+      );
+
+      responses.forEach((response, index) => {
+        const state = nodesToFetch[index];
+
+        for (const contract of response.contracts) {
+          mergedContractsByKey.set(`${state.node.id}:${contract.contractId}`, {
+            nodeId: state.node.id,
+            label: state.node.label,
+            contractId: contract.contractId,
+            templateId: contract.templateId,
+            recordTime: contract.createdRecordTime,
+          });
+        }
+
+        state.nextBefore = response.nextBefore ?? undefined;
+        state.exhausted = response.nextBefore === null;
+      });
+
+      const sortedContracts = Array.from(mergedContractsByKey.values()).sort(compareGlobalMergedContracts);
+      filteredContracts = filterContracts(sortedContracts);
+      hasMoreInDirection = filteredContracts.length > normalizedLimit;
+
+      if (hasMoreInDirection || nodeStates.every((state) => state.exhausted)) {
+        break;
+      }
+    }
+
+    const contracts = filteredContracts.slice(0, normalizedLimit);
+
+    return {
+      limit: normalizedLimit,
+      nextBefore:
+        contracts.length > 0 && (useAfterCursor || hasMoreInDirection)
+          ? encodeGlobalContractCursor(contracts[contracts.length - 1]!)
+          : null,
+      nextAfter:
+        contracts.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInDirection
+              ? encodeGlobalContractCursor(contracts[0]!)
+              : null
+            : beforeCursor
+              ? encodeGlobalContractCursor(contracts[0]!)
+              : null,
+      contracts,
+    };
   }
 
   async fetchPartyContracts(

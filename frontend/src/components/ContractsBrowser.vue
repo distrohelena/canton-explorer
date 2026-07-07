@@ -3,12 +3,13 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { LocationQueryRaw } from 'vue-router';
 import {
+  fetchLatestContracts,
   fetchNodeContracts,
   fetchNodeTemplates,
   fetchPartyContracts,
   fetchTemplates,
 } from '../lib/api';
-import type { NodeContractsResponse } from '../types/contracts';
+import type { GlobalContractsResponse, NodeContractsResponse } from '../types/contracts';
 import type { PartyContractsResponse } from '../types/parties';
 import ContractsTable from './ContractsTable.vue';
 import QuerySourcePill from './QuerySourcePill.vue';
@@ -16,7 +17,7 @@ import UpdatesAdvancedFilter from './UpdatesAdvancedFilter.vue';
 import UpdatesToolbar from './UpdatesToolbar.vue';
 
 type FilterMode = 'or' | 'and';
-type ContractScope = 'node' | 'party';
+type ContractScope = 'global' | 'node' | 'party';
 
 const props = withDefaults(
   defineProps<{
@@ -49,7 +50,7 @@ const props = withDefaults(
 
 const route = useRoute();
 const router = useRouter();
-const contractsResponse = ref<NodeContractsResponse | PartyContractsResponse | null>(null);
+const contractsResponse = ref<GlobalContractsResponse | NodeContractsResponse | PartyContractsResponse | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(false);
 const showAdvancedFilter = ref(false);
@@ -251,6 +252,30 @@ async function loadContracts() {
       return;
     }
 
+    if (props.scope === 'global') {
+      const options: Parameters<typeof fetchLatestContracts>[1] = {};
+
+      if (before) {
+        options.before = before;
+      }
+      if (after) {
+        options.after = after;
+      }
+      if (parties.length > 0) {
+        options.parties = parties;
+        options.partyMode = partyMode;
+      }
+      if (templates.length > 0) {
+        options.templates = templates;
+      }
+      if (hideSplice) {
+        options.hideSplice = true;
+      }
+
+      contractsResponse.value = await fetchLatestContracts(25, options);
+      return;
+    }
+
     if (props.scope === 'party' && props.partyId) {
       const options: NonNullable<Parameters<typeof fetchPartyContracts>[1]> = { limit: 25 };
 
@@ -278,6 +303,10 @@ async function loadContracts() {
     loading.value = false;
   }
 }
+
+defineExpose({
+  reload: loadContracts,
+});
 
 watch(
   () => [props.scope, props.nodeId, props.partyId],

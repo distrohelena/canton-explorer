@@ -219,6 +219,122 @@ describe('PartiesView', () => {
     expect(fetchNodeLocalParties).toHaveBeenCalledWith('participant-2');
   });
 
+  it('shows an All Nodes selector first and aggregates active parties across nodes', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: null,
+          reachable: false,
+          healthCheckImplemented: false,
+          servingStatus: null,
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger',
+          pqsDatabase: 'participant_1',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: false, checkedAt: '', latencyMs: null, message: null },
+        },
+      },
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+        ledgerLabel: 'Retail Ledger 2',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: 'localhost:5012',
+          reachable: true,
+          healthCheckImplemented: true,
+          servingStatus: 'SERVING',
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger 2',
+          pqsDatabase: 'participant_2',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+        },
+      },
+    ]);
+    vi.mocked(fetchNodeActiveParties)
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        mode: 'pqs_only',
+        parties: ['Bob', 'Alice'],
+      })
+      .mockResolvedValueOnce({
+        nodeId: 'participant-2',
+        label: 'Participant 2',
+        mode: 'pqs_with_grpc',
+        parties: ['Carol'],
+      });
+    vi.mocked(fetchNodeLocalParties).mockResolvedValue({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      parties: ['LocalCarol'],
+      localPartiesStatus: 'ok',
+      localPartiesError: null,
+      localPartiesErrorCode: null,
+      localPartiesErrorDetails: null,
+      localPartiesErrorTid: null,
+    });
+
+    render(PartiesView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    await screen.findByRole('button', { name: 'Participant 1' });
+
+    const nodeSelector = screen.getByRole('tablist', { name: 'Node selectors' });
+    const buttons = within(nodeSelector).getAllByRole('button');
+    expect(buttons[0]).toHaveTextContent('All Nodes');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'All Nodes' }));
+
+    await waitFor(() =>
+      expect(fetchNodeActiveParties).toHaveBeenCalledTimes(2),
+    );
+    expect(fetchNodeActiveParties).toHaveBeenLastCalledWith('participant-2');
+    expect(screen.getByRole('button', { name: 'All Nodes' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'All Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
+    expect(screen.getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
+    expect(screen.getByRole('link', { name: 'Carol' })).toHaveAttribute('href', '/parties/Carol');
+  });
+
   it('shows a grpc error message instead of the empty-state copy when local party loading fails', async () => {
     vi.mocked(fetchNodes).mockResolvedValue([
       {

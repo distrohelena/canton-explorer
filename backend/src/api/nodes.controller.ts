@@ -55,6 +55,33 @@ export class NodesController {
     );
   }
 
+  @Get('/contracts')
+  listGlobalContracts(
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('party') party?: string | string[],
+    @Query('template') template?: string | string[],
+    @Query('partyMode') partyMode?: string,
+    @Query('mode') mode?: string,
+    @Query('hideSplice') hideSplice?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    return this.pqsSummaryService.fetchGlobalContracts(
+      this.configService.list(),
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      {
+        before,
+        after,
+        parties: Array.isArray(party) ? party : party ? [party] : undefined,
+        templates: Array.isArray(template) ? template : template ? [template] : undefined,
+        partyMode: partyMode ?? mode,
+        hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      },
+    );
+  }
+
   @Get('/search')
   search(@Query('q') query?: string) {
     return (

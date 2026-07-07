@@ -102,52 +102,58 @@ describe('GrpcOperationsService', () => {
     expect(disposeAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('fetches party topology mappings through the SDK topology read services', async () => {
+  it('fetches party topology mappings through the SDK topology aggregation services', async () => {
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
-    const listPartyToParticipantAsync = jest.fn().mockResolvedValue({
+    const listPartiesAsync = jest.fn().mockResolvedValue({
       results: [
         {
-          context: {
-            signedByFingerprints: ['participant-signing-key'],
-          },
-          item: {
-            party: 'Alice',
-            participants: [
-              {
-                participantUid: 'participant-1::1220abc',
-                permission: 'submission',
-              },
-            ],
-          },
+          party: 'Alice',
+          participants: [
+            {
+              participantUid: 'participant-1::1220abc',
+              synchronizers: [
+                {
+                  synchronizerId: 'sync-a',
+                  permission: 'submission',
+                  physicalSynchronizerId: 'physical-sync-a',
+                },
+              ],
+            },
+          ],
         },
       ],
     });
-    const listPartyToKeyMappingAsync = jest.fn().mockResolvedValue({
+    const listKeyOwnersAsync = jest.fn().mockResolvedValue({
       results: [
         {
-          context: {
-            signedByFingerprints: ['party-signing-key'],
-          },
-          item: {
-            party: 'Alice',
-            signingKeys: [
-              {
-                format: 'raw',
-                scheme: 'ed25519',
-                usage: ['namespace'],
-                keySpec: 'signing',
-                publicKey: new Uint8Array([1, 2, 3]),
-              },
-            ],
-          },
+          keyOwner: 'Alice',
+          synchronizerId: 'sync-a',
+          physicalSynchronizerId: 'physical-sync-a',
+          signingKeys: [
+            {
+              format: 'raw',
+              scheme: 'ed25519',
+              usage: ['namespace'],
+              keySpec: 'signing',
+              publicKey: new Uint8Array([0xab, 0xcd, 0xef]),
+            },
+          ],
+          encryptionKeys: [
+            {
+              format: 'raw',
+              scheme: 'ecies',
+              keySpec: 'encryption',
+              publicKey: new Uint8Array([0x12, 0x34]),
+            },
+          ],
         },
       ],
     });
     const service = new GrpcOperationsService({
       create: () => ({
-        topologyManagerReadService: {
-          listPartyToParticipantAsync,
-          listPartyToKeyMappingAsync,
+        topologyAggregationService: {
+          listPartiesAsync,
+          listKeyOwnersAsync,
         },
         disposeAsync,
       }),
@@ -162,11 +168,14 @@ describe('GrpcOperationsService', () => {
       }
     ).fetchPartyTopology(grpcNode, 'Alice');
 
-    expect(listPartyToParticipantAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ filterParty: 'Alice' }),
+    expect(listPartiesAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ filterParty: 'Alice', synchronizerIds: [] }),
     );
-    expect(listPartyToKeyMappingAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ filterParty: 'Alice' }),
+    expect(listKeyOwnersAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filterKeyOwnerUid: 'Alice',
+        synchronizerIds: [],
+      }),
     );
     expect(result).toEqual({
       nodeId: 'participant-1',
@@ -178,17 +187,55 @@ describe('GrpcOperationsService', () => {
           participantId: 'participant-1',
           participantUid: 'participant-1::1220abc',
           permission: 'submission',
-          synchronizerIds: [],
+          synchronizerIds: ['sync-a'],
         },
       ],
       partyToKeyMappings: [
         {
-          keyFingerprint: 'party-signing-key',
+          keyFingerprint: 'abcdef',
           purpose: 'namespace',
           keyType: 'ed25519',
-          synchronizerIds: [],
+          synchronizerIds: ['sync-a'],
+        },
+        {
+          keyFingerprint: '1234',
+          purpose: 'encryption',
+          keyType: 'ecies',
+          synchronizerIds: ['sync-a'],
         },
       ],
+    });
+    expect(disposeAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a grpc error topology state when aggregation mapping reads fail', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const service = new GrpcOperationsService({
+      create: () => ({
+        topologyAggregationService: {
+          listPartiesAsync: jest.fn().mockRejectedValue(new Error('Topology read failed')),
+          listKeyOwnersAsync: jest.fn(),
+        },
+        disposeAsync,
+      }),
+    } as never);
+
+    const result = await (
+      service as GrpcOperationsService & {
+        fetchPartyTopology: (
+          node: typeof grpcNode,
+          partyId: string,
+        ) => Promise<unknown>;
+      }
+    ).fetchPartyTopology(grpcNode, 'Alice');
+
+    expect(result).toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      status: 'grpc_error',
+      errorMessage: 'Topology read failed',
+      partyToParticipants: [],
+      partyToKeyMappings: [],
     });
     expect(disposeAsync).toHaveBeenCalledTimes(1);
   });
@@ -217,39 +264,6 @@ describe('GrpcOperationsService', () => {
     });
   });
 
-  it('normalizes topology read failures into a node-local grpc error state', async () => {
-    const disposeAsync = jest.fn().mockResolvedValue(undefined);
-    const service = new GrpcOperationsService({
-      create: () => ({
-        topologyManagerReadService: {
-          listPartyToParticipantAsync: jest
-            .fn()
-            .mockRejectedValue(new Error('Topology read failed')),
-          listPartyToKeyMappingAsync: jest.fn(),
-        },
-        disposeAsync,
-      }),
-    } as never);
-
-    const result = await (
-      service as GrpcOperationsService & {
-        fetchPartyTopology: (
-          node: typeof grpcNode,
-          partyId: string,
-        ) => Promise<unknown>;
-      }
-    ).fetchPartyTopology(grpcNode, 'Alice');
-
-    expect(result).toEqual({
-      nodeId: 'participant-1',
-      label: 'Participant 1',
-      status: 'grpc_error',
-      errorMessage: 'Topology read failed',
-      partyToParticipants: [],
-      partyToKeyMappings: [],
-    });
-    expect(disposeAsync).toHaveBeenCalledTimes(1);
-  });
 
   it('fetches participant status through the participant status service', async () => {
     const disposeAsync = jest.fn().mockResolvedValue(undefined);

@@ -6,6 +6,7 @@ import type { ActivePartiesNodeEntry } from '../types/active-parties';
 import type { NodeSnapshot } from '../types/nodes';
 
 type PartiesMode = 'active' | 'all';
+const ALL_NODES_ID = '__all_nodes__';
 
 const nodes = ref<NodeSnapshot[] | null>(null);
 const activePartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
@@ -17,15 +18,17 @@ const loadingActiveNodeId = ref<string | null>(null);
 const loadingLocalNodeId = ref<string | null>(null);
 
 const nodeButtons = computed(() => nodes.value ?? []);
+const hasAllNodesOption = computed(() => nodeButtons.value.length > 1);
 
 const selectableNodes = computed(() =>
   selectedMode.value === 'active'
     ? nodeButtons.value
     : nodeButtons.value.filter((node) => node.mode === 'pqs_with_grpc'),
 );
+const isAllNodesSelected = computed(() => selectedNodeId.value === ALL_NODES_ID);
 
 const selectedNodeSnapshot = computed<NodeSnapshot | null>(() => {
-  if (!selectedNodeId.value) {
+  if (!selectedNodeId.value || isAllNodesSelected.value) {
     return null;
   }
 
@@ -40,6 +43,43 @@ const selectedNode = computed<ActivePartiesNodeEntry | null>(() => {
   return selectedMode.value === 'all'
     ? localPartiesByNodeId.value[selectedNodeId.value] ?? null
     : activePartiesByNodeId.value[selectedNodeId.value] ?? null;
+});
+
+const selectedNodeSnapshots = computed<NodeSnapshot[]>(() => {
+  if (isAllNodesSelected.value) {
+    return selectableNodes.value;
+  }
+
+  return selectedNodeSnapshot.value ? [selectedNodeSnapshot.value] : [];
+});
+
+const selectedEntries = computed<ActivePartiesNodeEntry[]>(() => {
+  if (isAllNodesSelected.value) {
+    const source =
+      selectedMode.value === 'all' ? localPartiesByNodeId.value : activePartiesByNodeId.value;
+
+    return selectedNodeSnapshots.value
+      .map((node) => source[node.id])
+      .filter((entry): entry is ActivePartiesNodeEntry => entry !== undefined);
+  }
+
+  return selectedNode.value ? [selectedNode.value] : [];
+});
+
+const selectedParties = computed(() =>
+  Array.from(
+    new Set(
+      selectedEntries.value.flatMap((entry) => entry.parties),
+    ),
+  ).sort((left, right) => left.localeCompare(right)),
+);
+
+const selectedHeader = computed(() => {
+  if (isAllNodesSelected.value) {
+    return selectedNodeSnapshots.value.length > 0 ? 'All Nodes' : null;
+  }
+
+  return selectedNodeSnapshot.value?.label ?? null;
 });
 
 const selectedLocalNodeStatus = computed(() => {
@@ -87,12 +127,24 @@ const isSelectedNodeLoading = computed(() => {
     return false;
   }
 
+  if (isAllNodesSelected.value) {
+    const selectedIds = new Set(selectedNodeSnapshots.value.map((node) => node.id));
+    return selectedMode.value === 'all'
+      ? (loadingLocalNodeId.value !== null && selectedIds.has(loadingLocalNodeId.value))
+      : (loadingActiveNodeId.value !== null && selectedIds.has(loadingActiveNodeId.value));
+  }
+
   return selectedMode.value === 'all'
     ? loadingLocalNodeId.value === selectedNodeId.value
     : loadingActiveNodeId.value === selectedNodeId.value;
 });
 
 function syncSelectedNode(preferredNodeId: string | null = selectedNodeId.value): void {
+  if (preferredNodeId === ALL_NODES_ID && hasAllNodesOption.value) {
+    selectedNodeId.value = ALL_NODES_ID;
+    return;
+  }
+
   const availableNodeIds = new Set(selectableNodes.value.map((node) => node.id));
 
   if (preferredNodeId && availableNodeIds.has(preferredNodeId)) {
@@ -105,7 +157,12 @@ function syncSelectedNode(preferredNodeId: string | null = selectedNodeId.value)
 
 function selectMode(mode: PartiesMode): void {
   selectedMode.value = mode;
-  syncSelectedNode();
+  syncSelectedNode(selectedNodeId.value);
+
+  if (selectedNodeId.value === ALL_NODES_ID) {
+    void ensureAllNodesPartiesLoaded(mode);
+    return;
+  }
 
   if (selectedNodeId.value) {
     void ensureNodePartiesLoaded(mode, selectedNodeId.value);
@@ -115,6 +172,15 @@ function selectMode(mode: PartiesMode): void {
 function selectNode(nodeId: string): void {
   selectedNodeId.value = nodeId;
   void ensureNodePartiesLoaded(selectedMode.value, nodeId);
+}
+
+function selectAllNodes(): void {
+  selectedNodeId.value = ALL_NODES_ID;
+  void ensureAllNodesPartiesLoaded(selectedMode.value);
+}
+
+async function ensureAllNodesPartiesLoaded(mode: PartiesMode): Promise<void> {
+  await Promise.all(selectableNodes.value.map((node) => ensureNodePartiesLoaded(mode, node.id)));
 }
 
 async function ensureNodePartiesLoaded(mode: PartiesMode, nodeId: string): Promise<void> {
@@ -212,6 +278,17 @@ onMounted(async () => {
 
         <div class="parties-page__node-list" role="tablist" aria-label="Node selectors">
           <button
+            v-if="hasAllNodesOption"
+            type="button"
+            class="parties-page__node-button"
+            :class="{ 'parties-page__node-button--active': isAllNodesSelected }"
+            :aria-pressed="isAllNodesSelected"
+            :disabled="selectedMode === 'all' && selectableNodes.length === 0"
+            @click="selectAllNodes"
+          >
+            <span class="parties-page__node-label">All Nodes</span>
+          </button>
+          <button
             v-for="node in nodeButtons"
             :key="node.id"
             type="button"
@@ -242,9 +319,9 @@ onMounted(async () => {
           :source="selectedMode === 'active' ? 'pqs' : 'grpc'"
         />
 
-        <div v-if="selectedNodeSnapshot" class="parties-page__results-header">
+        <div v-if="selectedHeader" class="parties-page__results-header">
           <div>
-            <h3>{{ selectedNodeSnapshot.label }}</h3>
+            <h3>{{ selectedHeader }}</h3>
           </div>
         </div>
         <div v-else class="parties-page__results-header">
@@ -256,27 +333,27 @@ onMounted(async () => {
           </div>
         </div>
 
-        <p v-if="selectedNodeSnapshot && isSelectedNodeLoading" class="dashboard__message">
-          Loading parties for this node...
+        <p v-if="selectedHeader && isSelectedNodeLoading" class="dashboard__message">
+          {{ isAllNodesSelected ? 'Loading parties across selected nodes...' : 'Loading parties for this node...' }}
         </p>
 
-        <div v-else-if="selectedMode === 'active' && selectedNode" class="package-detail__list">
+        <div v-else-if="selectedMode === 'active' && selectedEntries.length > 0" class="package-detail__list">
           <RouterLink
-            v-for="party in selectedNode.parties"
+            v-for="party in selectedParties"
             :key="party"
             class="package-detail__list-row contract-detail__link parties-page__party-link"
             :to="`/parties/${party}`"
           >
             {{ party }}
           </RouterLink>
-          <p v-if="selectedNode.parties.length === 0" class="update-detail__empty">
-            No active parties found for this node.
+          <p v-if="selectedParties.length === 0" class="update-detail__empty">
+            {{ isAllNodesSelected ? 'No active parties found across selected nodes.' : 'No active parties found for this node.' }}
           </p>
         </div>
 
-        <div v-else-if="selectedMode === 'all' && selectedNode" class="package-detail__list">
+        <div v-else-if="selectedMode === 'all' && selectedEntries.length > 0" class="package-detail__list">
           <RouterLink
-            v-for="party in selectedNode.parties"
+            v-for="party in selectedParties"
             :key="party"
             class="package-detail__list-row contract-detail__link parties-page__party-link"
             :to="`/parties/${party}`"
@@ -320,10 +397,10 @@ onMounted(async () => {
             gRPC is not configured for this node.
           </p>
           <p
-            v-else-if="selectedNode.parties.length === 0"
+            v-else-if="selectedParties.length === 0"
             class="update-detail__empty"
           >
-            No local parties found for this node.
+            {{ isAllNodesSelected ? 'No local parties found across selected nodes.' : 'No local parties found for this node.' }}
           </p>
         </div>
       </section>
