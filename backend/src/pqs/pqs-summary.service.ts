@@ -2886,7 +2886,8 @@ export class PqsSummaryService {
       throw new Error('Party not found');
     }
 
-    const partyTopologyByNode = this.grpcOperationsService
+    const grpcOperationsService = this.grpcOperationsService;
+    const partyTopologyByNode = grpcOperationsService
       ? (
           await Promise.all(
             observedNodes.map(async (observedNode) => {
@@ -2895,7 +2896,7 @@ export class PqsSummaryService {
                 return null;
               }
 
-              return this.grpcOperationsService.fetchPartyTopology(node, normalizedPartyId);
+              return grpcOperationsService.fetchPartyTopology(node, normalizedPartyId);
             }),
           )
         )
