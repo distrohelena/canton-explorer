@@ -1247,6 +1247,10 @@ h3 {
   gap: 12px;
 }
 
+.token-transfer-detail__amount {
+  white-space: nowrap;
+}
+
 .package-detail {
   display: flex;
   flex-direction: column;
@@ -2076,6 +2080,13 @@ h3 {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   background: var(--surface-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.tokens-page__known-card:hover {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--surface-card) 84%, var(--surface-muted) 16%);
 }
 
 .tokens-page__known-main {
@@ -2138,6 +2149,13 @@ h3 {
   white-space: normal;
 }
 
+.tokens-page__token-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .tokens-page__nodes {
   display: flex;
   flex-direction: column;
@@ -2164,6 +2182,100 @@ h3 {
   flex-direction: column;
   gap: 2px;
   white-space: normal;
+}
+
+.token-detail__sections {
+  grid-template-columns: 1fr;
+}
+
+.token-detail__section {
+  grid-column: 1 / -1;
+}
+
+.token-detail__holders-table,
+.token-detail__transfers-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface-card);
+}
+
+.token-detail__holders-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 0.8fr) minmax(180px, 1fr);
+  gap: 16px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line-soft);
+  align-items: center;
+}
+
+.token-detail__transfers-row {
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    minmax(130px, 1fr)
+    minmax(126px, 0.84fr)
+    minmax(100px, 0.78fr)
+    minmax(100px, 0.78fr)
+    minmax(140px, 0.9fr);
+  gap: 16px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line-soft);
+  align-items: center;
+}
+
+.token-detail__holders-row:first-child,
+.token-detail__transfers-row:first-child {
+  border-top: none;
+}
+
+.token-detail__holders-row--head,
+.token-detail__transfers-row--head {
+  background: var(--surface-muted);
+  color: var(--text-500);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.token-detail__cell {
+  min-width: 0;
+  color: var(--text-700);
+}
+
+.token-detail__party,
+.token-detail__nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.token-detail__party-link {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.token-detail__party .contract-detail__link,
+.token-detail__nodes,
+.token-detail__cell.tokens-page__time {
+  position: relative;
+  z-index: 1;
+}
+
+.token-detail__amount {
+  white-space: nowrap;
+}
+
+.token-detail__row-link {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 @media (max-width: 720px) {

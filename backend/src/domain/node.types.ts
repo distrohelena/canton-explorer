@@ -170,6 +170,27 @@ export interface TokensResponse {
   tokens: TokenSummary[];
 }
 
+export interface TokenDetailResponse {
+  token: TokenSummary;
+  transfers: TokenTransferSummary[];
+}
+
+export interface TokenHolderObservedNode {
+  nodeId: string;
+  label: string;
+}
+
+export interface TokenHolderSummary {
+  partyId: string;
+  amount: string | null;
+  nodes: TokenHolderObservedNode[];
+}
+
+export interface TokenHoldersResponse {
+  tokenId: string;
+  holders: TokenHolderSummary[];
+}
+
 export interface TokenTransferObservedNode {
   nodeId: string;
   label: string;

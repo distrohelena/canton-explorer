@@ -4,6 +4,8 @@ import NodesView from './views/NodesView.vue';
 import PartiesView from './views/PartiesView.vue';
 import ContractsView from './views/ContractsView.vue';
 import TokensView from './views/TokensView.vue';
+import TokenDetailView from './views/TokenDetailView.vue';
+import TokenTransferDetailView from './views/TokenTransferDetailView.vue';
 import NodeUpdatesView from './views/NodeUpdatesView.vue';
 import NodeDetailView from './views/NodeDetailView.vue';
 import UpdateDetailView from './views/UpdateDetailView.vue';
@@ -21,6 +23,8 @@ export const router = createRouter({
     { path: '/parties', component: PartiesView },
     { path: '/contracts', component: ContractsView },
     { path: '/tokens', component: TokensView },
+    { path: '/tokens/transfers/:updateId', component: TokenTransferDetailView, props: true },
+    { path: '/tokens/:tokenId', component: TokenDetailView, props: true },
     { path: '/search', component: SearchResultsView },
     { path: '/nodes/:id/updates', component: NodeUpdatesView, props: true },
     { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailView, props: true },

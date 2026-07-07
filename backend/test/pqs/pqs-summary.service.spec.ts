@@ -3416,8 +3416,20 @@ mode: 'pqs_only',
   });
 
   it('returns Canton Coin in the discovered token list', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-amulet',
+          event_offset: '303',
+          record_time: '2026-07-07T13:00:00.000Z',
+          template_id: 'Splice.Amulet:Amulet',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('amulet-1'),
+        },
+      ],
+    });
     const service = new PqsSummaryService({
-      getClient: jest.fn(),
+      getClient: () => ({ query }),
     } as never);
 
     const response = await (
@@ -3435,6 +3447,84 @@ mode: 'pqs_only',
           tokenId: 'canton-coin',
           name: 'Canton Coin',
           symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+  });
+
+  it('discovers an observed CIP56 token from a holding create even when no transfers exist yet', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-holding-update-1',
+          event_offset: '701',
+          record_time: '2026-07-07T14:00:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('cip56-holding-1'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'owner', value: 'Alice' },
+            {
+              label: 'instrumentId',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'admin', value: 'Issuer' },
+                  { label: 'id', value: 'validator-license' },
+                ],
+              },
+            },
+            { label: 'amount', value: '150.0000000000' },
+            {
+              label: 'meta',
+              value: {
+                kind: 'record',
+                fields: [
+                  {
+                    label: 'values',
+                    value: {
+                      kind: 'text_map',
+                      entries: [
+                        { key: 'name', value: 'Validator License' },
+                        { key: 'symbol', value: 'VL' },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
+
+    expect(response).toEqual({
+      tokens: [
+        {
+          tokenId: 'validator-license',
+          name: 'Validator License',
+          symbol: 'VL',
           source: 'pqs',
         },
       ],
@@ -3658,6 +3748,97 @@ mode: 'pqs_only',
     ]);
   });
 
+  it('normalizes a CIP56 transfer record into the merged transfer feed', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'cip56-transfer-update-1',
+          event_offset: '808',
+          record_time: '2026-07-07T14:05:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('cip56-transfer-1'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'sender', value: 'Issuer' },
+            { label: 'receiver', value: 'Alice' },
+            { label: 'amount', value: '42.5000000000' },
+            {
+              label: 'instrumentId',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'admin', value: 'Issuer' },
+                  { label: 'id', value: 'validator-license' },
+                ],
+              },
+            },
+            {
+              label: 'meta',
+              value: {
+                kind: 'record',
+                fields: [
+                  {
+                    label: 'values',
+                    value: {
+                      kind: 'text_map',
+                      entries: [
+                        { key: 'name', value: 'Validator License' },
+                        { key: 'symbol', value: 'VL' },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: Array<{ id: string; label: string }>,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers([{ id: 'participant-1', label: 'Participant 1' }], 25);
+
+    expect(response.transfers).toEqual([
+      {
+        tokenId: 'validator-license',
+        tokenName: 'Validator License',
+        amount: '42.5000000000',
+        sender: 'Issuer',
+        receiver: 'Alice',
+        updateId: 'cip56-transfer-update-1',
+        recordTime: '2026-07-07T14:05:00.000Z',
+        nodes: [
+          {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            eventOffset: '808',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('dedupes identical token transfers seen on multiple nodes into a single row', async () => {
     const participant1Query = jest.fn().mockResolvedValue({
       rows: [
@@ -3752,5 +3933,1396 @@ mode: 'pqs_only',
         ],
       },
     ]);
+  });
+
+  it('filters merged token transfers by separate sender and receiver party lists', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-1',
+          event_offset: '101',
+          record_time: '2026-07-07T11:00:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('transfer-1'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-2',
+          event_offset: '202',
+          record_time: '2026-07-07T12:00:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('transfer-2'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => ({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              {
+                label: 'transfer',
+                value:
+                  contractInstance.toString() === 'transfer-2'
+                    ? {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Alice' },
+                          { label: 'receiver', value: 'Bob' },
+                          { label: 'amount', value: '42.0' },
+                        ],
+                      }
+                    : {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Carol' },
+                          { label: 'receiver', value: 'Dave' },
+                          { label: 'amount', value: '12.5' },
+                        ],
+                      },
+              },
+            ],
+          },
+        })),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [
+      { id: 'participant-1', label: 'Participant 1' },
+      { id: 'participant-2', label: 'Participant 2' },
+    ] as const;
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: typeof nodes,
+          limit?: number,
+          options?: {
+            before?: string;
+            after?: string;
+            fromParties?: string[];
+            toParties?: string[];
+          },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers(nodes, 25, {
+      fromParties: ['Alice', 'Mallory'],
+      toParties: ['Bob'],
+    });
+
+    expect(response.transfers).toEqual([
+      {
+        tokenId: 'canton-coin',
+        tokenName: 'Canton Coin',
+        amount: '42.0',
+        sender: 'Alice',
+        receiver: 'Bob',
+        updateId: 'token-update-2',
+        recordTime: '2026-07-07T12:00:00.000Z',
+        nodes: [
+          {
+            nodeId: 'participant-2',
+            label: 'Participant 2',
+            eventOffset: '202',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('filters merged token transfers by strict amount bounds', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-1',
+          event_offset: '101',
+          record_time: '2026-07-07T11:00:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('transfer-1'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-update-2',
+          event_offset: '202',
+          record_time: '2026-07-07T12:00:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('transfer-2'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => ({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              {
+                label: 'transfer',
+                value:
+                  contractInstance.toString() === 'transfer-2'
+                    ? {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Alice' },
+                          { label: 'receiver', value: 'Bob' },
+                          { label: 'amount', value: '42.0' },
+                        ],
+                      }
+                    : {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Carol' },
+                          { label: 'receiver', value: 'Dave' },
+                          { label: 'amount', value: '12.5' },
+                        ],
+                      },
+              },
+            ],
+          },
+        })),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [
+      { id: 'participant-1', label: 'Participant 1' },
+      { id: 'participant-2', label: 'Participant 2' },
+    ] as const;
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: typeof nodes,
+          limit?: number,
+          options?: {
+            before?: string;
+            after?: string;
+            amountGt?: string;
+            amountLt?: string;
+          },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers(nodes, 25, {
+      amountGt: '20',
+      amountLt: '50',
+    });
+
+    expect(response.transfers).toEqual([
+      {
+        tokenId: 'canton-coin',
+        tokenName: 'Canton Coin',
+        amount: '42.0',
+        sender: 'Alice',
+        receiver: 'Bob',
+        updateId: 'token-update-2',
+        recordTime: '2026-07-07T12:00:00.000Z',
+        nodes: [
+          {
+            nodeId: 'participant-2',
+            label: 'Participant 2',
+            eventOffset: '202',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('returns a merged token transfer detail by update id', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'shared-update-1',
+          event_offset: '29615',
+          record_time: '2026-07-07T12:54:23.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('shared-transfer'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'shared-update-1',
+          event_offset: '58393',
+          record_time: '2026-07-07T12:54:23.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('shared-transfer'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            {
+              label: 'transfer',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'sender', value: 'Alice' },
+                  { label: 'receiver', value: 'Bob' },
+                  { label: 'amount', value: '42.0' },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenTransferDetail: (
+          nodes: Array<{ id: string; label: string }>,
+          updateId: string,
+        ) => Promise<TokenTransfersResponse['transfers'][number]>;
+      }
+    ).fetchTokenTransferDetail(
+      [
+        { id: 'participant-1', label: 'CNQS App Provider' },
+        { id: 'participant-2', label: 'CNQS Super Validator' },
+      ],
+      'shared-update-1',
+    );
+
+    expect(response).toEqual({
+      tokenId: 'canton-coin',
+      tokenName: 'Canton Coin',
+      amount: '42.0',
+      sender: 'Alice',
+      receiver: 'Bob',
+      updateId: 'shared-update-1',
+      recordTime: '2026-07-07T12:54:23.000Z',
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'CNQS App Provider',
+          eventOffset: '29615',
+        },
+        {
+          nodeId: 'participant-2',
+          label: 'CNQS Super Validator',
+          eventOffset: '58393',
+        },
+      ],
+    });
+  });
+
+  it('returns token detail for a discovered token with transfers filtered to that token id', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'transfer-update-1',
+          event_offset: '901',
+          record_time: '2026-07-07T14:10:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('validator-license-transfer'),
+        },
+        {
+          update_id: 'holding-update-1',
+          event_offset: '902',
+          record_time: '2026-07-07T14:11:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('validator-license-holding'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'canton-update-1',
+          event_offset: '903',
+          record_time: '2026-07-07T14:12:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('canton-transfer'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'validator-license-transfer':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'sender', value: 'Issuer' },
+                    { label: 'receiver', value: 'Alice' },
+                    { label: 'amount', value: '42.5000000000' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+            case 'validator-license-holding':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Alice' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    { label: 'amount', value: '150.0000000000' },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    {
+                      label: 'transfer',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Carol' },
+                          { label: 'receiver', value: 'Dave' },
+                          { label: 'amount', value: '12.5' },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+          }
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenDetail: (
+          nodes: Array<{ id: string; label: string }>,
+          tokenId: string,
+        ) => Promise<unknown>;
+      }
+    ).fetchTokenDetail(
+      [
+        { id: 'participant-1', label: 'Participant 1' },
+        { id: 'participant-2', label: 'Participant 2' },
+      ],
+      'validator-license',
+    );
+
+    expect(response).toEqual({
+      token: {
+        tokenId: 'validator-license',
+        name: 'Validator License',
+        symbol: 'VL',
+        source: 'pqs',
+      },
+      transfers: [
+        {
+          tokenId: 'validator-license',
+          tokenName: 'Validator License',
+          amount: '42.5000000000',
+          sender: 'Issuer',
+          receiver: 'Alice',
+          updateId: 'transfer-update-1',
+          recordTime: '2026-07-07T14:10:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+              eventOffset: '901',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('paginates transfers for a single token id without mixing in other tokens', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'transfer-update-2',
+          event_offset: '911',
+          record_time: '2026-07-07T14:20:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('validator-license-transfer-2'),
+        },
+        {
+          update_id: 'transfer-update-1',
+          event_offset: '901',
+          record_time: '2026-07-07T14:10:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('validator-license-transfer-1'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'canton-update-1',
+          event_offset: '903',
+          record_time: '2026-07-07T14:12:00.000Z',
+          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('canton-transfer'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'validator-license-transfer-2':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'sender', value: 'Issuer' },
+                    { label: 'receiver', value: 'Bob' },
+                    { label: 'amount', value: '10.0000000000' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+            case 'validator-license-transfer-1':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'sender', value: 'Issuer' },
+                    { label: 'receiver', value: 'Alice' },
+                    { label: 'amount', value: '42.5000000000' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    {
+                      label: 'transfer',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'sender', value: 'Carol' },
+                          { label: 'receiver', value: 'Dave' },
+                          { label: 'amount', value: '12.5' },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+          }
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [
+      { id: 'participant-1', label: 'Participant 1' },
+      { id: 'participant-2', label: 'Participant 2' },
+    ] as const;
+
+    const firstPage = await (
+      service as PqsSummaryService & {
+        fetchTokenTransfers: (
+          nodes: typeof nodes,
+          tokenId: string,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchTokenTransfers(nodes, 'validator-license', 1);
+
+    expect(firstPage).toEqual({
+      limit: 1,
+      nextBefore: expect.any(String),
+      nextAfter: null,
+      transfers: [
+        {
+          tokenId: 'validator-license',
+          tokenName: 'Validator License',
+          amount: '10.0000000000',
+          sender: 'Issuer',
+          receiver: 'Bob',
+          updateId: 'transfer-update-2',
+          recordTime: '2026-07-07T14:20:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+              eventOffset: '911',
+            },
+          ],
+        },
+      ],
+    });
+
+    const secondPage = await (
+      service as PqsSummaryService & {
+        fetchTokenTransfers: (
+          nodes: typeof nodes,
+          tokenId: string,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchTokenTransfers(nodes, 'validator-license', 1, {
+      before: firstPage.nextBefore ?? undefined,
+    });
+
+    expect(secondPage).toEqual({
+      limit: 1,
+      nextBefore: null,
+      nextAfter: expect.any(String),
+      transfers: [
+        {
+          tokenId: 'validator-license',
+          tokenName: 'Validator License',
+          amount: '42.5000000000',
+          sender: 'Issuer',
+          receiver: 'Alice',
+          updateId: 'transfer-update-1',
+          recordTime: '2026-07-07T14:10:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+              eventOffset: '901',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('filters token-scoped transfers by separate sender and receiver party lists', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'transfer-update-2',
+          event_offset: '911',
+          record_time: '2026-07-07T14:20:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('validator-license-transfer-2'),
+        },
+        {
+          update_id: 'transfer-update-1',
+          event_offset: '901',
+          record_time: '2026-07-07T14:10:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('validator-license-transfer-1'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'validator-license-transfer-2':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'sender', value: 'Issuer' },
+                    { label: 'receiver', value: 'Bob' },
+                    { label: 'amount', value: '10.0000000000' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'sender', value: 'Issuer' },
+                    { label: 'receiver', value: 'Alice' },
+                    { label: 'amount', value: '42.5000000000' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+          }
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({
+          query: participant1Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [{ id: 'participant-1', label: 'Participant 1' }] as const;
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenTransfers: (
+          nodes: typeof nodes,
+          tokenId: string,
+          limit?: number,
+          options?: {
+            before?: string;
+            after?: string;
+            fromParties?: string[];
+            toParties?: string[];
+          },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchTokenTransfers(nodes, 'validator-license', 25, {
+      fromParties: ['Issuer'],
+      toParties: ['Alice'],
+    });
+
+    expect(response.transfers).toEqual([
+      {
+        tokenId: 'validator-license',
+        tokenName: 'Validator License',
+        amount: '42.5000000000',
+        sender: 'Issuer',
+        receiver: 'Alice',
+        updateId: 'transfer-update-1',
+        recordTime: '2026-07-07T14:10:00.000Z',
+        nodes: [
+          {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            eventOffset: '901',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('filters token-scoped transfers by strict amount bounds', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'transfer-update-2',
+          event_offset: '911',
+          record_time: '2026-07-07T14:20:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('validator-license-transfer-2'),
+        },
+        {
+          update_id: 'transfer-update-1',
+          event_offset: '901',
+          record_time: '2026-07-07T14:10:00.000Z',
+          template_id: 'Splice.Api.Token.TransferInstructionV1:Transfer',
+          package_id: 'splice-api-token-transfer-instruction-v1',
+          contract_instance: Buffer.from('validator-license-transfer-1'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'validator-license-transfer-2':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'sender', value: 'Issuer' },
+                    { label: 'receiver', value: 'Bob' },
+                    { label: 'amount', value: '10.0000000000' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'sender', value: 'Issuer' },
+                    { label: 'receiver', value: 'Alice' },
+                    { label: 'amount', value: '42.5000000000' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [
+                                { key: 'name', value: 'Validator License' },
+                                { key: 'symbol', value: 'VL' },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+          }
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({
+          query: participant1Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [{ id: 'participant-1', label: 'Participant 1' }] as const;
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenTransfers: (
+          nodes: typeof nodes,
+          tokenId: string,
+          limit?: number,
+          options?: {
+            before?: string;
+            after?: string;
+            amountGt?: string;
+            amountLt?: string;
+          },
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchTokenTransfers(nodes, 'validator-license', 25, {
+      amountGt: '20',
+      amountLt: '50',
+    });
+
+    expect(response.transfers).toEqual([
+      {
+        tokenId: 'validator-license',
+        tokenName: 'Validator License',
+        amount: '42.5000000000',
+        sender: 'Issuer',
+        receiver: 'Alice',
+        updateId: 'transfer-update-1',
+        recordTime: '2026-07-07T14:10:00.000Z',
+        nodes: [
+          {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            eventOffset: '901',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('returns top holders for a token by merging observed holdings across nodes', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'holding-update-1',
+          event_offset: '1001',
+          record_time: '2026-07-07T14:20:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('alice-holding'),
+        },
+        {
+          update_id: 'holding-update-2',
+          event_offset: '1002',
+          record_time: '2026-07-07T14:21:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('bob-holding'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'holding-update-3',
+          event_offset: '1003',
+          record_time: '2026-07-07T14:22:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('alice-holding-shared'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'alice-holding':
+            case 'alice-holding-shared':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Alice' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    { label: 'amount', value: '150.0000000000' },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [{ key: 'name', value: 'Validator License' }],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Bob' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    { label: 'amount', value: '90.0000000000' },
+                    {
+                      label: 'meta',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          {
+                            label: 'values',
+                            value: {
+                              kind: 'text_map',
+                              entries: [{ key: 'name', value: 'Validator License' }],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              };
+          }
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenHolders: (
+          nodes: Array<{ id: string; label: string }>,
+          tokenId: string,
+        ) => Promise<unknown>;
+      }
+    ).fetchTokenHolders(
+      [
+        { id: 'participant-1', label: 'Participant 1' },
+        { id: 'participant-2', label: 'Participant 2' },
+      ],
+      'validator-license',
+    );
+
+    expect(response).toEqual({
+      tokenId: 'validator-license',
+      holders: [
+        {
+          partyId: 'Alice',
+          amount: '300.0000000000',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+            },
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+            },
+          ],
+        },
+        {
+          partyId: 'Bob',
+          amount: '90.0000000000',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('returns Canton Coin holders by summing active Amulets per party without double-counting the same contract across nodes', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          contract_id: 'amulet-contract-1',
+          update_id: 'amulet-update-1',
+          event_offset: '2001',
+          record_time: '2026-07-07T15:00:00.000Z',
+          template_id: 'Splice.Amulet:Amulet',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('alice-amulet-1'),
+        },
+        {
+          contract_id: 'amulet-contract-2',
+          update_id: 'amulet-update-2',
+          event_offset: '2002',
+          record_time: '2026-07-07T15:01:00.000Z',
+          template_id: 'Splice.Amulet:Amulet',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('alice-amulet-2'),
+        },
+      ],
+    });
+    const participant2Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          contract_id: 'amulet-contract-1',
+          update_id: 'amulet-update-1',
+          event_offset: '3001',
+          record_time: '2026-07-07T15:00:00.000Z',
+          template_id: 'Splice.Amulet:Amulet',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('alice-amulet-1'),
+        },
+        {
+          contract_id: 'amulet-contract-3',
+          update_id: 'amulet-update-3',
+          event_offset: '3002',
+          record_time: '2026-07-07T15:02:00.000Z',
+          template_id: 'Splice.Amulet:Amulet',
+          package_id: 'splice-amulet-package',
+          contract_instance: Buffer.from('bob-amulet'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'alice-amulet-1':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Alice' },
+                    {
+                      label: 'amount',
+                      value: {
+                        kind: 'record',
+                        fields: [{ label: 'initialAmount', value: '25.0' }],
+                      },
+                    },
+                  ],
+                },
+              };
+            case 'alice-amulet-2':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Alice' },
+                    {
+                      label: 'amount',
+                      value: {
+                        kind: 'record',
+                        fields: [{ label: 'initialAmount', value: '10.0' }],
+                      },
+                    },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Bob' },
+                    {
+                      label: 'amount',
+                      value: {
+                        kind: 'record',
+                        fields: [{ label: 'initialAmount', value: '5.0' }],
+                      },
+                    },
+                  ],
+                },
+              };
+          }
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenHolders: (
+          nodes: Array<{ id: string; label: string }>,
+          tokenId: string,
+        ) => Promise<unknown>;
+      }
+    ).fetchTokenHolders(
+      [
+        { id: 'participant-1', label: 'Participant 1' },
+        { id: 'participant-2', label: 'Participant 2' },
+      ],
+      'canton-coin',
+    );
+
+    expect(response).toEqual({
+      tokenId: 'canton-coin',
+      holders: [
+        {
+          partyId: 'Alice',
+          amount: '35.0',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+            },
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+            },
+          ],
+        },
+        {
+          partyId: 'Bob',
+          amount: '5.0',
+          nodes: [
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('throws when a token detail is requested for an unknown token id', async () => {
+    const service = new PqsSummaryService({
+      getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+    } as never);
+
+    await expect(
+      (
+        service as PqsSummaryService & {
+          fetchTokenDetail: (
+            nodes: Array<{ id: string; label: string }>,
+            tokenId: string,
+          ) => Promise<unknown>;
+        }
+      ).fetchTokenDetail([{ id: 'participant-1', label: 'Participant 1' }], 'missing-token'),
+    ).rejects.toThrow('Token not found');
   });
 });

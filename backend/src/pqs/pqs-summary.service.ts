@@ -30,6 +30,9 @@ import type {
   SearchUpdateResult,
   TemplateFilterResponse,
   TokenSummary,
+  TokenDetailResponse,
+  TokenHoldersResponse,
+  TokenHolderSummary,
   TokensResponse,
   TokenTransferSummary,
   TokenTransfersResponse,
@@ -155,6 +158,7 @@ interface GlobalMergedContract {
 }
 
 interface TokenTransferRow {
+  contract_id?: string | null;
   update_id: string;
   event_offset: string | number | null;
   record_time: string | null;
@@ -190,6 +194,25 @@ interface CachedNodeTokenTransfers {
   transfers: NodeTokenTransferObservation[];
 }
 
+interface CachedNodeObservedTokens {
+  cachedAt: number;
+  tokens: TokenSummary[];
+}
+
+interface NodeTokenHolderObservation {
+  contractId: string | null;
+  nodeId: string;
+  label: string;
+  tokenId: string;
+  partyId: string;
+  amount: string | null;
+}
+
+interface CachedNodeTokenHolders {
+  cachedAt: number;
+  holders: NodeTokenHolderObservation[];
+}
+
 interface SearchMatchedUpdate extends SearchUpdateResult {
   exact: boolean;
 }
@@ -216,6 +239,23 @@ const CANTON_COIN_TOKEN_NAME = 'Canton Coin';
 const CANTON_COIN_TRANSFER_TEMPLATE_ID =
   'Splice.AmuletTransferInstruction:AmuletTransferInstruction';
 const CANTON_COIN_AMULET_TEMPLATE_ID = 'Splice.Amulet:Amulet';
+const CIP56_HOLDING_TEMPLATE_ID = 'Splice.Api.Token.HoldingV1:Holding';
+const CIP56_TRANSFER_TEMPLATE_ID = 'Splice.Api.Token.TransferInstructionV1:Transfer';
+const TOKEN_DISCOVERY_TEMPLATE_IDS = [
+  CANTON_COIN_TRANSFER_TEMPLATE_ID,
+  CANTON_COIN_AMULET_TEMPLATE_ID,
+  CIP56_HOLDING_TEMPLATE_ID,
+  CIP56_TRANSFER_TEMPLATE_ID,
+] as const;
+const TOKEN_HOLDER_TEMPLATE_IDS = [
+  CANTON_COIN_AMULET_TEMPLATE_ID,
+  CIP56_HOLDING_TEMPLATE_ID,
+] as const;
+const TOKEN_TRANSFER_TEMPLATE_IDS = [
+  CANTON_COIN_TRANSFER_TEMPLATE_ID,
+  CANTON_COIN_AMULET_TEMPLATE_ID,
+  CIP56_TRANSFER_TEMPLATE_ID,
+] as const;
 const TOKEN_TRANSFER_CACHE_TTL_MS = 5 * 60 * 1000;
 const TOKEN_TRANSFER_CACHE_LIMIT = 250;
 
@@ -1858,12 +1898,16 @@ function contractDetailQuery(contractId: string): string {
   `;
 }
 
-function tokenTransferRowsQuery(limit: number): string {
+function tokenRowsQuery(limit: number, templateIds: readonly string[]): string {
   const normalizedLimit =
     Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(limit) : TOKEN_TRANSFER_CACHE_LIMIT;
+  const quotedTemplateIds = templateIds
+    .map((templateId) => `'${escapeSqlLiteral(templateId)}'`)
+    .join(',\n        ');
 
   return `
     select
+      contract_id,
       update_id,
       event_offset,
       record_time,
@@ -1872,6 +1916,7 @@ function tokenTransferRowsQuery(limit: number): string {
       contract_instance
     from (
       select
+        encode(contract.contract_id, 'hex') as contract_id,
         encode(activate_event.update_id, 'hex') as update_id,
         activate_event.event_offset::text as event_offset,
         to_char(
@@ -1887,13 +1932,13 @@ function tokenTransferRowsQuery(limit: number): string {
       left join participant.lapi_string_interning package_string
         on package_string.internal_id = activate_event.representative_package_id
       where contract.template_id in (
-        '${CANTON_COIN_TRANSFER_TEMPLATE_ID}',
-        '${CANTON_COIN_AMULET_TEMPLATE_ID}'
+        ${quotedTemplateIds}
       )
 
       union all
 
       select
+        encode(contract.contract_id, 'hex') as contract_id,
         encode(various_event.update_id, 'hex') as update_id,
         various_event.event_offset::text as event_offset,
         to_char(
@@ -1910,8 +1955,7 @@ function tokenTransferRowsQuery(limit: number): string {
         on package_string.internal_id = various_event.package_id
       where various_event.event_type = 6
         and contract.template_id in (
-          '${CANTON_COIN_TRANSFER_TEMPLATE_ID}',
-          '${CANTON_COIN_AMULET_TEMPLATE_ID}'
+          ${quotedTemplateIds}
         )
     ) token_transfer_rows
     order by event_offset::numeric desc
@@ -2171,6 +2215,8 @@ function normalizeByteaHex(value: string): string {
 
 @Injectable()
 export class PqsSummaryService {
+  private readonly observedTokensByNode = new Map<string, CachedNodeObservedTokens>();
+  private readonly tokenHoldersByNode = new Map<string, CachedNodeTokenHolders>();
   private readonly tokenTransfersByNode = new Map<string, CachedNodeTokenTransfers>();
 
   constructor(
@@ -3378,30 +3424,158 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchTokens(_nodes: NodeConfig[]): Promise<TokensResponse> {
-    const tokens: TokenSummary[] = [
-      {
-        tokenId: CANTON_COIN_TOKEN_ID,
-        name: CANTON_COIN_TOKEN_NAME,
-        symbol: null,
-        source: 'pqs',
-      },
-    ];
+  async fetchTokens(nodes: NodeConfig[]): Promise<TokensResponse> {
+    const refreshResults = await Promise.allSettled(
+      nodes.map(async (node) => ({
+        node,
+        tokens: await this.loadCachedObservedTokens(node),
+      })),
+    );
+    const successfulTokens = refreshResults
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          tokens: TokenSummary[];
+        }> => result.status === 'fulfilled',
+      )
+      .flatMap((result) => result.value.tokens);
 
-    return { tokens };
+    if (successfulTokens.length === 0) {
+      const firstFailure = refreshResults.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      if (firstFailure) {
+        throw firstFailure.reason;
+      }
+    }
+
+    const dedupedTokens = new Map<string, TokenSummary>();
+    for (const token of successfulTokens) {
+      if (!dedupedTokens.has(token.tokenId)) {
+        dedupedTokens.set(token.tokenId, token);
+      }
+    }
+
+    return {
+      tokens: Array.from(dedupedTokens.values()).sort(
+        (left, right) => left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
+      ),
+    };
   }
 
   async fetchLatestTokenTransfers(
     nodes: NodeConfig[],
     limit = 25,
-    options?: { before?: string; after?: string },
+    options?: {
+      before?: string;
+      after?: string;
+      fromParties?: string[];
+      toParties?: string[];
+      amountGt?: string;
+      amountLt?: string;
+    },
   ): Promise<TokenTransfersResponse> {
-    const normalizedLimit =
-      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
-    const beforeCursor = decodeGlobalTokenTransferCursor(options?.before);
-    const afterCursor =
-      beforeCursor === null ? decodeGlobalTokenTransferCursor(options?.after) : null;
-    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const mergedTransfers = this.filterTokenTransfersByParties(
+      await this.loadMergedTokenTransfers(nodes),
+      options,
+    );
+
+    return this.paginateTokenTransfers(mergedTransfers, limit, options);
+  }
+
+  async fetchTokenTransfers(
+    nodes: NodeConfig[],
+    tokenId: string,
+    limit = 25,
+    options?: {
+      before?: string;
+      after?: string;
+      fromParties?: string[];
+      toParties?: string[];
+      amountGt?: string;
+      amountLt?: string;
+    },
+  ): Promise<TokenTransfersResponse> {
+    const normalizedTokenId = this.normalizeTokenId(tokenId);
+    await this.findObservedToken(nodes, normalizedTokenId);
+    const mergedTransfers = this.filterTokenTransfersByParties(
+      await this.loadMergedTokenTransfers(nodes),
+      options,
+    );
+
+    return this.paginateTokenTransfers(
+      mergedTransfers.filter((transfer) => transfer.tokenId === normalizedTokenId),
+      limit,
+      options,
+    );
+  }
+
+  async fetchTokenTransferDetail(
+    nodes: NodeConfig[],
+    updateId: string,
+  ): Promise<TokenTransferSummary> {
+    const normalizedUpdateId = this.normalizeUpdateId(updateId);
+    const transfer = (await this.loadMergedTokenTransfers(nodes))
+      .sort(compareGlobalTokenTransfers)
+      .find((entry) => entry.updateId === normalizedUpdateId);
+
+    if (!transfer) {
+      throw new Error('Token transfer not found');
+    }
+
+    return transfer;
+  }
+
+  async fetchTokenDetail(nodes: NodeConfig[], tokenId: string): Promise<TokenDetailResponse> {
+    const normalizedTokenId = this.normalizeTokenId(tokenId);
+    const token = await this.findObservedToken(nodes, normalizedTokenId);
+    const transfersResponse = await this.fetchTokenTransfers(nodes, normalizedTokenId, 25);
+
+    return {
+      token,
+      transfers: transfersResponse.transfers,
+    };
+  }
+
+  async fetchTokenHolders(nodes: NodeConfig[], tokenId: string): Promise<TokenHoldersResponse> {
+    const normalizedTokenId = this.normalizeTokenId(tokenId);
+    await this.findObservedToken(nodes, normalizedTokenId);
+    const refreshResults = await Promise.allSettled(
+      nodes.map(async (node) => ({
+        node,
+        holders: await this.loadCachedTokenHolders(node),
+      })),
+    );
+    const successfulHolders = refreshResults
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          holders: NodeTokenHolderObservation[];
+        }> => result.status === 'fulfilled',
+      )
+      .flatMap((result) => result.value.holders)
+      .filter((holder) => holder.tokenId === normalizedTokenId);
+
+    if (successfulHolders.length === 0) {
+      const firstFailure = refreshResults.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      if (firstFailure) {
+        throw firstFailure.reason;
+      }
+    }
+
+    return {
+      tokenId: normalizedTokenId,
+      holders: this.mergeTokenHolders(successfulHolders).slice(0, 25),
+    };
+  }
+
+  private async loadMergedTokenTransfers(nodes: NodeConfig[]): Promise<TokenTransferSummary[]> {
     const refreshResults = await Promise.allSettled(
       nodes.map(async (node) => ({
         node,
@@ -3428,8 +3602,28 @@ export class PqsSummaryService {
       }
     }
 
-    const mergedTransfers = this.mergeTokenTransfers(successfulTransfers);
-    const filteredTransfers = mergedTransfers
+    return this.mergeTokenTransfers(successfulTransfers);
+  }
+
+  private paginateTokenTransfers(
+    transfers: TokenTransferSummary[],
+    limit = 25,
+    options?: {
+      before?: string;
+      after?: string;
+      fromParties?: string[];
+      toParties?: string[];
+      amountGt?: string;
+      amountLt?: string;
+    },
+  ): TokenTransfersResponse {
+    const normalizedLimit =
+      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+    const beforeCursor = decodeGlobalTokenTransferCursor(options?.before);
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalTokenTransferCursor(options?.after) : null;
+    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const filteredTransfers = transfers
       .sort(compareGlobalTokenTransfers)
       .filter((transfer) => {
         if (beforeCursor !== null) {
@@ -3444,26 +3638,67 @@ export class PqsSummaryService {
       });
 
     const hasMoreInDirection = filteredTransfers.length > normalizedLimit;
-    const transfers = filteredTransfers.slice(0, normalizedLimit);
+    const pagedTransfers = filteredTransfers.slice(0, normalizedLimit);
 
     return {
       limit: normalizedLimit,
       nextBefore:
-        transfers.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalTokenTransferCursor(transfers[transfers.length - 1]!)
+        pagedTransfers.length > 0 && (useAfterCursor || hasMoreInDirection)
+          ? encodeGlobalTokenTransferCursor(pagedTransfers[pagedTransfers.length - 1]!)
           : null,
       nextAfter:
-        transfers.length === 0
+        pagedTransfers.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalTokenTransferCursor(transfers[0]!)
+              ? encodeGlobalTokenTransferCursor(pagedTransfers[0]!)
               : null
             : beforeCursor
-              ? encodeGlobalTokenTransferCursor(transfers[0]!)
+              ? encodeGlobalTokenTransferCursor(pagedTransfers[0]!)
               : null,
-      transfers,
+      transfers: pagedTransfers,
     };
+  }
+
+  private filterTokenTransfersByParties(
+    transfers: TokenTransferSummary[],
+    options?: {
+      fromParties?: string[];
+      toParties?: string[];
+      amountGt?: string;
+      amountLt?: string;
+    },
+  ): TokenTransferSummary[] {
+    const activeFromParties = normalizePartyFilters(options?.fromParties);
+    const activeToParties = normalizePartyFilters(options?.toParties);
+    const amountGt = options?.amountGt?.trim() || null;
+    const amountLt = options?.amountLt?.trim() || null;
+
+    if (
+      activeFromParties.length === 0 &&
+      activeToParties.length === 0 &&
+      amountGt === null &&
+      amountLt === null
+    ) {
+      return transfers;
+    }
+
+    return transfers.filter((transfer) => {
+      const matchesFrom =
+        activeFromParties.length === 0 ||
+        (transfer.sender !== null && activeFromParties.includes(transfer.sender));
+      const matchesTo =
+        activeToParties.length === 0 ||
+        (transfer.receiver !== null && activeToParties.includes(transfer.receiver));
+      const matchesAmountGt =
+        amountGt === null ||
+        (transfer.amount !== null && this.compareNumericStrings(transfer.amount, amountGt) > 0);
+      const matchesAmountLt =
+        amountLt === null ||
+        (transfer.amount !== null && this.compareNumericStrings(transfer.amount, amountLt) < 0);
+
+      return matchesFrom && matchesTo && matchesAmountGt && matchesAmountLt;
+    });
   }
 
   async fetchUpdateDetail(
@@ -3753,6 +3988,161 @@ export class PqsSummaryService {
     }
   }
 
+  private async loadCachedObservedTokens(node: NodeConfig): Promise<TokenSummary[]> {
+    const cached = this.observedTokensByNode.get(node.id);
+    if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
+      return cached.tokens;
+    }
+
+    const tokens = await this.fetchObservedTokensForNode(node, TOKEN_TRANSFER_CACHE_LIMIT);
+    this.observedTokensByNode.set(node.id, {
+      cachedAt: Date.now(),
+      tokens,
+    });
+    return tokens;
+  }
+
+  private async fetchObservedTokensForNode(node: NodeConfig, limit: number): Promise<TokenSummary[]> {
+    const client = this.clientFactory.getClient(node);
+    const result = await client.query(tokenRowsQuery(limit, TOKEN_DISCOVERY_TEMPLATE_IDS));
+    const rows = (result.rows as TokenTransferRow[]) ?? [];
+    const dedupedTokens = new Map<string, TokenSummary>();
+
+    for (const row of rows) {
+      const token = await this.normalizeObservedTokenRow(row);
+      if (token && !dedupedTokens.has(token.tokenId)) {
+        dedupedTokens.set(token.tokenId, token);
+      }
+    }
+
+    return Array.from(dedupedTokens.values()).sort(
+      (left, right) => left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
+    );
+  }
+
+  private async findObservedToken(nodes: NodeConfig[], tokenId: string): Promise<TokenSummary> {
+    const tokensResponse = await this.fetchTokens(nodes);
+    const token = tokensResponse.tokens.find((candidate) => candidate.tokenId === tokenId);
+
+    if (!token) {
+      throw new Error('Token not found');
+    }
+
+    return token;
+  }
+
+  private async normalizeObservedTokenRow(row: TokenTransferRow): Promise<TokenSummary | null> {
+    const templateId = this.normalizeTemplateIdentifier(row.template_id);
+
+    if (
+      templateId === CANTON_COIN_TRANSFER_TEMPLATE_ID ||
+      templateId === CANTON_COIN_AMULET_TEMPLATE_ID
+    ) {
+      return {
+        tokenId: CANTON_COIN_TOKEN_ID,
+        name: CANTON_COIN_TOKEN_NAME,
+        symbol: null,
+        source: 'pqs',
+      };
+    }
+
+    if (templateId !== CIP56_HOLDING_TEMPLATE_ID && templateId !== CIP56_TRANSFER_TEMPLATE_ID) {
+      return null;
+    }
+
+    const decoded = await this.decodeContractData(
+      this.normalizePackageIdentifier(row.package_id),
+      templateId,
+      row.contract_instance,
+    );
+
+    return this.extractCip56TokenSummary(decoded);
+  }
+
+  private async loadCachedTokenHolders(node: NodeConfig): Promise<NodeTokenHolderObservation[]> {
+    const cached = this.tokenHoldersByNode.get(node.id);
+    if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
+      return cached.holders;
+    }
+
+    const holders = await this.fetchTokenHoldersForNode(node, TOKEN_TRANSFER_CACHE_LIMIT);
+    this.tokenHoldersByNode.set(node.id, {
+      cachedAt: Date.now(),
+      holders,
+    });
+    return holders;
+  }
+
+  private async fetchTokenHoldersForNode(
+    node: NodeConfig,
+    limit: number,
+  ): Promise<NodeTokenHolderObservation[]> {
+    const client = this.clientFactory.getClient(node);
+    const result = await client.query(tokenRowsQuery(limit, TOKEN_HOLDER_TEMPLATE_IDS));
+    const rows = (result.rows as TokenTransferRow[]) ?? [];
+    const holders: NodeTokenHolderObservation[] = [];
+
+    for (const row of rows) {
+      const holder = await this.normalizeTokenHolderRow(node, row);
+      if (holder) {
+        holders.push(holder);
+      }
+    }
+
+    return holders;
+  }
+
+  private async normalizeTokenHolderRow(
+    node: NodeConfig,
+    row: TokenTransferRow,
+  ): Promise<NodeTokenHolderObservation | null> {
+    const templateId = this.normalizeTemplateIdentifier(row.template_id);
+    const decoded = await this.decodeContractData(
+      this.normalizePackageIdentifier(row.package_id),
+      templateId,
+      row.contract_instance,
+    );
+
+    if (decoded?.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
+      return null;
+    }
+
+    if (templateId === CIP56_HOLDING_TEMPLATE_ID) {
+      const tokenSummary = this.extractCip56TokenSummary(decoded);
+      const partyId = this.readScalarField(decoded.value, 'owner');
+      if (!tokenSummary || !partyId) {
+        return null;
+      }
+
+      return {
+        contractId: this.normalizeOptionalScalar(row.contract_id),
+        nodeId: node.id,
+        label: node.label,
+        tokenId: tokenSummary.tokenId,
+        partyId,
+        amount: this.readScalarField(decoded.value, 'amount'),
+      };
+    }
+
+    if (templateId === CANTON_COIN_AMULET_TEMPLATE_ID) {
+      const partyId = this.readScalarField(decoded.value, 'owner');
+      if (!partyId) {
+        return null;
+      }
+
+      return {
+        contractId: this.normalizeOptionalScalar(row.contract_id),
+        nodeId: node.id,
+        label: node.label,
+        tokenId: CANTON_COIN_TOKEN_ID,
+        partyId,
+        amount: this.readNestedScalarField(decoded.value, ['amount', 'initialAmount']),
+      };
+    }
+
+    return null;
+  }
+
   private async loadCachedTokenTransfers(node: NodeConfig): Promise<NodeTokenTransferObservation[]> {
     const cached = this.tokenTransfersByNode.get(node.id);
     if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
@@ -3772,7 +4162,7 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
     const client = this.clientFactory.getClient(node);
-    const result = await client.query(tokenTransferRowsQuery(limit));
+    const result = await client.query(tokenRowsQuery(limit, TOKEN_TRANSFER_TEMPLATE_IDS));
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];
 
@@ -3796,7 +4186,7 @@ export class PqsSummaryService {
       templateId,
       row.contract_instance,
     );
-    const decodedTransfer = this.extractCantonCoinMovement(templateId, decoded);
+    const decodedTransfer = this.extractTokenMovement(templateId, decoded);
     if (!decodedTransfer) {
       return null;
     }
@@ -3804,8 +4194,8 @@ export class PqsSummaryService {
     return {
       nodeId: node.id,
       label: node.label,
-      tokenId: CANTON_COIN_TOKEN_ID,
-      tokenName: CANTON_COIN_TOKEN_NAME,
+      tokenId: decodedTransfer.tokenId,
+      tokenName: decodedTransfer.tokenName,
       amount: decodedTransfer.amount,
       sender: decodedTransfer.sender,
       receiver: decodedTransfer.receiver,
@@ -3854,6 +4244,60 @@ export class PqsSummaryService {
     }));
   }
 
+  private mergeTokenHolders(holders: NodeTokenHolderObservation[]): TokenHolderSummary[] {
+    const merged = new Map<
+      string,
+      TokenHolderSummary & {
+        observedContractIds: Set<string>;
+      }
+    >();
+
+    for (const holder of holders) {
+      const holderKey = `${holder.tokenId}\u0000${holder.partyId}`;
+      const existing = merged.get(holderKey);
+      const observedNode = {
+        nodeId: holder.nodeId,
+        label: holder.label,
+      };
+      const dedupeContractId =
+        holder.contractId ??
+        JSON.stringify([holder.tokenId, holder.partyId, holder.amount ?? '', holder.nodeId]);
+
+      if (!existing) {
+        merged.set(holderKey, {
+          partyId: holder.partyId,
+          amount: holder.amount,
+          nodes: [observedNode],
+          observedContractIds: new Set([dedupeContractId]),
+        });
+        continue;
+      }
+
+      if (!existing.nodes.some((node) => node.nodeId === observedNode.nodeId)) {
+        existing.nodes.push(observedNode);
+      }
+
+      if (!existing.observedContractIds.has(dedupeContractId)) {
+        existing.amount = this.addNumericStrings(existing.amount, holder.amount);
+        existing.observedContractIds.add(dedupeContractId);
+      }
+    }
+
+    return Array.from(merged.values())
+      .map(({ observedContractIds: _observedContractIds, ...holder }) => ({
+        ...holder,
+        nodes: [...holder.nodes].sort((left, right) => left.label.localeCompare(right.label)),
+      }))
+      .sort((left, right) => {
+        const amountComparison = this.compareNumericStrings(left.amount, right.amount);
+        if (amountComparison !== 0) {
+          return -amountComparison;
+        }
+
+        return left.partyId.localeCompare(right.partyId);
+      });
+  }
+
   private buildTokenTransferDedupKey(transfer: {
     tokenId: string;
     amount: string | null;
@@ -3872,14 +4316,87 @@ export class PqsSummaryService {
     ]);
   }
 
+  private normalizeTokenId(tokenId: string): string {
+    return tokenId.trim();
+  }
+
+  private compareNumericStrings(left: string | null, right: string | null): number {
+    const leftValue = left === null ? Number.NEGATIVE_INFINITY : Number(left);
+    const rightValue = right === null ? Number.NEGATIVE_INFINITY : Number(right);
+    const leftValid = Number.isFinite(leftValue);
+    const rightValid = Number.isFinite(rightValue);
+
+    if (leftValid && rightValid && leftValue !== rightValue) {
+      return leftValue - rightValue;
+    }
+
+    if (leftValid !== rightValid) {
+      return leftValid ? 1 : -1;
+    }
+
+    return (left ?? '').localeCompare(right ?? '');
+  }
+
+  private addNumericStrings(left: string | null, right: string | null): string | null {
+    if (left === null) {
+      return right;
+    }
+
+    if (right === null) {
+      return left;
+    }
+
+    const scale = Math.max(this.numericScale(left), this.numericScale(right));
+    const factor = 10n ** BigInt(scale);
+    const leftValue = this.parseScaledDecimal(left, scale);
+    const rightValue = this.parseScaledDecimal(right, scale);
+    const sum = leftValue + rightValue;
+    const negative = sum < 0n;
+    const absolute = negative ? -sum : sum;
+    const whole = absolute / factor;
+    const fractional = absolute % factor;
+
+    if (scale === 0) {
+      return `${negative ? '-' : ''}${whole.toString()}`;
+    }
+
+    return `${negative ? '-' : ''}${whole.toString()}.${fractional
+      .toString()
+      .padStart(scale, '0')}`;
+  }
+
+  private numericScale(value: string): number {
+    const normalized = value.trim();
+    const decimalIndex = normalized.indexOf('.');
+    return decimalIndex === -1 ? 0 : normalized.length - decimalIndex - 1;
+  }
+
+  private parseScaledDecimal(value: string, scale: number): bigint {
+    const normalized = value.trim();
+    const negative = normalized.startsWith('-');
+    const unsigned = negative ? normalized.slice(1) : normalized;
+    const [wholePart, fractionalPart = ''] = unsigned.split('.');
+    const paddedFractional = `${fractionalPart}${'0'.repeat(scale)}`.slice(0, scale);
+    const digits = `${wholePart || '0'}${paddedFractional}`;
+    const parsed = BigInt(digits || '0');
+
+    return negative ? -parsed : parsed;
+  }
+
   private normalizeUpdateId(updateId: string): string {
     return updateId.startsWith('\\x') ? updateId.slice(2) : updateId;
   }
 
-  private extractCantonCoinMovement(
+  private extractTokenMovement(
     templateId: string | null,
     decoded: NodeDecodeState<NodeDecodedDamlValue> | null,
-  ): { sender: string | null; receiver: string | null; amount: string | null } | null {
+  ): {
+    tokenId: string;
+    tokenName: string;
+    sender: string | null;
+    receiver: string | null;
+    amount: string | null;
+  } | null {
     if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
       return null;
     }
@@ -3891,6 +4408,8 @@ export class PqsSummaryService {
       }
 
       return {
+        tokenId: CANTON_COIN_TOKEN_ID,
+        tokenName: CANTON_COIN_TOKEN_NAME,
         sender: this.readScalarField(transferRecord, 'sender'),
         receiver: this.readScalarField(transferRecord, 'receiver'),
         amount: this.readScalarField(transferRecord, 'amount'),
@@ -3899,13 +4418,50 @@ export class PqsSummaryService {
 
     if (templateId === CANTON_COIN_AMULET_TEMPLATE_ID) {
       return {
+        tokenId: CANTON_COIN_TOKEN_ID,
+        tokenName: CANTON_COIN_TOKEN_NAME,
         sender: this.readScalarField(decoded.value, 'dso'),
         receiver: this.readScalarField(decoded.value, 'owner'),
         amount: this.readNestedScalarField(decoded.value, ['amount', 'initialAmount']),
       };
     }
 
+    if (templateId === CIP56_TRANSFER_TEMPLATE_ID) {
+      const tokenSummary = this.extractCip56TokenSummary(decoded);
+      if (!tokenSummary) {
+        return null;
+      }
+
+      return {
+        tokenId: tokenSummary.tokenId,
+        tokenName: tokenSummary.name,
+        sender: this.readScalarField(decoded.value, 'sender'),
+        receiver: this.readScalarField(decoded.value, 'receiver'),
+        amount: this.readScalarField(decoded.value, 'amount'),
+      };
+    }
+
     return null;
+  }
+
+  private extractCip56TokenSummary(
+    decoded: NodeDecodeState<NodeDecodedDamlValue> | null,
+  ): TokenSummary | null {
+    if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
+      return null;
+    }
+
+    const tokenId = this.readNestedScalarField(decoded.value, ['instrumentId', 'id']);
+    if (!tokenId) {
+      return null;
+    }
+
+    return {
+      tokenId,
+      name: this.readTextMapEntryField(decoded.value, ['meta', 'values'], 'name') ?? tokenId,
+      symbol: this.readTextMapEntryField(decoded.value, ['meta', 'values'], 'symbol'),
+      source: 'pqs',
+    };
   }
 
   private async fetchEventsByUpdateId(
@@ -4243,6 +4799,58 @@ export class PqsSummaryService {
       }
 
       current = field;
+    }
+
+    return null;
+  }
+
+  private readTextMapEntryField(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    path: string[],
+    key: string,
+  ): string | null {
+    let current: NodeDecodedDamlValue | null = value;
+
+    for (const segment of path) {
+      if (!current || !this.isRecordValue(current)) {
+        return null;
+      }
+
+      const field: NodeDecodedDamlValue | undefined = current.fields.find(
+        (candidate) => candidate.label === segment,
+      )?.value;
+      if (field === undefined) {
+        return null;
+      }
+
+      current = field;
+    }
+
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      !('kind' in current) ||
+      current.kind !== 'text_map'
+    ) {
+      return null;
+    }
+
+    const entry = current.entries.find((candidate) => candidate.key === key)?.value;
+    if (entry === null || entry === undefined) {
+      return null;
+    }
+
+    if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
+      return String(entry);
+    }
+
+    if (
+      typeof entry === 'object' &&
+      entry !== null &&
+      'kind' in entry &&
+      entry.kind === 'contract_id'
+    ) {
+      return entry.value;
     }
 
     return null;

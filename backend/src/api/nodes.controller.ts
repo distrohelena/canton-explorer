@@ -96,6 +96,10 @@ export class NodesController {
     @Query('limit') limit?: string,
     @Query('before') before?: string,
     @Query('after') after?: string,
+    @Query('fromParty') fromParty?: string | string[],
+    @Query('toParty') toParty?: string | string[],
+    @Query('amountGt') amountGt?: string,
+    @Query('amountLt') amountLt?: string,
   ) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
 
@@ -104,7 +108,14 @@ export class NodesController {
         fetchLatestTokenTransfers: (
           nodes: ReturnType<NodeConfigService['list']>,
           limit?: number,
-          options?: { before?: string; after?: string },
+          options?: {
+            before?: string;
+            after?: string;
+            fromParties?: string[];
+            toParties?: string[];
+            amountGt?: string;
+            amountLt?: string;
+          },
         ) => unknown;
       }
     ).fetchLatestTokenTransfers(
@@ -113,8 +124,124 @@ export class NodesController {
       {
         before,
         after,
+        fromParties: Array.isArray(fromParty) ? fromParty : fromParty ? [fromParty] : undefined,
+        toParties: Array.isArray(toParty) ? toParty : toParty ? [toParty] : undefined,
+        amountGt,
+        amountLt,
       },
     );
+  }
+
+  @Get('/tokens/transfers/:updateId')
+  async getTokenTransferDetail(@Param('updateId') updateId: string) {
+    try {
+      return await (
+        this.pqsSummaryService as PqsSummaryService & {
+          fetchTokenTransferDetail: (
+            nodes: ReturnType<NodeConfigService['list']>,
+            updateId: string,
+          ) => Promise<unknown>;
+        }
+      ).fetchTokenTransferDetail(this.configService.list(), updateId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Token transfer not found') {
+        throw new NotFoundException(`Unknown token transfer: ${updateId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/tokens/:tokenId/transfers')
+  async listTransfersByToken(
+    @Param('tokenId') tokenId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('fromParty') fromParty?: string | string[],
+    @Query('toParty') toParty?: string | string[],
+    @Query('amountGt') amountGt?: string,
+    @Query('amountLt') amountLt?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    try {
+      return await (
+        this.pqsSummaryService as PqsSummaryService & {
+          fetchTokenTransfers: (
+            nodes: ReturnType<NodeConfigService['list']>,
+            tokenId: string,
+            limit?: number,
+            options?: {
+              before?: string;
+              after?: string;
+              fromParties?: string[];
+              toParties?: string[];
+              amountGt?: string;
+              amountLt?: string;
+            },
+          ) => Promise<unknown>;
+        }
+      ).fetchTokenTransfers(
+        this.configService.list(),
+        tokenId,
+        Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+        {
+          before,
+          after,
+          fromParties: Array.isArray(fromParty) ? fromParty : fromParty ? [fromParty] : undefined,
+          toParties: Array.isArray(toParty) ? toParty : toParty ? [toParty] : undefined,
+          amountGt,
+          amountLt,
+        },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Token not found') {
+        throw new NotFoundException(`Unknown token: ${tokenId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/tokens/:tokenId')
+  async getTokenDetail(@Param('tokenId') tokenId: string) {
+    try {
+      return await (
+        this.pqsSummaryService as PqsSummaryService & {
+          fetchTokenDetail: (
+            nodes: ReturnType<NodeConfigService['list']>,
+            tokenId: string,
+          ) => Promise<unknown>;
+        }
+      ).fetchTokenDetail(this.configService.list(), tokenId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Token not found') {
+        throw new NotFoundException(`Unknown token: ${tokenId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/tokens/:tokenId/holders')
+  async listTokenHolders(@Param('tokenId') tokenId: string) {
+    try {
+      return await (
+        this.pqsSummaryService as PqsSummaryService & {
+          fetchTokenHolders: (
+            nodes: ReturnType<NodeConfigService['list']>,
+            tokenId: string,
+          ) => Promise<unknown>;
+        }
+      ).fetchTokenHolders(this.configService.list(), tokenId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Token not found') {
+        throw new NotFoundException(`Unknown token: ${tokenId}`);
+      }
+
+      throw error;
+    }
   }
 
   @Get('/search')

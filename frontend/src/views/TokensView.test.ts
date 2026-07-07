@@ -14,6 +14,8 @@ async function renderAt(path: string) {
     history: createMemoryHistory(),
     routes: [
       { path: '/tokens', component: TokensView },
+      { path: '/tokens/transfers/:updateId', component: { template: '<div>Transfer Detail</div>' } },
+      { path: '/tokens/:tokenId', component: { template: '<div>Token Detail</div>' } },
       { path: '/nodes/:id/updates/:eventOffset', component: { template: '<div>Update Detail</div>' } },
       { path: '/parties/:partyId', component: { template: '<div>Party Detail</div>' } },
     ],
@@ -148,6 +150,122 @@ describe('TokensView', () => {
     expect(await screen.findByText('Party Detail')).toBeInTheDocument();
   });
 
+  it('navigates to the token detail page from a known token card', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue({
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    const { router } = await renderAt('/tokens');
+
+    await fireEvent.click(await screen.findByRole('link', { name: /Canton Coin/i }));
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens/canton-coin'));
+    expect(await screen.findByText('Token Detail')).toBeInTheDocument();
+  });
+
+  it('navigates to the token detail page from a transfer token link', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue({
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [
+        {
+          tokenId: 'canton-coin',
+          tokenName: 'Canton Coin',
+          amount: '42.0',
+          sender: 'Alice',
+          receiver: 'Bob',
+          updateId: 'token-update-2',
+          recordTime: '2026-07-07T12:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+              eventOffset: '202',
+            },
+          ],
+        },
+      ],
+    });
+
+    const { router } = await renderAt('/tokens');
+    const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
+
+    await fireEvent.click(within(transfersTable).getByRole('link', { name: /Canton Coin/i }));
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens/canton-coin'));
+    expect(await screen.findByText('Token Detail')).toBeInTheDocument();
+  });
+
+  it('navigates to the transfer detail page when clicking a transfer row', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue({
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [
+        {
+          tokenId: 'canton-coin',
+          tokenName: 'Canton Coin',
+          amount: '42.0',
+          sender: 'Alice',
+          receiver: 'Bob',
+          updateId: 'token-update-2',
+          recordTime: '2026-07-07T12:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+              eventOffset: '202',
+            },
+          ],
+        },
+      ],
+    });
+
+    const { router, container } = await renderAt('/tokens');
+
+    const row = container.querySelector('.tokens-page__row.node-updates__row--link');
+    expect(row).not.toBeNull();
+
+    await fireEvent.click(row as Element);
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens/transfers/token-update-2'));
+    expect(await screen.findByText('Transfer Detail')).toBeInTheDocument();
+  });
+
   it('paginates the token transfer feed with opaque cursors', async () => {
     vi.mocked(fetchTokens).mockResolvedValue({
       tokens: [
@@ -230,7 +348,7 @@ describe('TokensView', () => {
         ],
       });
 
-    await renderAt('/tokens');
+    const { router } = await renderAt('/tokens');
 
     await screen.findByText('Canton Coin');
 
@@ -239,6 +357,7 @@ describe('TokensView', () => {
     await waitFor(() =>
       expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(2, 25, { before: 'cursor-token-0' }),
     );
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?before=cursor-token-0'));
     expect(await screen.findByText('Participant 1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
 
@@ -247,6 +366,7 @@ describe('TokensView', () => {
     await waitFor(() =>
       expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(3, 25, { after: 'cursor-token-1' }),
     );
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?after=cursor-token-1'));
     expect(await screen.findByText('Participant 2')).toBeInTheDocument();
   });
 
@@ -296,5 +416,102 @@ describe('TokensView', () => {
     expect(within(transfersTable).getByText('CNQS App Provider')).toBeInTheDocument();
     expect(within(transfersTable).getByText('CNQS Super Validator')).toBeInTheDocument();
     expect(container.querySelectorAll('.tokens-page__nodes-item')).toHaveLength(2);
+  });
+
+  it('opens the advanced filter from URL state and passes separate from/to party filters', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue({
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [
+        {
+          tokenId: 'canton-coin',
+          tokenName: 'Canton Coin',
+          amount: '42.0',
+          sender: 'Alice',
+          receiver: 'Bob',
+          updateId: 'token-update-2',
+          recordTime: '2026-07-07T12:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+              eventOffset: '202',
+            },
+          ],
+        },
+      ],
+    });
+
+    await renderAt('/tokens?fromParty=Alice&toParty=Bob');
+
+    await screen.findByText('Canton Coin');
+
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 25, {
+      fromParties: ['Alice'],
+      toParties: ['Bob'],
+    });
+    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('heading', { name: 'Advanced Filter Parameters' })).toBeInTheDocument();
+    expect(screen.getAllByText('Alice').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bob').length).toBeGreaterThan(0);
+  });
+
+  it('passes amount bounds from URL state through the latest transfer query', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue({
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [
+        {
+          tokenId: 'canton-coin',
+          tokenName: 'Canton Coin',
+          amount: '42.0',
+          sender: 'Alice',
+          receiver: 'Bob',
+          updateId: 'token-update-2',
+          recordTime: '2026-07-07T12:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+              eventOffset: '202',
+            },
+          ],
+        },
+      ],
+    });
+
+    const { container } = await renderAt('/tokens?amountGt=10&amountLt=100');
+
+    await screen.findByText('Canton Coin');
+
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 25, {
+      amountGt: '10',
+      amountLt: '100',
+    });
+    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelector('input[value="10"]')).not.toBeNull();
+    expect(container.querySelector('input[value="100"]')).not.toBeNull();
   });
 });

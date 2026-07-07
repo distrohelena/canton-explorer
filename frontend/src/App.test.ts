@@ -24,6 +24,10 @@ const TokensStub = defineComponent({
   template: '<div>Tokens View</div>',
 });
 
+const TokenTransferDetailStub = defineComponent({
+  template: '<div>Token Transfer Detail View</div>',
+});
+
 const NodeUpdatesStub = defineComponent({
   template: '<div>Node Updates View</div>',
 });
@@ -61,6 +65,7 @@ async function renderAt(path: string) {
       { path: '/parties', component: PartiesStub },
       { path: '/contracts', component: ContractsStub },
       { path: '/tokens', component: TokensStub },
+      { path: '/tokens/transfers/:updateId', component: TokenTransferDetailStub, props: true },
       { path: '/search', component: SearchResultsStub },
       { path: '/nodes/:id/updates', component: NodeUpdatesStub, props: true },
       { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailStub, props: true },
@@ -170,6 +175,14 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
     expect(screen.getByText('Tokens View')).toBeInTheDocument();
+  });
+
+  it('keeps the shared shell on a token transfer detail route', async () => {
+    await renderAt('/tokens/transfers/token-update-2');
+
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByText('Token Transfer Detail View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a node detail route', async () => {

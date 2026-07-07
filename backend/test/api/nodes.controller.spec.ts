@@ -13,7 +13,10 @@ import type {
   PackageDetailResponse,
   PackageFamilyResponse,
   TemplateFilterResponse,
+  TokenDetailResponse,
+  TokenHoldersResponse,
   TokensResponse,
+  TokenTransferSummary,
   TokenTransfersResponse,
 } from '../../src/domain/node.types';
 
@@ -352,12 +355,100 @@ const typedTokenTransfersFixture = {
   ],
 } satisfies TokenTransfersResponse;
 
+const typedScopedTokenTransfersFixture = {
+  limit: 25,
+  nextBefore: 'token-cursor-before-2',
+  nextAfter: 'token-cursor-after-2',
+  transfers: [
+    {
+      tokenId: 'validator-license',
+      tokenName: 'Validator License',
+      amount: '42.5000000000',
+      sender: 'Issuer',
+      receiver: 'Alice',
+      updateId: 'validator-license-update-1',
+      recordTime: '2026-07-07T14:10:00.000Z',
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '901',
+        },
+      ],
+    },
+  ],
+} satisfies TokenTransfersResponse;
+
+const typedTokenTransferDetailFixture = {
+  tokenId: 'canton-coin',
+  tokenName: 'Canton Coin',
+  amount: '42.0',
+  sender: 'Alice',
+  receiver: 'Bob',
+  updateId: 'token-update-2',
+  recordTime: '2026-07-07T12:00:00.000Z',
+  nodes: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      eventOffset: '202',
+    },
+  ],
+} satisfies TokenTransferSummary;
+
+const typedTokenDetailFixture = {
+  token: {
+    tokenId: 'validator-license',
+    name: 'Validator License',
+    symbol: 'VL',
+    source: 'pqs',
+  },
+  transfers: [
+    {
+      tokenId: 'validator-license',
+      tokenName: 'Validator License',
+      amount: '42.5000000000',
+      sender: 'Issuer',
+      receiver: 'Alice',
+      updateId: 'validator-license-update-1',
+      recordTime: '2026-07-07T14:10:00.000Z',
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '901',
+        },
+      ],
+    },
+  ],
+} satisfies TokenDetailResponse;
+
+const typedTokenHoldersFixture = {
+  tokenId: 'validator-license',
+  holders: [
+    {
+      partyId: 'Alice',
+      amount: '150.0000000000',
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+        },
+      ],
+    },
+  ],
+} satisfies TokenHoldersResponse;
+
 describe('NodesController', () => {
   let controller: NodesController;
   let cache: NodeCacheService;
   let pqsSummaryService: {
     fetchTokens: jest.Mock;
     fetchLatestTokenTransfers: jest.Mock;
+    fetchTokenTransfers: jest.Mock;
+    fetchTokenTransferDetail: jest.Mock;
+    fetchTokenDetail: jest.Mock;
+    fetchTokenHolders: jest.Mock;
     fetchGlobalRecentUpdates: jest.Mock;
     fetchRecentUpdates: jest.Mock;
     fetchUpdateDetail: jest.Mock;
@@ -383,6 +474,10 @@ describe('NodesController', () => {
     pqsSummaryService = {
       fetchTokens: jest.fn().mockResolvedValue(typedTokensFixture),
       fetchLatestTokenTransfers: jest.fn().mockResolvedValue(typedTokenTransfersFixture),
+      fetchTokenTransfers: jest.fn().mockResolvedValue(typedScopedTokenTransfersFixture),
+      fetchTokenTransferDetail: jest.fn().mockResolvedValue(typedTokenTransferDetailFixture),
+      fetchTokenDetail: jest.fn().mockResolvedValue(typedTokenDetailFixture),
+      fetchTokenHolders: jest.fn().mockResolvedValue(typedTokenHoldersFixture),
       fetchGlobalRecentUpdates: jest.fn().mockResolvedValue({
         limit: 25,
         nextBefore: null,
@@ -1300,6 +1395,210 @@ describe('NodesController', () => {
         after: 'token-cursor-after-1',
       },
     );
+  });
+
+  it('passes token transfer party-side filters through to the PQS summary service', async () => {
+    await (
+      controller as unknown as {
+        listTokenTransfers: (
+          limit?: string,
+          before?: string,
+          after?: string,
+          fromParty?: string | string[],
+          toParty?: string | string[],
+        ) => Promise<unknown>;
+      }
+    ).listTokenTransfers('25', undefined, undefined, ['Alice', 'Carol'], 'Bob');
+
+    expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      25,
+      {
+        before: undefined,
+        after: undefined,
+        fromParties: ['Alice', 'Carol'],
+        toParties: ['Bob'],
+      },
+    );
+  });
+
+  it('passes token transfer amount bounds through to the PQS summary service', async () => {
+    await (
+      controller as unknown as {
+        listTokenTransfers: (
+          limit?: string,
+          before?: string,
+          after?: string,
+          fromParty?: string | string[],
+          toParty?: string | string[],
+          amountGt?: string,
+          amountLt?: string,
+        ) => Promise<unknown>;
+      }
+    ).listTokenTransfers('25', undefined, undefined, undefined, undefined, '10.5', '100.0');
+
+    expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      25,
+      {
+        before: undefined,
+        after: undefined,
+        fromParties: undefined,
+        toParties: undefined,
+        amountGt: '10.5',
+        amountLt: '100.0',
+      },
+    );
+  });
+
+  it('returns a token transfer detail by update id', async () => {
+    const response = await (
+      controller as unknown as {
+        getTokenTransferDetail: (updateId: string) => Promise<unknown>;
+      }
+    ).getTokenTransferDetail('token-update-2');
+
+    expect(pqsSummaryService.fetchTokenTransferDetail).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'token-update-2',
+    );
+    expect(response).toEqual(typedTokenTransferDetailFixture);
+  });
+
+  it('passes token-scoped transfer pagination cursors through to the PQS summary service', async () => {
+    const response = await (
+      controller as unknown as {
+        listTransfersByToken: (
+          tokenId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<unknown>;
+      }
+    ).listTransfersByToken('validator-license', '25', 'token-cursor-before-2', 'token-cursor-after-2');
+
+    expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'validator-license',
+      25,
+      {
+        before: 'token-cursor-before-2',
+        after: 'token-cursor-after-2',
+      },
+    );
+    expect(response).toEqual(typedScopedTokenTransfersFixture);
+  });
+
+  it('passes token-scoped transfer party-side filters through to the PQS summary service', async () => {
+    const response = await (
+      controller as unknown as {
+        listTransfersByToken: (
+          tokenId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+          fromParty?: string | string[],
+          toParty?: string | string[],
+        ) => Promise<unknown>;
+      }
+    ).listTransfersByToken('validator-license', '25', undefined, undefined, 'Issuer', ['Alice', 'Bob']);
+
+    expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'validator-license',
+      25,
+      {
+        before: undefined,
+        after: undefined,
+        fromParties: ['Issuer'],
+        toParties: ['Alice', 'Bob'],
+      },
+    );
+    expect(response).toEqual(typedScopedTokenTransfersFixture);
+  });
+
+  it('passes token-scoped transfer amount bounds through to the PQS summary service', async () => {
+    const response = await (
+      controller as unknown as {
+        listTransfersByToken: (
+          tokenId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+          fromParty?: string | string[],
+          toParty?: string | string[],
+          amountGt?: string,
+          amountLt?: string,
+        ) => Promise<unknown>;
+      }
+    ).listTransfersByToken('validator-license', '25', undefined, undefined, undefined, undefined, '20', '50');
+
+    expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'validator-license',
+      25,
+      {
+        before: undefined,
+        after: undefined,
+        fromParties: undefined,
+        toParties: undefined,
+        amountGt: '20',
+        amountLt: '50',
+      },
+    );
+    expect(response).toEqual(typedScopedTokenTransfersFixture);
+  });
+
+  it('returns a token detail by token id', async () => {
+    const response = await (
+      controller as unknown as {
+        getTokenDetail: (tokenId: string) => Promise<unknown>;
+      }
+    ).getTokenDetail('validator-license');
+
+    expect(pqsSummaryService.fetchTokenDetail).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'validator-license',
+    );
+    expect(response).toEqual(typedTokenDetailFixture);
+  });
+
+  it('returns token holders by token id', async () => {
+    const response = await (
+      controller as unknown as {
+        listTokenHolders: (tokenId: string) => Promise<unknown>;
+      }
+    ).listTokenHolders('validator-license');
+
+    expect(pqsSummaryService.fetchTokenHolders).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'validator-license',
+    );
+    expect(response).toEqual(typedTokenHoldersFixture);
   });
 
   it('passes through offset cursors for updates pagination', async () => {

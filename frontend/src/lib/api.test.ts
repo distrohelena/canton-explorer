@@ -4,6 +4,10 @@ import {
   fetchActiveParties,
   fetchActivityHistory,
   fetchLocalParties,
+  fetchTokenDetail,
+  fetchTokenHolders,
+  fetchTokenTransfers,
+  fetchTokenTransferDetail,
   fetchLatestTokenTransfers,
   fetchNodeActiveParties,
   fetchNodeContracts,
@@ -18,7 +22,12 @@ import type { NodePackagesResponse, NodeParticipantStatusResponse } from '../typ
 import type { ActivePartiesResponse } from '../types/active-parties';
 import type { PartyDetailResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
-import type { TokenTransfersResponse, TokensResponse } from '../types/tokens';
+import type {
+  TokenDetailResponse,
+  TokenHoldersResponse,
+  TokenTransfersResponse,
+  TokensResponse,
+} from '../types/tokens';
 import type { NodeUpdateDetailResponse } from '../types/updates';
 
 const typedUpdateDetailFixture = {
@@ -348,6 +357,94 @@ const typedTokenTransfersFixture = {
   ],
 } satisfies TokenTransfersResponse;
 
+const typedTokenDetailFixture = {
+  token: {
+    tokenId: 'canton-coin',
+    name: 'Canton Coin',
+    symbol: null,
+    source: 'pqs',
+  },
+  transfers: [
+    {
+      tokenId: 'canton-coin',
+      tokenName: 'Canton Coin',
+      amount: '42.0',
+      sender: 'Alice',
+      receiver: 'Bob',
+      updateId: 'token-update-2',
+      recordTime: '2026-07-07T12:00:00.000Z',
+      nodes: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          eventOffset: '202',
+        },
+      ],
+    },
+  ],
+} satisfies TokenDetailResponse;
+
+const typedScopedTokenTransfersFixture = {
+  limit: 25,
+  nextBefore: 'token-cursor-before-2',
+  nextAfter: 'token-cursor-after-2',
+  transfers: [
+    {
+      tokenId: 'validator-license',
+      tokenName: 'Validator License',
+      amount: '42.5000000000',
+      sender: 'Issuer',
+      receiver: 'Alice',
+      updateId: 'validator-license-update-1',
+      recordTime: '2026-07-07T14:10:00.000Z',
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '901',
+        },
+      ],
+    },
+  ],
+} satisfies TokenTransfersResponse;
+
+const typedTokenHoldersFixture = {
+  tokenId: 'canton-coin',
+  holders: [
+    {
+      partyId: 'Alice',
+      amount: '100.0',
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+        },
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+        },
+      ],
+    },
+  ],
+} satisfies TokenHoldersResponse;
+
+const typedTokenTransferDetailFixture = {
+  tokenId: 'canton-coin',
+  tokenName: 'Canton Coin',
+  amount: '42.0',
+  sender: 'Alice',
+  receiver: 'Bob',
+  updateId: 'token-update-2',
+  recordTime: '2026-07-07T12:00:00.000Z',
+  nodes: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      eventOffset: '202',
+    },
+  ],
+} satisfies TokenTransfersResponse['transfers'][number];
+
 describe('fetchNodes', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -360,6 +457,8 @@ describe('fetchNodes', () => {
     expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
     expect(typedNodePackagesFixture.packagesByName[0].packages[0].packageId).toBe('main-package-v2');
     expect(typedPartyDetailFixture.recentUpdates[0].updateId).toContain('1220994e');
+    expect(typedTokenDetailFixture.token.tokenId).toBe('canton-coin');
+    expect(typedTokenHoldersFixture.holders[0].partyId).toBe('Alice');
   });
 
   it('loads node summaries from the backend API', async () => {
@@ -505,6 +604,134 @@ describe('fetchNodes', () => {
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:3100/api/tokens/transfers?before=cursor-token-0&limit=25',
+    );
+  });
+
+  it('loads latest token transfers with from/to party filters from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchLatestTokenTransfers(25, {
+      fromParties: ['Alice', 'Carol'],
+      toParties: ['Bob'],
+    });
+
+    expect(result.transfers[0]?.updateId).toBe('token-update-2');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/transfers?fromParty=Alice&fromParty=Carol&toParty=Bob&limit=25',
+    );
+  });
+
+  it('loads latest token transfers with amount bounds from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchLatestTokenTransfers(25, {
+      amountGt: '10.5',
+      amountLt: '100.0',
+    });
+
+    expect(result.transfers[0]?.updateId).toBe('token-update-2');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/transfers?amountGt=10.5&amountLt=100.0&limit=25',
+    );
+  });
+
+  it('loads a token detail by token id from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenDetailFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenDetail('canton-coin');
+
+    expect(result.token.tokenId).toBe('canton-coin');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/tokens/canton-coin');
+  });
+
+  it('loads token holders by token id from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenHoldersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenHolders('canton-coin');
+
+    expect(result.holders[0]?.partyId).toBe('Alice');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/tokens/canton-coin/holders');
+  });
+
+  it('loads token-scoped transfers with cursor pagination from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedScopedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenTransfers('validator-license', 25, { before: 'token-cursor-before-2' });
+
+    expect(result.transfers[0]?.tokenId).toBe('validator-license');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/validator-license/transfers?before=token-cursor-before-2&limit=25',
+    );
+  });
+
+  it('loads token-scoped transfers with from/to party filters from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedScopedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenTransfers('validator-license', 25, {
+      fromParties: ['Issuer'],
+      toParties: ['Alice', 'Bob'],
+    });
+
+    expect(result.transfers[0]?.tokenId).toBe('validator-license');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/validator-license/transfers?fromParty=Issuer&toParty=Alice&toParty=Bob&limit=25',
+    );
+  });
+
+  it('loads token-scoped transfers with amount bounds from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedScopedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenTransfers('validator-license', 25, {
+      amountGt: '20',
+      amountLt: '50',
+    });
+
+    expect(result.transfers[0]?.tokenId).toBe('validator-license');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/validator-license/transfers?amountGt=20&amountLt=50&limit=25',
+    );
+  });
+
+  it('loads a token transfer detail by update id from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenTransferDetailFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenTransferDetail('token-update-2');
+
+    expect(result.updateId).toBe('token-update-2');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/transfers/token-update-2',
     );
   });
 

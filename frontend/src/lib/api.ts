@@ -16,7 +16,12 @@ import type { PartyContractsResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
 import type { SearchResultsResponse } from '../types/search';
 import type { TemplateFilterResponse } from '../types/templates';
-import type { TokenTransfersResponse, TokensResponse } from '../types/tokens';
+import type {
+  TokenDetailResponse,
+  TokenHoldersResponse,
+  TokenTransfersResponse,
+  TokensResponse,
+} from '../types/tokens';
 import type {
   GlobalUpdatesResponse,
   NodeUpdateDetailResponse,
@@ -156,11 +161,23 @@ export function fetchTokens(): Promise<TokensResponse> {
   return fetchJson<TokensResponse>('/tokens');
 }
 
+export function fetchTokenDetail(tokenId: string): Promise<TokenDetailResponse> {
+  return fetchJson<TokenDetailResponse>(`/tokens/${encodeURIComponent(tokenId)}`);
+}
+
+export function fetchTokenHolders(tokenId: string): Promise<TokenHoldersResponse> {
+  return fetchJson<TokenHoldersResponse>(`/tokens/${encodeURIComponent(tokenId)}/holders`);
+}
+
 export function fetchLatestTokenTransfers(
   limit = 25,
   options?: {
     before?: string;
     after?: string;
+    fromParties?: string[];
+    toParties?: string[];
+    amountGt?: string;
+    amountLt?: string;
   },
 ): Promise<TokenTransfersResponse> {
   const params = new URLSearchParams();
@@ -170,9 +187,73 @@ export function fetchLatestTokenTransfers(
   if (options?.after) {
     params.set('after', options.after);
   }
+  for (const party of options?.fromParties ?? []) {
+    if (party.trim()) {
+      params.append('fromParty', party);
+    }
+  }
+  for (const party of options?.toParties ?? []) {
+    if (party.trim()) {
+      params.append('toParty', party);
+    }
+  }
+  if (options?.amountGt?.trim()) {
+    params.set('amountGt', options.amountGt.trim());
+  }
+  if (options?.amountLt?.trim()) {
+    params.set('amountLt', options.amountLt.trim());
+  }
   params.set('limit', String(Math.max(1, Math.trunc(limit))));
 
   return fetchJson<TokenTransfersResponse>(`/tokens/transfers?${params.toString()}`);
+}
+
+export function fetchTokenTransfers(
+  tokenId: string,
+  limit = 25,
+  options?: {
+    before?: string;
+    after?: string;
+    fromParties?: string[];
+    toParties?: string[];
+    amountGt?: string;
+    amountLt?: string;
+  },
+): Promise<TokenTransfersResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  for (const party of options?.fromParties ?? []) {
+    if (party.trim()) {
+      params.append('fromParty', party);
+    }
+  }
+  for (const party of options?.toParties ?? []) {
+    if (party.trim()) {
+      params.append('toParty', party);
+    }
+  }
+  if (options?.amountGt?.trim()) {
+    params.set('amountGt', options.amountGt.trim());
+  }
+  if (options?.amountLt?.trim()) {
+    params.set('amountLt', options.amountLt.trim());
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(limit))));
+
+  return fetchJson<TokenTransfersResponse>(
+    `/tokens/${encodeURIComponent(tokenId)}/transfers?${params.toString()}`,
+  );
+}
+
+export function fetchTokenTransferDetail(updateId: string): Promise<TokenTransfersResponse['transfers'][number]> {
+  return fetchJson<TokenTransfersResponse['transfers'][number]>(
+    `/tokens/transfers/${encodeURIComponent(updateId)}`,
+  );
 }
 
 export function fetchLatestUpdates(
