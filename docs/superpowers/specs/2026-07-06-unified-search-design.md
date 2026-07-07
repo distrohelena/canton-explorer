@@ -40,8 +40,9 @@ Behavior:
 
 - User types a query.
 - Search runs only on explicit submit.
-- Submit navigates to `/search?q=<raw query>`.
+- Submit navigates to `/search?q=<trimmed query>`.
 - Empty or whitespace-only query does not issue a request.
+- The titlebar input may keep the user's typed whitespace locally, but the routed query string and backend request always use the trimmed value.
 
 Current app note:
 
@@ -58,6 +59,12 @@ The page shows:
 - A grouped result layout
 - A per-group result count
 - A clean empty state if no matches exist
+
+Direct-load behavior:
+
+- `/search` with no `q` parameter renders an idle empty state and does not request backend data.
+- `/search?q=` or `/search?q=%20...` behaves the same after trimming: idle empty state and no backend request.
+- `/search?q=<value>` restores the trimmed query into the page state and drives the fetch.
 
 Group order:
 
@@ -105,12 +112,20 @@ Search uses exact and prefix matching only.
 - Trim leading and trailing whitespace.
 - Preserve case-sensitive semantics by default.
 - Keep matching logic explicit per entity instead of applying one generic normalization everywhere.
+- Use the trimmed query for both routing and backend lookup.
 
 ### Parties
 
 Match exact or prefix against normalized party IDs shown by the app.
 
 The search layer should also tolerate party values that still include raw transport prefixes if they appear in stored data.
+
+Rules:
+
+- Query `p|Alice` must match the normalized party ID `Alice`.
+- Query `Alice` must also match stored raw forms like `p|Alice`.
+- Returned `partyId` values in search results are always normalized display values.
+- Party links always use the normalized app route form: `/parties/:partyId`.
 
 ### Updates
 
@@ -136,6 +151,8 @@ Support both:
 
 Package results should retain enough metadata for disambiguation, especially version.
 
+Package search is limited to packages already resolved in `PackageCacheService`, because those are the only package pages guaranteed to exist.
+
 ## Backend Design
 
 ### Endpoint
@@ -153,14 +170,22 @@ Return grouped results instead of a flat mixed list.
 Proposed shape:
 
 ```ts
+interface SearchResultGroup<T> {
+  items: T[];
+  displayedCount: number;
+  truncated: boolean;
+  status: 'ok' | 'partial' | 'failed';
+  warnings: string[];
+}
+
 interface SearchResultsResponse {
   query: string;
-  updates: SearchUpdateResult[];
-  contracts: SearchContractResult[];
-  parties: SearchPartyResult[];
+  updates: SearchResultGroup<SearchUpdateResult>;
+  contracts: SearchResultGroup<SearchContractResult>;
+  parties: SearchResultGroup<SearchPartyResult>;
   packages: {
-    packageIds: SearchPackageIdResult[];
-    packageNames: SearchPackageNameResult[];
+    packageIds: SearchResultGroup<SearchPackageIdResult>;
+    packageNames: SearchResultGroup<SearchPackageNameResult>;
   };
 }
 ```
@@ -229,6 +254,8 @@ This keeps the cross-entity entry point simple while avoiding one oversized quer
 
 No gRPC fallback in v1.
 
+Package groups must only emit cache-backed matches that can resolve to existing package detail or package-family pages.
+
 ### Result limits
 
 Use per-group caps rather than one global cap.
@@ -239,6 +266,14 @@ Recommended initial cap:
 
 If a group is truncated, include enough information for the frontend to show that only the first page is displayed.
 
+Search dedupes within each group before truncation:
+
+- Updates dedupe by `(nodeId, eventOffset)`
+- Contracts dedupe by `(nodeId, contractId)`
+- Parties dedupe by normalized `partyId`
+- Package ID matches dedupe by `packageId`
+- Package name matches dedupe by normalized package `name`
+
 ### Failure handling
 
 Search should degrade by group where possible.
@@ -247,7 +282,13 @@ If one group query fails:
 
 - Log it
 - Return other successful groups
-- Include an empty group rather than failing the whole search request
+- Return the failed group with `status: 'failed'`, empty `items`, and at least one warning message
+
+For PQS-backed groups that aggregate across multiple nodes:
+
+- A single node failure must not discard successful matches from other nodes.
+- If at least one node succeeds and at least one node fails, return the successful merged items with `status: 'partial'` and warnings that identify the failing node labels.
+- If all contributing nodes fail for that group, return `status: 'failed'`.
 
 Only reject the whole request for fundamentally invalid input or unrecoverable shared failures.
 
@@ -262,16 +303,22 @@ Implementation approach:
 - Match exact or prefix on normalized event offset
 - Match exact or prefix on normalized update ID
 - Reuse the same result-linking shape already used by update lists so routing remains correct
+- Dedupe results that match both event offset and update ID, then order exact matches before prefix matches
+- Within the same match bucket, order by record time descending, then node label ascending, then event offset descending where available
 
 ### Contracts
 
 Search exact or prefix on contract ID and return node context with minimal metadata.
+
+Order exact matches before prefix matches, then created record time descending, then node label ascending.
 
 ### Parties
 
 Search exact or prefix on party ID.
 
 Because party detail pages already exist globally, result rows can link directly to `/parties/:partyId`.
+
+Order exact matches before prefix matches, then normalized `partyId` ascending.
 
 ### Packages
 
@@ -283,6 +330,13 @@ Run two distinct searches:
 Package name matches should link to the existing package family page.
 
 Package ID matches should link to the package detail page.
+
+Order exact matches before prefix matches.
+
+Secondary ordering:
+
+- Package ID matches: package name ascending when present, then version descending, then package ID ascending
+- Package name matches: package name ascending
 
 ## Frontend Design
 
@@ -301,6 +355,7 @@ The global search component should:
 - Submit to `/search?q=...`
 - Preserve the current query when already on the search page
 - Not issue network requests itself
+- Avoid adding a `q` route update for whitespace-only submits
 
 Implementation note:
 
@@ -319,10 +374,19 @@ Create a view that:
 
 States:
 
+- idle empty query
 - loading
 - loaded with matches
 - loaded with no matches
+- loaded with partial group failures
 - request error
+
+Per-group rendering should distinguish:
+
+- no matches
+- truncated results
+- partial failure warnings
+- full group failure warnings
 
 ### Reuse opportunities
 
@@ -350,26 +414,34 @@ Add coverage for:
 
 - exact update match
 - prefix update match
+- exact update-id plus event-offset double-match dedupe
 - exact contract match
 - prefix contract match
 - exact party match
 - prefix party match
+- `p|`-prefixed party query normalization
 - exact package ID match
 - prefix package ID match
 - exact package name match
 - prefix package name match
+- package search limited to cache-resolved entries
 - grouped response shape
 - partial failure behavior
+- direct-load empty-query behavior
+- ordering rules within result groups
 
 ### Frontend
 
 Add coverage for:
 
 - search submit navigates to `/search?q=...`
+- whitespace-only submit does not navigate
 - query is restored from the URL on the search page
+- direct `/search` load shows idle state without fetching
 - loading state
 - empty state
 - grouped result rendering
+- per-group warning rendering
 - link destinations per result type
 - backend error state
 
