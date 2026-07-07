@@ -82,6 +82,41 @@ export class NodesController {
     );
   }
 
+  @Get('/tokens')
+  listTokens() {
+    return (
+      this.pqsSummaryService as PqsSummaryService & {
+        fetchTokens: (nodes: ReturnType<NodeConfigService['list']>) => unknown;
+      }
+    ).fetchTokens(this.configService.list());
+  }
+
+  @Get('/tokens/transfers')
+  listTokenTransfers(
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    return (
+      this.pqsSummaryService as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: ReturnType<NodeConfigService['list']>,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => unknown;
+      }
+    ).fetchLatestTokenTransfers(
+      this.configService.list(),
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      {
+        before,
+        after,
+      },
+    );
+  }
+
   @Get('/search')
   search(@Query('q') query?: string) {
     return (

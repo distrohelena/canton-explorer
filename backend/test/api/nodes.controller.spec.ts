@@ -13,6 +13,8 @@ import type {
   PackageDetailResponse,
   PackageFamilyResponse,
   TemplateFilterResponse,
+  TokensResponse,
+  TokenTransfersResponse,
 } from '../../src/domain/node.types';
 
 const typedPackageDetailFixture = {
@@ -315,10 +317,43 @@ const typedLocalPartiesFixture = {
   ],
 };
 
+const typedTokensFixture = {
+  tokens: [
+    {
+      tokenId: 'canton-coin',
+      name: 'Canton Coin',
+      symbol: null,
+      source: 'pqs',
+    },
+  ],
+} satisfies TokensResponse;
+
+const typedTokenTransfersFixture = {
+  limit: 25,
+  nextBefore: 'token-cursor-before-1',
+  nextAfter: null,
+  transfers: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      tokenId: 'canton-coin',
+      tokenName: 'Canton Coin',
+      amount: '42.0',
+      sender: 'Alice',
+      receiver: 'Bob',
+      eventOffset: '000000000000000002',
+      updateId: '00000000000000000000000000000002',
+      recordTime: '2026-07-01T12:01:00.000Z',
+    },
+  ],
+} satisfies TokenTransfersResponse;
+
 describe('NodesController', () => {
   let controller: NodesController;
   let cache: NodeCacheService;
   let pqsSummaryService: {
+    fetchTokens: jest.Mock;
+    fetchLatestTokenTransfers: jest.Mock;
     fetchGlobalRecentUpdates: jest.Mock;
     fetchRecentUpdates: jest.Mock;
     fetchUpdateDetail: jest.Mock;
@@ -342,6 +377,8 @@ describe('NodesController', () => {
 
   beforeEach(async () => {
     pqsSummaryService = {
+      fetchTokens: jest.fn().mockResolvedValue(typedTokensFixture),
+      fetchLatestTokenTransfers: jest.fn().mockResolvedValue(typedTokenTransfersFixture),
       fetchGlobalRecentUpdates: jest.fn().mockResolvedValue({
         limit: 25,
         nextBefore: null,
@@ -1070,18 +1107,18 @@ describe('NodesController', () => {
           status: 'healthy',
           latestActiveContractCount: 15,
           samples: [
-            expect.objectContaining({
-              timestamp: '2026-06-29T12:00:00.000Z',
-              activityValue: 2,
-            }),
-            expect.objectContaining({
+            {
               timestamp: '2026-07-01T11:45:00.000Z',
               activityValue: 0,
-            }),
-            expect.objectContaining({
+              activeContractCount: 12,
+              latestOffset: '000000000000123456',
+            },
+            {
               timestamp: '2026-07-01T12:00:00.000Z',
               activityValue: 3,
-            }),
+              activeContractCount: 15,
+              latestOffset: '000000000000123457',
+            },
           ],
         },
       ],
@@ -1217,6 +1254,46 @@ describe('NodesController', () => {
         templates: ['Main:Asset', 'Main:Wallet'],
         partyMode: 'and',
         hideSplice: true,
+      },
+    );
+  });
+
+  it('returns discovered tokens across all known nodes', async () => {
+    const response = await (
+      controller as unknown as {
+        listTokens: () => Promise<unknown>;
+      }
+    ).listTokens();
+
+    expect(pqsSummaryService.fetchTokens).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+    );
+    expect(response).toEqual(typedTokensFixture);
+  });
+
+  it('passes token transfer pagination cursors through to the PQS summary service', async () => {
+    await (
+      controller as unknown as {
+        listTokenTransfers: (
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<unknown>;
+      }
+    ).listTokenTransfers('25', 'token-cursor-before-1', 'token-cursor-after-1');
+
+    expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      25,
+      {
+        before: 'token-cursor-before-1',
+        after: 'token-cursor-after-1',
       },
     );
   });

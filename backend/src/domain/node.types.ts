@@ -159,6 +159,37 @@ export interface GlobalContractsResponse {
   contracts: GlobalContractSummary[];
 }
 
+export interface TokenSummary {
+  tokenId: string;
+  name: string;
+  symbol: string | null;
+  source: 'pqs';
+}
+
+export interface TokensResponse {
+  tokens: TokenSummary[];
+}
+
+export interface TokenTransferSummary {
+  nodeId: string;
+  label: string;
+  tokenId: string;
+  tokenName: string;
+  amount: string | null;
+  sender: string | null;
+  receiver: string | null;
+  eventOffset: string;
+  updateId: string;
+  recordTime: string | null;
+}
+
+export interface TokenTransfersResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  transfers: TokenTransferSummary[];
+}
+
 export interface NodeUpdateDetailMeta {
   update_id: string;
   record_time: string | number | null;
