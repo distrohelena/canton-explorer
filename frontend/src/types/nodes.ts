@@ -47,6 +47,69 @@ export interface NodeInstalledPackageGroup {
   packages: NodeInstalledPackageEntry[];
 }
 
+export type NodeParticipantStatusState =
+  | 'ok'
+  | 'not_initialized'
+  | 'grpc_not_configured'
+  | 'grpc_error';
+
+export type NodeParticipantStatusComponentSeverity = 'ok' | 'degraded' | 'failed' | 'fatal';
+export type NodeParticipantSynchronizerHealth = 'unspecified' | 'healthy' | 'unhealthy';
+export type NodeParticipantWaitingForExternalInput =
+  | 'unspecified'
+  | 'id'
+  | 'node_topology'
+  | 'initialization';
+
+export interface NodeParticipantStatusComponent {
+  name: string;
+  severity: NodeParticipantStatusComponentSeverity;
+  description: string | null;
+}
+
+export interface NodeParticipantTopologyQueues {
+  manager: number;
+  dispatcher: number;
+  clients: number;
+}
+
+export interface NodeParticipantConnectedSynchronizer {
+  physicalSynchronizerId: string | null;
+  health: NodeParticipantSynchronizerHealth;
+}
+
+export interface NodeParticipantStatusSummary {
+  uid: string | null;
+  uptime: string | null;
+  ports: Record<string, number>;
+  active: boolean;
+  commonStatusActive: boolean | null;
+  version: string | null;
+  supportedProtocolVersions: number[];
+  topologyQueues: NodeParticipantTopologyQueues | null;
+  components: NodeParticipantStatusComponent[];
+  connectedSynchronizers: NodeParticipantConnectedSynchronizer[];
+}
+
+export interface NodeParticipantNotInitializedSummary {
+  active: boolean;
+  waitingForExternalInput: NodeParticipantWaitingForExternalInput;
+  version: string | null;
+}
+
+export interface NodeParticipantStatusResponse {
+  nodeId: string;
+  label: string;
+  mode: NodeMode;
+  participantStatusStatus: NodeParticipantStatusState;
+  participantStatus: NodeParticipantStatusSummary | null;
+  notInitialized: NodeParticipantNotInitializedSummary | null;
+  participantStatusError: string | null;
+  participantStatusErrorCode: string | null;
+  participantStatusErrorDetails: string | null;
+  participantStatusErrorTid: string | null;
+}
+
 export interface NodePackagesResponse {
   nodeId: string;
   label: string;

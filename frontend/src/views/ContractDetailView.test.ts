@@ -121,7 +121,7 @@ describe('ContractDetailView', () => {
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00coupon"]')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute(
       'href',
-      '/nodes/participant-1',
+      '/contracts',
     );
   });
 

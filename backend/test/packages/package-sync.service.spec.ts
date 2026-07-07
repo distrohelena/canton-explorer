@@ -171,7 +171,13 @@ describe('PackageSyncService', () => {
       mode: 'pqs_with_grpc',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
-      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
     };
 
     await expect(service.syncNodePackages(node as never)).resolves.toEqual({
@@ -237,7 +243,13 @@ describe('PackageSyncService', () => {
       mode: 'pqs_with_grpc',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
-      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
     };
 
     await expect(service.syncNodePackages(node as never)).resolves.toEqual({
@@ -294,7 +306,13 @@ describe('PackageSyncService', () => {
       mode: 'pqs_with_grpc',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
-      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
     };
 
     await expect(service.syncNodePackages(node as never)).resolves.toEqual({

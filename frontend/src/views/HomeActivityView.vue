@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import UpdatesBrowser from '../components/UpdatesBrowser.vue';
 import { useActivityHistory } from '../composables/useActivityHistory';
 import type { ActivitySample, ActivitySeries } from '../types/activity';
 
 const { history, loading, error, refresh, selectedDays, selectDays } = useActivityHistory();
 const windowOptions = [1, 7, 30] as const;
+const updatesBrowser = ref<{ reload: () => Promise<void> } | null>(null);
 
 const nodes = computed(() => history.value?.nodes ?? []);
 const windowMinutesLabel = computed(() => history.value?.windowMinutes ?? 0);
 const chartWidth = 320;
 const chartHeight = 96;
+
+async function refreshPage() {
+  await Promise.all([refresh(), updatesBrowser.value?.reload() ?? Promise.resolve()]);
+}
 
 interface ChartDomain {
   startMs: number;
@@ -129,26 +135,24 @@ function displaySamples(
     return filledSamples;
   }
 
-  for (
-    let missingBucketStart = bucketStart(lastSampleTimestamp, days) + bucketMs;
-    missingBucketStart <= domain.endMs;
-    missingBucketStart += bucketMs
-  ) {
+  const nextTrailingBucketStart = bucketStart(lastSampleTimestamp, days) + bucketMs;
+  if (nextTrailingBucketStart < domain.endMs) {
     filledSamples.push({
-      timestamp: new Date(missingBucketStart).toISOString(),
+      timestamp: new Date(nextTrailingBucketStart).toISOString(),
       activityValue: 0,
       activeContractCount: lastSample.activeContractCount,
       latestOffset: lastSample.latestOffset,
     });
   }
 
-  const finalTimestamp = Date.parse(filledSamples[filledSamples.length - 1]?.timestamp ?? '');
+  const finalSample = filledSamples[filledSamples.length - 1];
+  const finalTimestamp = Date.parse(finalSample?.timestamp ?? '');
   if (Number.isFinite(finalTimestamp) && finalTimestamp < domain.endMs) {
     filledSamples.push({
       timestamp: new Date(domain.endMs).toISOString(),
-      activityValue: 0,
-      activeContractCount: lastSample.activeContractCount,
-      latestOffset: lastSample.latestOffset,
+      activityValue: finalSample.activityValue,
+      activeContractCount: finalSample.activeContractCount,
+      latestOffset: finalSample.latestOffset,
     });
   }
 
@@ -279,7 +283,7 @@ function verticalScaleLabels(
             {{ days }}
           </button>
         </div>
-        <button type="button" class="dashboard__refresh" @click="refresh">Refresh</button>
+        <button type="button" class="dashboard__refresh" @click="refreshPage">Refresh</button>
       </div>
     </div>
 
@@ -374,6 +378,24 @@ function verticalScaleLabels(
           </article>
         </RouterLink>
       </div>
+
+      <section class="activity-home__updates-section">
+        <UpdatesBrowser
+          ref="updatesBrowser"
+          scope="global"
+          path="/"
+          title="Latest Updates"
+          eyebrow="Updates"
+          show-node-column
+          source-tag="updates"
+          advanced-filter-id="home-updates-advanced-filter"
+          loading-message="Loading latest updates..."
+          empty-message="No updates available yet."
+          table-aria-label="Latest updates across all nodes"
+          spinner-label="Updating latest updates"
+          row-class="activity-home__updates-row"
+        />
+      </section>
 
     </template>
 

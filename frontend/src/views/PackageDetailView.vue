@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import PackageTypeInlineSchema from '../components/PackageTypeInlineSchema.vue';
+import PackageTypeTree from '../components/PackageTypeTree.vue';
 import { fetchPackageDetail } from '../lib/api';
 import type { PackageDetailResponse } from '../types/packages';
 
@@ -52,6 +54,17 @@ function formatDecodeStatus(status: PackageDetailResponse['status']): string {
       return 'Invalid Package';
     case 'missing_package':
       return 'Missing Package';
+  }
+}
+
+function packageSectionEmptyMessage(section: 'modules' | 'templates' | 'dataTypes'): string {
+  switch (section) {
+    case 'modules':
+      return 'No decoded modules are present in this package.';
+    case 'templates':
+      return 'No template definitions are present in this package.';
+    case 'dataTypes':
+      return 'No data type definitions are present in this package.';
   }
 }
 
@@ -198,11 +211,11 @@ const packageFamilyPath = computed(() => {
 
           <section class="node-detail__section package-detail__section--decoded">
             <h3>Modules</h3>
-            <p
-              v-if="packageDetail.status !== 'decoded' || packageDetail.modules.length === 0"
-              class="update-detail__empty"
-            >
+            <p v-if="packageDetail.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
+            </p>
+            <p v-else-if="packageDetail.modules.length === 0" class="update-detail__empty">
+              {{ packageSectionEmptyMessage('modules') }}
             </p>
             <div v-else class="package-detail__list">
               <div
@@ -217,38 +230,43 @@ const packageFamilyPath = computed(() => {
 
           <section class="node-detail__section package-detail__section--decoded">
             <h3>Templates</h3>
-            <p
-              v-if="packageDetail.status !== 'decoded' || packageDetail.templates.length === 0"
-              class="update-detail__empty"
-            >
+            <p v-if="packageDetail.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
+            </p>
+            <p v-else-if="packageDetail.templates.length === 0" class="update-detail__empty">
+              {{ packageSectionEmptyMessage('templates') }}
             </p>
             <div v-else class="package-detail__list">
               <div
                 v-for="template in packageDetail.templates"
                 :key="template.templateId"
-                class="package-detail__list-row"
+                class="package-detail__list-row package-detail__list-row--stacked"
               >
-                {{ template.templateId }}
+                <div class="package-detail__entry-title">{{ template.templateId }}</div>
+                <PackageTypeTree v-if="template.createType" :node="template.createType" />
               </div>
             </div>
           </section>
 
           <section class="node-detail__section package-detail__section--decoded">
             <h3>Data Types</h3>
-            <p
-              v-if="packageDetail.status !== 'decoded' || packageDetail.dataTypes.length === 0"
-              class="update-detail__empty"
-            >
+            <p v-if="packageDetail.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
+            </p>
+            <p v-else-if="packageDetail.dataTypes.length === 0" class="update-detail__empty">
+              {{ packageSectionEmptyMessage('dataTypes') }}
             </p>
             <div v-else class="package-detail__list">
               <div
                 v-for="dataType in packageDetail.dataTypes"
                 :key="dataType.typeId"
-                class="package-detail__list-row"
+                class="package-detail__list-row package-detail__list-row--stacked"
               >
-                {{ dataType.typeId }}
+                <div class="package-detail__entry-title">{{ dataType.typeId }}</div>
+                <PackageTypeInlineSchema
+                  v-if="dataType.definition"
+                  :node="dataType.definition"
+                />
               </div>
             </div>
           </section>

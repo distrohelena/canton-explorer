@@ -16,10 +16,26 @@ const nodeBaseSchema = {
     .optional(),
 };
 
+const grpcAuthSchema = z
+  .discriminatedUnion('kind', [
+    z
+      .object({
+        kind: z.literal('shared_secret_jwt'),
+        user: z.string().min(1),
+        audience: z.string().min(1),
+        secret: z.string().min(1),
+      })
+      .strict(),
+  ])
+  .optional();
+
 const grpcSchema = z.object({
-  target: z.string().min(1),
+  ledgerTarget: z.string().min(1),
+  ledgerAdminTarget: z.string().min(1),
+  participantAdminTarget: z.string().min(1),
   useTls: z.boolean().default(false),
   connectTimeoutMs: z.number().int().positive().default(5000),
+  auth: grpcAuthSchema,
 });
 
 const nodeSchema = z.discriminatedUnion('mode', [

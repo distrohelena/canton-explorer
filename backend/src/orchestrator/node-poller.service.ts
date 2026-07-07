@@ -238,7 +238,7 @@ export class NodePollerService
 
   private defaultServiceInfo(node: NodeConfig): ServiceInfo {
     return {
-      target: node.mode === 'pqs_with_grpc' ? node.grpc.target : null,
+      target: node.mode === 'pqs_with_grpc' ? node.grpc.ledgerTarget : null,
       reachable: false,
       healthCheckImplemented: false,
       servingStatus: null,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import type { LocationQueryRaw } from 'vue-router';
 import {
   fetchNodeContracts,
   fetchNodeTemplates,
@@ -121,19 +122,23 @@ function syncFiltersFromRoute() {
   activeHideSplice.value = readHideSplice(route.query[queryKey('hideSplice')]);
 }
 
-const renderedContracts = computed(() =>
-  (contractsResponse.value?.contracts ?? []).map((contract) => ({
+const renderedContracts = computed(() => {
+  const response = contractsResponse.value;
+  const fallbackLabel =
+    response && 'label' in response && typeof response.label === 'string'
+      ? response.label
+      : props.title;
+
+  return (response?.contracts ?? []).map((contract) => ({
     ...contract,
     nodeId:
       'nodeId' in contract && typeof contract.nodeId === 'string' ? contract.nodeId : (props.nodeId ?? ''),
     label:
       'label' in contract && typeof contract.label === 'string'
         ? contract.label
-        : 'label' in (contractsResponse.value ?? {}) && typeof contractsResponse.value.label === 'string'
-          ? contractsResponse.value.label
-          : props.title,
-  })),
-);
+        : fallbackLabel,
+  }));
+});
 
 function hasAdvancedFilterQuery(): boolean {
   return (
@@ -144,7 +149,7 @@ function hasAdvancedFilterQuery(): boolean {
   );
 }
 
-function clearManagedKeys(query: Record<string, unknown>) {
+function clearManagedKeys(query: LocationQueryRaw) {
   delete query[queryKey('before')];
   delete query[queryKey('after')];
   delete query[queryKey('party')];
@@ -165,8 +170,8 @@ function buildQuery(
     mode?: FilterMode;
     hideSplice?: boolean;
   },
-): Record<string, unknown> {
-  const nextQuery: Record<string, unknown> = { ...route.query };
+): LocationQueryRaw {
+  const nextQuery: LocationQueryRaw = { ...route.query };
   clearManagedKeys(nextQuery);
 
   if (options?.before) {
@@ -175,12 +180,14 @@ function buildQuery(
   if (options?.after) {
     nextQuery[queryKey('after')] = options.after;
   }
-  if (props.showPartyFilters && (options?.parties?.length ?? 0) > 0) {
-    nextQuery[queryKey('party')] = options.parties;
-    nextQuery[queryKey('partyMode')] = options.mode ?? 'or';
+  const parties = options?.parties;
+  if (props.showPartyFilters && (parties?.length ?? 0) > 0) {
+    nextQuery[queryKey('party')] = parties;
+    nextQuery[queryKey('partyMode')] = options?.mode ?? 'or';
   }
-  if ((options?.templates?.length ?? 0) > 0) {
-    nextQuery[queryKey('template')] = options.templates;
+  const templates = options?.templates;
+  if ((templates?.length ?? 0) > 0) {
+    nextQuery[queryKey('template')] = templates;
   }
   if (options?.hideSplice) {
     nextQuery[queryKey('hideSplice')] = 'true';
@@ -245,7 +252,7 @@ async function loadContracts() {
     }
 
     if (props.scope === 'party' && props.partyId) {
-      const options: Parameters<typeof fetchPartyContracts>[1] = { limit: 25 };
+      const options: NonNullable<Parameters<typeof fetchPartyContracts>[1]> = { limit: 25 };
 
       if (before) {
         options.before = before;
@@ -313,7 +320,7 @@ watch(
   { immediate: true },
 );
 
-async function pushQuery(query: Record<string, unknown>) {
+async function pushQuery(query: LocationQueryRaw) {
   await router.push({
     path: props.path,
     query,

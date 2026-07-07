@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { fetchNodeUpdateDetail } from '../lib/api';
 import type { NodeUpdateDetailResponse } from '../types/updates';
 import type { DecodedDamlValue } from '../types/daml';
 
 const props = defineProps<{ id: string; eventOffset: string }>();
+const route = useRoute();
 
 const updateDetail = ref<NodeUpdateDetailResponse | null>(null);
 const error = ref<string | null>(null);
@@ -41,6 +43,20 @@ const recordTimeLines = computed(() =>
   updateDetail.value ? formatRecordTime(updateDetail.value.recordTime) : null,
 );
 const renderedEvents = computed(() => updateDetail.value?.events ?? []);
+const backTarget = computed(() => {
+  const source = Array.isArray(route.query.from) ? route.query.from[0] : route.query.from;
+  const partyId = Array.isArray(route.query.partyId) ? route.query.partyId[0] : route.query.partyId;
+
+  if (source === 'updates') {
+    return '/';
+  }
+
+  if (source === 'party' && typeof partyId === 'string' && partyId.trim().length > 0) {
+    return `/parties/${encodeURIComponent(partyId)}`;
+  }
+
+  return `/nodes/${props.id}/updates`;
+});
 
 function formatEventKind(eventKind: NodeUpdateDetailResponse['events'][number]['eventKind']): string {
   switch (eventKind) {
@@ -238,7 +254,7 @@ function getExerciseEntries(
       <div class="node-page__rail">
         <RouterLink
           class="node-detail__back"
-          :to="`/nodes/${props.id}/updates`"
+          :to="backTarget"
           aria-label="Back to overview"
         >
           ←

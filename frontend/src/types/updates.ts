@@ -16,6 +16,18 @@ export interface NodeUpdatesResponse {
   updates: NodeUpdateEntry[];
 }
 
+export interface GlobalUpdateEntry extends NodeUpdateEntry {
+  nodeId: string;
+  label: string;
+}
+
+export interface GlobalUpdatesResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  updates: GlobalUpdateEntry[];
+}
+
 export interface NodeUpdateDetailResponse {
   nodeId: string;
   label: string;

@@ -3,10 +3,17 @@ import { defineComponent } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import NodeUpdatesView from './NodeUpdatesView.vue';
-import { fetchNodeUpdates } from '../lib/api';
+import { fetchNodeTemplates, fetchNodeUpdates } from '../lib/api';
 import type { NodeUpdatesResponse } from '../types/updates';
 
 vi.mock('../lib/api', () => ({
+  fetchNodeTemplates: vi.fn().mockResolvedValue({
+    templates: [
+      { templateId: 'Main:Asset' },
+      { templateId: 'Main:Wallet' },
+      { templateId: 'Splice.Amulet:Amulet' },
+    ],
+  }),
   fetchNodeUpdates: vi.fn(),
 }));
 
@@ -31,7 +38,7 @@ async function renderAt(path: string) {
   router.push(path);
   await router.isReady();
 
-  return render(
+  const rendered = render(
     {
       template: '<RouterView />',
     },
@@ -41,11 +48,14 @@ async function renderAt(path: string) {
       },
     },
   );
+
+  return { ...rendered, router };
 }
 
 describe('NodeUpdatesView', () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
     vi.restoreAllMocks();
   });
 
@@ -156,7 +166,7 @@ describe('NodeUpdatesView', () => {
     expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
 
     expect(
-      container.querySelector('a[href="/nodes/participant-1/updates/000000000000000098"]'),
+      container.querySelector('a[href="/nodes/participant-1/updates/000000000000000098?from=node"]'),
     ).not.toBeNull();
   });
 
@@ -250,7 +260,7 @@ describe('NodeUpdatesView', () => {
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
         parties: ['Alice'],
-        mode: 'or',
+        partyMode: 'or',
       }),
     );
 
@@ -262,7 +272,7 @@ describe('NodeUpdatesView', () => {
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
         parties: ['Alice', 'Bob'],
-        mode: 'or',
+        partyMode: 'or',
       }),
     );
 
@@ -273,7 +283,7 @@ describe('NodeUpdatesView', () => {
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
         parties: ['Alice', 'Bob'],
-        mode: 'and',
+        partyMode: 'and',
       }),
     );
 
@@ -282,7 +292,7 @@ describe('NodeUpdatesView', () => {
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
         parties: ['Bob'],
-        mode: 'and',
+        partyMode: 'and',
       }),
     );
 
@@ -312,6 +322,7 @@ describe('NodeUpdatesView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
 
     const hideSpliceToggle = screen.getByRole('checkbox', { name: 'Hide Splice Offsets' });
+    expect(hideSpliceToggle).toHaveClass('node-updates__advanced-filter-checkbox');
     expect(hideSpliceToggle).not.toBeChecked();
 
     await fireEvent.click(hideSpliceToggle);
@@ -325,7 +336,7 @@ describe('NodeUpdatesView', () => {
     expect(hideSpliceToggle).toBeChecked();
   });
 
-  it('toggles OR and AND mode state even before any party filter is added', async () => {
+  it('adds a template filter from the searchable combobox', async () => {
     vi.mocked(fetchNodeUpdates).mockResolvedValue({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -341,27 +352,50 @@ describe('NodeUpdatesView', () => {
     expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+
+    await waitFor(() => expect(fetchNodeTemplates).toHaveBeenCalledWith('participant-1'));
+
+    const input = screen.getByRole('combobox', { name: 'Template ID' });
+    await fireEvent.focus(input);
+    await fireEvent.update(input, 'wallet');
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(screen.getByDisplayValue('Main:Wallet')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Add template filter' }));
+
+    await waitFor(() =>
+      expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        templates: ['Main:Wallet'],
+      }),
+    );
+
+    expect(screen.getAllByText('Main:Wallet').length).toBeGreaterThan(0);
+  });
+
+  it('does not persist party mode before any party filter is added', async () => {
+    vi.mocked(fetchNodeUpdates).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+
+    const { router } = await renderAt('/nodes/participant-1/updates');
+
+    expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    const initialCallCount = vi.mocked(fetchNodeUpdates).mock.calls.length;
     await fireEvent.click(screen.getByRole('button', { name: 'AND' }));
-
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'AND' })).toHaveClass(
-        'node-updates__advanced-filter-mode--active',
-      ),
+      expect(vi.mocked(fetchNodeUpdates).mock.calls.length).toBe(initialCallCount),
     );
-    expect(screen.getByRole('button', { name: 'OR' })).not.toHaveClass(
-      'node-updates__advanced-filter-mode--active',
-    );
-
-    await fireEvent.click(screen.getByRole('button', { name: 'OR' }));
-
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'OR' })).toHaveClass(
-        'node-updates__advanced-filter-mode--active',
-      ),
-    );
-    expect(screen.getByRole('button', { name: 'AND' })).not.toHaveClass(
-      'node-updates__advanced-filter-mode--active',
-    );
+    expect(router.currentRoute.value.query.partyMode).toBeUndefined();
   });
 
   it('opens the advanced filter panel when filter query params are present in the URL', async () => {
@@ -374,7 +408,7 @@ describe('NodeUpdatesView', () => {
       updates: [],
     });
 
-    await renderAt('/nodes/participant-1/updates?party=Alice&mode=and');
+    await renderAt('/nodes/participant-1/updates?party=Alice&partyMode=and');
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
@@ -402,5 +436,58 @@ describe('NodeUpdatesView', () => {
     expect(fetchNodeUpdates).toHaveBeenCalledWith('participant-1', {
       hideSplice: true,
     });
+  });
+
+  it('opens the advanced filter panel when template filters are present in the URL', async () => {
+    vi.mocked(fetchNodeUpdates).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+
+    await renderAt('/nodes/participant-1/updates?template=Main:Asset');
+
+    expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+    expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
+    expect(screen.getByText('Main:Asset')).toBeInTheDocument();
+    expect(fetchNodeUpdates).toHaveBeenCalledWith('participant-1', {
+      templates: ['Main:Asset'],
+    });
+  });
+
+  it('does not add partyMode to the URL when only template filters are present', async () => {
+    vi.mocked(fetchNodeUpdates).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+
+    const { router } = await renderAt('/nodes/participant-1/updates');
+
+    expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await waitFor(() => expect(fetchNodeTemplates).toHaveBeenCalled());
+
+    const input = screen.getByRole('combobox', { name: 'Template ID' });
+    await fireEvent.focus(input);
+    await fireEvent.update(input, 'wallet');
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add template filter' }));
+
+    await waitFor(() =>
+      expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        templates: ['Main:Wallet'],
+      }),
+    );
+    expect(router.currentRoute.value.query.template).toEqual(['Main:Wallet']);
+    expect(router.currentRoute.value.query.partyMode).toBeUndefined();
   });
 });

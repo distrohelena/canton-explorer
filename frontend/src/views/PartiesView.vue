@@ -1,83 +1,178 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
-import { fetchActiveParties, fetchLocalParties } from '../lib/api';
-import type { ActivePartiesNodeEntry, ActivePartiesResponse } from '../types/active-parties';
+import { computed, onMounted, ref } from 'vue';
+import QuerySourcePill from '../components/QuerySourcePill.vue';
+import { fetchNodeActiveParties, fetchNodeLocalParties, fetchNodes } from '../lib/api';
+import type { ActivePartiesNodeEntry } from '../types/active-parties';
+import type { NodeSnapshot } from '../types/nodes';
 
 type PartiesMode = 'active' | 'all';
 
-const activeParties = ref<ActivePartiesResponse | null>(null);
-const localParties = ref<ActivePartiesResponse | null>(null);
+const nodes = ref<NodeSnapshot[] | null>(null);
+const activePartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
+const localPartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
 const error = ref<string | null>(null);
 const selectedMode = ref<PartiesMode>('active');
 const selectedNodeId = ref<string | null>(null);
+const loadingActiveNodeId = ref<string | null>(null);
+const loadingLocalNodeId = ref<string | null>(null);
 
-const nodes = computed(() => activeParties.value?.nodes ?? []);
+const nodeButtons = computed(() => nodes.value ?? []);
 
 const selectableNodes = computed(() =>
   selectedMode.value === 'active'
-    ? nodes.value
-    : nodes.value.filter((node) => node.mode === 'pqs_with_grpc'),
+    ? nodeButtons.value
+    : nodeButtons.value.filter((node) => node.mode === 'pqs_with_grpc'),
 );
+
+const selectedNodeSnapshot = computed<NodeSnapshot | null>(() => {
+  if (!selectedNodeId.value) {
+    return null;
+  }
+
+  return nodeButtons.value.find((node) => node.id === selectedNodeId.value) ?? null;
+});
 
 const selectedNode = computed<ActivePartiesNodeEntry | null>(() => {
   if (!selectedNodeId.value) {
     return null;
   }
 
-  const sourceNodes =
-    selectedMode.value === 'all'
-      ? localParties.value?.nodes ?? []
-      : activeParties.value?.nodes ?? [];
+  return selectedMode.value === 'all'
+    ? localPartiesByNodeId.value[selectedNodeId.value] ?? null
+    : activePartiesByNodeId.value[selectedNodeId.value] ?? null;
+});
 
-  return sourceNodes.find((node) => node.nodeId === selectedNodeId.value) ?? null;
+const selectedLocalNodeStatus = computed(() => {
+  if (selectedMode.value !== 'all') {
+    return null;
+  }
+
+  return selectedNode.value?.localPartiesStatus ?? 'ok';
+});
+
+const selectedLocalNodeError = computed(() => {
+  if (selectedMode.value !== 'all') {
+    return null;
+  }
+
+  return selectedNode.value?.localPartiesError ?? null;
+});
+
+const selectedLocalNodeErrorCode = computed(() => {
+  if (selectedMode.value !== 'all') {
+    return null;
+  }
+
+  return selectedNode.value?.localPartiesErrorCode ?? null;
+});
+
+const selectedLocalNodeErrorDetails = computed(() => {
+  if (selectedMode.value !== 'all') {
+    return null;
+  }
+
+  return selectedNode.value?.localPartiesErrorDetails ?? null;
+});
+
+const selectedLocalNodeErrorTid = computed(() => {
+  if (selectedMode.value !== 'all') {
+    return null;
+  }
+
+  return selectedNode.value?.localPartiesErrorTid ?? null;
+});
+
+const isSelectedNodeLoading = computed(() => {
+  if (!selectedNodeId.value) {
+    return false;
+  }
+
+  return selectedMode.value === 'all'
+    ? loadingLocalNodeId.value === selectedNodeId.value
+    : loadingActiveNodeId.value === selectedNodeId.value;
 });
 
 function syncSelectedNode(preferredNodeId: string | null = selectedNodeId.value): void {
-  const availableNodeIds = new Set(selectableNodes.value.map((node) => node.nodeId));
+  const availableNodeIds = new Set(selectableNodes.value.map((node) => node.id));
 
   if (preferredNodeId && availableNodeIds.has(preferredNodeId)) {
     selectedNodeId.value = preferredNodeId;
     return;
   }
 
-  selectedNodeId.value = selectableNodes.value[0]?.nodeId ?? null;
+  selectedNodeId.value = selectableNodes.value[0]?.id ?? null;
 }
 
 function selectMode(mode: PartiesMode): void {
   selectedMode.value = mode;
+  syncSelectedNode();
+
+  if (selectedNodeId.value) {
+    void ensureNodePartiesLoaded(mode, selectedNodeId.value);
+  }
 }
 
 function selectNode(nodeId: string): void {
   selectedNodeId.value = nodeId;
+  void ensureNodePartiesLoaded(selectedMode.value, nodeId);
 }
 
-async function ensureLocalPartiesLoaded(): Promise<void> {
-  if (localParties.value) {
+async function ensureNodePartiesLoaded(mode: PartiesMode, nodeId: string): Promise<void> {
+  if (mode === 'active') {
+    if (activePartiesByNodeId.value[nodeId] || loadingActiveNodeId.value === nodeId) {
+      return;
+    }
+
+    loadingActiveNodeId.value = nodeId;
+    try {
+      const entry = await fetchNodeActiveParties(nodeId);
+      activePartiesByNodeId.value = {
+        ...activePartiesByNodeId.value,
+        [nodeId]: entry,
+      };
+      error.value = null;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error';
+    } finally {
+      if (loadingActiveNodeId.value === nodeId) {
+        loadingActiveNodeId.value = null;
+      }
+    }
     return;
   }
 
-  localParties.value = await fetchLocalParties();
+  if (localPartiesByNodeId.value[nodeId] || loadingLocalNodeId.value === nodeId) {
+    return;
+  }
+
+  loadingLocalNodeId.value = nodeId;
+  try {
+    const entry = await fetchNodeLocalParties(nodeId);
+    localPartiesByNodeId.value = {
+      ...localPartiesByNodeId.value,
+      [nodeId]: entry,
+    };
+    error.value = null;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unknown error';
+  } finally {
+    if (loadingLocalNodeId.value === nodeId) {
+      loadingLocalNodeId.value = null;
+    }
+  }
 }
 
 onMounted(async () => {
   try {
-    activeParties.value = await fetchActiveParties();
-    syncSelectedNode(activeParties.value.nodes[0]?.nodeId ?? null);
+    nodes.value = await fetchNodes();
+    syncSelectedNode(nodes.value[0]?.id ?? null);
+
+    if (selectedNodeId.value) {
+      await ensureNodePartiesLoaded('active', selectedNodeId.value);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   }
-});
-
-watch(selectedMode, async (mode) => {
-  if (mode === 'all') {
-    try {
-      await ensureLocalPartiesLoaded();
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error';
-    }
-  }
-
-  syncSelectedNode();
 });
 </script>
 
@@ -91,7 +186,7 @@ watch(selectedMode, async (mode) => {
     </header>
 
     <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
-    <p v-else-if="!activeParties" class="dashboard__message">Loading active parties...</p>
+    <p v-else-if="!nodes" class="dashboard__message">Loading parties...</p>
     <div v-else class="parties-page">
       <section class="node-detail__section parties-page__section">
         <div class="parties-page__mode-switch" role="tablist" aria-label="Party source modes">
@@ -117,18 +212,18 @@ watch(selectedMode, async (mode) => {
 
         <div class="parties-page__node-list" role="tablist" aria-label="Node selectors">
           <button
-            v-for="node in nodes"
-            :key="node.nodeId"
+            v-for="node in nodeButtons"
+            :key="node.id"
             type="button"
             class="parties-page__node-button"
             :class="{
-              'parties-page__node-button--active': node.nodeId === selectedNodeId,
+              'parties-page__node-button--active': node.id === selectedNodeId,
               'parties-page__node-button--disabled':
                 selectedMode === 'all' && node.mode === 'pqs_only',
             }"
-            :aria-pressed="node.nodeId === selectedNodeId"
+            :aria-pressed="node.id === selectedNodeId"
             :disabled="selectedMode === 'all' && node.mode === 'pqs_only'"
-            @click="selectNode(node.nodeId)"
+            @click="selectNode(node.id)"
           >
             <span class="parties-page__node-label">{{ node.label }}</span>
             <span
@@ -142,12 +237,14 @@ watch(selectedMode, async (mode) => {
       </section>
 
       <section class="node-detail__section parties-page__section parties-page__results">
-        <div v-if="selectedNode" class="parties-page__results-header">
+        <QuerySourcePill
+          class="results-section__source-pill"
+          :source="selectedMode === 'active' ? 'pqs' : 'grpc'"
+        />
+
+        <div v-if="selectedNodeSnapshot" class="parties-page__results-header">
           <div>
-            <h3>{{ selectedNode.label }}</h3>
-            <p v-if="selectedMode === 'all'" class="package-detail__seen-meta parties-page__results-copy">
-              Local party inventory via gRPC.
-            </p>
+            <h3>{{ selectedNodeSnapshot.label }}</h3>
           </div>
         </div>
         <div v-else class="parties-page__results-header">
@@ -159,7 +256,11 @@ watch(selectedMode, async (mode) => {
           </div>
         </div>
 
-        <div v-if="selectedMode === 'active' && selectedNode" class="package-detail__list">
+        <p v-if="selectedNodeSnapshot && isSelectedNodeLoading" class="dashboard__message">
+          Loading parties for this node...
+        </p>
+
+        <div v-else-if="selectedMode === 'active' && selectedNode" class="package-detail__list">
           <RouterLink
             v-for="party in selectedNode.parties"
             :key="party"
@@ -182,7 +283,46 @@ watch(selectedMode, async (mode) => {
           >
             {{ party }}
           </RouterLink>
-          <p v-if="selectedNode.parties.length === 0" class="update-detail__empty">
+          <p
+            v-if="selectedLocalNodeStatus === 'grpc_error'"
+            class="update-detail__empty"
+          >
+            gRPC error while listing local parties for this node.
+          </p>
+          <p
+            v-if="selectedLocalNodeStatus === 'grpc_error' && selectedLocalNodeErrorCode !== null"
+            class="package-detail__seen-meta parties-page__results-copy"
+          >
+            Status code: {{ selectedLocalNodeErrorCode }}
+          </p>
+          <p
+            v-if="selectedLocalNodeStatus === 'grpc_error' && selectedLocalNodeErrorTid"
+            class="package-detail__seen-meta parties-page__results-copy"
+          >
+            Request ID: {{ selectedLocalNodeErrorTid }}
+          </p>
+          <p
+            v-if="selectedLocalNodeStatus === 'grpc_error' && selectedLocalNodeErrorDetails"
+            class="package-detail__seen-meta parties-page__results-copy"
+          >
+            {{ selectedLocalNodeErrorDetails }}
+          </p>
+          <p
+            v-else-if="selectedLocalNodeStatus === 'grpc_error' && selectedLocalNodeError"
+            class="package-detail__seen-meta parties-page__results-copy"
+          >
+            {{ selectedLocalNodeError }}
+          </p>
+          <p
+            v-else-if="selectedLocalNodeStatus === 'grpc_not_configured'"
+            class="update-detail__empty"
+          >
+            gRPC is not configured for this node.
+          </p>
+          <p
+            v-else-if="selectedNode.parties.length === 0"
+            class="update-detail__empty"
+          >
             No local parties found for this node.
           </p>
         </div>

@@ -9,8 +9,8 @@ const { nodes, loading, error, refresh } = useNodes();
   <section class="dashboard">
     <div class="dashboard__hero">
       <div class="dashboard__hero-copy">
+        <p class="activity-home__eyebrow">Nodes</p>
         <h2>Connected Nodes</h2>
-        <p class="dashboard__lede">Nodes currently reachable from this explorer.</p>
       </div>
       <div class="dashboard__controls">
         <button type="button" class="dashboard__refresh" @click="refresh">Refresh</button>

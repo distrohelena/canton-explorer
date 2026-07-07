@@ -181,7 +181,7 @@ const contractDataEntries = computed(() => {
     <p v-else-if="!contractDetail" class="node-detail__message">Loading contract detail...</p>
     <div v-else class="node-page">
       <div class="node-page__rail">
-        <RouterLink class="node-detail__back" :to="`/nodes/${props.id}`" aria-label="Back to overview">
+        <RouterLink class="node-detail__back" to="/contracts" aria-label="Back to overview">
           ←
         </RouterLink>
       </div>

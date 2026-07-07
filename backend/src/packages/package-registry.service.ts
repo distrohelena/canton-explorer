@@ -4,6 +4,7 @@ import type {
   PackageRegistryResult,
   ResolvedChoice,
   ResolvedDataType,
+  SdkRawInterface,
   ResolvedPackageInspection,
   ResolvedPackage,
   ResolvedTemplate,
@@ -11,8 +12,17 @@ import type {
   SdkRawPackage,
   SdkRawTemplate,
   SdkRawTemplateChoice,
+  SdkRawType,
+  SdkRawTypeSyn,
 } from './daml-decoder.types';
-import { resolveRawDottedName, resolveRawInternedString } from './daml-lf-raw.util';
+import type { PackageTypeNode } from '../domain/node.types';
+import {
+  flattenRawTypeApplication,
+  resolveRawBuiltinTypeName,
+  resolveRawDottedName,
+  resolveRawInternedString,
+  resolveRawReferencedPackageId,
+} from './daml-lf-raw.util';
 import { PackageCacheService } from './package-cache.service';
 
 type DamlLfSdkModule = typeof import('canton-typescript-sdk/daml-lf');
@@ -137,6 +147,16 @@ export class PackageRegistryService implements OnModuleInit {
         templateId: template.templateId,
         moduleName: template.moduleName,
         entityName: template.entityName,
+        createType: template.dataType
+          ? this.buildDataTypeNode(
+              resolvedPackage,
+              template.templateId,
+              template.dataType,
+              new Set<string>(),
+              new Map<string, SdkRawType>(),
+              new Set<string>(),
+            )
+          : null,
       }))
       .sort((left, right) => left.templateId.localeCompare(right.templateId));
 
@@ -145,6 +165,14 @@ export class PackageRegistryService implements OnModuleInit {
         typeId: dataType.typeId,
         moduleName: dataType.moduleName,
         entityName: dataType.entityName,
+        definition: this.buildDataTypeNode(
+          resolvedPackage,
+          dataType.typeId,
+          dataType.dataType,
+          new Set<string>(),
+          new Map<string, SdkRawType>(),
+          new Set<string>(),
+        ),
       }))
       .sort((left, right) => left.typeId.localeCompare(right.typeId));
 
@@ -252,6 +280,610 @@ export class PackageRegistryService implements OnModuleInit {
 
     return this.sdkModule;
   }
+
+  private buildDataTypeNode(
+    resolvedPackage: ResolvedPackage,
+    typeId: string,
+    dataType: SdkRawDataType,
+    ancestry: Set<string>,
+    typeBindings: Map<string, SdkRawType>,
+    expandingVariables: Set<string>,
+  ): PackageTypeNode {
+    const nextAncestry = new Set(ancestry);
+    nextAncestry.add(`${resolvedPackage.packageId}::${typeId}`);
+    const typeParameters = dataType.params
+      .map((parameter) => resolveRawInternedString(resolvedPackage.rawPackage, parameter.varInternedStr))
+      .filter((parameter): parameter is string => Boolean(parameter));
+
+    switch (dataType.dataCons.oneofKind) {
+      case 'record':
+        return {
+          kind: 'record',
+          label: typeId,
+          packageId: resolvedPackage.packageId,
+          typeId,
+          typeParameters,
+          fields: dataType.dataCons.record.fields.map((field) => ({
+            name: resolveRawInternedString(resolvedPackage.rawPackage, field.fieldInternedStr) ?? 'Unknown',
+            type: this.buildTypeNode(
+              resolvedPackage,
+              field.type,
+              nextAncestry,
+              typeBindings,
+              expandingVariables,
+            ),
+          })),
+        };
+      case 'variant':
+        return {
+          kind: 'variant',
+          label: typeId,
+          packageId: resolvedPackage.packageId,
+          typeId,
+          typeParameters,
+          constructors: dataType.dataCons.variant.fields.map((field) => ({
+            name: resolveRawInternedString(resolvedPackage.rawPackage, field.fieldInternedStr) ?? 'Unknown',
+            type: field.type
+              ? this.buildTypeNode(
+                  resolvedPackage,
+                  field.type,
+                  nextAncestry,
+                  typeBindings,
+                  expandingVariables,
+                )
+              : null,
+          })),
+        };
+      case 'enum':
+        return {
+          kind: 'enum',
+          label: typeId,
+          packageId: resolvedPackage.packageId,
+          typeId,
+          typeParameters,
+          constructors: dataType.dataCons.enum.constructorsInternedStr.map((constructorIndex) => ({
+            name:
+              resolveRawInternedString(resolvedPackage.rawPackage, constructorIndex) ?? 'Unknown',
+            type: null,
+          })),
+        };
+      case 'interface':
+        return this.buildInterfaceNode(
+          resolvedPackage,
+          typeId,
+          typeParameters,
+          nextAncestry,
+          typeBindings,
+          expandingVariables,
+        );
+      default:
+        return {
+          kind: 'unknown',
+          label: typeId,
+          packageId: resolvedPackage.packageId,
+          typeId,
+        };
+    }
+  }
+
+  private buildInterfaceNode(
+    resolvedPackage: ResolvedPackage,
+    typeId: string,
+    typeParameters: string[],
+    ancestry: Set<string>,
+    typeBindings: Map<string, SdkRawType>,
+    expandingVariables: Set<string>,
+  ): PackageTypeNode {
+    const interfaceDefinition = resolvedPackage.interfacesById.get(typeId);
+    if (!interfaceDefinition) {
+      return {
+        kind: 'interface',
+        label: typeId,
+        packageId: resolvedPackage.packageId,
+        typeId,
+        typeParameters,
+      };
+    }
+
+    return {
+      kind: 'interface',
+      label: typeId,
+      packageId: resolvedPackage.packageId,
+      typeId,
+      typeParameters,
+      view: interfaceDefinition.view
+        ? this.buildTypeNode(
+            resolvedPackage,
+            interfaceDefinition.view,
+            ancestry,
+            typeBindings,
+            expandingVariables,
+          )
+        : null,
+      requires: interfaceDefinition.requires.map((requiredInterface) =>
+        this.buildTypeReferenceNode(
+          resolvedPackage,
+          requiredInterface,
+          ancestry,
+          typeBindings,
+          expandingVariables,
+        ),
+      ),
+      methods: interfaceDefinition.methods.map((method) => ({
+        name:
+          resolveRawInternedString(
+            resolvedPackage.rawPackage,
+            method.methodInternedName,
+          ) ?? 'Unknown',
+        type: method.type
+          ? this.buildTypeNode(
+              resolvedPackage,
+              method.type,
+              ancestry,
+              typeBindings,
+              expandingVariables,
+            )
+          : null,
+      })),
+      choices: interfaceDefinition.choices.map((choice) => ({
+        name:
+          resolveRawInternedString(
+            resolvedPackage.rawPackage,
+            choice.nameInternedStr,
+          ) ?? 'Unknown',
+        consuming: choice.consuming,
+        argumentType: choice.argBinder?.type
+          ? this.buildTypeNode(
+              resolvedPackage,
+              choice.argBinder.type,
+              ancestry,
+              typeBindings,
+              expandingVariables,
+            )
+          : null,
+        resultType: choice.retType
+          ? this.buildTypeNode(
+              resolvedPackage,
+              choice.retType,
+              ancestry,
+              typeBindings,
+              expandingVariables,
+            )
+          : null,
+      })),
+    };
+  }
+
+  private buildTypeNode(
+    resolvedPackage: ResolvedPackage,
+    rawType: SdkRawType | undefined,
+    ancestry: Set<string>,
+    typeBindings: Map<string, SdkRawType>,
+    expandingVariables: Set<string>,
+  ): PackageTypeNode {
+    const normalizedType = flattenRawTypeApplication(rawType);
+    if (!normalizedType?.sum.oneofKind) {
+      return { kind: 'unknown', label: 'Unknown' };
+    }
+
+    switch (normalizedType.sum.oneofKind) {
+      case 'internedType': {
+        return this.buildTypeNode(
+          resolvedPackage,
+          resolvedPackage.rawPackage.internedTypes[normalizedType.sum.internedType],
+          ancestry,
+          typeBindings,
+          expandingVariables,
+        );
+      }
+      case 'builtin': {
+        return {
+          kind: 'builtin',
+          label: this.formatBuiltinTypeLabel(normalizedType.sum.builtin.builtin),
+          arguments: normalizedType.sum.builtin.args.map((argument) =>
+            this.buildTypeNode(
+              resolvedPackage,
+              argument,
+              ancestry,
+              typeBindings,
+              expandingVariables,
+            ),
+          ),
+        };
+      }
+      case 'nat':
+        return {
+          kind: 'nat',
+          label: normalizedType.sum.nat,
+        };
+      case 'var': {
+        const variableName =
+          resolveRawInternedString(
+            resolvedPackage.rawPackage,
+            normalizedType.sum.var.varInternedStr,
+          ) ?? 'a';
+        const boundType = typeBindings.get(variableName);
+        if (boundType && normalizedType.sum.var.args.length === 0) {
+          if (expandingVariables.has(variableName)) {
+            return {
+              kind: 'type_var',
+              label: variableName,
+            };
+          }
+
+          return this.buildTypeNode(
+            resolvedPackage,
+            boundType,
+            ancestry,
+            typeBindings,
+            new Set([...expandingVariables, variableName]),
+          );
+        }
+
+        return {
+          kind: 'type_var',
+          label: variableName,
+          arguments: normalizedType.sum.var.args.map((argument) =>
+            this.buildTypeNode(
+              resolvedPackage,
+              argument,
+              ancestry,
+              typeBindings,
+              expandingVariables,
+            ),
+          ),
+        };
+      }
+      case 'con':
+        return this.buildTypeConNode(
+          resolvedPackage,
+          normalizedType.sum.con,
+          ancestry,
+          typeBindings,
+          expandingVariables,
+        );
+      case 'syn':
+        return this.buildTypeSynonymNode(
+          resolvedPackage,
+          normalizedType.sum.syn,
+          ancestry,
+          typeBindings,
+          expandingVariables,
+        );
+      case 'struct':
+        return {
+          kind: 'struct',
+          label: 'Struct',
+          fields: normalizedType.sum.struct.fields.map((field) => ({
+            name: resolveRawInternedString(resolvedPackage.rawPackage, field.fieldInternedStr) ?? 'Unknown',
+            type: this.buildTypeNode(
+              resolvedPackage,
+              field.type,
+              ancestry,
+              typeBindings,
+              expandingVariables,
+            ),
+          })),
+        };
+      case 'forall': {
+        const variables = normalizedType.sum.forall.vars
+          .map((variable) =>
+            resolveRawInternedString(resolvedPackage.rawPackage, variable.varInternedStr),
+          )
+          .filter((variable): variable is string => Boolean(variable));
+
+        return {
+          kind: 'forall',
+          label: variables.length > 0 ? `forall ${variables.join(', ')}` : 'forall',
+          typeParameters: variables,
+          body: normalizedType.sum.forall.body
+            ? this.buildTypeNode(
+              resolvedPackage,
+              normalizedType.sum.forall.body,
+              ancestry,
+              typeBindings,
+              expandingVariables,
+            )
+            : null,
+        };
+      }
+      default:
+        return {
+          kind: 'unknown',
+          label: 'Unknown',
+        };
+    }
+  }
+
+  private buildTypeConNode(
+    resolvedPackage: ResolvedPackage,
+    conType: Extract<SdkRawType['sum'], { oneofKind: 'con' }>['con'],
+    ancestry: Set<string>,
+    typeBindings: Map<string, SdkRawType>,
+    expandingVariables: Set<string>,
+  ): PackageTypeNode {
+    return this.buildTypeReferenceNode(
+      resolvedPackage,
+      conType.tycon,
+      ancestry,
+      typeBindings,
+      expandingVariables,
+      conType.args,
+    );
+  }
+
+  private buildTypeReferenceNode(
+    resolvedPackage: ResolvedPackage,
+    typeReference:
+      | {
+          nameInternedDname: number;
+          module?: {
+            moduleNameInternedDname: number;
+            packageId?: {
+              sum: {
+                oneofKind?: 'selfPackageId' | 'importedPackageIdInternedStr' | 'packageImportId';
+                importedPackageIdInternedStr?: number;
+                packageImportId?: number;
+              };
+            };
+          };
+        }
+      | undefined,
+    ancestry: Set<string>,
+    typeBindings: Map<string, SdkRawType>,
+    expandingVariables: Set<string>,
+    rawArguments: SdkRawType[] = [],
+  ): PackageTypeNode {
+    const reference = this.resolveTypeReference(resolvedPackage, typeReference);
+    const argumentNodes = rawArguments.map((argument) =>
+      this.buildTypeNode(
+        resolvedPackage,
+        argument,
+        ancestry,
+        typeBindings,
+        expandingVariables,
+      ),
+    );
+
+    if (!reference) {
+      return {
+        kind: 'type_con',
+        label: 'Unknown',
+        arguments: argumentNodes,
+        note: 'missing_definition',
+      };
+    }
+
+    const loadedPackage = this.loadPackageSync(reference.packageId);
+    if (typeof loadedPackage === 'string') {
+      return {
+        kind: 'type_con',
+        label: reference.typeId,
+        packageId: reference.packageId,
+        typeId: reference.typeId,
+        arguments: argumentNodes,
+        note: 'missing_definition',
+      };
+    }
+
+    const recursiveKey = `${reference.packageId}::${reference.typeId}`;
+    if (ancestry.has(recursiveKey)) {
+      return {
+        kind: 'type_con',
+        label: reference.typeId,
+        packageId: reference.packageId,
+        typeId: reference.typeId,
+        arguments: argumentNodes,
+        note: 'recursive_reference',
+      };
+    }
+
+    const referencedDataType = loadedPackage.dataTypesById.get(reference.typeId);
+    if (!referencedDataType) {
+      return {
+        kind: 'type_con',
+        label: reference.typeId,
+        packageId: reference.packageId,
+        typeId: reference.typeId,
+        arguments: argumentNodes,
+        note: 'missing_definition',
+      };
+    }
+
+    return {
+      kind: 'type_con',
+      label: reference.typeId,
+      packageId: reference.packageId,
+      typeId: reference.typeId,
+      arguments: argumentNodes,
+      definition: this.buildDataTypeNode(
+        loadedPackage,
+        reference.typeId,
+        referencedDataType.dataType,
+        ancestry,
+        this.extendTypeBindings(
+          loadedPackage.rawPackage,
+          referencedDataType.dataType.params,
+          rawArguments,
+          typeBindings,
+        ),
+        expandingVariables,
+      ),
+    };
+  }
+
+  private buildTypeSynonymNode(
+    resolvedPackage: ResolvedPackage,
+    synonymType: Extract<SdkRawType['sum'], { oneofKind: 'syn' }>['syn'],
+    ancestry: Set<string>,
+    typeBindings: Map<string, SdkRawType>,
+    expandingVariables: Set<string>,
+  ): PackageTypeNode {
+    const reference = this.resolveTypeReference(resolvedPackage, synonymType.tysyn);
+    const argumentNodes = synonymType.args.map((argument: SdkRawType) =>
+      this.buildTypeNode(
+        resolvedPackage,
+        argument,
+        ancestry,
+        typeBindings,
+        expandingVariables,
+      ),
+    );
+
+    if (!reference) {
+      return {
+        kind: 'synonym',
+        label: 'Unknown',
+        arguments: argumentNodes,
+        note: 'missing_definition',
+      };
+    }
+
+    const loadedPackage = this.loadPackageSync(reference.packageId);
+    if (typeof loadedPackage === 'string') {
+      return {
+        kind: 'synonym',
+        label: reference.typeId,
+        packageId: reference.packageId,
+        typeId: reference.typeId,
+        arguments: argumentNodes,
+        note: 'missing_definition',
+      };
+    }
+
+    const recursiveKey = `${reference.packageId}::${reference.typeId}`;
+    if (ancestry.has(recursiveKey)) {
+      return {
+        kind: 'synonym',
+        label: reference.typeId,
+        packageId: reference.packageId,
+        typeId: reference.typeId,
+        arguments: argumentNodes,
+        note: 'recursive_reference',
+      };
+    }
+
+    const synonym = loadedPackage.typeSynonymsById.get(reference.typeId);
+    if (!synonym) {
+      return {
+        kind: 'synonym',
+        label: reference.typeId,
+        packageId: reference.packageId,
+        typeId: reference.typeId,
+        arguments: argumentNodes,
+        note: 'missing_definition',
+      };
+    }
+
+    return {
+      kind: 'synonym',
+      label: reference.typeId,
+      packageId: reference.packageId,
+      typeId: reference.typeId,
+      arguments: argumentNodes,
+      typeParameters: synonym.params
+        .map((parameter) => resolveRawInternedString(loadedPackage.rawPackage, parameter.varInternedStr))
+        .filter((parameter): parameter is string => Boolean(parameter)),
+      definition: synonym.type
+        ? this.buildTypeNode(
+            loadedPackage,
+            synonym.type,
+            new Set([...ancestry, recursiveKey]),
+            this.extendTypeBindings(
+              loadedPackage.rawPackage,
+              synonym.params,
+              synonymType.args,
+              typeBindings,
+            ),
+            expandingVariables,
+          )
+        : null,
+    };
+  }
+
+  private extendTypeBindings(
+    rawPackage: SdkRawPackage,
+    parameters: Array<{ varInternedStr: number }>,
+    argumentsList: SdkRawType[],
+    existingBindings: Map<string, SdkRawType>,
+  ): Map<string, SdkRawType> {
+    const nextBindings = new Map(existingBindings);
+
+    parameters.forEach((parameter, index) => {
+      const parameterName = resolveRawInternedString(rawPackage, parameter.varInternedStr);
+      const argument = argumentsList[index];
+      if (parameterName && argument) {
+        nextBindings.set(parameterName, argument);
+      }
+    });
+
+    return nextBindings;
+  }
+
+  private resolveTypeReference(
+    resolvedPackage: ResolvedPackage,
+    typeReference:
+      | {
+          nameInternedDname: number;
+          module?: {
+            moduleNameInternedDname: number;
+            packageId?: {
+              sum: {
+                oneofKind?: 'selfPackageId' | 'importedPackageIdInternedStr' | 'packageImportId';
+                importedPackageIdInternedStr?: number;
+                packageImportId?: number;
+              };
+            };
+          };
+        }
+      | undefined,
+  ): { packageId: string; typeId: string } | null {
+    const moduleName = resolveRawDottedName(
+      resolvedPackage.rawPackage,
+      typeReference?.module?.moduleNameInternedDname,
+    );
+    const entityName = resolveRawDottedName(
+      resolvedPackage.rawPackage,
+      typeReference?.nameInternedDname,
+    );
+
+    if (!moduleName || !entityName) {
+      return null;
+    }
+
+    return {
+      packageId: resolveRawReferencedPackageId(
+        resolvedPackage.rawPackage,
+        resolvedPackage.packageId,
+        typeReference?.module?.packageId,
+      ),
+      typeId: `${moduleName}:${entityName}`,
+    };
+  }
+
+  private formatBuiltinTypeLabel(builtin: number | undefined): string {
+    const builtinName = resolveRawBuiltinTypeName(builtin);
+    if (!builtinName) {
+      return 'Unknown';
+    }
+
+    switch (builtinName) {
+      case 'INT64':
+        return 'Int64';
+      case 'CONTRACT_ID':
+        return 'ContractId';
+      case 'GENMAP':
+        return 'GenMap';
+      case 'TEXTMAP':
+        return 'TextMap';
+      default:
+        return builtinName
+          .toLowerCase()
+          .split('_')
+          .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+          .join('');
+    }
+  }
 }
 
 function buildResolvedPackage(
@@ -259,6 +891,8 @@ function buildResolvedPackage(
 ): ResolvedPackage {
   const templatesById = new Map<string, ResolvedTemplate>();
   const dataTypesById = new Map<string, ResolvedDataType>();
+  const interfacesById = new Map<string, SdkRawInterface>();
+  const typeSynonymsById = new Map<string, SdkRawTypeSyn>();
   const sdkTemplatesById = indexSdkTemplates(input.sdkPackage);
   const sdkDataTypesById = indexSdkDataTypes(input.sdkPackage);
 
@@ -289,6 +923,26 @@ function buildResolvedPackage(
           sdkDataType: sdkDataTypesById.get(typeId) ?? null,
           packageRef: undefined as never,
         });
+      }
+    }
+
+    for (const synonym of moduleDefinition.synonyms) {
+      const synonymName = resolveRawDottedName(
+        input.rawPackage,
+        synonym.nameInternedDname,
+      );
+      if (synonymName) {
+        typeSynonymsById.set(`${moduleName}:${synonymName}`, synonym);
+      }
+    }
+
+    for (const interfaceDefinition of moduleDefinition.interfaces) {
+      const interfaceName = resolveRawDottedName(
+        input.rawPackage,
+        interfaceDefinition.tyconInternedDname,
+      );
+      if (interfaceName) {
+        interfacesById.set(`${moduleName}:${interfaceName}`, interfaceDefinition);
       }
     }
 
@@ -323,6 +977,8 @@ function buildResolvedPackage(
     rawPackage: input.rawPackage,
     templatesById,
     dataTypesById,
+    interfacesById,
+    typeSynonymsById,
     sdkPackage: input.sdkPackage,
     sdkCompilation: input.sdkCompilation,
     sdkSemanticModel: input.sdkSemanticModel,

@@ -37,7 +37,13 @@ describe('NodePollerService', () => {
       mode: 'pqs_with_grpc',
       ledgerLabel: 'Quickstart App Provider',
       pqs: { connectionUriEnv: 'CNQS_PQS_APP_PROVIDER_URL' },
-      grpc: { target: 'localhost:3961', useTls: false, connectTimeoutMs: 5000 },
+      grpc: {
+        ledgerTarget: 'localhost:3961',
+        ledgerAdminTarget: 'localhost:3962',
+        participantAdminTarget: 'localhost:3963',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
       polling: { intervalMs: 15000, staleAfterMs: 45000 },
     });
 
@@ -122,7 +128,13 @@ describe('NodePollerService', () => {
       mode: 'pqs_with_grpc',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PQS_URL' },
-      grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
       polling: { intervalMs: 15000, staleAfterMs: 45000 },
     };
 
@@ -215,7 +227,13 @@ describe('NodePollerService', () => {
         mode: 'pqs_with_grpc',
         ledgerLabel: 'Retail Ledger',
         pqs: { connectionUriEnv: 'PQS_URL' },
-        grpc: { target: 'localhost:5012', useTls: false, connectTimeoutMs: 5000 },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
         polling: { intervalMs: 15000, staleAfterMs: 45000 },
       });
 

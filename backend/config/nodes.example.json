@@ -10,9 +10,17 @@
         "connectionUriEnv": "PARTICIPANT_1_PQS_URL"
       },
       "grpc": {
-        "target": "localhost:5012",
+        "ledgerTarget": "localhost:5012",
+        "ledgerAdminTarget": "localhost:5012",
+        "participantAdminTarget": "localhost:5013",
         "useTls": false,
-        "connectTimeoutMs": 5000
+        "connectTimeoutMs": 5000,
+        "auth": {
+          "kind": "shared_secret_jwt",
+          "user": "ledger-api-user",
+          "audience": "https://canton.network.global",
+          "secret": "unsafe"
+        }
       },
       "polling": {
         "intervalMs": 15000,

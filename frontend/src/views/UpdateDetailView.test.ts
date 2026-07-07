@@ -1,14 +1,28 @@
-import { render, screen } from '@testing-library/vue';
+import { cleanup, render, screen } from '@testing-library/vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import UpdateDetailView from './UpdateDetailView.vue';
 import { fetchNodeUpdateDetail } from '../lib/api';
+
+const routeQuery = {
+  from: undefined as string | undefined,
+  partyId: undefined as string | undefined,
+};
 
 vi.mock('../lib/api', () => ({
   fetchNodeUpdateDetail: vi.fn(),
 }));
 
+vi.mock('vue-router', () => ({
+  useRoute: () => ({
+    query: routeQuery,
+  }),
+}));
+
 describe('UpdateDetailView', () => {
   afterEach(() => {
+    cleanup();
+    routeQuery.from = undefined;
+    routeQuery.partyId = undefined;
     vi.restoreAllMocks();
   });
 
@@ -34,6 +48,8 @@ describe('UpdateDetailView', () => {
   });
 
   it('renders a single update detail without a raw metadata section', async () => {
+    routeQuery.from = 'node';
+
     vi.mocked(fetchNodeUpdateDetail).mockResolvedValue({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -191,6 +207,86 @@ describe('UpdateDetailView', () => {
       '/nodes/participant-1/updates',
     );
     expect(screen.queryByText('Back to overview')).not.toBeInTheDocument();
+  });
+
+  it('returns to the global updates page when opened from that feed', async () => {
+    routeQuery.from = 'updates';
+
+    vi.mocked(fetchNodeUpdateDetail).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      eventOffset: '0000000000000001',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      recordTime: '2026-07-01T12:00:00.000Z',
+      parties: ['Alice'],
+      events: [],
+      meta: {
+        update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+        record_time: 1782907200000000,
+        event_offset: '0000000000000001',
+      },
+    });
+
+    render(UpdateDetailView, {
+      props: {
+        id: 'participant-1',
+        eventOffset: '0000000000000001',
+      },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    await screen.findByText('No event rows found for this update.');
+
+    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute('href', '/');
+  });
+
+  it('returns to the party page when opened from a party-scoped updates browser', async () => {
+    routeQuery.from = 'party';
+    routeQuery.partyId = 'Alice';
+
+    vi.mocked(fetchNodeUpdateDetail).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      eventOffset: '0000000000000001',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      recordTime: '2026-07-01T12:00:00.000Z',
+      parties: ['Alice'],
+      events: [],
+      meta: {
+        update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+        record_time: 1782907200000000,
+        event_offset: '0000000000000001',
+      },
+    });
+
+    render(UpdateDetailView, {
+      props: {
+        id: 'participant-1',
+        eventOffset: '0000000000000001',
+      },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    await screen.findByText('No event rows found for this update.');
+
+    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute(
+      'href',
+      '/parties/Alice',
+    );
   });
 
   it('renders nested decoded exercise data with flattened labels', async () => {

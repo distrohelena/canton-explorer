@@ -35,13 +35,13 @@ function loadDescriptorFile(filename: string) {
   );
 }
 
-function resolveDescriptorPath(filename: string): string {
-  const directPath = resolve(__dirname, filename);
+export function resolveDescriptorPath(filename: string, baseDir = __dirname): string {
+  const directPath = resolve(baseDir, filename);
   if (existsSync(directPath)) {
     return directPath;
   }
 
-  const sourcePath = resolve(__dirname, '..', '..', 'src', 'packages', filename);
+  const sourcePath = resolve(process.cwd(), 'src', 'packages', filename);
   if (existsSync(sourcePath)) {
     return sourcePath;
   }

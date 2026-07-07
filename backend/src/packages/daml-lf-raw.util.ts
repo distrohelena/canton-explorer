@@ -13,6 +13,8 @@ const BUILTIN_TYPE_NAMES = new Map<number, string>([
   [9, 'OPTIONAL'],
   [10, 'LIST'],
   [11, 'GENMAP'],
+  [16, 'ARROW'],
+  [17, 'UPDATE'],
   [19, 'TEXTMAP'],
 ]);
 
