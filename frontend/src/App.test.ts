@@ -114,6 +114,12 @@ describe('App', () => {
     expect(
       screen.queryByText('Operational clarity for connected Canton environments.'),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole('contentinfo')).toHaveTextContent(
+      'powered by @distrohelena/canton-typescript-sdk',
+    );
+    expect(
+      screen.getByRole('link', { name: '@distrohelena/canton-typescript-sdk' }),
+    ).toHaveAttribute('href', 'https://www.npmjs.com/package/@distrohelena/canton-typescript-sdk');
   });
 
   it('keeps the shared shell on the nodes route', async () => {

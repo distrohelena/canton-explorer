@@ -162,5 +162,20 @@ onBeforeUnmount(() => {
         <RouterView />
       </main>
     </div>
+    <footer class="app-footer">
+      <div class="app-footer__inner">
+        <p class="app-footer__text">
+          powered by
+          <a
+            class="app-footer__package"
+            href="https://www.npmjs.com/package/@distrohelena/canton-typescript-sdk"
+            target="_blank"
+            rel="noreferrer"
+          >
+            @distrohelena/canton-typescript-sdk
+          </a>
+        </p>
+      </div>
+    </footer>
   </div>
 </template>
