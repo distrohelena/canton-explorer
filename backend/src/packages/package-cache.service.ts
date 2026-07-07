@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BeforeApplicationShutdown, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -41,7 +41,7 @@ export interface CachedPackageNodePresence {
 }
 
 @Injectable()
-export class PackageCacheService {
+export class PackageCacheService implements OnModuleDestroy, BeforeApplicationShutdown {
   private readonly database: DatabaseSync;
 
   constructor() {
@@ -50,6 +50,7 @@ export class PackageCacheService {
       resolve(process.cwd(), 'data', 'package-cache.sqlite');
     mkdirSync(dirname(databasePath), { recursive: true });
     this.database = new DatabaseSync(databasePath);
+    this.configureConnection();
     this.initializeSchema();
   }
 
@@ -350,6 +351,22 @@ export class PackageCacheService {
 
   close(): void {
     this.database.close();
+  }
+
+  onModuleDestroy(): void {
+    this.close();
+  }
+
+  beforeApplicationShutdown(): void {
+    this.close();
+  }
+
+  private configureConnection(): void {
+    this.database.exec(`
+      pragma busy_timeout = 5000;
+      pragma journal_mode = wal;
+      pragma synchronous = normal;
+    `);
   }
 
   private initializeSchema(): void {

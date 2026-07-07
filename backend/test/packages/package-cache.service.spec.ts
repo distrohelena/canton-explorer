@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
 
 describe('PackageCacheService', () => {
@@ -19,6 +20,31 @@ describe('PackageCacheService', () => {
       rmSync(tempDir, { recursive: true, force: true });
       tempDir = null;
     }
+  });
+
+  it('configures sqlite for wal mode and a busy timeout on startup', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    const databasePath = join(tempDir, 'packages.sqlite');
+    process.env.PACKAGE_CACHE_DB_PATH = databasePath;
+    const service = new PackageCacheService();
+    const liveConnection = (service as PackageCacheService & {
+      database: DatabaseSync;
+    }).database;
+    const liveBusyTimeout = liveConnection
+      .prepare('pragma busy_timeout')
+      .get() as { timeout: number; busy_timeout?: number };
+
+    service.close();
+
+    const persistedConnection = new DatabaseSync(databasePath);
+    const journalMode = persistedConnection
+      .prepare('pragma journal_mode')
+      .get() as { journal_mode: string };
+
+    expect(journalMode.journal_mode).toBe('wal');
+    expect(liveBusyTimeout.busy_timeout ?? liveBusyTimeout.timeout).toBe(5000);
+
+    persistedConnection.close();
   });
 
   it('records node package presence and returns only uncached package ids as missing', () => {

@@ -225,16 +225,33 @@ export class NodesController {
   }
 
   @Get('/tokens/:tokenId/holders')
-  async listTokenHolders(@Param('tokenId') tokenId: string) {
+  async listTokenHolders(
+    @Param('tokenId') tokenId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
     try {
       return await (
         this.pqsSummaryService as PqsSummaryService & {
           fetchTokenHolders: (
             nodes: ReturnType<NodeConfigService['list']>,
             tokenId: string,
+            limit?: number,
+            options?: { before?: string; after?: string },
           ) => Promise<unknown>;
         }
-      ).fetchTokenHolders(this.configService.list(), tokenId);
+      ).fetchTokenHolders(
+        this.configService.list(),
+        tokenId,
+        Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+        {
+          before,
+          after,
+        },
+      );
     } catch (error) {
       if (error instanceof Error && error.message === 'Token not found') {
         throw new NotFoundException(`Unknown token: ${tokenId}`);

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref, watch } from 'vue';
+import type { LocationQueryRaw } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import TokenTransfersBrowser from '../components/TokenTransfersBrowser.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
 import { fetchTokenDetail, fetchTokenHolders } from '../lib/api';
@@ -7,32 +9,124 @@ import type { TokenDetailResponse, TokenHoldersResponse } from '../types/tokens'
 
 const props = defineProps<{ tokenId: string }>();
 
+const route = useRoute();
+const router = useRouter();
 const tokenDetail = ref<TokenDetailResponse | null>(null);
 const tokenHolders = ref<TokenHoldersResponse | null>(null);
 const error = ref<string | null>(null);
+const loadingTokenDetail = ref(true);
+const loadingTokenHolders = ref(true);
 
-onMounted(async () => {
+async function loadTokenDetail() {
+  loadingTokenDetail.value = true;
+  error.value = null;
+
   try {
-    const [detail, holders] = await Promise.all([
-      fetchTokenDetail(props.tokenId),
-      fetchTokenHolders(props.tokenId),
-    ]);
+    const detail = await fetchTokenDetail(props.tokenId);
     tokenDetail.value = detail;
-    tokenHolders.value = holders;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
+  } finally {
+    loadingTokenDetail.value = false;
   }
-});
+}
+
+function readHolderCursor(key: 'holdersBefore' | 'holdersAfter'): string | undefined {
+  const value = route.query[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function buildHolderQuery(options?: { before?: string; after?: string }): LocationQueryRaw {
+  const nextQuery: LocationQueryRaw = { ...route.query };
+  delete nextQuery.holdersBefore;
+  delete nextQuery.holdersAfter;
+
+  if (options?.before) {
+    nextQuery.holdersBefore = options.before;
+  }
+
+  if (options?.after) {
+    nextQuery.holdersAfter = options.after;
+  }
+
+  return nextQuery;
+}
+
+async function pushHolderQuery(query: LocationQueryRaw) {
+  await router.push({
+    path: route.path,
+    query,
+  });
+}
+
+async function loadTokenHolders() {
+  loadingTokenHolders.value = true;
+  error.value = null;
+
+  try {
+    const before = readHolderCursor('holdersBefore');
+    const after = before ? undefined : readHolderCursor('holdersAfter');
+    const options: { before?: string; after?: string } = {};
+
+    if (before) {
+      options.before = before;
+    }
+
+    if (after) {
+      options.after = after;
+    }
+
+    tokenHolders.value = await fetchTokenHolders(props.tokenId, 25, options);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unknown error';
+  } finally {
+    loadingTokenHolders.value = false;
+  }
+}
+
+async function showPreviousHolders() {
+  const cursor = tokenHolders.value?.nextAfter;
+  if (!cursor) {
+    return;
+  }
+
+  await pushHolderQuery(buildHolderQuery({ after: cursor }));
+}
+
+async function showNextHolders() {
+  const cursor = tokenHolders.value?.nextBefore;
+  if (!cursor) {
+    return;
+  }
+
+  await pushHolderQuery(buildHolderQuery({ before: cursor }));
+}
 
 function partyLink(partyId: string): string {
   return `/parties/${encodeURIComponent(partyId)}`;
 }
+
+watch(
+  () => props.tokenId,
+  () => {
+    void loadTokenDetail();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [props.tokenId, route.query.holdersBefore, route.query.holdersAfter],
+  () => {
+    void loadTokenHolders();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
   <section class="contract-detail">
     <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="!tokenDetail || !tokenHolders" class="node-detail__message">Loading token detail...</p>
+    <p v-else-if="loadingTokenDetail || !tokenDetail || !tokenHolders" class="node-detail__message">Loading token detail...</p>
     <div v-else class="node-page">
       <div class="node-page__rail">
         <RouterLink class="node-detail__back" to="/tokens" aria-label="Back to overview">
@@ -78,10 +172,34 @@ function partyLink(partyId: string): string {
                 <p class="activity-home__eyebrow">Balances</p>
                 <h3>Top Holders</h3>
               </div>
-              <QuerySourcePill source="pqs" />
+              <div class="results-header__actions">
+                <div class="node-updates__pager">
+                  <button
+                    type="button"
+                    class="dashboard__refresh"
+                    :disabled="!tokenHolders?.nextAfter || loadingTokenHolders"
+                    @click="showPreviousHolders"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    class="dashboard__refresh"
+                    :disabled="!tokenHolders?.nextBefore || loadingTokenHolders"
+                    @click="showNextHolders"
+                  >
+                    Next
+                  </button>
+                </div>
+                <QuerySourcePill source="pqs" />
+              </div>
             </header>
 
-            <p v-if="tokenHolders.holders.length === 0" class="dashboard__message">
+            <p v-if="loadingTokenHolders" class="dashboard__message">
+              Loading token holders...
+            </p>
+
+            <p v-else-if="tokenHolders.holders.length === 0" class="dashboard__message">
               No holders observed for this token yet.
             </p>
 

@@ -214,7 +214,7 @@ export class GrpcClientFactory {
   }
 
   private async loadSdk(): Promise<SdkModule> {
-    return import('canton-typescript-sdk') as Promise<SdkModule>;
+    return import('@distrohelena/canton-typescript-sdk') as Promise<SdkModule>;
   }
 
   private createAuthProvider(

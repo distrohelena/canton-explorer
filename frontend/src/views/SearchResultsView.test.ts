@@ -140,6 +140,42 @@ describe('SearchResultsView', () => {
     );
   });
 
+  it('encodes party destination links for party ids with special characters', async () => {
+    vi.mocked(fetchSearchResults).mockResolvedValue({
+      query: 'ed25519_party',
+      updates: { items: [], displayedCount: 0, truncated: false, status: 'ok', warnings: [] },
+      contracts: { items: [], displayedCount: 0, truncated: false, status: 'ok', warnings: [] },
+      parties: {
+        items: [
+          {
+            partyId:
+              'ed25519_party::1220715ab025d3477024c0cf1fa9cb90b9cfdeddd249578ef2de2f9fc4cf8eb19289',
+            nodeIds: ['participant-1'],
+          },
+        ],
+        displayedCount: 1,
+        truncated: false,
+        status: 'ok',
+        warnings: [],
+      },
+      packages: {
+        packageIds: { items: [], displayedCount: 0, truncated: false, status: 'ok', warnings: [] },
+        packageNames: { items: [], displayedCount: 0, truncated: false, status: 'ok', warnings: [] },
+      },
+    });
+
+    await renderAt('/search?q=ed25519_party');
+
+    expect(
+      await screen.findByRole('link', {
+        name: 'ed25519_party::1220715ab025d3477024c0cf1fa9cb90b9cfdeddd249578ef2de2f9fc4cf8eb19289',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/parties/ed25519_party%3A%3A1220715ab025d3477024c0cf1fa9cb90b9cfdeddd249578ef2de2f9fc4cf8eb19289',
+    );
+  });
+
   it('renders partial warnings for degraded result groups', async () => {
     vi.mocked(fetchSearchResults).mockResolvedValue({
       query: '39',

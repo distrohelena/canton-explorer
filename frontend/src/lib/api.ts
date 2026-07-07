@@ -165,8 +165,26 @@ export function fetchTokenDetail(tokenId: string): Promise<TokenDetailResponse> 
   return fetchJson<TokenDetailResponse>(`/tokens/${encodeURIComponent(tokenId)}`);
 }
 
-export function fetchTokenHolders(tokenId: string): Promise<TokenHoldersResponse> {
-  return fetchJson<TokenHoldersResponse>(`/tokens/${encodeURIComponent(tokenId)}/holders`);
+export function fetchTokenHolders(
+  tokenId: string,
+  limit = 25,
+  options?: {
+    before?: string;
+    after?: string;
+  },
+): Promise<TokenHoldersResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(limit))));
+
+  return fetchJson<TokenHoldersResponse>(
+    `/tokens/${encodeURIComponent(tokenId)}/holders?${params.toString()}`,
+  );
 }
 
 export function fetchLatestTokenTransfers(

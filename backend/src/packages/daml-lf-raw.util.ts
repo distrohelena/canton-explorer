@@ -78,8 +78,8 @@ export function resolveRawDottedName(
   }
 
   return dottedName.segmentsInternedStr
-    .map((segmentIndex) => rawPackage.internedStrings[segmentIndex] ?? '')
-    .filter((segment) => segment.length > 0)
+    .map((segmentIndex: number) => rawPackage.internedStrings[segmentIndex] ?? '')
+    .filter((segment: string) => segment.length > 0)
     .join('.');
 }
 

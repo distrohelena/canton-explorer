@@ -25,7 +25,7 @@ import {
 } from './daml-lf-raw.util';
 import { PackageCacheService } from './package-cache.service';
 
-type DamlLfSdkModule = typeof import('canton-typescript-sdk/daml-lf');
+type DamlLfSdkModule = typeof import('@distrohelena/canton-typescript-sdk/daml-lf');
 
 interface ResolveTemplateInput {
   packageId: string;
@@ -56,7 +56,7 @@ export class PackageRegistryService implements OnModuleInit {
   private sdkModule: DamlLfSdkModule | null = null;
 
   constructor(private readonly cacheService: PackageCacheService) {
-    this.sdkModulePromise = import('canton-typescript-sdk/daml-lf').then((sdkModule) => {
+    this.sdkModulePromise = import('@distrohelena/canton-typescript-sdk/daml-lf').then((sdkModule) => {
       this.sdkModule = sdkModule;
       return sdkModule;
     });

@@ -6,7 +6,7 @@ import type {
   DamlLfPackageLoadResult as SdkDamlLfPackageLoadResult,
   DamlLfSemanticModel as SdkDamlLfSemanticModel,
   DamlLfTemplate as SdkDamlLfTemplate,
-} from 'canton-typescript-sdk/daml-lf';
+} from '@distrohelena/canton-typescript-sdk/daml-lf';
 import type {
   PackageDataTypeSummary,
   PackageTemplateSummary,

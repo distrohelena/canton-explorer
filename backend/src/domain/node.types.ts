@@ -188,6 +188,9 @@ export interface TokenHolderSummary {
 
 export interface TokenHoldersResponse {
   tokenId: string;
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
   holders: TokenHolderSummary[];
 }
 

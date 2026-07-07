@@ -189,6 +189,11 @@ interface GlobalTokenTransferCursor {
   receiver: string | null;
 }
 
+interface GlobalTokenHolderCursor {
+  partyId: string;
+  amount: string | null;
+}
+
 interface CachedNodeTokenTransfers {
   cachedAt: number;
   transfers: NodeTokenTransferObservation[];
@@ -505,6 +510,59 @@ function decodeGlobalTokenTransferCursor(cursor?: string): GlobalTokenTransferCu
         amount: decoded.amount ?? null,
         sender: decoded.sender ?? null,
         receiver: decoded.receiver ?? null,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function compareGlobalTokenHolders(
+  left: GlobalTokenHolderCursor,
+  right: GlobalTokenHolderCursor,
+): number {
+  const leftValue = left.amount === null ? Number.NEGATIVE_INFINITY : Number(left.amount);
+  const rightValue = right.amount === null ? Number.NEGATIVE_INFINITY : Number(right.amount);
+  const leftValid = Number.isFinite(leftValue);
+  const rightValid = Number.isFinite(rightValue);
+
+  if (leftValid && rightValid && leftValue !== rightValue) {
+    return rightValue - leftValue;
+  }
+
+  if (leftValid !== rightValid) {
+    return leftValid ? -1 : 1;
+  }
+
+  return left.partyId.localeCompare(right.partyId);
+}
+
+function encodeGlobalTokenHolderCursor(holder: GlobalTokenHolderCursor): string {
+  return Buffer.from(
+    JSON.stringify({
+      partyId: holder.partyId,
+      amount: holder.amount,
+    } satisfies GlobalTokenHolderCursor),
+    'utf8',
+  ).toString('base64url');
+}
+
+function decodeGlobalTokenHolderCursor(cursor?: string): GlobalTokenHolderCursor | null {
+  if (!cursor || !cursor.trim()) {
+    return null;
+  }
+
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as Partial<GlobalTokenHolderCursor>;
+
+    if (typeof decoded.partyId === 'string' && (decoded.amount === null || typeof decoded.amount === 'string')) {
+      return {
+        partyId: decoded.partyId,
+        amount: decoded.amount ?? null,
       };
     }
   } catch {
@@ -3060,6 +3118,12 @@ export class PqsSummaryService {
 
   async fetchPartyDetail(nodes: NodeConfig[], partyId: string): Promise<PartyDetailResponse> {
     const normalizedPartyId = this.normalizePartyIdentifier(partyId);
+    const activePartiesByNode = await Promise.all(
+      nodes.map(async (node) => ({
+        node,
+        parties: await this.fetchActivePartiesForNode(node),
+      })),
+    );
     const recentUpdatesByNode = await Promise.all(
       nodes.map(async (node) => ({
         node,
@@ -3108,6 +3172,20 @@ export class PqsSummaryService {
         label: node.label,
         recentUpdateCount: existing?.recentUpdateCount ?? 0,
         recentContractCount: contracts.length,
+      });
+    }
+
+    for (const { node, parties } of activePartiesByNode) {
+      if (!parties.includes(normalizedPartyId)) {
+        continue;
+      }
+
+      const existing = nodesById.get(node.id);
+      nodesById.set(node.id, {
+        nodeId: node.id,
+        label: node.label,
+        recentUpdateCount: existing?.recentUpdateCount ?? 0,
+        recentContractCount: existing?.recentContractCount ?? 0,
       });
     }
 
@@ -3539,7 +3617,12 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchTokenHolders(nodes: NodeConfig[], tokenId: string): Promise<TokenHoldersResponse> {
+  async fetchTokenHolders(
+    nodes: NodeConfig[],
+    tokenId: string,
+    limit = 25,
+    options?: { before?: string; after?: string },
+  ): Promise<TokenHoldersResponse> {
     const normalizedTokenId = this.normalizeTokenId(tokenId);
     await this.findObservedToken(nodes, normalizedTokenId);
     const refreshResults = await Promise.allSettled(
@@ -3569,9 +3652,57 @@ export class PqsSummaryService {
       }
     }
 
+    return this.paginateTokenHolders(
+      normalizedTokenId,
+      this.mergeTokenHolders(successfulHolders),
+      limit,
+      options,
+    );
+  }
+
+  private paginateTokenHolders(
+    tokenId: string,
+    holders: TokenHolderSummary[],
+    limit = 25,
+    options?: { before?: string; after?: string },
+  ): TokenHoldersResponse {
+    const normalizedLimit =
+      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+    const beforeCursor = decodeGlobalTokenHolderCursor(options?.before);
+    const afterCursor = beforeCursor === null ? decodeGlobalTokenHolderCursor(options?.after) : null;
+    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const filteredHolders = holders.filter((holder) => {
+      if (beforeCursor !== null) {
+        return compareGlobalTokenHolders(holder, beforeCursor) > 0;
+      }
+
+      if (afterCursor !== null) {
+        return compareGlobalTokenHolders(holder, afterCursor) < 0;
+      }
+
+      return true;
+    });
+    const hasMoreInDirection = filteredHolders.length > normalizedLimit;
+    const pagedHolders = filteredHolders.slice(0, normalizedLimit);
+
     return {
-      tokenId: normalizedTokenId,
-      holders: this.mergeTokenHolders(successfulHolders).slice(0, 25),
+      tokenId,
+      limit: normalizedLimit,
+      nextBefore:
+        pagedHolders.length > 0 && (useAfterCursor || hasMoreInDirection)
+          ? encodeGlobalTokenHolderCursor(pagedHolders[pagedHolders.length - 1]!)
+          : null,
+      nextAfter:
+        pagedHolders.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInDirection
+              ? encodeGlobalTokenHolderCursor(pagedHolders[0]!)
+              : null
+            : beforeCursor
+              ? encodeGlobalTokenHolderCursor(pagedHolders[0]!)
+              : null,
+      holders: pagedHolders,
     };
   }
 

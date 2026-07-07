@@ -425,6 +425,9 @@ const typedTokenDetailFixture = {
 
 const typedTokenHoldersFixture = {
   tokenId: 'validator-license',
+  limit: 25,
+  nextBefore: null,
+  nextAfter: null,
   holders: [
     {
       partyId: 'Alice',
@@ -1587,9 +1590,31 @@ describe('NodesController', () => {
   it('returns token holders by token id', async () => {
     const response = await (
       controller as unknown as {
-        listTokenHolders: (tokenId: string) => Promise<unknown>;
+        listTokenHolders: (tokenId: string, limit?: string, before?: string, after?: string) => Promise<unknown>;
       }
     ).listTokenHolders('validator-license');
+
+    expect(pqsSummaryService.fetchTokenHolders).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+      expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'validator-license',
+      25,
+      {
+        before: undefined,
+        after: undefined,
+      },
+    );
+    expect(response).toEqual(typedTokenHoldersFixture);
+  });
+
+  it('passes token holder cursors through to the PQS summary service', async () => {
+    await (
+      controller as unknown as {
+        listTokenHolders: (tokenId: string, limit?: string, before?: string, after?: string) => Promise<unknown>;
+      }
+    ).listTokenHolders('validator-license', '25', 'holders-before-1', 'holders-after-1');
 
     expect(pqsSummaryService.fetchTokenHolders).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -1597,8 +1622,12 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
+      25,
+      {
+        before: 'holders-before-1',
+        after: 'holders-after-1',
+      },
     );
-    expect(response).toEqual(typedTokenHoldersFixture);
   });
 
   it('passes through offset cursors for updates pagination', async () => {

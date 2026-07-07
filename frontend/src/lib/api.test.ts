@@ -410,6 +410,9 @@ const typedScopedTokenTransfersFixture = {
 
 const typedTokenHoldersFixture = {
   tokenId: 'canton-coin',
+  limit: 25,
+  nextBefore: null,
+  nextAfter: null,
   holders: [
     {
       partyId: 'Alice',
@@ -666,7 +669,22 @@ describe('fetchNodes', () => {
     const result = await fetchTokenHolders('canton-coin');
 
     expect(result.holders[0]?.partyId).toBe('Alice');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/tokens/canton-coin/holders');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3100/api/tokens/canton-coin/holders?limit=25');
+  });
+
+  it('loads token holders by token id with cursor pagination from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenHoldersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenHolders('canton-coin', 25, { before: 'holders-cursor-1' });
+
+    expect(result.holders[0]?.partyId).toBe('Alice');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3100/api/tokens/canton-coin/holders?before=holders-cursor-1&limit=25',
+    );
   });
 
   it('loads token-scoped transfers with cursor pagination from the backend API', async () => {

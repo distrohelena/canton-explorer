@@ -148,7 +148,7 @@ watch(trimmedQuery, (query) => {
             v-for="party in results.parties.items"
             :key="party.partyId"
             class="search-results-row"
-            :to="`/parties/${party.partyId}`"
+            :to="`/parties/${encodeURIComponent(party.partyId)}`"
             :aria-label="party.partyId"
           >
             <span class="search-results-row__primary">{{ party.partyId }}</span>

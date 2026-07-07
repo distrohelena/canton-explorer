@@ -1161,6 +1161,62 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('returns party detail for an active party even when it has no recent updates or contracts', async () => {
+    const activeOnlyPartyId =
+      'ed25519_party::1220715ab025d3477024c0cf1fa9cb90b9cfdeddd249578ef2de2f9fc4cf8eb19289';
+    const participantQuery = jest.fn(async (sql: string) => {
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              parties: [activeOnlyPartyId],
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({
+          query: participantQuery,
+        }),
+      } as never,
+      undefined,
+      {
+        getPackage: jest.fn(),
+      } as never,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchPartyDetail?: (
+        nodes: Array<{ id: string; label: string }>,
+        partyId: string,
+      ) => Promise<PartyDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPartyDetail?.([{ id: 'participant-1', label: 'Participant 1' }], activeOnlyPartyId),
+    ).resolves.toEqual({
+      partyId: activeOnlyPartyId,
+      nodeCount: 1,
+      recentUpdateCount: 0,
+      recentContractCount: 0,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          recentUpdateCount: 0,
+          recentContractCount: 0,
+        },
+      ],
+      recentUpdates: [],
+      recentContracts: [],
+      partyTopologyByNode: [],
+    });
+  });
+
   it('keeps party detail available when topology fails for one node', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
@@ -5121,6 +5177,9 @@ mode: 'pqs_only',
 
     expect(response).toEqual({
       tokenId: 'validator-license',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
       holders: [
         {
           partyId: 'Alice',
@@ -5280,6 +5339,9 @@ mode: 'pqs_only',
 
     expect(response).toEqual({
       tokenId: 'canton-coin',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
       holders: [
         {
           partyId: 'Alice',
@@ -5302,6 +5364,150 @@ mode: 'pqs_only',
             {
               nodeId: 'participant-2',
               label: 'Participant 2',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('paginates token holders with opaque cursors', async () => {
+    const participant1Query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'holding-update-1',
+          event_offset: '1001',
+          record_time: '2026-07-07T14:20:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('alice-holding'),
+        },
+        {
+          update_id: 'holding-update-2',
+          event_offset: '1002',
+          record_time: '2026-07-07T14:21:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('bob-holding'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'alice-holding':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Alice' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    { label: 'amount', value: '150.0000000000' },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'owner', value: 'Bob' },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'Issuer' },
+                          { label: 'id', value: 'validator-license' },
+                        ],
+                      },
+                    },
+                    { label: 'amount', value: '90.0000000000' },
+                  ],
+                },
+              };
+          }
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({
+          query: participant1Query,
+        }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [{ id: 'participant-1', label: 'Participant 1' }] as const;
+
+    const firstPage = await (
+      service as PqsSummaryService & {
+        fetchTokenHolders: (
+          nodes: typeof nodes,
+          tokenId: string,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenHoldersResponse>;
+      }
+    ).fetchTokenHolders(nodes, 'validator-license', 1);
+
+    expect(firstPage).toEqual({
+      tokenId: 'validator-license',
+      limit: 1,
+      nextBefore: expect.any(String),
+      nextAfter: null,
+      holders: [
+        {
+          partyId: 'Alice',
+          amount: '150.0000000000',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+            },
+          ],
+        },
+      ],
+    });
+
+    const secondPage = await (
+      service as PqsSummaryService & {
+        fetchTokenHolders: (
+          nodes: typeof nodes,
+          tokenId: string,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokenHoldersResponse>;
+      }
+    ).fetchTokenHolders(nodes, 'validator-license', 1, {
+      before: firstPage.nextBefore ?? undefined,
+    });
+
+    expect(secondPage).toEqual({
+      tokenId: 'validator-license',
+      limit: 1,
+      nextBefore: null,
+      nextAfter: expect.any(String),
+      holders: [
+        {
+          partyId: 'Bob',
+          amount: '90.0000000000',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
             },
           ],
         },

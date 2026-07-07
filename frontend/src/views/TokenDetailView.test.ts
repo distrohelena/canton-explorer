@@ -50,21 +50,9 @@ describe('TokenDetailView', () => {
     vi.mocked(fetchTokenHolders).mockReturnValue(new Promise(() => undefined));
     vi.mocked(fetchTokenTransfers).mockReturnValue(new Promise(() => undefined));
 
-    render(TokenDetailView, {
-      props: {
-        tokenId: 'canton-coin',
-      },
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="typeof to === \'string\' ? to : to.path" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
+    return renderAt('/tokens/canton-coin').then(() => {
+      expect(screen.getByText('Loading token detail...')).toBeInTheDocument();
     });
-
-    expect(screen.getByText('Loading token detail...')).toBeInTheDocument();
   });
 
   it('renders overview, top holders, and paged recent transfers for a token', async () => {
@@ -79,6 +67,9 @@ describe('TokenDetailView', () => {
     });
     vi.mocked(fetchTokenHolders).mockResolvedValue({
       tokenId: 'canton-coin',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
       holders: [
         {
           partyId: 'Alice',
@@ -183,6 +174,8 @@ describe('TokenDetailView', () => {
     expect(within(holdersTable).getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
     expect(within(holdersTable).getByText('100.0')).toBeInTheDocument();
     expect(within(holdersTable).getByText('CNQS App Provider')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
 
     await waitFor(() => expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'canton-coin', 25, {}));
 
@@ -208,6 +201,93 @@ describe('TokenDetailView', () => {
 
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens/transfers/token-update-2'));
     expect(await screen.findByText('Transfer Detail')).toBeInTheDocument();
+  });
+
+  it('paginates top holders with holder-specific cursors', async () => {
+    vi.mocked(fetchTokenDetail).mockResolvedValue({
+      token: {
+        tokenId: 'canton-coin',
+        name: 'Canton Coin',
+        symbol: null,
+        source: 'pqs',
+      },
+      transfers: [],
+    });
+    vi.mocked(fetchTokenHolders)
+      .mockResolvedValueOnce({
+        tokenId: 'canton-coin',
+        limit: 25,
+        nextBefore: 'holders-cursor-before-1',
+        nextAfter: null,
+        holders: [
+          {
+            partyId: 'Alice',
+            amount: '100.0',
+            nodes: [{ nodeId: 'participant-1', label: 'Participant 1' }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        tokenId: 'canton-coin',
+        limit: 25,
+        nextBefore: null,
+        nextAfter: 'holders-cursor-after-1',
+        holders: [
+          {
+            partyId: 'Bob',
+            amount: '80.0',
+            nodes: [{ nodeId: 'participant-2', label: 'Participant 2' }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        tokenId: 'canton-coin',
+        limit: 25,
+        nextBefore: 'holders-cursor-before-1',
+        nextAfter: null,
+        holders: [
+          {
+            partyId: 'Alice',
+            amount: '100.0',
+            nodes: [{ nodeId: 'participant-1', label: 'Participant 1' }],
+          },
+        ],
+      });
+    vi.mocked(fetchTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    const { router } = await renderAt('/tokens/canton-coin');
+
+    await screen.findByText('Alice');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() =>
+      expect(fetchTokenHolders).toHaveBeenNthCalledWith(2, 'canton-coin', 25, {
+        before: 'holders-cursor-before-1',
+      }),
+    );
+    await waitFor(() =>
+      expect(router.currentRoute.value.fullPath).toBe('/tokens/canton-coin?holdersBefore=holders-cursor-before-1'),
+    );
+    expect(await screen.findByText('Bob')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous' })).not.toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+
+    await waitFor(() =>
+      expect(fetchTokenHolders).toHaveBeenNthCalledWith(3, 'canton-coin', 25, {
+        after: 'holders-cursor-after-1',
+      }),
+    );
+    await waitFor(() =>
+      expect(router.currentRoute.value.fullPath).toBe('/tokens/canton-coin?holdersAfter=holders-cursor-after-1'),
+    );
+    expect(await screen.findByText('Alice')).toBeInTheDocument();
   });
 
 });

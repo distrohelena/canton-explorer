@@ -492,7 +492,7 @@ export class GrpcOperationsService {
   private async decodePackageArchiveMetadata(
     archivePayload: Buffer,
   ): Promise<{ name: string | null; version: string | null }> {
-    const sdk = await import('canton-typescript-sdk/daml-lf');
+    const sdk = await import('@distrohelena/canton-typescript-sdk/daml-lf');
     const packageLoader = new sdk.DamlLfPackageLoader();
     const decodedPackage = packageLoader.loadPackageOrThrow(archivePayload);
 
