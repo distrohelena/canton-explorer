@@ -67,7 +67,7 @@ describe('TokenDetailView', () => {
     });
     vi.mocked(fetchTokenHolders).mockResolvedValue({
       tokenId: 'canton-coin',
-      limit: 25,
+      limit: 10,
       nextBefore: null,
       nextAfter: null,
       holders: [
@@ -95,7 +95,7 @@ describe('TokenDetailView', () => {
     });
     vi.mocked(fetchTokenTransfers)
       .mockResolvedValueOnce({
-        limit: 25,
+        limit: 10,
         nextBefore: 'cursor-token-0',
         nextAfter: null,
         transfers: [
@@ -123,7 +123,7 @@ describe('TokenDetailView', () => {
         ],
       })
       .mockResolvedValueOnce({
-        limit: 25,
+        limit: 10,
         nextBefore: null,
         nextAfter: 'cursor-token-1',
         transfers: [
@@ -177,7 +177,7 @@ describe('TokenDetailView', () => {
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
 
-    await waitFor(() => expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'canton-coin', 25, {}));
+    await waitFor(() => expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'canton-coin', 10, {}));
 
     const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
     expect(within(transfersTable).getByText('42.0')).toBeInTheDocument();
@@ -216,7 +216,7 @@ describe('TokenDetailView', () => {
     vi.mocked(fetchTokenHolders)
       .mockResolvedValueOnce({
         tokenId: 'canton-coin',
-        limit: 25,
+        limit: 10,
         nextBefore: 'holders-cursor-before-1',
         nextAfter: null,
         holders: [
@@ -229,7 +229,7 @@ describe('TokenDetailView', () => {
       })
       .mockResolvedValueOnce({
         tokenId: 'canton-coin',
-        limit: 25,
+        limit: 10,
         nextBefore: null,
         nextAfter: 'holders-cursor-after-1',
         holders: [
@@ -242,7 +242,7 @@ describe('TokenDetailView', () => {
       })
       .mockResolvedValueOnce({
         tokenId: 'canton-coin',
-        limit: 25,
+        limit: 10,
         nextBefore: 'holders-cursor-before-1',
         nextAfter: null,
         holders: [
@@ -254,7 +254,7 @@ describe('TokenDetailView', () => {
         ],
       });
     vi.mocked(fetchTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 10,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -267,7 +267,7 @@ describe('TokenDetailView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     await waitFor(() =>
-      expect(fetchTokenHolders).toHaveBeenNthCalledWith(2, 'canton-coin', 25, {
+      expect(fetchTokenHolders).toHaveBeenNthCalledWith(2, 'canton-coin', 10, {
         before: 'holders-cursor-before-1',
       }),
     );
@@ -280,7 +280,7 @@ describe('TokenDetailView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
 
     await waitFor(() =>
-      expect(fetchTokenHolders).toHaveBeenNthCalledWith(3, 'canton-coin', 25, {
+      expect(fetchTokenHolders).toHaveBeenNthCalledWith(3, 'canton-coin', 10, {
         after: 'holders-cursor-after-1',
       }),
     );
@@ -288,6 +288,70 @@ describe('TokenDetailView', () => {
       expect(router.currentRoute.value.fullPath).toBe('/tokens/canton-coin?holdersAfter=holders-cursor-after-1'),
     );
     expect(await screen.findByText('Alice')).toBeInTheDocument();
+  });
+
+  it('changes the holders page size independently from transfer pagination', async () => {
+    vi.mocked(fetchTokenDetail).mockResolvedValue({
+      token: {
+        tokenId: 'canton-coin',
+        name: 'Canton Coin',
+        symbol: null,
+        source: 'pqs',
+      },
+      transfers: [],
+    });
+    vi.mocked(fetchTokenHolders)
+      .mockResolvedValueOnce({
+        tokenId: 'canton-coin',
+        limit: 10,
+        nextBefore: 'holders-cursor-before-1',
+        nextAfter: null,
+        holders: [
+          {
+            partyId: 'Alice',
+            amount: '100.0',
+            nodes: [{ nodeId: 'participant-1', label: 'Participant 1' }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        tokenId: 'canton-coin',
+        limit: 50,
+        nextBefore: null,
+        nextAfter: null,
+        holders: [
+          {
+            partyId: 'Bob',
+            amount: '80.0',
+            nodes: [{ nodeId: 'participant-2', label: 'Participant 2' }],
+          },
+        ],
+      });
+    vi.mocked(fetchTokenTransfers).mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    const { router } = await renderAt('/tokens/canton-coin?holdersBefore=holders-cursor-before-1');
+
+    await screen.findByText('Alice');
+
+    const holdersSection = screen.getByRole('heading', { name: 'Top Holders' }).closest('section');
+    if (!holdersSection) {
+      throw new Error('Expected top holders section');
+    }
+
+    await fireEvent.update(within(holdersSection).getByRole('combobox', { name: 'Items per page' }), '50');
+
+    await waitFor(() =>
+      expect(fetchTokenHolders).toHaveBeenNthCalledWith(2, 'canton-coin', 50, {}),
+    );
+    await waitFor(() =>
+      expect(router.currentRoute.value.fullPath).toBe('/tokens/canton-coin?holdersLimit=50'),
+    );
+    expect(await screen.findByText('Bob')).toBeInTheDocument();
   });
 
 });

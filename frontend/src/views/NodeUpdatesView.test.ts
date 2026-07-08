@@ -125,7 +125,7 @@ describe('NodeUpdatesView', () => {
     const { container } = await renderAt('/nodes/participant-1/updates');
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
-    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
+    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1', { limit: 10 });
     expect(screen.queryByText('Latest 25 updates')).not.toBeInTheDocument();
     expect(screen.getByText('000000000000000101')).toBeInTheDocument();
     expect(screen.getAllByText('Alice')).toHaveLength(1);
@@ -154,6 +154,7 @@ describe('NodeUpdatesView', () => {
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenNthCalledWith(2, 'participant-1', {
         before: '000000000000000099',
+        limit: 10,
       }),
     );
 
@@ -231,6 +232,56 @@ describe('NodeUpdatesView', () => {
     );
   });
 
+  it('changes the updates page size, resets cursors, and persists the limit in the URL', async () => {
+    vi.mocked(fetchNodeUpdates)
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        limit: 10,
+        nextBefore: '000000000000000099',
+        nextAfter: null,
+        updates: [
+          {
+            eventOffset: '000000000000000101',
+            updateId: '00000000000000000000000000000001',
+            recordTime: '2026-07-01T12:00:00.000Z',
+            parties: ['Alice'],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        limit: 50,
+        nextBefore: null,
+        nextAfter: null,
+        updates: [
+          {
+            eventOffset: '000000000000000050',
+            updateId: '00000000000000000000000000000050',
+            recordTime: '2026-07-01T11:00:00.000Z',
+            parties: ['Bob'],
+          },
+        ],
+      });
+
+    const { router } = await renderAt('/nodes/participant-1/updates?before=000000000000000099');
+
+    expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
+
+    await fireEvent.update(screen.getByRole('combobox', { name: 'Items per page' }), '50');
+
+    await waitFor(() =>
+      expect(fetchNodeUpdates).toHaveBeenNthCalledWith(2, 'participant-1', {
+        limit: 50,
+      }),
+    );
+    await waitFor(() =>
+      expect(router.currentRoute.value.fullPath).toBe('/nodes/participant-1/updates?limit=50'),
+    );
+    expect(await screen.findByText('000000000000000050')).toBeInTheDocument();
+  });
+
   it('adds and removes party filter chips and applies global OR and AND modes', async () => {
     vi.mocked(fetchNodeUpdates).mockResolvedValue({
       nodeId: 'participant-1',
@@ -251,7 +302,7 @@ describe('NodeUpdatesView', () => {
     await renderAt('/nodes/participant-1/updates');
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
-    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
+    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1', { limit: 10 });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
     await fireEvent.update(screen.getByPlaceholderText('Party ID'), 'Alice');
@@ -259,6 +310,7 @@ describe('NodeUpdatesView', () => {
 
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        limit: 10,
         parties: ['Alice'],
         partyMode: 'or',
       }),
@@ -271,6 +323,7 @@ describe('NodeUpdatesView', () => {
 
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        limit: 10,
         parties: ['Alice', 'Bob'],
         partyMode: 'or',
       }),
@@ -282,6 +335,7 @@ describe('NodeUpdatesView', () => {
 
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        limit: 10,
         parties: ['Alice', 'Bob'],
         partyMode: 'and',
       }),
@@ -291,6 +345,7 @@ describe('NodeUpdatesView', () => {
 
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        limit: 10,
         parties: ['Bob'],
         partyMode: 'and',
       }),
@@ -300,7 +355,7 @@ describe('NodeUpdatesView', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Remove party filter Bob' }));
 
-    await waitFor(() => expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1'));
+    await waitFor(() => expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', { limit: 10 }));
     expect(screen.queryByRole('button', { name: 'Remove party filter Bob' })).not.toBeInTheDocument();
   });
 
@@ -317,7 +372,7 @@ describe('NodeUpdatesView', () => {
     await renderAt('/nodes/participant-1/updates');
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
-    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
+    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1', { limit: 10 });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
 
@@ -329,6 +384,7 @@ describe('NodeUpdatesView', () => {
 
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        limit: 10,
         hideSplice: true,
       }),
     );
@@ -349,7 +405,7 @@ describe('NodeUpdatesView', () => {
     await renderAt('/nodes/participant-1/updates');
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
-    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
+    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1', { limit: 10 });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
 
@@ -367,6 +423,7 @@ describe('NodeUpdatesView', () => {
 
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        limit: 10,
         templates: ['Main:Wallet'],
       }),
     );
@@ -387,7 +444,7 @@ describe('NodeUpdatesView', () => {
     const { router } = await renderAt('/nodes/participant-1/updates');
 
     expect(await screen.findByRole('heading', { name: 'Participant 1 Updates' })).toBeInTheDocument();
-    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1');
+    expect(fetchNodeUpdates).toHaveBeenNthCalledWith(1, 'participant-1', { limit: 10 });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
     const initialCallCount = vi.mocked(fetchNodeUpdates).mock.calls.length;
@@ -434,6 +491,7 @@ describe('NodeUpdatesView', () => {
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Hide Splice Offsets' })).toBeChecked();
     expect(fetchNodeUpdates).toHaveBeenCalledWith('participant-1', {
+      limit: 10,
       hideSplice: true,
     });
   });
@@ -454,6 +512,7 @@ describe('NodeUpdatesView', () => {
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
     expect(screen.getByText('Main:Asset')).toBeInTheDocument();
     expect(fetchNodeUpdates).toHaveBeenCalledWith('participant-1', {
+      limit: 10,
       templates: ['Main:Asset'],
     });
   });
@@ -484,6 +543,7 @@ describe('NodeUpdatesView', () => {
 
     await waitFor(() =>
       expect(fetchNodeUpdates).toHaveBeenLastCalledWith('participant-1', {
+        limit: 10,
         templates: ['Main:Wallet'],
       }),
     );

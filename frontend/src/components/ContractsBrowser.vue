@@ -9,6 +9,7 @@ import {
   fetchPartyContracts,
   fetchTemplates,
 } from '../lib/api';
+import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import type { GlobalContractsResponse, NodeContractsResponse } from '../types/contracts';
 import type { PartyContractsResponse } from '../types/parties';
 import ContractsTable from './ContractsTable.vue';
@@ -63,7 +64,7 @@ const activeTemplateFilters = ref<string[]>([]);
 const activeFilterMode = ref<FilterMode>('or');
 const activeHideSplice = ref(false);
 
-function queryKey(base: 'before' | 'after' | 'party' | 'template' | 'partyMode' | 'hideSplice'): string {
+function queryKey(base: 'before' | 'after' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit'): string {
   if (!props.queryPrefix) {
     return base;
   }
@@ -140,6 +141,7 @@ const renderedContracts = computed(() => {
         : fallbackLabel,
   }));
 });
+const activePageSize = computed(() => normalizePageSize(route.query[queryKey('limit')]));
 
 function hasAdvancedFilterQuery(): boolean {
   return (
@@ -157,6 +159,7 @@ function clearManagedKeys(query: LocationQueryRaw) {
   delete query[queryKey('template')];
   delete query[queryKey('partyMode')];
   delete query[queryKey('hideSplice')];
+  delete query[queryKey('limit')];
   if (!props.queryPrefix) {
     delete query.mode;
   }
@@ -170,6 +173,7 @@ function buildQuery(
     templates?: string[];
     mode?: FilterMode;
     hideSplice?: boolean;
+    limit?: number;
   },
 ): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
@@ -192,6 +196,11 @@ function buildQuery(
   }
   if (options?.hideSplice) {
     nextQuery[queryKey('hideSplice')] = 'true';
+  }
+
+  const limit = normalizePageSize(options?.limit);
+  if (limit !== DEFAULT_PAGE_SIZE) {
+    nextQuery[queryKey('limit')] = String(limit);
   }
 
   return nextQuery;
@@ -224,9 +233,10 @@ async function loadContracts() {
     const templates = activeTemplateFilters.value;
     const partyMode = activeFilterMode.value;
     const hideSplice = activeHideSplice.value;
+    const limit = activePageSize.value;
 
     if (props.scope === 'node' && props.nodeId) {
-      const options: Parameters<typeof fetchNodeContracts>[1] = {};
+      const options: NonNullable<Parameters<typeof fetchNodeContracts>[1]> = { limit };
 
       if (before) {
         options.before = before;
@@ -245,10 +255,7 @@ async function loadContracts() {
         options.hideSplice = true;
       }
 
-      contractsResponse.value =
-        Object.keys(options).length > 0
-          ? await fetchNodeContracts(props.nodeId, options)
-          : await fetchNodeContracts(props.nodeId);
+      contractsResponse.value = await fetchNodeContracts(props.nodeId, options);
       return;
     }
 
@@ -272,12 +279,12 @@ async function loadContracts() {
         options.hideSplice = true;
       }
 
-      contractsResponse.value = await fetchLatestContracts(25, options);
+      contractsResponse.value = await fetchLatestContracts(limit, options);
       return;
     }
 
     if (props.scope === 'party' && props.partyId) {
-      const options: NonNullable<Parameters<typeof fetchPartyContracts>[1]> = { limit: 25 };
+      const options: NonNullable<Parameters<typeof fetchPartyContracts>[1]> = { limit };
 
       if (before) {
         options.before = before;
@@ -373,6 +380,7 @@ async function showOlder() {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -390,6 +398,19 @@ async function showNewer() {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
+    }),
+  );
+}
+
+async function setPageSize(limit: number) {
+  await pushQuery(
+    buildQuery({
+      parties: activePartyFilters.value,
+      templates: activeTemplateFilters.value,
+      mode: activeFilterMode.value,
+      hideSplice: activeHideSplice.value,
+      limit,
     }),
   );
 }
@@ -410,6 +431,7 @@ async function addPartyFilter() {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -424,6 +446,7 @@ async function removePartyFilter(party: string) {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -444,6 +467,7 @@ async function addTemplateFilter() {
       templates: nextTemplates,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -458,6 +482,7 @@ async function removeTemplateFilter(templateId: string) {
       templates: nextTemplates,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -471,6 +496,7 @@ async function setFilterMode(mode: FilterMode) {
       templates: activeTemplateFilters.value,
       mode,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -484,6 +510,7 @@ async function setHideSplice(hidden: boolean) {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: hidden,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -502,7 +529,9 @@ async function setHideSplice(hidden: boolean) {
           :advanced-filter-controls="advancedFilterId"
           :newer-disabled="!contractsResponse?.nextAfter || loading"
           :older-disabled="!contractsResponse?.nextBefore || loading"
+          :page-size="activePageSize"
           @toggle-advanced-filter="toggleAdvancedFilter"
+          @page-size-change="setPageSize"
           @newer="showNewer"
           @older="showOlder"
         />

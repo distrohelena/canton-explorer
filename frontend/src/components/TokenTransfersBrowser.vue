@@ -6,6 +6,7 @@ import QuerySourcePill from './QuerySourcePill.vue';
 import TokenTransfersAdvancedFilter from './TokenTransfersAdvancedFilter.vue';
 import UpdatesToolbar from './UpdatesToolbar.vue';
 import { fetchLatestTokenTransfers, fetchTokenTransfers } from '../lib/api';
+import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import type { TokenTransfersResponse } from '../types/tokens';
 
 type TokenTransferScope = 'global' | 'token';
@@ -47,7 +48,7 @@ const amountGtDraft = ref('');
 const amountLtDraft = ref('');
 
 function queryKey(
-  base: 'before' | 'after' | 'fromParty' | 'toParty' | 'amountGt' | 'amountLt',
+  base: 'before' | 'after' | 'fromParty' | 'toParty' | 'amountGt' | 'amountLt' | 'limit',
 ): string {
   if (!props.queryPrefix) {
     return base;
@@ -86,6 +87,7 @@ const activeToPartyFilters = computed(() =>
 );
 const activeAmountGt = computed(() => readQueryCursor(route.query[queryKey('amountGt')]) ?? '');
 const activeAmountLt = computed(() => readQueryCursor(route.query[queryKey('amountLt')]) ?? '');
+const activePageSize = computed(() => normalizePageSize(route.query[queryKey('limit')]));
 
 function hasAdvancedFilterQuery(): boolean {
   return (
@@ -103,6 +105,7 @@ function buildQuery(options?: {
   toParties?: string[];
   amountGt?: string;
   amountLt?: string;
+  limit?: number;
 }): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
   delete nextQuery[queryKey('before')];
@@ -111,6 +114,7 @@ function buildQuery(options?: {
   delete nextQuery[queryKey('toParty')];
   delete nextQuery[queryKey('amountGt')];
   delete nextQuery[queryKey('amountLt')];
+  delete nextQuery[queryKey('limit')];
 
   if (options?.before) {
     nextQuery[queryKey('before')] = options.before;
@@ -136,6 +140,11 @@ function buildQuery(options?: {
     nextQuery[queryKey('amountLt')] = options.amountLt.trim();
   }
 
+  const limit = normalizePageSize(options?.limit);
+  if (limit !== DEFAULT_PAGE_SIZE) {
+    nextQuery[queryKey('limit')] = String(limit);
+  }
+
   return nextQuery;
 }
 
@@ -157,6 +166,7 @@ async function loadTransfers() {
     const toParties = activeToPartyFilters.value;
     const amountGt = activeAmountGt.value;
     const amountLt = activeAmountLt.value;
+    const limit = activePageSize.value;
     const options: {
       before?: string;
       after?: string;
@@ -192,8 +202,8 @@ async function loadTransfers() {
 
     tokenTransfersResponse.value =
       props.scope === 'token' && props.tokenId
-        ? await fetchTokenTransfers(props.tokenId, 25, options)
-        : await fetchLatestTokenTransfers(25, options);
+        ? await fetchTokenTransfers(props.tokenId, limit, options)
+        : await fetchLatestTokenTransfers(limit, options);
   } catch (err) {
     tokenTransfersError.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
@@ -261,6 +271,7 @@ async function showOlder() {
       toParties: activeToPartyFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -278,6 +289,19 @@ async function showNewer() {
       toParties: activeToPartyFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
+    }),
+  );
+}
+
+async function setPageSize(limit: number) {
+  await pushQuery(
+    buildQuery({
+      fromParties: activeFromPartyFilters.value,
+      toParties: activeToPartyFilters.value,
+      amountGt: activeAmountGt.value,
+      amountLt: activeAmountLt.value,
+      limit,
     }),
   );
 }
@@ -299,6 +323,7 @@ async function addFromPartyFilter() {
       toParties: activeToPartyFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -316,6 +341,7 @@ async function addToPartyFilter() {
       toParties: uniqueValues([...activeToPartyFilters.value, nextParty]),
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -327,6 +353,7 @@ async function removeFromPartyFilter(party: string) {
       toParties: activeToPartyFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -338,6 +365,7 @@ async function removeToPartyFilter(party: string) {
       toParties: activeToPartyFilters.value.filter((candidate) => candidate !== party),
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -378,6 +406,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
       toParties: activeToPartyFilters.value,
       amountGt: nextAmountGt,
       amountLt: nextAmountLt,
+      limit: activePageSize.value,
     }),
   );
 });
@@ -396,7 +425,9 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
           :advanced-filter-controls="advancedFilterId"
           :newer-disabled="!tokenTransfersResponse?.nextAfter || loadingTransfers"
           :older-disabled="!tokenTransfersResponse?.nextBefore || loadingTransfers"
+          :page-size="activePageSize"
           @toggle-advanced-filter="toggleAdvancedFilter"
+          @page-size-change="setPageSize"
           @newer="showNewer"
           @older="showOlder"
         />

@@ -102,6 +102,7 @@ describe('PartyDetailView', () => {
           label: 'Participant 1',
           status: 'ok',
           errorMessage: null,
+          isLocalParty: true,
           partyToParticipants: [
             {
               participantId: 'participant-1',
@@ -113,8 +114,12 @@ describe('PartyDetailView', () => {
           partyToKeyMappings: [
             {
               keyFingerprint: 'fingerprint-1',
-              purpose: 'namespace',
+              publicKey: '302a300506032b6570032100638f79098ceb4d97743ac43a6baa249b08c65a9930da82645cd324271c1f75e4',
+              purpose: 'namespace, proofOfOwnership, protocol',
               keyType: 'ed25519',
+              keyFormat: 'derX509SubjectPublicKeyInfo',
+              keySpec: 'ecCurve25519',
+              threshold: 1,
               synchronizerIds: [],
             },
           ],
@@ -124,6 +129,7 @@ describe('PartyDetailView', () => {
           label: 'Participant 2',
           status: 'grpc_not_configured',
           errorMessage: null,
+          isLocalParty: null,
           partyToParticipants: [],
           partyToKeyMappings: [],
         },
@@ -238,8 +244,8 @@ describe('PartyDetailView', () => {
     expect(screen.getByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent Updates' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent Contracts' })).toBeInTheDocument();
-    expect(api.fetchPartyUpdates).toHaveBeenCalledWith('Alice');
-    expect(api.fetchPartyContracts).toHaveBeenCalledWith('Alice', { limit: 25 });
+    expect(api.fetchPartyUpdates).toHaveBeenCalledWith('Alice', { limit: 10 });
+    expect(api.fetchPartyContracts).toHaveBeenCalledWith('Alice', { limit: 10 });
     expect(screen.getAllByText('2')).toHaveLength(3);
     expect(screen.getByRole('link', { name: 'Participant 1' })).toHaveAttribute(
       'href',
@@ -250,14 +256,27 @@ describe('PartyDetailView', () => {
       '/nodes/participant-2',
     );
     expect(screen.getAllByText('gRPC')).toHaveLength(2);
+    expect(screen.getByText('Local Party')).toBeInTheDocument();
+    expect(screen.getByText('Yes')).toBeInTheDocument();
     expect(screen.getByText('Party to Participant')).toBeInTheDocument();
     expect(screen.getByText('Party to Key')).toBeInTheDocument();
     expect(screen.getByText('participant-1::1220abc')).toBeInTheDocument();
-    expect(screen.getByText('submission')).toBeInTheDocument();
+    expect(screen.getByText('Submission')).toBeInTheDocument();
+    expect(screen.queryByText('submission')).not.toBeInTheDocument();
     expect(screen.getByText('fingerprint-1')).toBeInTheDocument();
-    expect(screen.getByText('namespace')).toBeInTheDocument();
-    expect(screen.getByText('ed25519')).toBeInTheDocument();
+    expect(screen.getByText('Namespace')).toBeInTheDocument();
+    expect(screen.getByText('Proof-of-Ownership')).toBeInTheDocument();
+    expect(screen.getByText('Protocol')).toBeInTheDocument();
+    expect(screen.queryByText('namespace, proofOfOwnership, protocol')).not.toBeInTheDocument();
+    expect(screen.getAllByText('ED25519')).toHaveLength(2);
+    expect(screen.getByText('derX509SubjectPublicKeyInfo')).toBeInTheDocument();
+    expect(screen.queryByText('ecCurve25519')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('302a300506032b6570032100638f79098ceb4d97743ac43a6baa249b08c65a9930da82645cd324271c1f75e4'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('gRPC not configured for this node.')).toBeInTheDocument();
+    expect(container.querySelectorAll('.party-topology__pill-list')).toHaveLength(4);
     expect(await screen.findByRole('link', { name: '0000000000000001' })).toHaveAttribute(
       'href',
       '/nodes/participant-1/updates/0000000000000001?from=party&partyId=Alice',
@@ -304,7 +323,7 @@ describe('PartyDetailView', () => {
       expect(api.fetchPartyContracts).toHaveBeenLastCalledWith('Alice', {
         templates: ['Main:Asset'],
         hideSplice: true,
-        limit: 25,
+        limit: 10,
       }),
     );
 
@@ -315,7 +334,7 @@ describe('PartyDetailView', () => {
         before: 'cursor-contract-1',
         templates: ['Main:Asset'],
         hideSplice: true,
-        limit: 25,
+        limit: 10,
       }),
     );
     expect(await screen.findByRole('link', { name: '00def' })).toHaveAttribute(
@@ -346,6 +365,7 @@ describe('PartyDetailView', () => {
           label: 'Participant 1',
           status: 'ok',
           errorMessage: null,
+          isLocalParty: true,
           partyToParticipants: [],
           partyToKeyMappings: [],
         },
@@ -354,6 +374,7 @@ describe('PartyDetailView', () => {
           label: 'Participant 2',
           status: 'grpc_error',
           errorMessage: 'Topology read failed',
+          isLocalParty: false,
           partyToParticipants: [],
           partyToKeyMappings: [],
         },
@@ -386,6 +407,7 @@ describe('PartyDetailView', () => {
     await renderAt('/parties/Alice');
 
     expect(await screen.findByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();
+    expect(screen.getByText('No aggregated topology mappings returned for this local party.')).toBeInTheDocument();
     expect(screen.getAllByText('Not Present').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Topology read failed')).toBeInTheDocument();
   });

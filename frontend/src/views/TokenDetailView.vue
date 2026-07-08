@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import TokenTransfersBrowser from '../components/TokenTransfersBrowser.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
 import { fetchTokenDetail, fetchTokenHolders } from '../lib/api';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, normalizePageSize } from '../lib/pagination';
 import type { TokenDetailResponse, TokenHoldersResponse } from '../types/tokens';
 
 const props = defineProps<{ tokenId: string }>();
@@ -36,10 +37,15 @@ function readHolderCursor(key: 'holdersBefore' | 'holdersAfter'): string | undef
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
-function buildHolderQuery(options?: { before?: string; after?: string }): LocationQueryRaw {
+function readHolderPageSize(): number {
+  return normalizePageSize(route.query.holdersLimit);
+}
+
+function buildHolderQuery(options?: { before?: string; after?: string; limit?: number }): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
   delete nextQuery.holdersBefore;
   delete nextQuery.holdersAfter;
+  delete nextQuery.holdersLimit;
 
   if (options?.before) {
     nextQuery.holdersBefore = options.before;
@@ -47,6 +53,11 @@ function buildHolderQuery(options?: { before?: string; after?: string }): Locati
 
   if (options?.after) {
     nextQuery.holdersAfter = options.after;
+  }
+
+  const limit = normalizePageSize(options?.limit);
+  if (limit !== DEFAULT_PAGE_SIZE) {
+    nextQuery.holdersLimit = String(limit);
   }
 
   return nextQuery;
@@ -66,6 +77,7 @@ async function loadTokenHolders() {
   try {
     const before = readHolderCursor('holdersBefore');
     const after = before ? undefined : readHolderCursor('holdersAfter');
+    const limit = readHolderPageSize();
     const options: { before?: string; after?: string } = {};
 
     if (before) {
@@ -76,7 +88,7 @@ async function loadTokenHolders() {
       options.after = after;
     }
 
-    tokenHolders.value = await fetchTokenHolders(props.tokenId, 25, options);
+    tokenHolders.value = await fetchTokenHolders(props.tokenId, limit, options);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
@@ -90,7 +102,7 @@ async function showPreviousHolders() {
     return;
   }
 
-  await pushHolderQuery(buildHolderQuery({ after: cursor }));
+  await pushHolderQuery(buildHolderQuery({ after: cursor, limit: readHolderPageSize() }));
 }
 
 async function showNextHolders() {
@@ -99,7 +111,20 @@ async function showNextHolders() {
     return;
   }
 
-  await pushHolderQuery(buildHolderQuery({ before: cursor }));
+  await pushHolderQuery(buildHolderQuery({ before: cursor, limit: readHolderPageSize() }));
+}
+
+async function setHolderPageSize(limit: number) {
+  await pushHolderQuery(buildHolderQuery({ limit }));
+}
+
+function handleHolderPageSizeChange(event: Event) {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  void setHolderPageSize(Number.parseInt(target.value, 10));
 }
 
 function partyLink(partyId: string): string {
@@ -115,7 +140,7 @@ watch(
 );
 
 watch(
-  () => [props.tokenId, route.query.holdersBefore, route.query.holdersAfter],
+  () => [props.tokenId, route.query.holdersBefore, route.query.holdersAfter, route.query.holdersLimit],
   () => {
     void loadTokenHolders();
   },
@@ -174,6 +199,23 @@ watch(
               </div>
               <div class="results-header__actions">
                 <div class="node-updates__pager">
+                  <label class="node-updates__page-size">
+                    <span class="node-updates__page-size-label">Show</span>
+                    <select
+                      class="node-updates__page-size-select"
+                      :value="readHolderPageSize()"
+                      aria-label="Items per page"
+                      @change="handleHolderPageSizeChange"
+                    >
+                      <option
+                        v-for="option in PAGE_SIZE_OPTIONS"
+                        :key="option"
+                        :value="option"
+                      >
+                        {{ option }}
+                      </option>
+                    </select>
+                  </label>
                   <button
                     type="button"
                     class="dashboard__refresh"
@@ -251,6 +293,7 @@ watch(
             scope="token"
             :path="`/tokens/${encodeURIComponent(props.tokenId)}`"
             :token-id="props.tokenId"
+            query-prefix="transfers"
             title="Latest Transfers"
             table-aria-label="Latest token transfers"
             spinner-label="Updating latest token transfers"

@@ -28,7 +28,22 @@ import type {
   NodeUpdatesResponse,
 } from '../types/updates';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+export function resolveApiBaseUrl(
+  envBaseUrl = import.meta.env.VITE_API_BASE_URL,
+  hostname = typeof window !== 'undefined' ? window.location.hostname : undefined,
+): string {
+  if (hostname === 'canton.sweetsquare.io') {
+    return 'https://canton-server.sweetsquare.io/api';
+  }
+
+  if (envBaseUrl?.trim()) {
+    return envBaseUrl;
+  }
+
+  return 'http://localhost:4600/api';
+}
+
+const API_BASE = resolveApiBaseUrl();
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
@@ -322,6 +337,7 @@ export function fetchNodeUpdates(
     templates?: string[];
     partyMode?: 'or' | 'and';
     hideSplice?: boolean;
+    limit?: number;
   },
 ): Promise<NodeUpdatesResponse> {
   const params = new URLSearchParams();
@@ -346,6 +362,9 @@ export function fetchNodeUpdates(
   }
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
+  }
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set('limit', String(Math.trunc(options.limit)));
   }
 
   const suffix = params.size > 0 ? `?${params.toString()}` : '';

@@ -67,7 +67,7 @@ describe('TokensView', () => {
       ],
     });
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 10,
       nextBefore: 'cursor-token-0',
       nextAfter: null,
       transfers: [
@@ -105,6 +105,7 @@ describe('TokensView', () => {
     expect(within(transfersTable).getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
     expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
+    expect(fetchLatestTokenTransfers).toHaveBeenCalledWith(10, {});
   });
 
   it('navigates to the party detail page from transfer parties', async () => {
@@ -148,6 +149,40 @@ describe('TokensView', () => {
 
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/parties/Alice'));
     expect(await screen.findByText('Party Detail')).toBeInTheDocument();
+  });
+
+  it('changes the transfers page size and persists the selected limit in the URL', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue({
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          source: 'pqs',
+        },
+      ],
+    });
+    vi.mocked(fetchLatestTokenTransfers)
+      .mockResolvedValueOnce({
+        limit: 10,
+        nextBefore: null,
+        nextAfter: null,
+        transfers: [],
+      })
+      .mockResolvedValueOnce({
+        limit: 50,
+        nextBefore: null,
+        nextAfter: null,
+        transfers: [],
+      });
+
+    const { router } = await renderAt('/tokens');
+
+    await screen.findByRole('heading', { name: 'Latest Transfers' });
+    await fireEvent.update(screen.getByRole('combobox', { name: 'Items per page' }), '50');
+
+    await waitFor(() => expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(2, 50, {}));
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?limit=50'));
   });
 
   it('navigates to the token detail page from a known token card', async () => {
@@ -355,7 +390,7 @@ describe('TokensView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
-      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(2, 25, { before: 'cursor-token-0' }),
+      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(2, 10, { before: 'cursor-token-0' }),
     );
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?before=cursor-token-0'));
     expect(await screen.findByText('Participant 1')).toBeInTheDocument();
@@ -364,7 +399,7 @@ describe('TokensView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Newer' }));
 
     await waitFor(() =>
-      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(3, 25, { after: 'cursor-token-1' }),
+      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(3, 10, { after: 'cursor-token-1' }),
     );
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?after=cursor-token-1'));
     expect(await screen.findByText('Participant 2')).toBeInTheDocument();
@@ -457,7 +492,7 @@ describe('TokensView', () => {
 
     await screen.findByText('Canton Coin');
 
-    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 25, {
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
       fromParties: ['Alice'],
       toParties: ['Bob'],
     });
@@ -506,7 +541,7 @@ describe('TokensView', () => {
 
     await screen.findByText('Canton Coin');
 
-    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 25, {
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
       amountGt: '10',
       amountLt: '100',
     });

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { LocationQueryRaw } from 'vue-router';
 import { fetchLatestUpdates, fetchNodeTemplates, fetchNodeUpdates, fetchPartyUpdates, fetchTemplates } from '../lib/api';
+import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import type { GlobalUpdateEntry, GlobalUpdatesResponse, NodeUpdateEntry, NodeUpdatesResponse } from '../types/updates';
 import UpdatesAdvancedFilter from './UpdatesAdvancedFilter.vue';
 import UpdatesToolbar from './UpdatesToolbar.vue';
@@ -60,7 +61,7 @@ const templateFilterDraft = ref('');
 const templateOptions = ref<string[]>([]);
 const templatesLoaded = ref(false);
 
-function queryKey(base: 'before' | 'after' | 'party' | 'template' | 'partyMode' | 'hideSplice'): string {
+function queryKey(base: 'before' | 'after' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit'): string {
   if (!props.queryPrefix) {
     return base;
   }
@@ -121,6 +122,7 @@ const activeFilterMode = computed<FilterMode>(() => {
   return 'or';
 });
 const activeHideSplice = computed(() => readHideSplice(route.query[queryKey('hideSplice')]));
+const activePageSize = computed(() => normalizePageSize(route.query[queryKey('limit')]));
 
 function hasAdvancedFilterQuery(): boolean {
   return (
@@ -141,6 +143,7 @@ function clearManagedKeys(query: LocationQueryRaw) {
   delete query[queryKey('template')];
   delete query[queryKey('partyMode')];
   delete query[queryKey('hideSplice')];
+  delete query[queryKey('limit')];
 
   if (!props.queryPrefix) {
     delete query.mode;
@@ -155,6 +158,7 @@ function buildQuery(
     templates?: string[];
     mode?: FilterMode;
     hideSplice?: boolean;
+    limit?: number;
   },
 ): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
@@ -178,6 +182,11 @@ function buildQuery(
 
   if (options?.hideSplice) {
     nextQuery[queryKey('hideSplice')] = 'true';
+  }
+
+  const limit = normalizePageSize(options?.limit);
+  if (limit !== DEFAULT_PAGE_SIZE) {
+    nextQuery[queryKey('limit')] = String(limit);
   }
 
   return nextQuery;
@@ -271,6 +280,7 @@ async function loadUpdates() {
     const templates = activeTemplateFilters.value;
     const partyMode = activeFilterMode.value;
     const hideSplice = activeHideSplice.value;
+    const limit = activePageSize.value;
 
     if (props.scope === 'global') {
       const options: Parameters<typeof fetchLatestUpdates>[1] = {};
@@ -291,13 +301,12 @@ async function loadUpdates() {
         options.hideSplice = true;
       }
 
-      updatesResponse.value =
-        Object.keys(options).length > 0 ? await fetchLatestUpdates(25, options) : await fetchLatestUpdates(25);
+      updatesResponse.value = await fetchLatestUpdates(limit, options);
       return;
     }
 
     if (props.scope === 'node' && props.nodeId) {
-      const options: Parameters<typeof fetchNodeUpdates>[1] = {};
+      const options: NonNullable<Parameters<typeof fetchNodeUpdates>[1]> = { limit };
       if (before) {
         options.before = before;
       }
@@ -315,13 +324,12 @@ async function loadUpdates() {
         options.hideSplice = true;
       }
 
-      updatesResponse.value =
-        Object.keys(options).length > 0 ? await fetchNodeUpdates(props.nodeId, options) : await fetchNodeUpdates(props.nodeId);
+      updatesResponse.value = await fetchNodeUpdates(props.nodeId, options);
       return;
     }
 
     if (props.scope === 'party' && props.partyId) {
-      const options: Parameters<typeof fetchPartyUpdates>[1] = {};
+      const options: NonNullable<Parameters<typeof fetchPartyUpdates>[1]> = { limit };
       if (before) {
         options.before = before;
       }
@@ -335,8 +343,7 @@ async function loadUpdates() {
         options.hideSplice = true;
       }
 
-      updatesResponse.value =
-        Object.keys(options).length > 0 ? await fetchPartyUpdates(props.partyId, options) : await fetchPartyUpdates(props.partyId);
+      updatesResponse.value = await fetchPartyUpdates(props.partyId, options);
       return;
     }
 
@@ -410,6 +417,7 @@ async function showOlder() {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -427,6 +435,19 @@ async function showNewer() {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
+    }),
+  );
+}
+
+async function setPageSize(limit: number) {
+  await pushQuery(
+    buildQuery({
+      parties: activePartyFilters.value,
+      templates: activeTemplateFilters.value,
+      mode: activeFilterMode.value,
+      hideSplice: activeHideSplice.value,
+      limit,
     }),
   );
 }
@@ -446,6 +467,7 @@ async function addPartyFilter() {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -459,6 +481,7 @@ async function removePartyFilter(party: string) {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -478,6 +501,7 @@ async function addTemplateFilter() {
       templates: nextTemplates,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -491,6 +515,7 @@ async function removeTemplateFilter(templateId: string) {
       templates: nextTemplates,
       mode: activeFilterMode.value,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -502,6 +527,7 @@ async function setFilterMode(mode: FilterMode) {
       templates: activeTemplateFilters.value,
       mode,
       hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -513,6 +539,7 @@ async function setHideSplice(hidden: boolean) {
       templates: activeTemplateFilters.value,
       mode: activeFilterMode.value,
       hideSplice: hidden,
+      limit: activePageSize.value,
     }),
   );
 }
@@ -558,7 +585,9 @@ function partyLink(party: string): string {
         :advanced-filter-controls="advancedFilterId"
         :newer-disabled="!updatesResponse?.nextAfter || loading"
         :older-disabled="!updatesResponse?.nextBefore || loading"
+        :page-size="activePageSize"
         @toggle-advanced-filter="toggleAdvancedFilter"
+        @page-size-change="setPageSize"
         @newer="showNewer"
         @older="showOlder"
       />

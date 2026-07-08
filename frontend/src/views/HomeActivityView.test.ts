@@ -305,7 +305,7 @@ describe('HomeActivityView', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Latest Updates' })).toBeInTheDocument();
-    expect(fetchLatestUpdates).toHaveBeenCalledWith(25);
+    expect(fetchLatestUpdates).toHaveBeenCalledWith(10, {});
     const updatesTable = await screen.findByRole('table', { name: 'Latest updates across all nodes' });
     const updatesScope = within(updatesTable);
     const updatesSection = screen.getByRole('heading', { name: 'Latest Updates' }).closest('section')!;
@@ -488,7 +488,7 @@ describe('HomeActivityView', () => {
     await fireEvent.click(updatesSectionScope.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
-      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(25, {
+      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(10, {
         before: 'cursor-before-1',
       }),
     );
@@ -530,7 +530,7 @@ describe('HomeActivityView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Add party filter' }));
 
     await waitFor(() =>
-      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(25, {
+      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(10, {
         parties: ['Alice'],
         partyMode: 'or',
       }),
@@ -541,7 +541,7 @@ describe('HomeActivityView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'AND' }));
 
     await waitFor(() =>
-      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(25, {
+      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(10, {
         parties: ['Alice'],
         partyMode: 'and',
       }),
@@ -555,7 +555,7 @@ describe('HomeActivityView', () => {
     );
 
     await waitFor(() =>
-      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(25, {
+      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(10, {
         parties: ['Alice'],
         partyMode: 'and',
         hideSplice: true,
@@ -597,7 +597,7 @@ describe('HomeActivityView', () => {
       'node-updates__advanced-filter-mode--active',
     );
     expect(screen.getByRole('checkbox', { name: 'Hide Splice Offsets' })).toBeChecked();
-    expect(fetchLatestUpdates).toHaveBeenCalledWith(25, {
+    expect(fetchLatestUpdates).toHaveBeenCalledWith(10, {
       parties: ['Alice'],
       partyMode: 'and',
       hideSplice: true,
@@ -640,7 +640,7 @@ describe('HomeActivityView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Add template filter' }));
 
     await waitFor(() =>
-      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(25, {
+      expect(fetchLatestUpdates).toHaveBeenLastCalledWith(10, {
         templates: ['Main:Wallet'],
       }),
     );
