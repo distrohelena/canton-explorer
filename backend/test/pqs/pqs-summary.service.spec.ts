@@ -4025,8 +4025,16 @@ mode: 'pqs_only',
           value: {
             kind: 'record',
             fields: [
-              { label: 'vaultIdentity', value: { kind: 'unit' } },
-              { label: 'vaultParty', value: 'Vault' },
+              {
+                label: 'vaultIdentity',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'admin', value: 'VaultAdmin' },
+                    { label: 'id', value: 'vault-1' },
+                  ],
+                },
+              },
               { label: 'owner', value: 'Alice' },
               { label: 'name', value: 'USDCx Test Vault Share' },
               { label: 'symbol', value: 'vUSDCx-SHARE' },
@@ -4058,8 +4066,16 @@ mode: 'pqs_only',
           value: {
             kind: 'record',
             fields: [
-              { label: 'vaultIdentity', value: { kind: 'unit' } },
-              { label: 'vaultParty', value: 'Vault' },
+              {
+                label: 'vaultIdentity',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'admin', value: 'VaultAdmin' },
+                    { label: 'id', value: 'vault-1' },
+                  ],
+                },
+              },
               { label: 'name', value: 'USDCx Test Vault Share' },
               { label: 'symbol', value: 'vUSDCx-SHARE' },
             ],
@@ -4116,10 +4132,10 @@ mode: 'pqs_only',
           source: 'pqs',
         },
         {
-          tokenId: 'vUSDCx-SHARE',
+          tokenId: 'VaultAdmin::vUSDCx-SHARE',
           name: 'USDCx Test Vault Share',
           symbol: 'vUSDCx-SHARE',
-          issuer: null,
+          issuer: 'VaultAdmin',
           source: 'pqs',
         },
       ],
@@ -5393,8 +5409,16 @@ mode: 'pqs_only',
                 value: {
                   kind: 'record',
                   fields: [
-                    { label: 'vaultIdentity', value: { kind: 'unit' } },
-                    { label: 'vaultParty', value: 'Vault' },
+                    {
+                      label: 'vaultIdentity',
+                      value: {
+                        kind: 'record',
+                        fields: [
+                          { label: 'admin', value: 'VaultAdmin' },
+                          { label: 'id', value: 'vault-1' },
+                        ],
+                      },
+                    },
                     { label: 'owner', value: 'Alice' },
                     { label: 'name', value: 'USDCx Test Vault Share' },
                     { label: 'symbol', value: 'vUSDCx-SHARE' },
@@ -5457,7 +5481,7 @@ mode: 'pqs_only',
           '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Share Mint',
         movementType: 'Share Mint',
         source: 'pqs_inferred_holding_v2',
-        tokenId: 'vUSDCx-SHARE',
+        tokenId: 'VaultAdmin::vUSDCx-SHARE',
         tokenName: 'USDCx Test Vault Share',
         amount: '100.0000000000',
         sender: null,
@@ -6362,8 +6386,16 @@ mode: 'pqs_only',
         value: {
           kind: 'record',
           fields: [
-            { label: 'vaultIdentity', value: { kind: 'unit' } },
-            { label: 'vaultParty', value: 'Vault' },
+            {
+              label: 'vaultIdentity',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'admin', value: 'VaultAdmin' },
+                  { label: 'id', value: 'vault-1' },
+                ],
+              },
+            },
             { label: 'owner', value: 'Alice' },
             { label: 'name', value: 'USDCx Test Vault Share' },
             { label: 'symbol', value: 'vUSDCx-SHARE' },
@@ -6386,11 +6418,14 @@ mode: 'pqs_only',
           tokenId: string,
         ) => Promise<unknown>;
       }
-    ).fetchTokenHolders([{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }], 'vUSDCx-SHARE');
+    ).fetchTokenHolders(
+      [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }],
+      'VaultAdmin::vUSDCx-SHARE',
+    );
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining(".CIP112:"));
     expect(response).toEqual({
-      tokenId: 'vUSDCx-SHARE',
+      tokenId: 'VaultAdmin::vUSDCx-SHARE',
       limit: 25,
       nextBefore: null,
       nextAfter: null,

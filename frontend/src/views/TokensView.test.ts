@@ -134,6 +134,31 @@ describe('TokensView', () => {
     expect(fetchLatestTokenTransfers).toHaveBeenCalledWith(10, {});
   });
 
+  it('prefers token symbols over verbose names in known token cards', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
+      {
+        tokenId: 'VaultAdmin::vUSDCx-SHARE',
+        name: 'USDCx Test Vault deployment Share',
+        symbol: 'vUSDCx-SHARE',
+        issuer: 'VaultAdmin',
+        source: 'pqs',
+      },
+    ]));
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    await renderAt('/tokens');
+
+    expect(await screen.findByRole('heading', { name: 'Known Tokens' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /vUSDCx-SHARE/i })).toBeInTheDocument();
+    expect(screen.getByText('VaultAdmin')).toBeInTheDocument();
+    expect(screen.queryByText('USDCx Test Vault deployment Share')).not.toBeInTheDocument();
+  });
+
   it('navigates to the party detail page from transfer parties', async () => {
     vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
         {

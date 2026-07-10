@@ -76,6 +76,11 @@ function tokenDetailLink(tokenId: string): string {
   return `/tokens/${encodeURIComponent(tokenId)}`;
 }
 
+function displayTokenTitle(token: TokensResponse['tokens'][number]): string {
+  const normalizedSymbol = token.symbol?.trim() ?? '';
+  return normalizedSymbol.length > 0 ? normalizedSymbol : token.name;
+}
+
 async function showPreviousTokens() {
   const cursor = tokensResponse.value?.nextAfter;
   if (!cursor) {
@@ -186,7 +191,7 @@ watch(
           :to="tokenDetailLink(token.tokenId)"
         >
           <div class="tokens-page__known-main">
-            <h4>{{ token.name }}</h4>
+            <h4>{{ displayTokenTitle(token) }}</h4>
             <p v-if="token.issuer" class="tokens-page__known-issuer">{{ token.issuer }}</p>
           </div>
           <QuerySourcePill :source="token.source" />

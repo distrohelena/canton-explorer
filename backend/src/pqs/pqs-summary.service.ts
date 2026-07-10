@@ -5286,6 +5286,7 @@ export class PqsSummaryService {
 
     const issuer =
       this.readNestedScalarField(decoded.value, ['instrumentId', 'admin'])
+      ?? this.readNestedScalarField(decoded.value, ['vaultIdentity', 'admin'])
       ?? this.readScalarField(decoded.value, 'issuer');
     const tokenId = this.buildObservedTokenId(intrinsicId, issuer);
 
