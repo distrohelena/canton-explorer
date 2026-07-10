@@ -1,5 +1,9 @@
 import { Injectable, Optional } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
+import {
+  DEFAULT_TOKEN_METADATA_CONFIG,
+  type TokenMetadataConfig,
+} from '../config/node-config.schema';
 import { NodeConfigService } from '../config/node-config.service';
 import type {
   ActivePartiesResponse,
@@ -44,7 +48,10 @@ import { PqsClientFactory } from './pqs-client.factory';
 import { DamlValueDecoderService } from '../packages/daml-value-decoder.service';
 import { PackageCacheService } from '../packages/package-cache.service';
 import { PackageRegistryService } from '../packages/package-registry.service';
-import { GrpcOperationsService } from '../grpc/grpc-operations.service';
+import {
+  GrpcOperationsService,
+  type GrpcTokenHolderObservation,
+} from '../grpc/grpc-operations.service';
 import { PackageSyncService } from '../packages/package-sync.service';
 
 interface SummaryRow {
@@ -273,11 +280,23 @@ const TOKEN_DISCOVERY_TEMPLATE_IDS = [
   CIP56_TRANSFER_TEMPLATE_ID,
 ] as const;
 const TOKEN_DISCOVERY_TEMPLATE_PATTERNS = [CIP112_TEMPLATE_ID_LIKE_PATTERN] as const;
+const TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS = [
+  CANTON_COIN_TRANSFER_TEMPLATE_ID,
+  CANTON_COIN_AMULET_TEMPLATE_ID,
+  CIP56_HOLDING_TEMPLATE_ID,
+  CIP56_TRANSFER_TEMPLATE_ID,
+] as const;
+const TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS = [] as const;
 const TOKEN_HOLDER_TEMPLATE_IDS = [
   CANTON_COIN_AMULET_TEMPLATE_ID,
   CIP56_HOLDING_TEMPLATE_ID,
 ] as const;
 const TOKEN_HOLDER_TEMPLATE_PATTERNS = [CIP112_TEMPLATE_ID_LIKE_PATTERN] as const;
+const TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS = [
+  CANTON_COIN_AMULET_TEMPLATE_ID,
+  CIP56_HOLDING_TEMPLATE_ID,
+] as const;
+const TOKEN_HOLDER_NON_CIP112_TEMPLATE_PATTERNS = [] as const;
 const TOKEN_TRANSFER_TEMPLATE_IDS = [
   CANTON_COIN_TRANSFER_TEMPLATE_ID,
   CANTON_COIN_AMULET_TEMPLATE_ID,
@@ -4569,7 +4588,25 @@ export class PqsSummaryService {
       return cached.tokens;
     }
 
-    const tokens = await this.fetchObservedTokensForNode(node, TOKEN_TRANSFER_CACHE_LIMIT);
+    const useGrpcHoldingViews =
+      node.mode === 'pqs_with_grpc' && this.grpcOperationsService !== undefined;
+    const [pqsTokens, grpcTokens] = await Promise.all([
+      this.fetchObservedTokensForNode(node, TOKEN_TRANSFER_CACHE_LIMIT, {
+        includeCip112: !useGrpcHoldingViews,
+      }),
+      useGrpcHoldingViews
+        ? this.grpcOperationsService!.fetchHoldingV2Tokens(node)
+        : Promise.resolve([] as TokenSummary[]),
+    ]);
+    const dedupedTokens = new Map<string, TokenSummary>();
+
+    for (const token of [...pqsTokens, ...grpcTokens]) {
+      if (!dedupedTokens.has(token.tokenId)) {
+        dedupedTokens.set(token.tokenId, token);
+      }
+    }
+
+    const tokens = Array.from(dedupedTokens.values()).sort(compareGlobalTokens);
     this.observedTokensByNode.set(node.id, {
       cachedAt: Date.now(),
       tokens,
@@ -4577,10 +4614,19 @@ export class PqsSummaryService {
     return tokens;
   }
 
-  private async fetchObservedTokensForNode(node: NodeConfig, limit: number): Promise<TokenSummary[]> {
+  private async fetchObservedTokensForNode(
+    node: NodeConfig,
+    limit: number,
+    options?: { includeCip112?: boolean },
+  ): Promise<TokenSummary[]> {
     const client = this.clientFactory.getClient(node);
+    const includeCip112 = options?.includeCip112 ?? true;
     const result = await client.query(
-      tokenRowsQuery(limit, TOKEN_DISCOVERY_TEMPLATE_IDS, TOKEN_DISCOVERY_TEMPLATE_PATTERNS),
+      tokenRowsQuery(
+        limit,
+        includeCip112 ? TOKEN_DISCOVERY_TEMPLATE_IDS : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS,
+        includeCip112 ? TOKEN_DISCOVERY_TEMPLATE_PATTERNS : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS,
+      ),
     );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const dedupedTokens = new Map<string, TokenSummary>();
@@ -4672,7 +4718,27 @@ export class PqsSummaryService {
       return cached.holders;
     }
 
-    const holders = await this.fetchTokenHoldersForNode(node, TOKEN_TRANSFER_CACHE_LIMIT);
+    const useGrpcHoldingViews =
+      node.mode === 'pqs_with_grpc' && this.grpcOperationsService !== undefined;
+    const [pqsHolders, grpcHolders] = await Promise.all([
+      this.fetchTokenHoldersForNode(node, TOKEN_TRANSFER_CACHE_LIMIT, {
+        includeCip112: !useGrpcHoldingViews,
+      }),
+      useGrpcHoldingViews
+        ? this.grpcOperationsService!.fetchHoldingV2TokenHolders(node)
+        : Promise.resolve([] as GrpcTokenHolderObservation[]),
+    ]);
+    const holders = [
+      ...pqsHolders,
+      ...grpcHolders.map((holder) => ({
+        contractId: holder.contractId,
+        nodeId: holder.nodeId,
+        label: holder.label,
+        tokenId: holder.tokenId,
+        partyId: holder.partyId,
+        amount: holder.amount,
+      })),
+    ];
     this.tokenHoldersByNode.set(node.id, {
       cachedAt: Date.now(),
       holders,
@@ -4683,10 +4749,16 @@ export class PqsSummaryService {
   private async fetchTokenHoldersForNode(
     node: NodeConfig,
     limit: number,
+    options?: { includeCip112?: boolean },
   ): Promise<NodeTokenHolderObservation[]> {
     const client = this.clientFactory.getClient(node);
+    const includeCip112 = options?.includeCip112 ?? true;
     const result = await client.query(
-      tokenRowsQuery(limit, TOKEN_HOLDER_TEMPLATE_IDS, TOKEN_HOLDER_TEMPLATE_PATTERNS),
+      tokenRowsQuery(
+        limit,
+        includeCip112 ? TOKEN_HOLDER_TEMPLATE_IDS : TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS,
+        includeCip112 ? TOKEN_HOLDER_TEMPLATE_PATTERNS : TOKEN_HOLDER_NON_CIP112_TEMPLATE_PATTERNS,
+      ),
     );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const holders: NodeTokenHolderObservation[] = [];
@@ -5247,8 +5319,8 @@ export class PqsSummaryService {
 
     return {
       tokenId,
-      name: this.readTextMapEntryField(decoded.value, ['meta', 'values'], 'name') ?? intrinsicId,
-      symbol: this.readTextMapEntryField(decoded.value, ['meta', 'values'], 'symbol'),
+      name: this.readConfiguredDecodedTokenMetadata(decoded.value, 'name') ?? intrinsicId,
+      symbol: this.readConfiguredDecodedTokenMetadata(decoded.value, 'symbol'),
       issuer,
       source: 'pqs',
     };
@@ -5276,7 +5348,8 @@ export class PqsSummaryService {
       return null;
     }
 
-    const symbol = this.readScalarField(decoded.value, 'symbol');
+    const configuredSymbol = this.readConfiguredDecodedTokenMetadata(decoded.value, 'symbol');
+    const symbol = configuredSymbol ?? this.readScalarField(decoded.value, 'symbol');
     const instrumentIdText = this.readScalarField(decoded.value, 'instrumentIdText');
     const instrumentId = this.readNestedScalarField(decoded.value, ['instrumentId', 'id']);
     const intrinsicId = instrumentId ?? symbol ?? instrumentIdText;
@@ -5286,13 +5359,17 @@ export class PqsSummaryService {
 
     const issuer =
       this.readNestedScalarField(decoded.value, ['instrumentId', 'admin'])
-      ?? this.readNestedScalarField(decoded.value, ['vaultIdentity', 'admin'])
       ?? this.readScalarField(decoded.value, 'issuer');
     const tokenId = this.buildObservedTokenId(intrinsicId, issuer);
 
     return {
       tokenId,
-      name: this.readScalarField(decoded.value, 'name') ?? instrumentIdText ?? symbol ?? intrinsicId,
+      name:
+        this.readConfiguredDecodedTokenMetadata(decoded.value, 'name')
+        ?? this.readScalarField(decoded.value, 'name')
+        ?? instrumentIdText
+        ?? symbol
+        ?? intrinsicId,
       symbol,
       issuer,
       source: 'pqs',
@@ -5308,6 +5385,29 @@ export class PqsSummaryService {
     }
 
     return `${normalizedIssuer}::${normalizedIntrinsicId}`;
+  }
+
+  private readConfiguredDecodedTokenMetadata(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    field: 'name' | 'symbol',
+  ): string | null {
+    const keys = this.getTokenMetadataConfig()[field === 'name' ? 'nameKeys' : 'symbolKeys'];
+
+    for (const key of keys) {
+      const metadataValue = this.readTextMapEntryField(value, ['meta', 'values'], key);
+      if (metadataValue) {
+        return metadataValue;
+      }
+    }
+
+    return null;
+  }
+
+  private getTokenMetadataConfig(): TokenMetadataConfig {
+    return this.nodeConfigService?.getTokenMetadataConfig() ?? {
+      nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
+      symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
+    };
   }
 
   private async fetchEventsByUpdateId(

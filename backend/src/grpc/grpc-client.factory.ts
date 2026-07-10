@@ -91,6 +91,51 @@ type AggregatedTopologyKeyOwnerResult = {
   encryptionKeys?: AggregatedTopologyEncryptionKey[];
 };
 type LedgerPackageResponse = { archivePayload: Uint8Array };
+type LedgerIdentifier = {
+  packageId?: string;
+  moduleName?: string;
+  entityName?: string;
+};
+type LedgerValue = {
+  sum?: {
+    oneofKind?: string;
+    unit?: unknown;
+    bool?: boolean;
+    int64?: string;
+    numeric?: string;
+    party?: string;
+    text?: string;
+    contractId?: string;
+    optional?: { value?: LedgerValue };
+    list?: { elements?: LedgerValue[] };
+    textMap?: { entries?: Array<{ key?: string; value?: LedgerValue }> };
+    genMap?: { entries?: Array<{ key?: LedgerValue; value?: LedgerValue }> };
+    record?: LedgerRecord;
+    variant?: { constructor?: string; value?: LedgerValue };
+    enum?: { constructor?: string };
+  };
+};
+type LedgerRecordField = {
+  label?: string;
+  value?: LedgerValue;
+};
+type LedgerRecord = {
+  fields?: LedgerRecordField[];
+};
+type LedgerInterfaceView = {
+  interfaceId?: LedgerIdentifier;
+  viewStatus?: { code?: number; message?: string };
+  viewValue?: LedgerRecord;
+  implementationPackageId?: string;
+};
+type LedgerCreatedEvent = {
+  contractId?: string;
+  interfaceViews?: LedgerInterfaceView[];
+};
+type LedgerActiveContract = {
+  createdEvent?: LedgerCreatedEvent;
+  synchronizerId?: string;
+};
 type SdkCantonClient = {
   hashing: {
     computePublicKeyFingerprint(publicKey: Uint8Array, format?: string): string;
@@ -143,6 +188,22 @@ type SdkCantonClient = {
   packageService: {
     listPackagesAsync(input: Record<string, never>): Promise<{ packageIds?: string[] }>;
     getPackageAsync(input: { packageId: string }): Promise<LedgerPackageResponse>;
+  };
+  stateService: {
+    getActiveContractsPageAsync(input: {
+      party: string;
+      templateId?: string;
+      interfaceId?: string;
+      includeInterfaceView?: boolean;
+      includeCreatedEventBlob?: boolean;
+      activeAtOffset?: string;
+      maxPageSize?: number;
+      pageToken?: Uint8Array;
+    }): Promise<{
+      contracts?: LedgerActiveContract[];
+      activeAtOffset?: string;
+      nextPageToken?: Uint8Array;
+    }>;
   };
   topologyManagerReadService?: {
     listAvailableStoresAsync(input: Record<string, never>): Promise<{

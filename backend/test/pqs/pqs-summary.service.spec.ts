@@ -3984,7 +3984,7 @@ mode: 'pqs_only',
     });
   });
 
-  it('discovers observed CIP112 tokens after forcing a package refresh on invalid_package', async () => {
+  it('discovers observed CIP112 tokens from PQS-only fallback after forcing a package refresh on invalid_package', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [
         {
@@ -4107,7 +4107,7 @@ mode: 'pqs_only',
     const node = {
       id: 'cnqs-extra-1',
       label: 'CNQS Extra 1',
-      mode: 'pqs_with_grpc',
+      mode: 'pqs_only',
     };
 
     const response = await (
@@ -4132,14 +4132,133 @@ mode: 'pqs_only',
           source: 'pqs',
         },
         {
-          tokenId: 'VaultAdmin::vUSDCx-SHARE',
+          tokenId: 'vUSDCx-SHARE',
           name: 'USDCx Test Vault Share',
           symbol: 'vUSDCx-SHARE',
-          issuer: 'VaultAdmin',
+          issuer: null,
           source: 'pqs',
         },
       ],
     });
+  });
+
+  it('prefers gRPC HoldingV2 token discovery for CIP112 tokens on grpc-enabled nodes', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-holding-update-1',
+          event_offset: '701',
+          record_time: '2026-07-07T14:00:00.000Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('cip56-holding-1'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'owner', value: 'Alice' },
+            {
+              label: 'instrumentId',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'admin', value: 'Issuer' },
+                  { label: 'id', value: 'validator-license' },
+                ],
+              },
+            },
+            { label: 'amount', value: '150.0000000000' },
+            {
+              label: 'meta',
+              value: {
+                kind: 'record',
+                fields: [
+                  {
+                    label: 'values',
+                    value: {
+                      kind: 'text_map',
+                      entries: [
+                        { key: 'name', value: 'Validator License' },
+                        { key: 'symbol', value: 'VL' },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const grpcOperationsService = {
+      fetchHoldingV2Tokens: jest.fn().mockResolvedValue([
+        {
+          tokenId: 'RegistryAdmin::USDCx',
+          name: 'USDCx',
+          symbol: null,
+          issuer: 'RegistryAdmin',
+          source: 'grpc',
+        },
+        {
+          tokenId: 'RegistryAdmin::USDCx-SHARE',
+          name: 'USDCx Test Vault Share',
+          symbol: 'vUSDCx-SHARE',
+          issuer: 'RegistryAdmin',
+          source: 'grpc',
+        },
+      ]),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+      undefined,
+      undefined,
+      undefined,
+      grpcOperationsService as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
+        ) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' }]);
+
+    expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-1' }),
+    );
+    expect(query).not.toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
+    expect(response.tokens).toEqual([
+      {
+        tokenId: 'RegistryAdmin::USDCx',
+        name: 'USDCx',
+        symbol: null,
+        issuer: 'RegistryAdmin',
+        source: 'grpc',
+      },
+      {
+        tokenId: 'RegistryAdmin::USDCx-SHARE',
+        name: 'USDCx Test Vault Share',
+        symbol: 'vUSDCx-SHARE',
+        issuer: 'RegistryAdmin',
+        source: 'grpc',
+      },
+      {
+        tokenId: 'Issuer::validator-license',
+        name: 'Validator License',
+        symbol: 'VL',
+        issuer: 'Issuer',
+        source: 'pqs',
+      },
+    ]);
   });
 
   it('keeps same-name CIP112 tokens from different issuers as separate tokens', async () => {
@@ -6367,7 +6486,7 @@ mode: 'pqs_only',
     });
   });
 
-  it('returns top holders for a CIP112 token from holding creates', async () => {
+  it('returns top holders for a CIP112 token from PQS-only fallback holding creates', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [
         {
@@ -6420,12 +6539,12 @@ mode: 'pqs_only',
       }
     ).fetchTokenHolders(
       [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }],
-      'VaultAdmin::vUSDCx-SHARE',
+      'vUSDCx-SHARE',
     );
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining(".CIP112:"));
     expect(response).toEqual({
-      tokenId: 'VaultAdmin::vUSDCx-SHARE',
+      tokenId: 'vUSDCx-SHARE',
       limit: 25,
       nextBefore: null,
       nextAfter: null,
@@ -6442,6 +6561,210 @@ mode: 'pqs_only',
         },
       ],
     });
+  });
+
+  it('prefers gRPC HoldingV2 token holders for CIP112 tokens on grpc-enabled nodes', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'holding-update-cip56-1',
+          event_offset: '1102',
+          record_time: '2026-07-09T15:02:39.756Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('alice-cip56-holding'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'owner', value: 'Alice' },
+            {
+              label: 'instrumentId',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'admin', value: 'Issuer' },
+                  { label: 'id', value: 'validator-license' },
+                ],
+              },
+            },
+            { label: 'amount', value: '42.0000000000' },
+            {
+              label: 'meta',
+              value: {
+                kind: 'record',
+                fields: [
+                  {
+                    label: 'values',
+                    value: {
+                      kind: 'text_map',
+                      entries: [
+                        { key: 'name', value: 'Validator License' },
+                        { key: 'symbol', value: 'VL' },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const grpcOperationsService = {
+      fetchHoldingV2Tokens: jest.fn().mockResolvedValue([
+        {
+          tokenId: 'RegistryAdmin::USDCx-SHARE',
+          name: 'USDCx Test Vault Share',
+          symbol: 'vUSDCx-SHARE',
+          issuer: 'RegistryAdmin',
+          source: 'grpc',
+        },
+      ]),
+      fetchHoldingV2TokenHolders: jest.fn().mockResolvedValue([
+        {
+          contractId: 'share-contract-1',
+          nodeId: 'cnqs-extra-1',
+          label: 'CNQS Extra 1',
+          tokenId: 'RegistryAdmin::USDCx-SHARE',
+          partyId: 'Alice',
+          amount: '55.0000000000',
+        },
+      ]),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+      undefined,
+      undefined,
+      undefined,
+      grpcOperationsService as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenHolders: (
+          nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
+          tokenId: string,
+        ) => Promise<unknown>;
+      }
+    ).fetchTokenHolders(
+      [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1', mode: 'pqs_with_grpc' }],
+      'RegistryAdmin::USDCx-SHARE',
+    );
+
+    expect(grpcOperationsService.fetchHoldingV2TokenHolders).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'cnqs-extra-1' }),
+    );
+    expect(query).not.toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
+    expect(response).toEqual({
+      tokenId: 'RegistryAdmin::USDCx-SHARE',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      holders: [
+        {
+          partyId: 'Alice',
+          amount: '55.0000000000',
+          nodes: [
+            {
+              nodeId: 'cnqs-extra-1',
+              label: 'CNQS Extra 1',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('uses configured token metadata keys when decoding PQS-observed holdings', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'holding-update-cip56-custom-meta',
+          event_offset: '1201',
+          record_time: '2026-07-09T15:12:39.756Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('alice-cip56-custom-meta-holding'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            {
+              label: 'instrumentId',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'admin', value: 'Issuer' },
+                  { label: 'id', value: 'validator-license' },
+                ],
+              },
+            },
+            {
+              label: 'meta',
+              value: {
+                kind: 'record',
+                fields: [
+                  {
+                    label: 'values',
+                    value: {
+                      kind: 'text_map',
+                      entries: [
+                        { key: 'display_name', value: 'Validator License' },
+                        { key: 'ticker', value: 'VL' },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+      undefined,
+      undefined,
+      {
+        getTokenMetadataConfig: () => ({
+          nameKeys: ['display_name'],
+          symbolKeys: ['ticker'],
+        }),
+      } as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
+
+    expect(response.tokens).toEqual([
+      {
+        tokenId: 'Issuer::validator-license',
+        name: 'Validator License',
+        symbol: 'VL',
+        issuer: 'Issuer',
+        source: 'pqs',
+      },
+    ]);
   });
 
   it('returns Canton Coin holders by summing active Amulets per party without double-counting the same contract across nodes', async () => {

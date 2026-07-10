@@ -4,6 +4,10 @@ import { parseNodeConfigFile } from '../../src/config/node-config.schema';
 describe('parseNodeConfigFile', () => {
   it('parses a valid participant-node config', () => {
     const result = parseNodeConfigFile({
+      tokenMetadata: {
+        nameKeys: ['display_name'],
+        symbolKeys: ['ticker'],
+      },
       nodes: [
         {
           id: 'participant-1',
@@ -33,6 +37,10 @@ describe('parseNodeConfigFile', () => {
     expect(result.nodes[0].id).toBe('participant-1');
     expect(result.nodes[0].pqs.connectionUriEnv).toBe('PARTICIPANT_1_PQS_URL');
     expect(result.nodes[0].mode).toBe('pqs_with_grpc');
+    expect(result.tokenMetadata).toEqual({
+      nameKeys: ['display_name'],
+      symbolKeys: ['ticker'],
+    });
     expect(result.nodes[0].grpc.auth).toEqual({
       kind: 'shared_secret_jwt',
       user: 'ledger-api-user',
@@ -159,5 +167,24 @@ describe('parseNodeConfigFile', () => {
         ],
       }),
     ).toThrow(/ledgerAdminTarget|participantAdminTarget/i);
+  });
+
+  it('defaults token metadata keys when omitted', () => {
+    const result = parseNodeConfigFile({
+      nodes: [
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+      ],
+    });
+
+    expect(result.tokenMetadata).toEqual({
+      nameKeys: ['name'],
+      symbolKeys: ['symbol'],
+    });
   });
 });

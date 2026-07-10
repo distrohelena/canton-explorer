@@ -102,6 +102,479 @@ describe('GrpcOperationsService', () => {
     expect(disposeAsync).toHaveBeenCalledTimes(1);
   });
 
+  it('discovers HoldingV2 tokens and holders through ledger interface views', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const listKnownPartiesAsync = jest.fn().mockResolvedValue({
+      partyDetails: [
+        { party: 'Alice', isLocal: true },
+        { party: 'Bob', isLocal: true },
+      ],
+    });
+    const getActiveContractsPageAsync = jest.fn().mockImplementation(async (request) => ({
+      contracts:
+        request.party === 'Alice'
+          ? [
+              {
+                createdEvent: {
+                  contractId: 'share-contract-1',
+                  interfaceViews: [
+                    {
+                      interfaceId: {
+                        packageId: '#splice-api-token-holding-v2',
+                        moduleName: 'Splice.Api.Token.HoldingV2',
+                        entityName: 'Holding',
+                      },
+                      viewStatus: { code: 0 },
+                      viewValue: {
+                        fields: [
+                          {
+                            label: 'account',
+                            value: {
+                              sum: {
+                                oneofKind: 'record',
+                                record: {
+                                  fields: [
+                                    {
+                                      label: 'owner',
+                                      value: {
+                                        sum: {
+                                          oneofKind: 'optional',
+                                          optional: {
+                                            value: {
+                                              sum: { oneofKind: 'party', party: 'Alice' },
+                                            },
+                                          },
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                          {
+                            label: 'instrumentId',
+                            value: {
+                              sum: {
+                                oneofKind: 'record',
+                                record: {
+                                  fields: [
+                                    {
+                                      label: 'admin',
+                                      value: {
+                                        sum: { oneofKind: 'party', party: 'RegistryAdmin' },
+                                      },
+                                    },
+                                    {
+                                      label: 'id',
+                                      value: {
+                                        sum: { oneofKind: 'text', text: 'USDCx-SHARE' },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                          {
+                            label: 'amount',
+                            value: { sum: { oneofKind: 'numeric', numeric: '55.0000000000' } },
+                          },
+                          {
+                            label: 'meta',
+                            value: {
+                              sum: {
+                                oneofKind: 'record',
+                                record: {
+                                  fields: [
+                                    {
+                                      label: 'values',
+                                      value: {
+                                        sum: {
+                                          oneofKind: 'textMap',
+                                          textMap: {
+                                            entries: [
+                                              {
+                                                key: 'name',
+                                                value: {
+                                                  sum: {
+                                                    oneofKind: 'text',
+                                                    text: 'USDCx Test Vault Share',
+                                                  },
+                                                },
+                                              },
+                                              {
+                                                key: 'symbol',
+                                                value: {
+                                                  sum: {
+                                                    oneofKind: 'text',
+                                                    text: 'vUSDCx-SHARE',
+                                                  },
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ]
+          : [],
+    }));
+    const service = new GrpcOperationsService({
+      create: () => ({
+        partyManagementService: {
+          listKnownPartiesAsync,
+        },
+        stateService: {
+          getActiveContractsPageAsync,
+        },
+        disposeAsync,
+      }),
+    } as never);
+
+    const tokens = await service.fetchHoldingV2Tokens(grpcNode);
+    const holders = await service.fetchHoldingV2TokenHolders(grpcNode);
+
+    expect(getActiveContractsPageAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        party: 'Alice',
+        interfaceId: '#splice-api-token-holding-v2:Splice.Api.Token.HoldingV2:Holding',
+        includeInterfaceView: true,
+      }),
+    );
+    expect(tokens).toEqual([
+      {
+        tokenId: 'RegistryAdmin::USDCx-SHARE',
+        name: 'USDCx Test Vault Share',
+        symbol: 'vUSDCx-SHARE',
+        issuer: 'RegistryAdmin',
+        source: 'grpc',
+      },
+    ]);
+    expect(holders).toEqual([
+      {
+        contractId: 'share-contract-1',
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        tokenId: 'RegistryAdmin::USDCx-SHARE',
+        partyId: 'Alice',
+        amount: '55.0000000000',
+      },
+    ]);
+    expect(disposeAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores OZ-specific holding metadata keys for CIP112 display metadata', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const listKnownPartiesAsync = jest.fn().mockResolvedValue({
+      partyDetails: [{ party: 'Alice', isLocal: true }],
+      nextPageToken: undefined,
+    });
+    const getActiveContractsPageAsync = jest.fn().mockResolvedValue({
+      contracts: [
+        {
+          createdEvent: {
+            contractId: 'share-contract-2',
+            interfaceViews: [
+              {
+                interfaceId: {
+                  packageId: '#splice-api-token-holding-v2',
+                  moduleName: 'Splice.Api.Token.HoldingV2',
+                  entityName: 'Holding',
+                },
+                viewStatus: { code: 0 },
+                viewValue: {
+                  fields: [
+                    {
+                      label: 'account',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'owner',
+                                value: {
+                                  sum: {
+                                    oneofKind: 'optional',
+                                    optional: {
+                                      value: {
+                                        sum: { oneofKind: 'party', party: 'Alice' },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'admin',
+                                value: {
+                                  sum: { oneofKind: 'party', party: 'RegistryAdmin' },
+                                },
+                              },
+                              {
+                                label: 'id',
+                                value: {
+                                  sum: { oneofKind: 'text', text: 'USDCx-SHARE' },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'values',
+                                value: {
+                                  sum: {
+                                    oneofKind: 'textMap',
+                                    textMap: {
+                                      entries: [
+                                        {
+                                          key: 'oz.vault.share.name',
+                                          value: {
+                                            sum: {
+                                              oneofKind: 'text',
+                                              text: 'USDCx Test Vault Share',
+                                            },
+                                          },
+                                        },
+                                        {
+                                          key: 'oz.vault.share.symbol',
+                                          value: {
+                                            sum: {
+                                              oneofKind: 'text',
+                                              text: 'vUSDCx-SHARE',
+                                            },
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+      nextPageToken: undefined,
+    });
+    const service = new GrpcOperationsService({
+      create: () => ({
+        partyManagementService: {
+          listKnownPartiesAsync,
+        },
+        stateService: {
+          getActiveContractsPageAsync,
+        },
+        disposeAsync,
+      }),
+    } as never);
+
+    const tokens = await service.fetchHoldingV2Tokens(grpcNode);
+
+    expect(tokens).toEqual([
+      {
+        tokenId: 'RegistryAdmin::USDCx-SHARE',
+        name: 'USDCx-SHARE',
+        symbol: null,
+        issuer: 'RegistryAdmin',
+        source: 'grpc',
+      },
+    ]);
+  });
+
+  it('uses configured token metadata keys for HoldingV2 display fields', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const listKnownPartiesAsync = jest.fn().mockResolvedValue({
+      partyDetails: [{ party: 'Alice', isLocal: true }],
+      nextPageToken: undefined,
+    });
+    const getActiveContractsPageAsync = jest.fn().mockResolvedValue({
+      contracts: [
+        {
+          createdEvent: {
+            contractId: 'share-contract-3',
+            interfaceViews: [
+              {
+                interfaceId: {
+                  packageId: '#splice-api-token-holding-v2',
+                  moduleName: 'Splice.Api.Token.HoldingV2',
+                  entityName: 'Holding',
+                },
+                viewStatus: { code: 0 },
+                viewValue: {
+                  fields: [
+                    {
+                      label: 'account',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'owner',
+                                value: {
+                                  sum: {
+                                    oneofKind: 'optional',
+                                    optional: {
+                                      value: {
+                                        sum: { oneofKind: 'party', party: 'Alice' },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'admin',
+                                value: {
+                                  sum: { oneofKind: 'party', party: 'RegistryAdmin' },
+                                },
+                              },
+                              {
+                                label: 'id',
+                                value: {
+                                  sum: { oneofKind: 'text', text: 'USDCx-SHARE' },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    {
+                      label: 'meta',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'values',
+                                value: {
+                                  sum: {
+                                    oneofKind: 'textMap',
+                                    textMap: {
+                                      entries: [
+                                        {
+                                          key: 'display_name',
+                                          value: {
+                                            sum: {
+                                              oneofKind: 'text',
+                                              text: 'USDCx Test Vault Share',
+                                            },
+                                          },
+                                        },
+                                        {
+                                          key: 'ticker',
+                                          value: {
+                                            sum: {
+                                              oneofKind: 'text',
+                                              text: 'vUSDCx-SHARE',
+                                            },
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+      nextPageToken: undefined,
+    });
+    const service = new GrpcOperationsService(
+      {
+        create: () => ({
+          partyManagementService: {
+            listKnownPartiesAsync,
+          },
+          stateService: {
+            getActiveContractsPageAsync,
+          },
+          disposeAsync,
+        }),
+      } as never,
+      {
+        getTokenMetadataConfig: () => ({
+          nameKeys: ['display_name'],
+          symbolKeys: ['ticker'],
+        }),
+      } as never,
+    );
+
+    const tokens = await service.fetchHoldingV2Tokens(grpcNode);
+
+    expect(tokens).toEqual([
+      {
+        tokenId: 'RegistryAdmin::USDCx-SHARE',
+        name: 'USDCx Test Vault Share',
+        symbol: 'vUSDCx-SHARE',
+        issuer: 'RegistryAdmin',
+        source: 'grpc',
+      },
+    ]);
+  });
+
   it('fetches party topology mappings through the SDK topology aggregation services', async () => {
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
     const computePublicKeyFingerprint = jest

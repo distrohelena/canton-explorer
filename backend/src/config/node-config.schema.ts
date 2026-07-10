@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+export const DEFAULT_TOKEN_METADATA_CONFIG = {
+  nameKeys: ['name'],
+  symbolKeys: ['symbol'],
+} as const;
+
 const nodeBaseSchema = {
   id: z.string().min(1),
   label: z.string().min(1),
@@ -38,6 +43,20 @@ const grpcSchema = z.object({
   auth: grpcAuthSchema,
 });
 
+const tokenMetadataSchema = z
+  .object({
+    nameKeys: z.array(z.string().min(1)).min(1).default([...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys]),
+    symbolKeys: z
+      .array(z.string().min(1))
+      .min(1)
+      .default([...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys]),
+  })
+  .strict()
+  .default({
+    nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
+    symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
+  });
+
 const nodeSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -55,11 +74,16 @@ const nodeSchema = z.discriminatedUnion('mode', [
 ]);
 
 const configSchema = z.object({
+  tokenMetadata: tokenMetadataSchema.default({
+    nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
+    symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
+  }),
   nodes: z.array(nodeSchema).min(1),
 });
 
 export type NodeConfigFile = z.infer<typeof configSchema>;
 export type NodeConfig = z.infer<typeof nodeSchema>;
+export type TokenMetadataConfig = z.infer<typeof tokenMetadataSchema>;
 
 export function parseNodeConfigFile(input: unknown): NodeConfigFile {
   return configSchema.parse(input);

@@ -3,7 +3,7 @@ export interface TokenSummary {
   name: string;
   symbol: string | null;
   issuer?: string | null;
-  source: 'pqs';
+  source: 'pqs' | 'grpc';
 }
 
 export interface TokensResponse {

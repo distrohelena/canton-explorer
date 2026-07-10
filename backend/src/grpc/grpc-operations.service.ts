@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import {
+  DEFAULT_TOKEN_METADATA_CONFIG,
+  type TokenMetadataConfig,
+} from '../config/node-config.schema';
+import { NodeConfigService } from '../config/node-config.service';
 import type { NodeConfig } from '../config/node-config.schema';
 import type {
   NodeParticipantNotInitializedSummary,
@@ -7,6 +12,7 @@ import type {
   NodeParticipantSynchronizerHealth,
   NodeParticipantWaitingForExternalInput,
   ServiceInfo,
+  TokenSummary,
 } from '../domain/node.types';
 import type { CachedPackageBlob, CachedPackageRef } from '../packages/package-cache.service';
 import { GrpcClientFactory } from './grpc-client.factory';
@@ -41,6 +47,66 @@ export interface GrpcPartyTopologyNodeEntry {
   partyToParticipants: GrpcPartyTopologyParticipantMapping[];
   partyToKeyMappings: GrpcPartyTopologyKeyMapping[];
 }
+
+export interface GrpcTokenHolderObservation {
+  contractId: string | null;
+  nodeId: string;
+  label: string;
+  tokenId: string;
+  partyId: string;
+  amount: string | null;
+}
+
+const HOLDING_V2_INTERFACE_ID = '#splice-api-token-holding-v2:Splice.Api.Token.HoldingV2:Holding';
+const HOLDING_V2_INTERFACE_MODULE = 'Splice.Api.Token.HoldingV2';
+const HOLDING_V2_INTERFACE_ENTITY = 'Holding';
+const HOLDING_V2_PAGE_SIZE = 500;
+
+type LedgerViewValue = {
+  sum?: {
+    oneofKind?: string;
+    unit?: unknown;
+    bool?: boolean;
+    int64?: string;
+    numeric?: string;
+    party?: string;
+    text?: string;
+    contractId?: string;
+    optional?: { value?: unknown };
+    list?: { elements?: unknown[] };
+    textMap?: { entries?: Array<{ key?: string; value?: unknown }> };
+    genMap?: { entries?: Array<{ key?: unknown; value?: unknown }> };
+    record?: LedgerViewRecord;
+    variant?: { constructor?: string; value?: unknown };
+    enum?: { constructor?: string };
+  };
+};
+
+type LedgerViewRecord = {
+  fields?: Array<{
+    label?: string;
+    value?: LedgerViewValue | unknown;
+  }>;
+};
+
+type LedgerViewIdentifier = {
+  packageId?: string;
+  moduleName?: string;
+  entityName?: string;
+};
+
+type LedgerView = {
+  interfaceId?: LedgerViewIdentifier;
+  viewStatus?: { code?: number; message?: string };
+  viewValue?: LedgerViewRecord;
+};
+
+type LedgerHoldingActiveContract = {
+  createdEvent?: {
+    contractId?: string;
+    interfaceViews?: LedgerView[];
+  };
+};
 
 type TopologyStoreShape = {
   kind?: 'authorized' | 'synchronizer' | 'temporary';
@@ -102,7 +168,10 @@ type TopologySdkModule = {
 export class GrpcOperationsService {
   private topologySdkPromise?: Promise<TopologySdkModule>;
 
-  constructor(private readonly clientFactory: GrpcClientFactory) {}
+  constructor(
+    private readonly clientFactory: GrpcClientFactory,
+    @Optional() private readonly nodeConfigService?: NodeConfigService,
+  ) {}
 
   async fetchOperationalInfo(node: NodeConfig): Promise<ServiceInfo> {
     if (node.mode !== 'pqs_with_grpc') {
@@ -157,6 +226,53 @@ export class GrpcOperationsService {
         .map((partyId) => this.extractPartyFingerprint(partyId))
         .filter((fingerprint): fingerprint is string => fingerprint !== null)
         .sort((left, right) => left.localeCompare(right));
+    });
+  }
+
+  async fetchHoldingV2Tokens(node: NodeConfig): Promise<TokenSummary[]> {
+    if (node.mode !== 'pqs_with_grpc') {
+      return [];
+    }
+
+    return this.withClient(node, async (client) => {
+      const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
+      const deduped = new Map<string, TokenSummary>();
+
+      for (const contract of activeContracts) {
+        const token = this.extractHoldingV2TokenSummary(contract);
+        if (token && !deduped.has(token.tokenId)) {
+          deduped.set(token.tokenId, token);
+        }
+      }
+
+      return Array.from(deduped.values()).sort(
+        (left, right) => left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
+      );
+    });
+  }
+
+  async fetchHoldingV2TokenHolders(node: NodeConfig): Promise<GrpcTokenHolderObservation[]> {
+    if (node.mode !== 'pqs_with_grpc') {
+      return [];
+    }
+
+    return this.withClient(node, async (client) => {
+      const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
+      const deduped = new Map<string, GrpcTokenHolderObservation>();
+
+      for (const contract of activeContracts) {
+        const holder = this.extractHoldingV2TokenHolder(node, contract);
+        if (!holder) {
+          continue;
+        }
+
+        const dedupeKey = holder.contractId ?? `${holder.tokenId}\u0000${holder.partyId}\u0000${holder.amount ?? ''}`;
+        if (!deduped.has(dedupeKey)) {
+          deduped.set(dedupeKey, holder);
+        }
+      }
+
+      return Array.from(deduped.values());
     });
   }
 
@@ -525,6 +641,261 @@ export class GrpcOperationsService {
       default:
         return undefined;
     }
+  }
+
+  private async fetchHoldingV2ActiveContracts(
+    client: Awaited<ReturnType<GrpcClientFactory['create']>>,
+  ): Promise<LedgerHoldingActiveContract[]> {
+    const localParties = await this.listLocalPartiesWithClient(client);
+    const contracts: LedgerHoldingActiveContract[] = [];
+
+    for (const partyId of localParties) {
+      let nextPageToken: Uint8Array | undefined;
+
+      do {
+        const response = await client.stateService.getActiveContractsPageAsync({
+          party: partyId,
+          interfaceId: HOLDING_V2_INTERFACE_ID,
+          includeInterfaceView: true,
+          maxPageSize: HOLDING_V2_PAGE_SIZE,
+          pageToken: nextPageToken,
+        });
+
+        contracts.push(...(response.contracts ?? []));
+        nextPageToken =
+          response.nextPageToken && response.nextPageToken.length > 0
+            ? response.nextPageToken
+            : undefined;
+      } while (nextPageToken);
+    }
+
+    return contracts;
+  }
+
+  private extractHoldingV2TokenSummary(
+    contract: LedgerHoldingActiveContract,
+  ): TokenSummary | null {
+    const view = this.findHoldingV2View(contract);
+    if (!view) {
+      return null;
+    }
+
+    const issuer = this.readLedgerNestedScalarField(view, ['instrumentId', 'admin']);
+    const intrinsicId = this.readLedgerNestedScalarField(view, ['instrumentId', 'id']);
+    if (!issuer || !intrinsicId) {
+      return null;
+    }
+
+    const name = this.readConfiguredLedgerTokenMetadata(view, 'name') ?? intrinsicId;
+    const symbol = this.readConfiguredLedgerTokenMetadata(view, 'symbol');
+
+    return {
+      tokenId: `${issuer}::${intrinsicId}`,
+      name,
+      symbol,
+      issuer,
+      source: 'grpc',
+    };
+  }
+
+  private extractHoldingV2TokenHolder(
+    node: NodeConfig,
+    contract: LedgerHoldingActiveContract,
+  ): GrpcTokenHolderObservation | null {
+    const view = this.findHoldingV2View(contract);
+    if (!view) {
+      return null;
+    }
+
+    const issuer = this.readLedgerNestedScalarField(view, ['instrumentId', 'admin']);
+    const intrinsicId = this.readLedgerNestedScalarField(view, ['instrumentId', 'id']);
+    const partyId = this.readLedgerNestedScalarField(view, ['account', 'owner']);
+    if (!issuer || !intrinsicId || !partyId) {
+      return null;
+    }
+
+    return {
+      contractId: this.nullIfEmptyString(contract.createdEvent?.contractId),
+      nodeId: node.id,
+      label: node.label,
+      tokenId: `${issuer}::${intrinsicId}`,
+      partyId,
+      amount: this.readLedgerScalarField(view, 'amount'),
+    };
+  }
+
+  private findHoldingV2View(
+    contract: LedgerHoldingActiveContract,
+  ): LedgerViewRecord | null {
+    for (const interfaceView of contract.createdEvent?.interfaceViews ?? []) {
+      if (
+        interfaceView.interfaceId?.moduleName !== HOLDING_V2_INTERFACE_MODULE
+        || interfaceView.interfaceId?.entityName !== HOLDING_V2_INTERFACE_ENTITY
+      ) {
+        continue;
+      }
+
+      if ((interfaceView.viewStatus?.code ?? 0) !== 0) {
+        continue;
+      }
+
+      return interfaceView.viewValue ?? null;
+    }
+
+    return null;
+  }
+
+  private findLedgerField(
+    record: LedgerViewRecord | null | undefined,
+    label: string,
+  ): unknown {
+    return record?.fields?.find((field) => field.label === label)?.value;
+  }
+
+  private isLedgerRecordValue(value: unknown): value is {
+    sum?: {
+      oneofKind?: string;
+      record?: LedgerViewRecord;
+    };
+  } {
+    return (
+      typeof value === 'object'
+      && value !== null
+      && 'sum' in value
+      && typeof (value as { sum?: { oneofKind?: string } }).sum === 'object'
+      && (value as { sum?: { oneofKind?: string } }).sum?.oneofKind === 'record'
+    );
+  }
+
+  private readLedgerScalar(value: unknown): string | null {
+    if (!value || typeof value !== 'object' || !('sum' in value)) {
+      return null;
+    }
+
+    const sum = (value as {
+      sum?: {
+        oneofKind?: string;
+        party?: string;
+        text?: string;
+        numeric?: string;
+        int64?: string;
+        contractId?: string;
+        bool?: boolean;
+        optional?: { value?: unknown };
+        enum?: { constructor?: string };
+        variant?: { constructor?: string };
+      };
+    }).sum;
+
+    switch (sum?.oneofKind) {
+      case 'party':
+        return this.nullIfEmptyString(sum.party);
+      case 'text':
+        return this.nullIfEmptyString(sum.text);
+      case 'numeric':
+        return this.nullIfEmptyString(sum.numeric);
+      case 'int64':
+        return this.nullIfEmptyString(sum.int64);
+      case 'contractId':
+        return this.nullIfEmptyString(sum.contractId);
+      case 'bool':
+        return typeof sum.bool === 'boolean' ? String(sum.bool) : null;
+      case 'optional':
+        return this.readLedgerScalar(sum.optional?.value);
+      case 'enum':
+        return this.nullIfEmptyString(sum.enum?.constructor);
+      case 'variant':
+        return this.nullIfEmptyString(sum.variant?.constructor);
+      default:
+        return null;
+    }
+  }
+
+  private readLedgerScalarField(
+    record: LedgerViewRecord | null | undefined,
+    label: string,
+  ): string | null {
+    return this.readLedgerScalar(this.findLedgerField(record, label));
+  }
+
+  private readLedgerNestedScalarField(
+    record: LedgerViewRecord | null | undefined,
+    path: string[],
+  ): string | null {
+    return this.readLedgerScalar(this.getLedgerFieldValueAtPath(record, path));
+  }
+
+  private readLedgerTextMapEntryField(
+    record: LedgerViewRecord | null | undefined,
+    path: string[],
+    entryKey: string,
+  ): string | null {
+    const targetValue = this.getLedgerFieldValueAtPath(record, path);
+    if (!targetValue || typeof targetValue !== 'object' || !('sum' in targetValue)) {
+      return null;
+    }
+
+    const textMapEntries = (targetValue as {
+      sum?: {
+        oneofKind?: string;
+        textMap?: { entries?: Array<{ key?: string; value?: unknown }> };
+      };
+    }).sum;
+
+    if (textMapEntries?.oneofKind !== 'textMap') {
+      return null;
+    }
+
+    const matchingEntry = textMapEntries.textMap?.entries?.find((entry) => entry.key === entryKey);
+    return this.readLedgerScalar(matchingEntry?.value);
+  }
+
+  private readConfiguredLedgerTokenMetadata(
+    record: LedgerViewRecord | null | undefined,
+    field: 'name' | 'symbol',
+  ): string | null {
+    const keys = this.getTokenMetadataConfig()[field === 'name' ? 'nameKeys' : 'symbolKeys'];
+
+    for (const key of keys) {
+      const value = this.readLedgerTextMapEntryField(record, ['meta', 'values'], key);
+      if (value) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
+  private getTokenMetadataConfig(): TokenMetadataConfig {
+    return this.nodeConfigService?.getTokenMetadataConfig() ?? {
+      nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
+      symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
+    };
+  }
+  private getLedgerFieldValueAtPath(
+    record: LedgerViewRecord | null | undefined,
+    path: string[],
+  ): unknown {
+    let currentRecord = record;
+
+    for (let index = 0; index < path.length; index += 1) {
+      const fieldValue = this.findLedgerField(currentRecord, path[index] ?? '');
+      if (fieldValue === undefined) {
+        return null;
+      }
+
+      if (index === path.length - 1) {
+        return fieldValue;
+      }
+
+      if (!this.isLedgerRecordValue(fieldValue)) {
+        return null;
+      }
+
+      currentRecord = fieldValue.sum?.record ?? null;
+    }
+
+    return null;
   }
 
   private nullIfEmptyString(value: unknown): string | null {

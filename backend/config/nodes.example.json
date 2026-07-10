@@ -1,4 +1,8 @@
 {
+  "tokenMetadata": {
+    "nameKeys": ["name"],
+    "symbolKeys": ["symbol"]
+  },
   "nodes": [
     {
       "id": "participant-1",
