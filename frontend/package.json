@@ -2,10 +2,12 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "build:packaged": "vue-tsc -b && vite build --mode packaged",
     "preview": "vite preview",
     "start": "vite preview",
     "test": "vitest"

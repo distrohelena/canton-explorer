@@ -2,6 +2,20 @@
 
 Read-only operations explorer for multiple Canton participant nodes and ledgers.
 
+## Publishable Package
+
+The publishable runtime package is the backend workspace:
+
+```bash
+npx @distrohelena/canton-explorer --config ./config/nodes.local.json
+```
+
+To simulate the published package locally from this repo:
+
+```bash
+npm run pack:dry-run
+```
+
 ## Local setup
 
 1. Copy `backend/config/nodes.example.json` to `backend/config/nodes.local.json`.

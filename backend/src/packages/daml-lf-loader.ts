@@ -41,6 +41,16 @@ export function resolveDescriptorPath(filename: string, baseDir = __dirname): st
     return directPath;
   }
 
+  const packagedPath = resolve(baseDir, '..', '..', 'packages', filename);
+  if (existsSync(packagedPath)) {
+    return packagedPath;
+  }
+
+  const legacyPackagedPath = resolve(baseDir, '..', '..', 'packages', 'packages', filename);
+  if (existsSync(legacyPackagedPath)) {
+    return legacyPackagedPath;
+  }
+
   const sourcePath = resolve(process.cwd(), 'src', 'packages', filename);
   if (existsSync(sourcePath)) {
     return sourcePath;

@@ -6,7 +6,7 @@
     "assets": [
       {
         "include": "packages/*.descriptor.pb",
-        "outDir": "dist/packages"
+        "outDir": "dist/src"
       }
     ],
     "deleteOutDir": true

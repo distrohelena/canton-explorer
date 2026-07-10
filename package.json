@@ -1,7 +1,8 @@
 {
-  "name": "canton-node-explorer",
+  "name": "canton-node-explorer-workspace",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "workspaces": [
     "backend",
     "frontend"
@@ -12,6 +13,8 @@
     "lint": "npm run lint --workspace backend && npm run lint --workspace frontend",
     "dev:backend": "npm run start:dev --workspace backend",
     "dev:frontend": "npm run dev --workspace frontend",
-    "start:frontend": "npm run build --workspace frontend && npm run start --workspace frontend"
+    "start:frontend": "npm run build --workspace frontend && npm run start --workspace frontend",
+    "build:package": "npm run build:package --workspace backend",
+    "pack:dry-run": "npm run pack:dry-run --workspace backend"
   }
 }

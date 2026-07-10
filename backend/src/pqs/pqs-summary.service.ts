@@ -5176,7 +5176,7 @@ export class PqsSummaryService {
       tokenId: token.tokenId,
       tokenName: token.name,
       amount: this.readScalarField(record, 'amount'),
-      sender: movementType === 'Mint' ? this.readScalarField(record, 'issuer') : null,
+      sender: this.readScalarField(record, 'issuer'),
       receiver: this.readScalarField(record, 'owner') ?? receiverFallback,
       eventOffset: this.normalizeOptionalScalar(update.event_offset) ?? '',
       updateId:

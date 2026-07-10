@@ -1,17 +1,30 @@
 {
-  "name": "backend",
-  "version": "0.0.1",
-  "description": "",
+  "name": "@distrohelena/canton-explorer",
+  "version": "0.1.0",
+  "description": "Read-only operations explorer for Canton participant nodes and PQS-backed ledgers.",
   "author": "",
-  "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
+  "main": "dist/src/main.js",
+  "bin": {
+    "canton-explorer": "bin/canton-explorer.js"
+  },
+  "files": [
+    "bin",
+    "config/nodes.example.json",
+    "dist",
+    ".env.example",
+    "README.md"
+  ],
   "scripts": {
     "build": "nest build",
+    "build:package": "node ./scripts/prepack.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/src/main.js",
+    "prepack": "node ./scripts/prepack.mjs",
+    "pack:dry-run": "npm pack --dry-run",
     "debug:list-local-parties": "NODE_OPTIONS=--experimental-vm-modules ts-node ./scripts/list-local-parties.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
