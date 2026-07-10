@@ -798,6 +798,26 @@ describe('fetchNodes', () => {
     );
   });
 
+  it('loads discovered tokens with name, exclude name, and issuer filters from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokensFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokens({
+      names: ['Vault'],
+      excludeNames: ['Beta'],
+      issuers: ['Issuer-A'],
+      limit: 25,
+    });
+
+    expect(result.tokens[0]?.tokenId).toBe('canton-coin');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/tokens?name=Vault&excludeName=Beta&issuer=Issuer-A&limit=25',
+    );
+  });
+
   it('loads latest token transfers with cursor pagination from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

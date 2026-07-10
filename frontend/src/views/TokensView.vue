@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { LocationQueryRaw } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
 import TokenTransfersBrowser from '../components/TokenTransfersBrowser.vue';
+import TokensAdvancedFilter from '../components/TokensAdvancedFilter.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
+import UpdatesToolbar from '../components/UpdatesToolbar.vue';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, normalizePageSize } from '../lib/pagination';
 import { fetchTokens } from '../lib/api';
 import type { TokensResponse } from '../types/tokens';
@@ -13,21 +15,69 @@ const router = useRouter();
 const tokensResponse = ref<TokensResponse | null>(null);
 const tokensError = ref<string | null>(null);
 const loadingTokens = ref(true);
+const showAdvancedFilter = ref(false);
+const nameFilterDraft = ref('');
+const excludeNameFilterDraft = ref('');
+const issuerFilterDraft = ref('');
+const tokensAdvancedFilterId = 'tokens-advanced-filter';
 
 function readTokenCursor(key: 'tokensBefore' | 'tokensAfter'): string | undefined {
   const value = route.query[key];
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
+function readTokenQueryList(key: 'tokensName' | 'tokensExcludeName' | 'tokensIssuer'): string[] {
+  const value = route.query[key];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  }
+
+  return typeof value === 'string' && value.trim().length > 0 ? [value] : [];
+}
+
+function uniqueValues(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
+}
+
 function readTokenPageSize(): number {
   return normalizePageSize(route.query.tokensLimit);
 }
 
-function buildTokenQuery(options?: { before?: string; after?: string; limit?: number }): LocationQueryRaw {
+const activeNameFilters = computed(() => uniqueValues(readTokenQueryList('tokensName')));
+const activeExcludeNameFilters = computed(() =>
+  uniqueValues(readTokenQueryList('tokensExcludeName')),
+);
+const activeIssuerFilters = computed(() => uniqueValues(readTokenQueryList('tokensIssuer')));
+
+function hasAdvancedFilterQuery(): boolean {
+  return (
+    activeNameFilters.value.length > 0
+    || activeExcludeNameFilters.value.length > 0
+    || activeIssuerFilters.value.length > 0
+  );
+}
+
+function buildTokenQuery(options?: {
+  before?: string;
+  after?: string;
+  limit?: number;
+  names?: string[];
+  excludeNames?: string[];
+  issuers?: string[];
+}): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
   delete nextQuery.tokensBefore;
   delete nextQuery.tokensAfter;
   delete nextQuery.tokensLimit;
+  delete nextQuery.tokensName;
+  delete nextQuery.tokensExcludeName;
+  delete nextQuery.tokensIssuer;
 
   if (options?.before) {
     nextQuery.tokensBefore = options.before;
@@ -40,6 +90,18 @@ function buildTokenQuery(options?: { before?: string; after?: string; limit?: nu
   const limit = normalizePageSize(options?.limit);
   if (limit !== DEFAULT_PAGE_SIZE) {
     nextQuery.tokensLimit = String(limit);
+  }
+
+  if ((options?.names?.length ?? 0) > 0) {
+    nextQuery.tokensName = options?.names;
+  }
+
+  if ((options?.excludeNames?.length ?? 0) > 0) {
+    nextQuery.tokensExcludeName = options?.excludeNames;
+  }
+
+  if ((options?.issuers?.length ?? 0) > 0) {
+    nextQuery.tokensIssuer = options?.issuers;
   }
 
   return nextQuery;
@@ -60,10 +122,16 @@ async function loadTokens() {
     const before = readTokenCursor('tokensBefore');
     const after = before ? undefined : readTokenCursor('tokensAfter');
     const limit = readTokenPageSize();
+    const names = activeNameFilters.value;
+    const excludeNames = activeExcludeNameFilters.value;
+    const issuers = activeIssuerFilters.value;
     tokensResponse.value = await fetchTokens({
       before,
       after,
       limit,
+      names,
+      excludeNames,
+      issuers,
     });
   } catch (err) {
     tokensError.value = err instanceof Error ? err.message : 'Unknown error';
@@ -87,7 +155,13 @@ async function showPreviousTokens() {
     return;
   }
 
-  await pushTokenQuery(buildTokenQuery({ after: cursor, limit: readTokenPageSize() }));
+  await pushTokenQuery(buildTokenQuery({
+    after: cursor,
+    limit: readTokenPageSize(),
+    names: activeNameFilters.value,
+    excludeNames: activeExcludeNameFilters.value,
+    issuers: activeIssuerFilters.value,
+  }));
 }
 
 async function showNextTokens() {
@@ -96,25 +170,108 @@ async function showNextTokens() {
     return;
   }
 
-  await pushTokenQuery(buildTokenQuery({ before: cursor, limit: readTokenPageSize() }));
+  await pushTokenQuery(buildTokenQuery({
+    before: cursor,
+    limit: readTokenPageSize(),
+    names: activeNameFilters.value,
+    excludeNames: activeExcludeNameFilters.value,
+    issuers: activeIssuerFilters.value,
+  }));
 }
 
 async function setTokenPageSize(limit: number) {
-  await pushTokenQuery(buildTokenQuery({ limit }));
+  await pushTokenQuery(buildTokenQuery({
+    limit,
+    names: activeNameFilters.value,
+    excludeNames: activeExcludeNameFilters.value,
+    issuers: activeIssuerFilters.value,
+  }));
 }
 
-function handleTokenPageSizeChange(event: Event) {
-  const target = event.target;
-  if (!(target instanceof HTMLSelectElement)) {
+function toggleAdvancedFilter() {
+  showAdvancedFilter.value = !showAdvancedFilter.value;
+}
+
+async function setTokenFilters(options?: {
+  names?: string[];
+  excludeNames?: string[];
+  issuers?: string[];
+}) {
+  await pushTokenQuery(buildTokenQuery({
+    limit: readTokenPageSize(),
+    names: options?.names ?? activeNameFilters.value,
+    excludeNames: options?.excludeNames ?? activeExcludeNameFilters.value,
+    issuers: options?.issuers ?? activeIssuerFilters.value,
+  }));
+}
+
+async function addNameFilter() {
+  const nextValue = nameFilterDraft.value.trim();
+  if (!nextValue) {
     return;
   }
 
-  void setTokenPageSize(Number.parseInt(target.value, 10));
+  nameFilterDraft.value = '';
+  await setTokenFilters({
+    names: uniqueValues([...activeNameFilters.value, nextValue]),
+  });
+}
+
+async function addExcludeNameFilter() {
+  const nextValue = excludeNameFilterDraft.value.trim();
+  if (!nextValue) {
+    return;
+  }
+
+  excludeNameFilterDraft.value = '';
+  await setTokenFilters({
+    excludeNames: uniqueValues([...activeExcludeNameFilters.value, nextValue]),
+  });
+}
+
+async function addIssuerFilter() {
+  const nextValue = issuerFilterDraft.value.trim();
+  if (!nextValue) {
+    return;
+  }
+
+  issuerFilterDraft.value = '';
+  await setTokenFilters({
+    issuers: uniqueValues([...activeIssuerFilters.value, nextValue]),
+  });
+}
+
+async function removeNameFilter(value: string) {
+  await setTokenFilters({
+    names: activeNameFilters.value.filter((item) => item !== value),
+  });
+}
+
+async function removeExcludeNameFilter(value: string) {
+  await setTokenFilters({
+    excludeNames: activeExcludeNameFilters.value.filter((item) => item !== value),
+  });
+}
+
+async function removeIssuerFilter(value: string) {
+  await setTokenFilters({
+    issuers: activeIssuerFilters.value.filter((item) => item !== value),
+  });
 }
 
 watch(
-  () => [route.query.tokensBefore, route.query.tokensAfter, route.query.tokensLimit],
+  () => [
+    route.query.tokensBefore,
+    route.query.tokensAfter,
+    route.query.tokensLimit,
+    route.query.tokensName,
+    route.query.tokensExcludeName,
+    route.query.tokensIssuer,
+  ],
   () => {
+    if (hasAdvancedFilterQuery()) {
+      showAdvancedFilter.value = true;
+    }
     void loadTokens();
   },
   { immediate: true },
@@ -137,43 +294,38 @@ watch(
           <h3>Known Tokens</h3>
         </div>
         <div v-if="tokensResponse" class="results-header__actions">
-          <div class="node-updates__pager">
-            <label class="node-updates__page-size">
-              <span class="node-updates__page-size-label">Show</span>
-              <select
-                class="node-updates__page-size-select"
-                :value="readTokenPageSize()"
-                aria-label="Known tokens per page"
-                @change="handleTokenPageSizeChange"
-              >
-                <option
-                  v-for="option in PAGE_SIZE_OPTIONS"
-                  :key="option"
-                  :value="option"
-                >
-                  {{ option }}
-                </option>
-              </select>
-            </label>
-            <button
-              type="button"
-              class="dashboard__refresh"
-              :disabled="!tokensResponse.nextAfter || loadingTokens"
-              @click="showPreviousTokens"
-            >
-              Newer
-            </button>
-            <button
-              type="button"
-              class="dashboard__refresh"
-              :disabled="!tokensResponse.nextBefore || loadingTokens"
-              @click="showNextTokens"
-            >
-              Older
-            </button>
-          </div>
+          <UpdatesToolbar
+            :advanced-filter-expanded="showAdvancedFilter"
+            :advanced-filter-controls="tokensAdvancedFilterId"
+            :newer-disabled="!tokensResponse.nextAfter || loadingTokens"
+            :older-disabled="!tokensResponse.nextBefore || loadingTokens"
+            :page-size="readTokenPageSize()"
+            :page-size-options="PAGE_SIZE_OPTIONS"
+            page-size-aria-label="Known tokens per page"
+            @toggle-advanced-filter="toggleAdvancedFilter"
+            @newer="showPreviousTokens"
+            @older="showNextTokens"
+            @page-size-change="setTokenPageSize"
+          />
         </div>
       </header>
+
+      <TokensAdvancedFilter
+        v-if="showAdvancedFilter"
+        :id="tokensAdvancedFilterId"
+        v-model:name-draft="nameFilterDraft"
+        v-model:exclude-name-draft="excludeNameFilterDraft"
+        v-model:issuer-draft="issuerFilterDraft"
+        :active-names="activeNameFilters"
+        :active-excluded-names="activeExcludeNameFilters"
+        :active-issuers="activeIssuerFilters"
+        @add-name-filter="addNameFilter"
+        @add-exclude-name-filter="addExcludeNameFilter"
+        @add-issuer-filter="addIssuerFilter"
+        @remove-name-filter="removeNameFilter"
+        @remove-exclude-name-filter="removeExcludeNameFilter"
+        @remove-issuer-filter="removeIssuerFilter"
+      />
 
       <p v-if="!tokensResponse && loadingTokens" class="dashboard__message">Loading tokens...</p>
       <p v-else-if="tokensError" class="dashboard__message dashboard__message--error">

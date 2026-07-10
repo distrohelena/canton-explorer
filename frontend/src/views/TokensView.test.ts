@@ -281,7 +281,14 @@ describe('TokensView', () => {
     const { router } = await renderAt('/tokens');
 
     expect(await screen.findByText('Alpha')).toBeInTheDocument();
-    expect(fetchTokens).toHaveBeenNthCalledWith(1, { before: undefined, after: undefined, limit: 10 });
+    expect(fetchTokens).toHaveBeenNthCalledWith(1, {
+      before: undefined,
+      after: undefined,
+      limit: 10,
+      names: [],
+      excludeNames: [],
+      issuers: [],
+    });
 
     const knownTokensSection = sectionForHeading('Known Tokens');
 
@@ -292,6 +299,9 @@ describe('TokensView', () => {
         before: 'tokens-cursor-before-1',
         after: undefined,
         limit: 10,
+        names: [],
+        excludeNames: [],
+        issuers: [],
       }),
     );
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?tokensBefore=tokens-cursor-before-1'));
@@ -304,6 +314,9 @@ describe('TokensView', () => {
         before: undefined,
         after: 'tokens-cursor-after-1',
         limit: 10,
+        names: [],
+        excludeNames: [],
+        issuers: [],
       }),
     );
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?tokensAfter=tokens-cursor-after-1'));
@@ -619,11 +632,14 @@ describe('TokensView', () => {
 
     expect((await screen.findAllByText('Canton Coin')).length).toBeGreaterThan(0);
 
+    const transfersBrowserSection = sectionForHeading('Latest Transfers');
     expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
       fromParties: ['Alice'],
       toParties: ['Bob'],
     });
-    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(transfersBrowserSection).getByRole('button', { name: 'Advanced Filter' }),
+    ).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('heading', { name: 'Advanced Filter Parameters' })).toBeInTheDocument();
     expect(screen.getAllByText('Alice').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bob').length).toBeGreaterThan(0);
@@ -667,12 +683,53 @@ describe('TokensView', () => {
 
     expect((await screen.findAllByText('Canton Coin')).length).toBeGreaterThan(0);
 
+    const transfersBrowserSection = sectionForHeading('Latest Transfers');
     expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
       amountGt: '10',
       amountLt: '100',
     });
-    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(transfersBrowserSection).getByRole('button', { name: 'Advanced Filter' }),
+    ).toHaveAttribute('aria-expanded', 'true');
     expect(container.querySelector('input[value="10"]')).not.toBeNull();
     expect(container.querySelector('input[value="100"]')).not.toBeNull();
+  });
+
+  it('opens the known tokens advanced filter from URL state and passes token filters', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
+      {
+        tokenId: 'Issuer-A::Alpha Vault',
+        name: 'Alpha Vault',
+        symbol: 'ALPHA',
+        issuer: 'Issuer-A',
+        source: 'pqs',
+      },
+    ]));
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    await renderAt('/tokens?tokensName=Vault&tokensExcludeName=Beta&tokensIssuer=Issuer-A');
+
+    expect(await screen.findByText('ALPHA')).toBeInTheDocument();
+
+    const knownTokensSection = sectionForHeading('Known Tokens');
+    expect(fetchTokens).toHaveBeenNthCalledWith(1, {
+      before: undefined,
+      after: undefined,
+      limit: 10,
+      names: ['Vault'],
+      excludeNames: ['Beta'],
+      issuers: ['Issuer-A'],
+    });
+    expect(
+      within(knownTokensSection).getByRole('button', { name: 'Advanced Filter' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getAllByText('Vault').length).toBeGreaterThan(0);
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(screen.getAllByText('Issuer-A').length).toBeGreaterThan(0);
   });
 });

@@ -785,6 +785,34 @@ function normalizeTemplateFilters(templates?: string[]): string[] {
   );
 }
 
+function normalizeTokenTextFilters(values?: string[]): string[] {
+  if (!values) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim().toLowerCase())
+        .filter((value) => value.length > 0),
+    ),
+  );
+}
+
+function normalizeTokenIssuerFilters(values?: string[]): string[] {
+  if (!values) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
+}
+
 function buildUpdatePartyExistsCondition(partyId: string): string {
   const createMatch = partyWitnessArrayMatchCondition('create_event.tree_event_witnesses', partyId);
   const consumingMatch = partyWitnessArrayMatchCondition(
@@ -3917,7 +3945,13 @@ export class PqsSummaryService {
   async fetchTokens(
     nodes: NodeConfig[],
     limit = 25,
-    options?: { before?: string; after?: string },
+    options?: {
+      before?: string;
+      after?: string;
+      names?: string[];
+      excludeNames?: string[];
+      issuers?: string[];
+    },
   ): Promise<TokensResponse> {
     const refreshResults = await Promise.allSettled(
       nodes.map(async (node) => ({
@@ -3952,8 +3986,13 @@ export class PqsSummaryService {
       }
     }
 
+    const filteredTokens = this.filterTokens(
+      Array.from(dedupedTokens.values()),
+      options,
+    );
+
     return this.paginateTokens(
-      Array.from(dedupedTokens.values()).sort(compareGlobalTokens),
+      filteredTokens.sort(compareGlobalTokens),
       limit,
       options,
     );
@@ -4172,6 +4211,55 @@ export class PqsSummaryService {
               : null,
       tokens: pagedTokens,
     };
+  }
+
+  private filterTokens(
+    tokens: TokenSummary[],
+    options?: {
+      names?: string[];
+      excludeNames?: string[];
+      issuers?: string[];
+    },
+  ): TokenSummary[] {
+    const activeNameFilters = normalizeTokenTextFilters(options?.names);
+    const activeExcludedNameFilters = normalizeTokenTextFilters(options?.excludeNames);
+    const activeIssuerFilters = normalizeTokenIssuerFilters(options?.issuers);
+
+    if (
+      activeNameFilters.length === 0
+      && activeExcludedNameFilters.length === 0
+      && activeIssuerFilters.length === 0
+    ) {
+      return tokens;
+    }
+
+    return tokens.filter((token) => {
+      const tokenName = token.name.trim().toLowerCase();
+      const tokenSymbol = token.symbol?.trim().toLowerCase() ?? '';
+      const matchesNameFilter =
+        activeNameFilters.length === 0
+        || activeNameFilters.some(
+          (filterValue) => tokenName.includes(filterValue) || tokenSymbol.includes(filterValue),
+        );
+
+      if (!matchesNameFilter) {
+        return false;
+      }
+
+      const matchesExcludedNameFilter = activeExcludedNameFilters.some(
+        (filterValue) => tokenName.includes(filterValue) || tokenSymbol.includes(filterValue),
+      );
+
+      if (matchesExcludedNameFilter) {
+        return false;
+      }
+
+      if (activeIssuerFilters.length === 0) {
+        return true;
+      }
+
+      return token.issuer !== null && activeIssuerFilters.includes(token.issuer);
+    });
   }
 
   private async loadMergedTokenTransfers(nodes: NodeConfig[]): Promise<TokenTransferSummary[]> {

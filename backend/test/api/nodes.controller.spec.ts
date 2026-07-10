@@ -1635,6 +1635,36 @@ describe('NodesController', () => {
     expect(response).toEqual(typedTokensFixture);
   });
 
+  it('passes token filters through to the PQS summary service', async () => {
+    await (
+      controller as unknown as {
+        listTokens: (
+          limit?: string,
+          before?: string,
+          after?: string,
+          name?: string | string[],
+          excludeName?: string | string[],
+          issuer?: string | string[],
+        ) => Promise<unknown>;
+      }
+    ).listTokens('50', undefined, undefined, ['Vault'], ['Beta'], ['Issuer-A']);
+
+    expect(pqsSummaryService.fetchTokens).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      50,
+      {
+        before: undefined,
+        after: undefined,
+        names: ['Vault'],
+        excludeNames: ['Beta'],
+        issuers: ['Issuer-A'],
+      },
+    );
+  });
+
   it('passes token transfer pagination cursors through to the PQS summary service', async () => {
     await (
       controller as unknown as {

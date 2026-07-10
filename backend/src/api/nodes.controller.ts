@@ -89,6 +89,9 @@ export class NodesController {
     @Query('limit') limit?: string,
     @Query('before') before?: string,
     @Query('after') after?: string,
+    @Query('name') name?: string | string[],
+    @Query('excludeName') excludeName?: string | string[],
+    @Query('issuer') issuer?: string | string[],
   ) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
 
@@ -97,7 +100,13 @@ export class NodesController {
         fetchTokens: (
           nodes: ReturnType<NodeConfigService['list']>,
           limit?: number,
-          options?: { before?: string; after?: string },
+          options?: {
+            before?: string;
+            after?: string;
+            names?: string[];
+            excludeNames?: string[];
+            issuers?: string[];
+          },
         ) => unknown;
       }
     ).fetchTokens(
@@ -106,6 +115,13 @@ export class NodesController {
       {
         before,
         after,
+        names: Array.isArray(name) ? name : name ? [name] : undefined,
+        excludeNames: Array.isArray(excludeName)
+          ? excludeName
+          : excludeName
+            ? [excludeName]
+            : undefined,
+        issuers: Array.isArray(issuer) ? issuer : issuer ? [issuer] : undefined,
       },
     );
   }

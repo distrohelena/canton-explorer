@@ -256,6 +256,9 @@ export function fetchTokens(options?: {
   before?: string;
   after?: string;
   limit?: number;
+  names?: string[];
+  excludeNames?: string[];
+  issuers?: string[];
 }): Promise<TokensResponse> {
   const params = new URLSearchParams();
   if (options?.before) {
@@ -263,6 +266,21 @@ export function fetchTokens(options?: {
   }
   if (options?.after) {
     params.set('after', options.after);
+  }
+  for (const name of options?.names ?? []) {
+    if (name.trim()) {
+      params.append('name', name.trim());
+    }
+  }
+  for (const name of options?.excludeNames ?? []) {
+    if (name.trim()) {
+      params.append('excludeName', name.trim());
+    }
+  }
+  for (const issuer of options?.issuers ?? []) {
+    if (issuer.trim()) {
+      params.append('issuer', issuer.trim());
+    }
   }
   if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
     params.set('limit', String(Math.trunc(options.limit)));

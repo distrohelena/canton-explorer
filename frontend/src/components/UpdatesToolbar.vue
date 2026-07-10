@@ -9,9 +9,11 @@ const props = withDefaults(
     olderDisabled: boolean;
     pageSize: number;
     pageSizeOptions?: readonly number[];
+    pageSizeAriaLabel?: string;
   }>(),
   {
     pageSizeOptions: () => PAGE_SIZE_OPTIONS,
+    pageSizeAriaLabel: 'Items per page',
   },
 );
 
@@ -48,7 +50,7 @@ function handlePageSizeChange(event: Event) {
       <select
         class="node-updates__page-size-select"
         :value="props.pageSize"
-        aria-label="Items per page"
+        :aria-label="props.pageSizeAriaLabel"
         @change="handlePageSizeChange"
       >
         <option

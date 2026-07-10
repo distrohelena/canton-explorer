@@ -4515,6 +4515,122 @@ mode: 'pqs_only',
     });
   });
 
+  it('filters discovered tokens by name, excluded name, and issuer before pagination', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'filter-token-1',
+          event_offset: '911',
+          record_time: '2026-07-09T18:10:00.000Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('filter-token-1'),
+        },
+        {
+          update_id: 'filter-token-2',
+          event_offset: '910',
+          record_time: '2026-07-09T18:09:00.000Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('filter-token-2'),
+        },
+        {
+          update_id: 'filter-token-3',
+          event_offset: '909',
+          record_time: '2026-07-09T18:08:00.000Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('filter-token-3'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer-A' },
+              { label: 'instrumentIdText', value: 'Alpha Vault' },
+              { label: 'name', value: 'Alpha Vault' },
+              { label: 'symbol', value: 'ALPHA' },
+              { label: 'amount', value: '10.0' },
+            ],
+          },
+        })
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer-A' },
+              { label: 'instrumentIdText', value: 'Beta Token' },
+              { label: 'name', value: 'Beta Token' },
+              { label: 'symbol', value: 'BETA' },
+              { label: 'amount', value: '20.0' },
+            ],
+          },
+        })
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer-B' },
+              { label: 'instrumentIdText', value: 'Gamma Vault' },
+              { label: 'name', value: 'Gamma Vault' },
+              { label: 'symbol', value: 'GAMMA' },
+              { label: 'amount', value: '30.0' },
+            ],
+          },
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [{ id: 'participant-1', label: 'Participant 1' }] as const;
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: typeof nodes,
+          limit?: number,
+          options?: {
+            before?: string;
+            after?: string;
+            names?: string[];
+            excludeNames?: string[];
+            issuers?: string[];
+          },
+        ) => Promise<TokensResponse>;
+      }
+    ).fetchTokens(nodes, 25, {
+      names: ['vault'],
+      excludeNames: ['gamma'],
+      issuers: ['Issuer-A'],
+    });
+
+    expect(response).toEqual({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      tokens: [
+        {
+          tokenId: 'Issuer-A::ALPHA',
+          name: 'Alpha Vault',
+          symbol: 'ALPHA',
+          issuer: 'Issuer-A',
+          source: 'pqs',
+        },
+      ],
+    });
+  });
+
   it('merges decoded Canton Coin transfers across nodes, paginates them, and reuses the in-memory cache', async () => {
     const participant1Query = jest.fn().mockResolvedValue({
       rows: [
