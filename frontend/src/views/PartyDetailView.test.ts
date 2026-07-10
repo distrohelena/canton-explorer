@@ -108,6 +108,14 @@ describe('PartyDetailView', () => {
               participantId: 'participant-1',
               participantUid: 'participant-1::1220abc',
               permission: 'submission',
+              threshold: 1,
+              synchronizerIds: [],
+            },
+            {
+              participantId: 'participant-2',
+              participantUid: 'participant-2::1220def',
+              permission: 'confirmation',
+              threshold: 1,
               synchronizerIds: [],
             },
           ],
@@ -119,6 +127,16 @@ describe('PartyDetailView', () => {
               keyType: 'ed25519',
               keyFormat: 'derX509SubjectPublicKeyInfo',
               keySpec: 'ecCurve25519',
+              threshold: 1,
+              synchronizerIds: [],
+            },
+            {
+              keyFingerprint: 'fingerprint-2',
+              publicKey: '302a300506032b6570032100aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              purpose: null,
+              keyType: null,
+              keyFormat: null,
+              keySpec: null,
               threshold: 1,
               synchronizerIds: [],
             },
@@ -260,23 +278,45 @@ describe('PartyDetailView', () => {
     expect(screen.getByText('Yes')).toBeInTheDocument();
     expect(screen.getByText('Party to Participant')).toBeInTheDocument();
     expect(screen.getByText('Party to Key')).toBeInTheDocument();
-    expect(screen.getByText('participant-1::1220abc')).toBeInTheDocument();
+    expect(screen.queryByText('Participant ID')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'participant-1::1220abc' })).toHaveAttribute(
+      'href',
+      '/parties/participant-1%3A%3A1220abc',
+    );
+    expect(screen.getByRole('link', { name: 'participant-2::1220def' })).toHaveAttribute(
+      'href',
+      '/parties/participant-2%3A%3A1220def',
+    );
+    expect(screen.getByRole('link', { name: 'participant-1::1220abc' }).closest('.party-topology__field'))
+      .toHaveClass('party-topology__field--participant-uid');
     expect(screen.getByText('Submission')).toBeInTheDocument();
+    expect(screen.getByText('Confirmation')).toBeInTheDocument();
     expect(screen.queryByText('submission')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Threshold')).toHaveLength(2);
     expect(screen.getByText('fingerprint-1')).toBeInTheDocument();
+    expect(screen.getByText('fingerprint-2')).toBeInTheDocument();
+    expect(screen.getByText('fingerprint-1').closest('.party-topology__field'))
+      .toHaveClass('party-topology__field--key-identity');
     expect(screen.getByText('Namespace')).toBeInTheDocument();
     expect(screen.getByText('Proof-of-Ownership')).toBeInTheDocument();
     expect(screen.getByText('Protocol')).toBeInTheDocument();
     expect(screen.queryByText('namespace, proofOfOwnership, protocol')).not.toBeInTheDocument();
     expect(screen.getAllByText('ED25519')).toHaveLength(2);
-    expect(screen.getByText('derX509SubjectPublicKeyInfo')).toBeInTheDocument();
+    expect(screen.getAllByText('Not Present').some((element) => element.closest('.party-topology__pill') !== null))
+      .toBe(true);
+    expect(screen.getByText('DER X.509 SPKI')).toBeInTheDocument();
+    expect(screen.queryByText('derX509SubjectPublicKeyInfo')).not.toBeInTheDocument();
     expect(screen.queryByText('ecCurve25519')).not.toBeInTheDocument();
     expect(
       screen.getByText('302a300506032b6570032100638f79098ceb4d97743ac43a6baa249b08c65a9930da82645cd324271c1f75e4'),
     ).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(
+      screen.getByText('302a300506032b6570032100638f79098ceb4d97743ac43a6baa249b08c65a9930da82645cd324271c1f75e4')
+        .closest('.party-topology__field'),
+    ).toHaveClass('party-topology__field--key-identity');
+    expect(screen.getAllByText('1')).toHaveLength(2);
     expect(screen.getByText('gRPC not configured for this node.')).toBeInTheDocument();
-    expect(container.querySelectorAll('.party-topology__pill-list')).toHaveLength(4);
+    expect(container.querySelectorAll('.party-topology__pill-list')).toHaveLength(7);
     expect(await screen.findByRole('link', { name: '0000000000000001' })).toHaveAttribute(
       'href',
       '/nodes/participant-1/updates/0000000000000001?from=party&partyId=Alice',

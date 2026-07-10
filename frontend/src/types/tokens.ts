@@ -2,10 +2,14 @@ export interface TokenSummary {
   tokenId: string;
   name: string;
   symbol: string | null;
+  issuer?: string | null;
   source: 'pqs';
 }
 
 export interface TokensResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
   tokens: TokenSummary[];
 }
 
@@ -40,6 +44,9 @@ export interface TokenTransferObservedNode {
 }
 
 export interface TokenTransferSummary {
+  rowId?: string;
+  movementType?: string | null;
+  source?: 'pqs' | 'pqs_inferred_holding_v2';
   tokenId: string;
   tokenName: string;
   amount: string | null;

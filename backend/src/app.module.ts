@@ -12,6 +12,7 @@ import { DamlValueDecoderService } from './packages/daml-value-decoder.service';
 import { PackageRegistryService } from './packages/package-registry.service';
 import { PackageSyncService } from './packages/package-sync.service';
 import { PqsPackageService } from './packages/pqs-package.service';
+import { NamespaceFingerprintService } from './namespaces/namespace-fingerprint.service';
 
 @Module({
   controllers: [NodesController],
@@ -27,6 +28,7 @@ import { PqsPackageService } from './packages/pqs-package.service';
     PackageRegistryService,
     DamlValueDecoderService,
     PackageSyncService,
+    NamespaceFingerprintService,
     NodePollerService,
   ],
 })

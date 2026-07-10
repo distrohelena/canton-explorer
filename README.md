@@ -16,8 +16,16 @@ npm run dev:backend
 npm run dev:frontend
 ```
 
-Backend: `http://localhost:3100`
+Backend: `http://localhost:4600`
 Frontend: `http://localhost:46000`
+
+## Run without dev mode
+
+```bash
+npm run start:frontend
+```
+
+This builds the frontend once and serves the built assets on `http://localhost:46000` without file watching or hot reload.
 
 ## Test
 

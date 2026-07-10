@@ -35,6 +35,9 @@ describe('TokenTransferDetailView', () => {
 
   it('renders a global token transfer detail and returns to the tokens page', async () => {
     vi.mocked(fetchTokenTransferDetail).mockResolvedValue({
+      rowId: 'token-update-2:#0:1:Mint',
+      movementType: 'Mint',
+      source: 'pqs_inferred_holding_v2',
       tokenId: 'canton-coin',
       tokenName: 'Canton Coin',
       amount: '42.0',
@@ -85,6 +88,10 @@ describe('TokenTransferDetailView', () => {
     expect(await screen.findByRole('heading', { name: 'Canton Coin Transfer' })).toBeInTheDocument();
     expect(screen.getByText('Token ID')).toBeInTheDocument();
     expect(screen.getByText('canton-coin')).toBeInTheDocument();
+    expect(screen.getByText('Movement Type')).toBeInTheDocument();
+    expect(screen.getByText('Mint')).toBeInTheDocument();
+    expect(screen.getByText('Source')).toBeInTheDocument();
+    expect(screen.getByText('pqs_inferred_holding_v2')).toBeInTheDocument();
     expect(screen.getByText('Amount')).toBeInTheDocument();
     expect(screen.getByText('Amount').closest('.contract-detail__summary-item')).toHaveClass(
       'contract-detail__summary-item--full-row',

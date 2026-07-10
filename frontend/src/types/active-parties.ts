@@ -15,3 +15,22 @@ export interface ActivePartiesNodeEntry {
 export interface ActivePartiesResponse {
   nodes: ActivePartiesNodeEntry[];
 }
+
+export interface NodePartyFingerprintsEntry {
+  nodeId: string;
+  label: string;
+  mode: NodeMode;
+  source: 'pqs' | 'grpc';
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  fingerprints: string[];
+}
+
+export interface PartyFingerprintsResponse {
+  source: 'pqs' | 'grpc';
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  fingerprints: string[];
+}

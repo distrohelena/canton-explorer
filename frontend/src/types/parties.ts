@@ -36,13 +36,18 @@ export interface PartyTopologyParticipantMapping {
   participantId: string | null;
   participantUid: string | null;
   permission: string | null;
+  threshold: number | null;
   synchronizerIds: string[];
 }
 
 export interface PartyTopologyKeyMapping {
   keyFingerprint: string | null;
+  publicKey: string | null;
   purpose: string | null;
   keyType: string | null;
+  keyFormat: string | null;
+  keySpec: string | null;
+  threshold: number | null;
   synchronizerIds: string[];
 }
 
@@ -53,6 +58,7 @@ export interface PartyTopologyNodeEntry {
   label: string;
   status: PartyTopologyNodeStatus;
   errorMessage: string | null;
+  isLocalParty?: boolean | null;
   partyToParticipants: PartyTopologyParticipantMapping[];
   partyToKeyMappings: PartyTopologyKeyMapping[];
 }

@@ -15,13 +15,18 @@ export interface GrpcPartyTopologyParticipantMapping {
   participantId: string | null;
   participantUid: string | null;
   permission: string | null;
+  threshold: number | null;
   synchronizerIds: string[];
 }
 
 export interface GrpcPartyTopologyKeyMapping {
   keyFingerprint: string | null;
+  publicKey: string | null;
   purpose: string | null;
   keyType: string | null;
+  keyFormat: string | null;
+  keySpec: string | null;
+  threshold: number | null;
   synchronizerIds: string[];
 }
 
@@ -32,12 +37,71 @@ export interface GrpcPartyTopologyNodeEntry {
   label: string;
   status: GrpcPartyTopologyStatus;
   errorMessage: string | null;
+  isLocalParty?: boolean | null;
   partyToParticipants: GrpcPartyTopologyParticipantMapping[];
   partyToKeyMappings: GrpcPartyTopologyKeyMapping[];
 }
 
+type TopologyStoreShape = {
+  kind?: 'authorized' | 'synchronizer' | 'temporary';
+  authorized?: Record<string, never>;
+  synchronizer?: {
+    id?: string;
+    physicalId?: string;
+  };
+  temporary?: {
+    name: string;
+  };
+};
+
+type TopologySdkModule = {
+  ListPartyToParticipantRequest: new (init: {
+    filterParty?: string;
+    filterParticipant?: string;
+    baseQuery?: {
+      storeId?: TopologyStoreShape;
+      headState?: boolean;
+    };
+  }) => {
+    filterParty?: string;
+    filterParticipant?: string;
+    baseQuery?: {
+      storeId?: TopologyStoreShape;
+      headState?: boolean;
+    };
+  };
+  TopologyBaseQuery: new (init: {
+    storeId?: TopologyStoreShape;
+    headState?: boolean;
+  }) => {
+    storeId?: TopologyStoreShape;
+    headState?: boolean;
+  };
+  TopologyStoreId: new (init: {
+    kind: unknown;
+    authorized?: unknown;
+    synchronizer?: unknown;
+    temporary?: unknown;
+  }) => TopologyStoreShape;
+  TopologyStoreKind: {
+    authorized: unknown;
+    synchronizer: unknown;
+    temporary: unknown;
+  };
+  TopologyStoreAuthorized: new (init?: Record<string, never>) => unknown;
+  TopologyStoreSynchronizer: new (init: {
+    id?: string;
+    physicalId?: string;
+  }) => TopologyStoreShape['synchronizer'];
+  TopologyStoreTemporary: new (init: {
+    name: string;
+  }) => TopologyStoreShape['temporary'];
+};
+
 @Injectable()
 export class GrpcOperationsService {
+  private topologySdkPromise?: Promise<TopologySdkModule>;
+
   constructor(private readonly clientFactory: GrpcClientFactory) {}
 
   async fetchOperationalInfo(node: NodeConfig): Promise<ServiceInfo> {
@@ -68,26 +132,31 @@ export class GrpcOperationsService {
       return [];
     }
 
+    return this.withClient(node, async (client) => this.listLocalPartiesWithClient(client));
+  }
+
+  async listKnownPartyFingerprints(node: NodeConfig): Promise<string[]> {
+    if (node.mode !== 'pqs_with_grpc') {
+      return [];
+    }
+
     return this.withClient(node, async (client) => {
-      const parties: string[] = [];
-      let nextPageToken: string | undefined;
+      const [partyTopologyResponse, localParties] = await Promise.all([
+        client.topologyAggregationService.listPartiesAsync({
+          synchronizerIds: [],
+        }),
+        this.listLocalPartiesWithClient(client),
+      ]);
 
-      do {
-        const response = await client.partyManagementService.listKnownPartiesAsync({
-          pageSize: 1000,
-          pageToken: nextPageToken,
-        });
+      const parties = this.uniqueNonEmptyStrings([
+        ...(partyTopologyResponse.results ?? []).map((result) => result.party),
+        ...localParties,
+      ]);
 
-        for (const partyDetail of response.partyDetails ?? []) {
-          if (partyDetail.isLocal) {
-            parties.push(partyDetail.party);
-          }
-        }
-
-        nextPageToken = response.nextPageToken;
-      } while (nextPageToken);
-
-      return parties.sort((left, right) => left.localeCompare(right));
+      return parties
+        .map((partyId) => this.extractPartyFingerprint(partyId))
+        .filter((fingerprint): fingerprint is string => fingerprint !== null)
+        .sort((left, right) => left.localeCompare(right));
     });
   }
 
@@ -101,6 +170,7 @@ export class GrpcOperationsService {
         label: node.label,
         status: 'grpc_not_configured',
         errorMessage: null,
+        isLocalParty: null,
         partyToParticipants: [],
         partyToKeyMappings: [],
       };
@@ -108,7 +178,7 @@ export class GrpcOperationsService {
 
     try {
       return await this.withClient(node, async (client) => {
-        const [partyTopologyResponse, keyOwnerResponse] = await Promise.all([
+        const [partyTopologyResponse, keyOwnerResponse, rawPartyToParticipantResponse] = await Promise.all([
           client.topologyAggregationService.listPartiesAsync({
             filterParty: partyId,
             synchronizerIds: [],
@@ -117,57 +187,117 @@ export class GrpcOperationsService {
             filterKeyOwnerUid: partyId,
             synchronizerIds: [],
           }),
+          this.tryListRawPartyToParticipant(client, partyId),
         ]);
+
+        const aggregatedParticipantMappings = (partyTopologyResponse.results ?? [])
+          .filter((result) => result.party === partyId)
+          .flatMap((result) =>
+            (result.participants ?? []).map((participant) => ({
+              participantId: this.extractParticipantId(participant.participantUid),
+              participantUid: this.nullIfEmptyString(participant.participantUid),
+              permission: this.joinDistinctValues(
+                (participant.synchronizers ?? []).map((synchronizer) => synchronizer.permission),
+              ),
+              threshold: null,
+              synchronizerIds: this.uniqueNonEmptyStrings(
+                (participant.synchronizers ?? []).map(
+                  (synchronizer) =>
+                    synchronizer.synchronizerId ?? synchronizer.physicalSynchronizerId,
+                ),
+              ),
+            })),
+          );
+        const rawPartyMappings = (rawPartyToParticipantResponse?.results ?? [])
+          .map((result) => result.item)
+          .filter((item): item is NonNullable<typeof item> => item !== undefined && item !== null)
+          .filter((item) => item.party === partyId);
+        const rawTopologySynchronizerId = this.extractRawTopologySynchronizerId(
+          rawPartyToParticipantResponse?.storeId,
+        );
+        const rawParticipantMappings = rawPartyMappings.flatMap((item) =>
+          (item.participants ?? []).map((participant) => ({
+            participantId: this.extractParticipantId(participant.participantUid),
+            participantUid: this.nullIfEmptyString(participant.participantUid),
+            permission: this.nullIfEmptyString(participant.permission),
+            threshold:
+              typeof item.threshold === 'number' && Number.isFinite(item.threshold)
+                ? item.threshold
+                : null,
+            synchronizerIds: rawTopologySynchronizerId ? [rawTopologySynchronizerId] : [],
+          })),
+        );
+        const aggregatedKeyMappings = (keyOwnerResponse.results ?? [])
+          .filter((result) => result.keyOwner === partyId)
+          .flatMap((result) => [
+            ...(result.signingKeys ?? []).map((signingKey) => ({
+              keyFingerprint:
+                this.nullIfEmptyString(signingKey.fingerprint)
+                ?? this.computePublicKeyFingerprint(client, signingKey.publicKey, signingKey.format),
+              publicKey: this.bytesToHex(signingKey.publicKey),
+              purpose: this.joinDistinctValues(signingKey.usage ?? []),
+              keyType: this.nullIfEmptyString(signingKey.scheme),
+              keyFormat: this.nullIfEmptyString(signingKey.format),
+              keySpec: this.nullIfEmptyString(signingKey.keySpec),
+              threshold: null,
+              synchronizerIds: this.uniqueNonEmptyStrings([
+                result.synchronizerId ?? result.physicalSynchronizerId,
+              ]),
+            })),
+            ...(result.encryptionKeys ?? []).map((encryptionKey) => ({
+              keyFingerprint:
+                this.nullIfEmptyString(encryptionKey.fingerprint)
+                ?? this.computePublicKeyFingerprint(
+                  client,
+                  encryptionKey.publicKey,
+                  encryptionKey.format,
+                ),
+              publicKey: this.bytesToHex(encryptionKey.publicKey),
+              purpose: 'encryption',
+              keyType: this.nullIfEmptyString(encryptionKey.scheme),
+              keyFormat: this.nullIfEmptyString(encryptionKey.format),
+              keySpec: this.nullIfEmptyString(encryptionKey.keySpec),
+              threshold: null,
+              synchronizerIds: this.uniqueNonEmptyStrings([
+                result.synchronizerId ?? result.physicalSynchronizerId,
+              ]),
+            })),
+          ]);
+        const rawSigningKeyMappings = rawPartyMappings.flatMap((item) =>
+          (item.partySigningKeys?.keys ?? []).map((signingKey) => ({
+            keyFingerprint: this.computePublicKeyFingerprint(
+              client,
+              signingKey.publicKey,
+              signingKey.format,
+            ),
+            publicKey: this.bytesToHex(signingKey.publicKey),
+            purpose: this.joinDistinctValues(signingKey.usage ?? []),
+            keyType: this.nullIfEmptyString(signingKey.scheme),
+            keyFormat: this.nullIfEmptyString(signingKey.format),
+            keySpec: this.nullIfEmptyString(signingKey.keySpec),
+            threshold:
+              typeof item.partySigningKeys?.threshold === 'number'
+              && Number.isFinite(item.partySigningKeys.threshold)
+                ? item.partySigningKeys.threshold
+                : null,
+            synchronizerIds: rawTopologySynchronizerId ? [rawTopologySynchronizerId] : [],
+          })),
+        );
 
         return {
           nodeId: node.id,
           label: node.label,
           status: 'ok',
           errorMessage: null,
-          partyToParticipants: (partyTopologyResponse.results ?? [])
-            .filter((result) => result.party === partyId)
-            .flatMap((result) =>
-              (result.participants ?? []).map((participant) => ({
-                participantId: this.extractParticipantId(participant.participantUid),
-                participantUid: this.nullIfEmptyString(participant.participantUid),
-                permission: this.joinDistinctValues(
-                  (participant.synchronizers ?? []).map((synchronizer) => synchronizer.permission),
-                ),
-                synchronizerIds: this.uniqueNonEmptyStrings(
-                  (participant.synchronizers ?? []).map(
-                    (synchronizer) =>
-                      synchronizer.synchronizerId ?? synchronizer.physicalSynchronizerId,
-                  ),
-                ),
-              })),
-            ),
-          partyToKeyMappings: (keyOwnerResponse.results ?? [])
-            .filter((result) => result.keyOwner === partyId)
-            .flatMap((result) => [
-              ...(result.signingKeys ?? []).map((signingKey) => ({
-                keyFingerprint: this.bytesToHex(signingKey.publicKey),
-                purpose: this.joinDistinctValues(signingKey.usage ?? []),
-                keyType: this.nullIfEmptyString(signingKey.scheme),
-                synchronizerIds: this.uniqueNonEmptyStrings([
-                  result.synchronizerId ?? result.physicalSynchronizerId,
-                ]),
-              })),
-              ...(result.encryptionKeys ?? []).map((encryptionKey) => ({
-                keyFingerprint: this.bytesToHex(encryptionKey.publicKey),
-                purpose: 'encryption',
-                keyType: this.nullIfEmptyString(encryptionKey.scheme),
-                synchronizerIds: this.uniqueNonEmptyStrings([
-                  result.synchronizerId ?? result.physicalSynchronizerId,
-                ]),
-              })),
-            ])
-            .filter(
-              (mapping) =>
-                mapping.keyFingerprint !== null
-                || mapping.purpose !== null
-                || mapping.keyType !== null
-                || mapping.synchronizerIds.length > 0,
-            ),
+          isLocalParty: null,
+          partyToParticipants: this.mergePartyTopologyParticipants([
+            ...aggregatedParticipantMappings,
+            ...rawParticipantMappings,
+          ]),
+          partyToKeyMappings: this.mergePartyTopologyKeyMappings([
+            ...aggregatedKeyMappings,
+            ...rawSigningKeyMappings,
+          ]),
         };
       });
     } catch (error) {
@@ -176,6 +306,7 @@ export class GrpcOperationsService {
         label: node.label,
         status: 'grpc_error',
         errorMessage: error instanceof Error ? error.message : 'Unknown gRPC error',
+        isLocalParty: null,
         partyToParticipants: [],
         partyToKeyMappings: [],
       };
@@ -353,8 +484,129 @@ export class GrpcOperationsService {
     return error.message.includes('Method not found:') && error.message.includes('PackageService/ListPackages');
   }
 
+  private loadTopologySdk(): Promise<TopologySdkModule> {
+    this.topologySdkPromise ??= (() => {
+      const sdkModulePath = '@distrohelena/canton-typescript-sdk';
+      return import(sdkModulePath) as Promise<TopologySdkModule>;
+    })();
+
+    return this.topologySdkPromise;
+  }
+
+  private buildTopologyStoreId(
+    sdk: TopologySdkModule,
+    store: TopologyStoreShape,
+  ): TopologyStoreShape | undefined {
+    switch (store.kind) {
+      case 'authorized':
+        return new sdk.TopologyStoreId({
+          kind: sdk.TopologyStoreKind.authorized,
+          authorized: new sdk.TopologyStoreAuthorized(),
+        });
+      case 'synchronizer':
+        return new sdk.TopologyStoreId({
+          kind: sdk.TopologyStoreKind.synchronizer,
+          synchronizer: new sdk.TopologyStoreSynchronizer({
+            id: store.synchronizer?.id,
+            physicalId: store.synchronizer?.physicalId,
+          }),
+        });
+      case 'temporary':
+        if (!store.temporary?.name) {
+          return undefined;
+        }
+
+        return new sdk.TopologyStoreId({
+          kind: sdk.TopologyStoreKind.temporary,
+          temporary: new sdk.TopologyStoreTemporary({
+            name: store.temporary.name,
+          }),
+        });
+      default:
+        return undefined;
+    }
+  }
+
   private nullIfEmptyString(value: unknown): string | null {
     return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  }
+
+  private async tryListRawPartyToParticipant(
+    client: Awaited<ReturnType<GrpcClientFactory['create']>>,
+    partyId: string,
+  ): Promise<
+    | {
+        storeId?: {
+          kind?: 'authorized' | 'synchronizer' | 'temporary';
+          synchronizer?: {
+            id?: string;
+            physicalId?: string;
+          };
+        };
+        results?: Array<{
+          item?: {
+            party?: string;
+            threshold?: number;
+            participants?: Array<{
+              participantUid?: string;
+              permission?: unknown;
+            }>;
+            partySigningKeys?: {
+              threshold?: number;
+              keys?: Array<{
+                format?: string;
+                publicKey?: Uint8Array;
+                usage?: string[];
+                scheme?: string;
+                keySpec?: string;
+              }>;
+            };
+          };
+        }>;
+      }
+    | null
+  > {
+    if (
+      !client.topologyManagerReadService?.listPartyToParticipantAsync
+      || !client.topologyManagerReadService.listAvailableStoresAsync
+    ) {
+      return null;
+    }
+
+    try {
+      const sdk = await this.loadTopologySdk();
+      const availableStores = await client.topologyManagerReadService.listAvailableStoresAsync({});
+      const synchronizerStores = (availableStores.storeIds ?? []).filter(
+        (store) => store.kind === 'synchronizer' && store.synchronizer !== undefined,
+      );
+
+      for (const storeId of synchronizerStores) {
+        try {
+          const response = await client.topologyManagerReadService.listPartyToParticipantAsync(
+            new sdk.ListPartyToParticipantRequest({
+              filterParty: partyId,
+              baseQuery: new sdk.TopologyBaseQuery({
+                storeId: this.buildTopologyStoreId(sdk, storeId),
+                headState: true,
+              }),
+            }),
+          );
+
+          if ((response.results ?? []).length > 0) {
+            return {
+              storeId,
+              results: response.results,
+            };
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
   }
 
   private uniqueNonEmptyStrings(values: unknown[]): string[] {
@@ -372,12 +624,118 @@ export class GrpcOperationsService {
     return normalizedValues.length > 0 ? normalizedValues.join(', ') : null;
   }
 
+  private mergePartyTopologyParticipants(
+    mappings: GrpcPartyTopologyParticipantMapping[],
+  ): GrpcPartyTopologyParticipantMapping[] {
+    const merged = new Map<string, GrpcPartyTopologyParticipantMapping>();
+
+    for (const mapping of mappings) {
+      const key = mapping.participantUid ?? mapping.participantId ?? JSON.stringify(mapping);
+      const existing = merged.get(key);
+
+      if (!existing) {
+        merged.set(key, {
+          participantId: mapping.participantId,
+          participantUid: mapping.participantUid,
+          permission: mapping.permission,
+          threshold: mapping.threshold,
+          synchronizerIds: [...mapping.synchronizerIds],
+        });
+        continue;
+      }
+
+      existing.participantId ??= mapping.participantId;
+      existing.participantUid ??= mapping.participantUid;
+      existing.permission ??= mapping.permission;
+      existing.threshold ??= mapping.threshold;
+      existing.synchronizerIds = this.uniqueNonEmptyStrings([
+        ...existing.synchronizerIds,
+        ...mapping.synchronizerIds,
+      ]);
+    }
+
+    return Array.from(merged.values()).filter(
+      (mapping) =>
+        mapping.participantId !== null
+        || mapping.participantUid !== null
+        || mapping.permission !== null
+        || mapping.threshold !== null
+        || mapping.synchronizerIds.length > 0,
+    );
+  }
+
+  private mergePartyTopologyKeyMappings(
+    mappings: GrpcPartyTopologyKeyMapping[],
+  ): GrpcPartyTopologyKeyMapping[] {
+    const merged = new Map<string, GrpcPartyTopologyKeyMapping>();
+
+    for (const mapping of mappings) {
+      const key = mapping.keyFingerprint ?? JSON.stringify(mapping);
+      const existing = merged.get(key);
+
+      if (!existing) {
+        merged.set(key, {
+          keyFingerprint: mapping.keyFingerprint,
+          publicKey: mapping.publicKey,
+          purpose: mapping.purpose,
+          keyType: mapping.keyType,
+          keyFormat: mapping.keyFormat,
+          keySpec: mapping.keySpec,
+          threshold: mapping.threshold,
+          synchronizerIds: [...mapping.synchronizerIds],
+        });
+        continue;
+      }
+
+      existing.keyFingerprint ??= mapping.keyFingerprint;
+      existing.publicKey ??= mapping.publicKey;
+      existing.purpose ??= mapping.purpose;
+      existing.keyType ??= mapping.keyType;
+      existing.keyFormat ??= mapping.keyFormat;
+      existing.keySpec ??= mapping.keySpec;
+      existing.threshold ??= mapping.threshold;
+      existing.synchronizerIds = this.uniqueNonEmptyStrings([
+        ...existing.synchronizerIds,
+        ...mapping.synchronizerIds,
+      ]);
+    }
+
+    return Array.from(merged.values()).filter(
+      (mapping) =>
+        mapping.keyFingerprint !== null
+        || mapping.publicKey !== null
+        || mapping.purpose !== null
+        || mapping.keyType !== null
+        || mapping.keyFormat !== null
+        || mapping.keySpec !== null
+        || mapping.threshold !== null
+        || mapping.synchronizerIds.length > 0,
+    );
+  }
+
   private bytesToHex(value: Uint8Array | null | undefined): string | null {
     if (!value || value.length === 0) {
       return null;
     }
 
     return Buffer.from(value).toString('hex');
+  }
+
+  private computePublicKeyFingerprint(
+    client: { hashing?: { computePublicKeyFingerprint(publicKey: Uint8Array, format?: string): string } },
+    publicKey: Uint8Array | null | undefined,
+    format?: string | null,
+  ): string | null {
+    if (!publicKey || publicKey.length === 0) {
+      return null;
+    }
+
+    return this.nullIfEmptyString(
+      client.hashing?.computePublicKeyFingerprint(
+        publicKey,
+        this.nullIfEmptyString(format) ?? undefined,
+      ),
+    );
   }
 
   private extractParticipantId(participantUid: unknown): string | null {
@@ -393,6 +751,68 @@ export class GrpcOperationsService {
     }
 
     return normalizedParticipantUid.slice(0, separatorIndex) || null;
+  }
+
+  private async listLocalPartiesWithClient(client: {
+    partyManagementService: {
+      listKnownPartiesAsync(input: {
+        pageSize: number;
+        pageToken?: string;
+      }): Promise<{ partyDetails?: Array<{ party: string; isLocal: boolean }>; nextPageToken?: string }>;
+    };
+  }): Promise<string[]> {
+    const parties: string[] = [];
+    let nextPageToken: string | undefined;
+
+    do {
+      const response = await client.partyManagementService.listKnownPartiesAsync({
+        pageSize: 1000,
+        pageToken: nextPageToken,
+      });
+
+      for (const partyDetail of response.partyDetails ?? []) {
+        if (partyDetail.isLocal) {
+          parties.push(partyDetail.party);
+        }
+      }
+
+      nextPageToken = response.nextPageToken;
+    } while (nextPageToken);
+
+    return parties.sort((left, right) => left.localeCompare(right));
+  }
+
+  private extractPartyFingerprint(partyId: unknown): string | null {
+    const normalizedPartyId = this.nullIfEmptyString(partyId);
+    if (!normalizedPartyId) {
+      return null;
+    }
+
+    const separatorIndex = normalizedPartyId.indexOf('::');
+    if (separatorIndex === -1) {
+      return normalizedPartyId;
+    }
+
+    const fingerprint = normalizedPartyId.slice(separatorIndex + 2).trim();
+    return fingerprint.length > 0 ? fingerprint : null;
+  }
+
+  private extractRawTopologySynchronizerId(
+    storeId:
+      | {
+          kind?: 'authorized' | 'synchronizer' | 'temporary';
+          synchronizer?: {
+            id?: string;
+            physicalId?: string;
+          };
+        }
+      | undefined,
+  ): string | null {
+    if (storeId?.kind !== 'synchronizer') {
+      return null;
+    }
+
+    return this.nullIfEmptyString(storeId.synchronizer?.id ?? storeId.synchronizer?.physicalId);
   }
 
   private formatDuration(

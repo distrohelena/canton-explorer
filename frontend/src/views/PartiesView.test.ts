@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import PartiesView from './PartiesView.vue';
 import {
   fetchNodeActiveParties,
+  fetchPartyFingerprints,
+  fetchNodePartyFingerprints,
   fetchNodeLocalParties,
   fetchNodes,
 } from '../lib/api';
@@ -10,6 +12,8 @@ import {
 vi.mock('../lib/api', () => ({
   fetchNodes: vi.fn(),
   fetchNodeActiveParties: vi.fn(),
+  fetchPartyFingerprints: vi.fn(),
+  fetchNodePartyFingerprints: vi.fn(),
   fetchNodeLocalParties: vi.fn(),
 }));
 
@@ -163,6 +167,16 @@ describe('PartiesView', () => {
       localPartiesErrorDetails: null,
       localPartiesErrorTid: null,
     });
+    vi.mocked(fetchNodePartyFingerprints).mockResolvedValue({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      source: 'grpc',
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220carol'],
+    });
 
     render(PartiesView, {
       global: {
@@ -180,6 +194,9 @@ describe('PartiesView', () => {
       'true',
     );
     expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
+    expect(
+      screen.getByText('PQS').closest('.results-header__actions'),
+    ).not.toBeNull();
     expect(fetchNodeActiveParties).toHaveBeenCalledTimes(1);
     expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-1');
     expect(screen.getByRole('button', { name: 'Participant 1' })).toHaveAttribute(
@@ -214,6 +231,9 @@ describe('PartiesView', () => {
       '/parties/LocalCarol',
     );
     expect(screen.getByText('gRPC')).toHaveAttribute('title', 'Data sourced from gRPC');
+    expect(
+      screen.getByText('gRPC').closest('.results-header__actions'),
+    ).not.toBeNull();
     expect(screen.queryByText('Local party inventory via gRPC.')).not.toBeInTheDocument();
     expect(fetchNodeLocalParties).toHaveBeenCalledTimes(1);
     expect(fetchNodeLocalParties).toHaveBeenCalledWith('participant-2');
@@ -304,6 +324,24 @@ describe('PartiesView', () => {
       localPartiesErrorDetails: null,
       localPartiesErrorTid: null,
     });
+    vi.mocked(fetchNodePartyFingerprints)
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        mode: 'pqs_only',
+        source: 'pqs',
+        limit: 10,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: ['1220shared', '1220alice'],
+      });
+    vi.mocked(fetchPartyFingerprints).mockResolvedValue({
+      source: 'pqs',
+      limit: 10,
+      nextBefore: '1220carol',
+      nextAfter: null,
+      fingerprints: ['1220alice', '1220carol'],
+    });
 
     render(PartiesView, {
       global: {
@@ -333,6 +371,375 @@ describe('PartiesView', () => {
     expect(screen.getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
     expect(screen.getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
     expect(screen.getByRole('link', { name: 'Carol' })).toHaveAttribute('href', '/parties/Carol');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'All Nodes' }));
+
+    await waitFor(() =>
+      expect(fetchPartyFingerprints).toHaveBeenCalledTimes(2),
+    );
+    expect(screen.getByText('1220alice')).toBeInTheDocument();
+    expect(screen.getByText('1220carol')).toBeInTheDocument();
+    expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
+    expect(screen.queryAllByText('gRPC')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
+  });
+
+  it('paginates namespaces with newer and older controls', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: null,
+          reachable: false,
+          healthCheckImplemented: false,
+          servingStatus: null,
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger',
+          pqsDatabase: 'participant_1',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: false, checkedAt: '', latencyMs: null, message: null },
+        },
+      },
+    ]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_only',
+      parties: ['Alice'],
+    });
+    vi.mocked(fetchNodePartyFingerprints)
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        mode: 'pqs_only',
+        source: 'pqs',
+        limit: 10,
+        nextBefore: '1220j',
+        nextAfter: null,
+        fingerprints: ['1220a', '1220b'],
+      })
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        mode: 'pqs_only',
+        source: 'pqs',
+        limit: 10,
+        nextBefore: null,
+        nextAfter: '1220k',
+        fingerprints: ['1220k', '1220l'],
+      })
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        mode: 'pqs_only',
+        source: 'pqs',
+        limit: 10,
+        nextBefore: '1220j',
+        nextAfter: null,
+        fingerprints: ['1220a', '1220b'],
+      });
+
+    render(PartiesView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces' }));
+
+    expect(await screen.findByText('1220a')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+
+    expect(await screen.findByText('1220k')).toBeInTheDocument();
+    expect(fetchNodePartyFingerprints).toHaveBeenLastCalledWith('participant-1', {
+      before: '1220j',
+      limit: 10,
+    });
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Newer' }));
+
+    expect(await screen.findByText('1220a')).toBeInTheDocument();
+    expect(fetchNodePartyFingerprints).toHaveBeenLastCalledWith('participant-1', {
+      after: '1220k',
+      limit: 10,
+    });
+  });
+
+  it('links namespace rows to the namespace detail page', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+        ledgerLabel: 'Retail Ledger 1',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: 'localhost:5012',
+          reachable: true,
+          healthCheckImplemented: true,
+          servingStatus: 'SERVING',
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger 1',
+          pqsDatabase: 'participant_1',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+        },
+      },
+    ]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_with_grpc',
+      parties: ['Alice::1220abcd'],
+    });
+    vi.mocked(fetchNodePartyFingerprints).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_with_grpc',
+      source: 'grpc',
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220abcd'],
+    });
+
+    render(PartiesView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces' }));
+
+    expect(await screen.findByRole('link', { name: '1220abcd' })).toHaveAttribute(
+      'href',
+      '/namespaces/1220abcd',
+    );
+    expect(screen.getByRole('link', { name: '1220abcd' })).toHaveClass(
+      'contract-detail__link',
+      'parties-page__party-link',
+    );
+  });
+
+  it('filters namespaces through the advanced filter panel', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: null,
+          reachable: false,
+          healthCheckImplemented: false,
+          servingStatus: null,
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger',
+          pqsDatabase: 'participant_1',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: false, checkedAt: '', latencyMs: null, message: null },
+        },
+      },
+    ]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_only',
+      parties: ['Alice'],
+    });
+    vi.mocked(fetchNodePartyFingerprints)
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        mode: 'pqs_only',
+        source: 'pqs',
+        limit: 10,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: ['1220a', '1220b'],
+      })
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        mode: 'pqs_only',
+        source: 'pqs',
+        limit: 10,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: ['1220a'],
+      });
+
+    render(PartiesView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+
+    expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
+
+    await fireEvent.update(screen.getByLabelText('Public Key'), '302a300506032b6570032100010203');
+    await fireEvent.update(screen.getByLabelText('Encoding'), 'hex');
+    await fireEvent.update(screen.getByLabelText('Key Format'), 'derX509SubjectPublicKeyInfo');
+    await fireEvent.update(screen.getByLabelText('Key Type'), 'ed25519');
+    await fireEvent.click(screen.getByRole('button', { name: 'Search Namespaces' }));
+
+    expect(await screen.findByText('1220a')).toBeInTheDocument();
+    expect(fetchNodePartyFingerprints).toHaveBeenLastCalledWith('participant-1', {
+      limit: 10,
+      publicKey: '302a300506032b6570032100010203',
+      encoding: 'hex',
+      keyFormat: 'derX509SubjectPublicKeyInfo',
+      keyType: 'ed25519',
+    });
+  });
+
+  it('paginates active parties and local parties with newer and older controls', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+        ledgerLabel: 'Retail Ledger',
+        status: 'healthy',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: null,
+        serviceInfo: {
+          target: 'localhost:5012',
+          reachable: true,
+          healthCheckImplemented: true,
+          servingStatus: 'SERVING',
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger',
+          pqsDatabase: 'participant_1',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+          grpc: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+        },
+      },
+    ]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_with_grpc',
+      parties: Array.from({ length: 12 }, (_, index) => `Active ${String(index + 1).padStart(2, '0')}`),
+    });
+    vi.mocked(fetchNodeLocalParties).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_with_grpc',
+      parties: Array.from({ length: 12 }, (_, index) => `Local ${String(index + 1).padStart(2, '0')}`),
+      localPartiesStatus: 'ok',
+      localPartiesError: null,
+      localPartiesErrorCode: null,
+      localPartiesErrorDetails: null,
+      localPartiesErrorTid: null,
+    });
+
+    render(PartiesView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(await screen.findByRole('link', { name: 'Active 01' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Active 11' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+
+    expect(await screen.findByRole('link', { name: 'Active 11' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'All Parties' }));
+
+    expect(await screen.findByRole('link', { name: 'Local 01' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Local 11' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+
+    expect(await screen.findByRole('link', { name: 'Local 11' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
   });
 
   it('shows a grpc error message instead of the empty-state copy when local party loading fails', async () => {

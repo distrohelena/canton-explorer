@@ -4,9 +4,12 @@ import { NodesController } from '../../src/api/nodes.controller';
 import { NodeCacheService } from '../../src/cache/node-cache.service';
 import { NodeConfigService } from '../../src/config/node-config.service';
 import { GrpcOperationsService } from '../../src/grpc/grpc-operations.service';
+import { NamespaceFingerprintService } from '../../src/namespaces/namespace-fingerprint.service';
 import { PqsSummaryService } from '../../src/pqs/pqs-summary.service';
 import type {
   PartyDetailResponse,
+  NamespaceDetailResponse,
+  NamespacePartiesResponse,
   NodeContractsResponse,
   NodeParticipantStatusResponse,
   NodePackagesResponse,
@@ -265,8 +268,12 @@ const typedPartyDetailFixture = {
       partyToKeyMappings: [
         {
           keyFingerprint: 'fingerprint-1',
+          publicKey: null,
           purpose: 'namespace',
           keyType: 'ed25519',
+          keyFormat: null,
+          keySpec: null,
+          threshold: null,
           synchronizerIds: [],
         },
       ],
@@ -281,6 +288,76 @@ const typedPartyDetailFixture = {
     },
   ],
 } satisfies PartyDetailResponse;
+
+const typedNamespaceDetailFixture = {
+  namespaceId: '1220abcd',
+  partyCount: 2,
+  nodeCount: 2,
+  recentUpdateCount: 2,
+  recentContractCount: 1,
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      recentUpdateCount: 1,
+      recentContractCount: 0,
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+  ],
+  recentUpdates: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      eventOffset: '42',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      recordTime: '2026-07-09T12:00:00.000Z',
+      parties: ['Alice::1220abcd', 'Bob::1220abcd'],
+    },
+  ],
+  recentContracts: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      contractId: '00abc',
+      templateId: 'Main:Asset',
+      packageId: null,
+      packageName: null,
+      packageVersion: null,
+      recordTime: '2026-07-09T12:00:00.000Z',
+    },
+  ],
+  topologyByNode: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      status: 'ok',
+      errorMessage: null,
+      partyToParticipants: [],
+      partyToKeyMappings: [],
+    },
+  ],
+} satisfies NamespaceDetailResponse;
+
+const typedNamespacePartiesFixture = {
+  namespaceId: '1220abcd',
+  partyCount: 2,
+  limit: 10,
+  nextBefore: null,
+  nextAfter: null,
+  parties: [
+    {
+      partyId: 'Alice::1220abcd',
+    },
+    {
+      partyId: 'Bob::1220abcd',
+    },
+  ],
+} satisfies NamespacePartiesResponse;
 
 const typedActivePartiesFixture = {
   nodes: [
@@ -321,11 +398,15 @@ const typedLocalPartiesFixture = {
 };
 
 const typedTokensFixture = {
+  limit: 25,
+  nextBefore: null,
+  nextAfter: null,
   tokens: [
     {
       tokenId: 'canton-coin',
       name: 'Canton Coin',
       symbol: null,
+      issuer: null,
       source: 'pqs',
     },
   ],
@@ -361,7 +442,7 @@ const typedScopedTokenTransfersFixture = {
   nextAfter: 'token-cursor-after-2',
   transfers: [
     {
-      tokenId: 'validator-license',
+      tokenId: 'Issuer::validator-license',
       tokenName: 'Validator License',
       amount: '42.5000000000',
       sender: 'Issuer',
@@ -398,14 +479,15 @@ const typedTokenTransferDetailFixture = {
 
 const typedTokenDetailFixture = {
   token: {
-    tokenId: 'validator-license',
+    tokenId: 'Issuer::validator-license',
     name: 'Validator License',
     symbol: 'VL',
+    issuer: 'Issuer',
     source: 'pqs',
   },
   transfers: [
     {
-      tokenId: 'validator-license',
+      tokenId: 'Issuer::validator-license',
       tokenName: 'Validator License',
       amount: '42.5000000000',
       sender: 'Issuer',
@@ -424,7 +506,7 @@ const typedTokenDetailFixture = {
 } satisfies TokenDetailResponse;
 
 const typedTokenHoldersFixture = {
-  tokenId: 'validator-license',
+  tokenId: 'Issuer::validator-license',
   limit: 25,
   nextBefore: null,
   nextAfter: null,
@@ -465,12 +547,18 @@ describe('NodesController', () => {
     fetchNodeContracts: jest.Mock;
     fetchActiveParties: jest.Mock;
     fetchPartyDetail: jest.Mock;
+    fetchNamespaceDetail: jest.Mock;
+    fetchNamespaceParties: jest.Mock;
     fetchPartyUpdates: jest.Mock;
     fetchPartyContracts: jest.Mock;
   };
   let grpcOperationsService: {
     listLocalParties: jest.Mock;
+    listKnownPartyFingerprints: jest.Mock;
     fetchParticipantStatus: jest.Mock;
+  };
+  let namespaceFingerprintService: {
+    computeFromInput: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -613,6 +701,8 @@ describe('NodesController', () => {
       fetchNodeContracts: jest.fn().mockResolvedValue(typedNodeContractsFixture),
       fetchActiveParties: jest.fn().mockResolvedValue(typedActivePartiesFixture),
       fetchPartyDetail: jest.fn().mockResolvedValue(typedPartyDetailFixture),
+      fetchNamespaceDetail: jest.fn().mockResolvedValue(typedNamespaceDetailFixture),
+      fetchNamespaceParties: jest.fn().mockResolvedValue(typedNamespacePartiesFixture),
       fetchPartyUpdates: jest.fn().mockResolvedValue({
         limit: 25,
         nextBefore: null,
@@ -628,10 +718,14 @@ describe('NodesController', () => {
     };
     grpcOperationsService = {
       listLocalParties: jest.fn().mockResolvedValue(['LocalAlice', 'LocalBob']),
+      listKnownPartyFingerprints: jest.fn().mockResolvedValue(['1220alice', '1220bob']),
       fetchParticipantStatus: jest.fn().mockResolvedValue({
         participantStatus: typedNodeParticipantStatusFixture.participantStatus,
         notInitialized: null,
       }),
+    };
+    namespaceFingerprintService = {
+      computeFromInput: jest.fn().mockResolvedValue('1220alice'),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -671,6 +765,10 @@ describe('NodesController', () => {
         {
           provide: GrpcOperationsService,
           useValue: grpcOperationsService,
+        },
+        {
+          provide: NamespaceFingerprintService,
+          useValue: namespaceFingerprintService,
         },
         {
           provide: PqsSummaryService,
@@ -1011,6 +1109,124 @@ describe('NodesController', () => {
     expect(response).toEqual(typedLocalPartiesFixture.nodes[1]);
   });
 
+  it('returns party fingerprints for a single known gRPC node id', async () => {
+    const maybeController = controller as {
+      listNodePartyFingerprints?: (id: string, limit?: string, before?: string, after?: string) => Promise<{
+        nodeId: string;
+        label: string;
+        mode: string;
+        source: string;
+        limit: number;
+        nextBefore: string | null;
+        nextAfter: string | null;
+        fingerprints: string[];
+      }>;
+    };
+
+    const response = await maybeController.listNodePartyFingerprints?.('participant-2', '10');
+
+    expect(grpcOperationsService.listKnownPartyFingerprints).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+    );
+    expect(response).toEqual({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      source: 'grpc',
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220alice', '1220bob'],
+    });
+  });
+
+  it('falls back to PQS-backed party fingerprints when gRPC lookup fails', async () => {
+    grpcOperationsService.listKnownPartyFingerprints.mockRejectedValueOnce(new Error('grpc failed'));
+    pqsSummaryService.fetchActiveParties.mockResolvedValueOnce({
+      nodes: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          mode: 'pqs_with_grpc',
+          parties: ['Alice::1220alice', 'Bob::1220bob'],
+        },
+      ],
+    });
+
+    const maybeController = controller as {
+      listNodePartyFingerprints?: (id: string, limit?: string, before?: string, after?: string) => Promise<{
+        nodeId: string;
+        label: string;
+        mode: string;
+        source: string;
+        limit: number;
+        nextBefore: string | null;
+        nextAfter: string | null;
+        fingerprints: string[];
+      }>;
+    };
+
+    const response = await maybeController.listNodePartyFingerprints?.('participant-2', '10');
+
+    expect(pqsSummaryService.fetchActiveParties).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'participant-2' }),
+    ]);
+    expect(response).toEqual({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      source: 'pqs',
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220alice', '1220bob'],
+    });
+  });
+
+  it('filters party fingerprints by a computed namespace fingerprint', async () => {
+    const maybeController = controller as {
+      listNodePartyFingerprints?: (
+        id: string,
+        limit?: string,
+        before?: string,
+        after?: string,
+        publicKey?: string,
+        encoding?: string,
+        keyFormat?: string,
+        keyType?: string,
+      ) => Promise<{
+        nodeId: string;
+        label: string;
+        mode: string;
+        source: string;
+        limit: number;
+        nextBefore: string | null;
+        nextAfter: string | null;
+        fingerprints: string[];
+      }>;
+    };
+
+    const response = await maybeController.listNodePartyFingerprints?.(
+      'participant-2',
+      '10',
+      undefined,
+      undefined,
+      '302a300506032b65700321000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20',
+      'hex',
+      'derX509SubjectPublicKeyInfo',
+      'ed25519',
+    );
+
+    expect(namespaceFingerprintService.computeFromInput).toHaveBeenCalledWith({
+      publicKey:
+        '302a300506032b65700321000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20',
+      encoding: 'hex',
+      keyFormat: 'derX509SubjectPublicKeyInfo',
+      keyType: 'ed25519',
+    });
+    expect(response?.fingerprints).toEqual(['1220alice']);
+  });
+
   it('returns grpc_not_configured for local-party lookup on a pqs-only node', async () => {
     const response = await controller.listNodeLocalParties('participant-1');
 
@@ -1075,6 +1291,44 @@ describe('NodesController', () => {
       'Alice',
     );
     expect(response).toEqual(typedPartyDetailFixture);
+  });
+
+  it('returns namespace detail for a known namespace id', async () => {
+    const response = await (
+      controller as unknown as {
+        getNamespaceDetail?: (namespaceId: string) => Promise<NamespaceDetailResponse>;
+      }
+    ).getNamespaceDetail?.('1220abcd');
+
+    expect(pqsSummaryService.fetchNamespaceDetail).toHaveBeenCalledWith(
+      expect.any(Array),
+      '1220abcd',
+    );
+    expect(response).toEqual(typedNamespaceDetailFixture);
+  });
+
+  it('returns paginated namespace parties for a known namespace id', async () => {
+    const response = await (
+      controller as unknown as {
+        listNamespaceParties?: (
+          namespaceId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<NamespacePartiesResponse>;
+      }
+    ).listNamespaceParties?.('1220abcd', '25', 'Bob::1220abcd', undefined);
+
+    expect(pqsSummaryService.fetchNamespaceParties).toHaveBeenCalledWith(
+      expect.any(Array),
+      '1220abcd',
+      {
+        limit: 25,
+        before: 'Bob::1220abcd',
+        after: undefined,
+      },
+    );
+    expect(response).toEqual(typedNamespacePartiesFixture);
   });
 
   it('returns party-scoped updates for a known party id', async () => {
@@ -1372,6 +1626,11 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
+      25,
+      {
+        before: undefined,
+        after: undefined,
+      },
     );
     expect(response).toEqual(typedTokensFixture);
   });

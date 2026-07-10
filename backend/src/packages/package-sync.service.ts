@@ -79,6 +79,50 @@ export class PackageSyncService {
     };
   }
 
+  async syncPackagesById(
+    node: NodeConfig,
+    packageIds: string[],
+  ): Promise<PackageSyncResult> {
+    const normalizedPackageIds = Array.from(
+      new Set(packageIds.map((packageId) => packageId.trim()).filter((packageId) => packageId.length > 0)),
+    );
+
+    if (normalizedPackageIds.length === 0) {
+      return {
+        missingPackageIds: [],
+        fetchedPackageCount: 0,
+        skippedBecauseNotDue: false,
+      };
+    }
+
+    const { source, packageRefs } = await this.fetchPackageRefs(node);
+    const requestedRefs = packageRefs.filter((packageRef) =>
+      normalizedPackageIds.includes(packageRef.packageId),
+    );
+    const requestedIds = requestedRefs.map((packageRef) => packageRef.packageId);
+    const missingPackageIds = normalizedPackageIds.filter(
+      (packageId) => !requestedIds.includes(packageId),
+    );
+
+    if (requestedRefs.length === 0) {
+      return {
+        missingPackageIds,
+        fetchedPackageCount: 0,
+        skippedBecauseNotDue: false,
+      };
+    }
+
+    this.cacheService.recordPackagePresence(node.id, requestedRefs, new Date().toISOString());
+    const packages = await this.fetchPackages(node, source, requestedIds, requestedRefs);
+    this.cacheService.storePackages(packages);
+
+    return {
+      missingPackageIds,
+      fetchedPackageCount: packages.length,
+      skippedBecauseNotDue: false,
+    };
+  }
+
   private async fetchPackageRefs(node: NodeConfig): Promise<PackageRefFetchResult> {
     if (node.mode !== 'pqs_with_grpc') {
       return {
@@ -111,9 +155,9 @@ export class PackageSyncService {
     }
 
     try {
-      return await this.grpcOperationsService.fetchPackagesByRefs(node, missingPackageRefs);
+      return await this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
     } catch {
-      return this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+      return this.grpcOperationsService.fetchPackagesByRefs(node, missingPackageRefs);
     }
   }
 }

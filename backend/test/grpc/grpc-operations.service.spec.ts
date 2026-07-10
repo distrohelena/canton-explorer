@@ -104,6 +104,10 @@ describe('GrpcOperationsService', () => {
 
   it('fetches party topology mappings through the SDK topology aggregation services', async () => {
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const computePublicKeyFingerprint = jest
+      .fn()
+      .mockReturnValueOnce('computed-signing-fingerprint')
+      .mockReturnValueOnce('computed-encryption-fingerprint');
     const listPartiesAsync = jest.fn().mockResolvedValue({
       results: [
         {
@@ -155,10 +159,12 @@ describe('GrpcOperationsService', () => {
           listPartiesAsync,
           listKeyOwnersAsync,
         },
+        hashing: {
+          computePublicKeyFingerprint,
+        },
         disposeAsync,
       }),
     } as never);
-
     const result = await (
       service as GrpcOperationsService & {
         fetchPartyTopology: (
@@ -182,29 +188,258 @@ describe('GrpcOperationsService', () => {
       label: 'Participant 1',
       status: 'ok',
       errorMessage: null,
+      isLocalParty: null,
       partyToParticipants: [
         {
           participantId: 'participant-1',
           participantUid: 'participant-1::1220abc',
           permission: 'submission',
+          threshold: null,
           synchronizerIds: ['sync-a'],
         },
       ],
       partyToKeyMappings: [
         {
-          keyFingerprint: 'abcdef',
+          keyFingerprint: 'computed-signing-fingerprint',
+          publicKey: 'abcdef',
           purpose: 'namespace',
           keyType: 'ed25519',
+          keyFormat: 'raw',
+          keySpec: 'signing',
+          threshold: null,
           synchronizerIds: ['sync-a'],
         },
         {
-          keyFingerprint: '1234',
+          keyFingerprint: 'computed-encryption-fingerprint',
+          publicKey: '1234',
           purpose: 'encryption',
           keyType: 'ecies',
+          keyFormat: 'raw',
+          keySpec: 'encryption',
+          threshold: null,
           synchronizerIds: ['sync-a'],
         },
       ],
     });
+    expect(computePublicKeyFingerprint).toHaveBeenNthCalledWith(
+      1,
+      new Uint8Array([0xab, 0xcd, 0xef]),
+      'raw',
+    );
+    expect(computePublicKeyFingerprint).toHaveBeenNthCalledWith(
+      2,
+      new Uint8Array([0x12, 0x34]),
+      'raw',
+    );
+    expect(disposeAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('augments external-party topology with signing keys from raw PartyToParticipant mappings', async () => {
+    class FakeTopologyStoreAuthorized {
+      public constructor(_init: Record<string, never> = {}) {
+        void _init;
+      }
+    }
+
+    class FakeTopologyStoreSynchronizer {
+      public readonly id?: string;
+      public readonly physicalId?: string;
+
+      public constructor(init: { id?: string; physicalId?: string } = {}) {
+        this.id = init.id;
+        this.physicalId = init.physicalId;
+      }
+    }
+
+    class FakeTopologyStoreTemporary {
+      public readonly name: string;
+
+      public constructor(init: { name: string }) {
+        this.name = init.name;
+      }
+    }
+
+    class FakeTopologyStoreId {
+      public readonly kind: string;
+      public readonly authorized?: FakeTopologyStoreAuthorized;
+      public readonly synchronizer?: FakeTopologyStoreSynchronizer;
+      public readonly temporary?: FakeTopologyStoreTemporary;
+
+      public constructor(init: {
+        kind: string;
+        authorized?: FakeTopologyStoreAuthorized;
+        synchronizer?: FakeTopologyStoreSynchronizer;
+        temporary?: FakeTopologyStoreTemporary;
+      }) {
+        this.kind = init.kind;
+        this.authorized = init.authorized;
+        this.synchronizer = init.synchronizer;
+        this.temporary = init.temporary;
+      }
+    }
+
+    class FakeTopologyBaseQuery {
+      public readonly storeId?: FakeTopologyStoreId;
+      public readonly headState?: boolean;
+
+      public constructor(init: {
+        storeId?: FakeTopologyStoreId;
+        headState?: boolean;
+      } = {}) {
+        this.storeId = init.storeId;
+        this.headState = init.headState;
+      }
+    }
+
+    class FakeListPartyToParticipantRequest {
+      public readonly filterParty?: string;
+      public readonly baseQuery?: FakeTopologyBaseQuery;
+
+      public constructor(init: {
+        filterParty?: string;
+        baseQuery?: FakeTopologyBaseQuery;
+      } = {}) {
+        this.filterParty = init.filterParty;
+        this.baseQuery = init.baseQuery;
+      }
+    }
+
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const computePublicKeyFingerprint = jest.fn().mockReturnValue('computed-raw-signing-fingerprint');
+    const listPartiesAsync = jest.fn().mockResolvedValue({
+      results: [],
+    });
+    const listKeyOwnersAsync = jest.fn().mockResolvedValue({
+      results: [],
+    });
+    const listAvailableStoresAsync = jest.fn().mockResolvedValue({
+      storeIds: [
+        { kind: 'authorized' },
+        {
+          kind: 'synchronizer',
+          synchronizer: {
+            id: 'sync-a',
+          },
+        },
+      ],
+    });
+    const listPartyToParticipantAsync = jest.fn().mockImplementation(async (request) => {
+      expect(request).toBeInstanceOf(FakeListPartyToParticipantRequest);
+      expect(request.baseQuery).toBeInstanceOf(FakeTopologyBaseQuery);
+      expect(request.baseQuery?.storeId).toBeInstanceOf(FakeTopologyStoreId);
+      expect(request.baseQuery?.storeId?.synchronizer).toBeInstanceOf(
+        FakeTopologyStoreSynchronizer,
+      );
+
+      return {
+        results: [
+          {
+            item: {
+              party: 'Alice',
+              participants: [
+                {
+                  participantUid: 'participant-1::1220abc',
+                  permission: 'confirmation',
+                },
+              ],
+              partySigningKeys: {
+                threshold: 1,
+                keys: [
+                  {
+                    format: 'derX509SubjectPublicKeyInfo',
+                    scheme: 'ed25519',
+                    usage: ['namespace', 'proofOfOwnership', 'protocol'],
+                    keySpec: 'ecCurve25519',
+                    publicKey: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      };
+    });
+    const service = new GrpcOperationsService({
+      create: () => ({
+        topologyAggregationService: {
+          listPartiesAsync,
+          listKeyOwnersAsync,
+        },
+        topologyManagerReadService: {
+          listAvailableStoresAsync,
+          listPartyToParticipantAsync,
+        },
+        hashing: {
+          computePublicKeyFingerprint,
+        },
+        disposeAsync,
+      }),
+    } as never);
+    (
+      service as GrpcOperationsService & {
+        loadTopologySdk: () => Promise<unknown>;
+      }
+    ).loadTopologySdk = jest.fn().mockResolvedValue({
+      ListPartyToParticipantRequest: FakeListPartyToParticipantRequest,
+      TopologyBaseQuery: FakeTopologyBaseQuery,
+      TopologyStoreId: FakeTopologyStoreId,
+      TopologyStoreKind: {
+        authorized: 'authorized',
+        synchronizer: 'synchronizer',
+        temporary: 'temporary',
+      },
+      TopologyStoreAuthorized: FakeTopologyStoreAuthorized,
+      TopologyStoreSynchronizer: FakeTopologyStoreSynchronizer,
+      TopologyStoreTemporary: FakeTopologyStoreTemporary,
+    });
+
+    const result = await (
+      service as GrpcOperationsService & {
+        fetchPartyTopology: (
+          node: typeof grpcNode,
+          partyId: string,
+        ) => Promise<unknown>;
+      }
+    ).fetchPartyTopology(grpcNode, 'Alice');
+
+    expect(listAvailableStoresAsync).toHaveBeenCalledWith({});
+    const rawRequest = listPartyToParticipantAsync.mock.calls[0]?.[0];
+    expect(rawRequest.filterParty).toBe('Alice');
+    expect(rawRequest.baseQuery.headState).toBe(true);
+    expect(rawRequest.baseQuery.storeId.kind).toBe('synchronizer');
+    expect(rawRequest.baseQuery.storeId.synchronizer.id).toBe('sync-a');
+    expect(result).toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      status: 'ok',
+      errorMessage: null,
+      isLocalParty: null,
+      partyToParticipants: [
+        {
+          participantId: 'participant-1',
+          participantUid: 'participant-1::1220abc',
+          permission: 'confirmation',
+          threshold: null,
+          synchronizerIds: ['sync-a'],
+        },
+      ],
+      partyToKeyMappings: [
+        {
+          keyFingerprint: 'computed-raw-signing-fingerprint',
+          publicKey: 'deadbeef',
+          purpose: 'namespace, proofOfOwnership, protocol',
+          keyType: 'ed25519',
+          keyFormat: 'derX509SubjectPublicKeyInfo',
+          keySpec: 'ecCurve25519',
+          threshold: 1,
+          synchronizerIds: ['sync-a'],
+        },
+      ],
+    });
+    expect(computePublicKeyFingerprint).toHaveBeenCalledWith(
+      new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+      'derX509SubjectPublicKeyInfo',
+    );
     expect(disposeAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -234,6 +469,7 @@ describe('GrpcOperationsService', () => {
       label: 'Participant 1',
       status: 'grpc_error',
       errorMessage: 'Topology read failed',
+      isLocalParty: null,
       partyToParticipants: [],
       partyToKeyMappings: [],
     });
@@ -259,6 +495,7 @@ describe('GrpcOperationsService', () => {
       label: 'Participant 2',
       status: 'grpc_not_configured',
       errorMessage: null,
+      isLocalParty: null,
       partyToParticipants: [],
       partyToKeyMappings: [],
     });

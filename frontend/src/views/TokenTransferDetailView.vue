@@ -72,6 +72,17 @@ const recordTimeLines = computed(() =>
                 <dt>Token ID</dt>
                 <dd>{{ transferDetail.tokenId }}</dd>
               </div>
+              <div
+                v-if="transferDetail.movementType"
+                class="contract-detail__summary-item"
+              >
+                <dt>Movement Type</dt>
+                <dd>{{ transferDetail.movementType }}</dd>
+              </div>
+              <div v-if="transferDetail.source" class="contract-detail__summary-item">
+                <dt>Source</dt>
+                <dd>{{ transferDetail.source }}</dd>
+              </div>
               <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <dt>Amount</dt>
                 <dd class="token-transfer-detail__amount">{{ transferDetail.amount ?? 'n/a' }}</dd>

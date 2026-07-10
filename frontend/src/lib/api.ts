@@ -1,4 +1,8 @@
-import type { ActivePartiesResponse } from '../types/active-parties';
+import type {
+  ActivePartiesResponse,
+  NodePartyFingerprintsEntry,
+  PartyFingerprintsResponse,
+} from '../types/active-parties';
 import type { ActivityHistoryResponse } from '../types/activity';
 import type {
   GlobalContractsResponse,
@@ -11,6 +15,7 @@ import type {
   NodeParticipantStatusResponse,
   NodeSnapshot,
 } from '../types/nodes';
+import type { NamespaceDetailResponse, NamespacePartiesResponse } from '../types/namespaces';
 import type { PartyDetailResponse } from '../types/parties';
 import type { PartyContractsResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
@@ -72,6 +77,81 @@ export function fetchNodeActiveParties(id: string): Promise<ActivePartiesRespons
 
 export function fetchNodeLocalParties(id: string): Promise<ActivePartiesResponse['nodes'][number]> {
   return fetchJson<ActivePartiesResponse['nodes'][number]>(`/nodes/${id}/parties/local`);
+}
+
+export function fetchPartyFingerprints(options?: {
+  before?: string;
+  after?: string;
+  limit?: number;
+  publicKey?: string;
+  encoding?: 'auto' | 'hex' | 'base64' | 'pem';
+  keyFormat?: 'raw' | 'derX509SubjectPublicKeyInfo';
+  keyType?: 'auto' | 'ed25519' | 'x25519' | 'secp256k1' | 'other';
+}): Promise<PartyFingerprintsResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set('limit', String(Math.trunc(options.limit)));
+  }
+  if (options?.publicKey?.trim()) {
+    params.set('publicKey', options.publicKey.trim());
+  }
+  if (options?.encoding && options.encoding !== 'auto') {
+    params.set('encoding', options.encoding);
+  }
+  if (options?.keyFormat && options.keyFormat !== 'raw') {
+    params.set('keyFormat', options.keyFormat);
+  }
+  if (options?.keyType && options.keyType !== 'auto') {
+    params.set('keyType', options.keyType);
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return fetchJson<PartyFingerprintsResponse>(`/parties/fingerprints${suffix}`);
+}
+
+export function fetchNodePartyFingerprints(
+  id: string,
+  options?: {
+    before?: string;
+    after?: string;
+    limit?: number;
+    publicKey?: string;
+    encoding?: 'auto' | 'hex' | 'base64' | 'pem';
+    keyFormat?: 'raw' | 'derX509SubjectPublicKeyInfo';
+    keyType?: 'auto' | 'ed25519' | 'x25519' | 'secp256k1' | 'other';
+  },
+): Promise<NodePartyFingerprintsEntry> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set('limit', String(Math.trunc(options.limit)));
+  }
+  if (options?.publicKey?.trim()) {
+    params.set('publicKey', options.publicKey.trim());
+  }
+  if (options?.encoding && options.encoding !== 'auto') {
+    params.set('encoding', options.encoding);
+  }
+  if (options?.keyFormat && options.keyFormat !== 'raw') {
+    params.set('keyFormat', options.keyFormat);
+  }
+  if (options?.keyType && options.keyType !== 'auto') {
+    params.set('keyType', options.keyType);
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return fetchJson<NodePartyFingerprintsEntry>(`/nodes/${id}/parties/fingerprints${suffix}`);
 }
 
 export function fetchNodeContracts(
@@ -172,8 +252,24 @@ export function fetchSearchResults(query: string): Promise<SearchResultsResponse
   return fetchJson<SearchResultsResponse>(`/search?q=${encodeURIComponent(query.trim())}`);
 }
 
-export function fetchTokens(): Promise<TokensResponse> {
-  return fetchJson<TokensResponse>('/tokens');
+export function fetchTokens(options?: {
+  before?: string;
+  after?: string;
+  limit?: number;
+}): Promise<TokensResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set('limit', String(Math.trunc(options.limit)));
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return fetchJson<TokensResponse>(`/tokens${suffix}`);
 }
 
 export function fetchTokenDetail(tokenId: string): Promise<TokenDetailResponse> {
@@ -399,6 +495,35 @@ export function fetchPackagesByName(packageName: string): Promise<PackageFamilyR
 
 export function fetchPartyDetail(partyId: string): Promise<PartyDetailResponse> {
   return fetchJson<PartyDetailResponse>(`/parties/${encodeURIComponent(partyId)}`);
+}
+
+export function fetchNamespaceDetail(namespaceId: string): Promise<NamespaceDetailResponse> {
+  return fetchJson<NamespaceDetailResponse>(`/namespaces/${encodeURIComponent(namespaceId)}`);
+}
+
+export function fetchNamespaceParties(
+  namespaceId: string,
+  options?: {
+    before?: string;
+    after?: string;
+    limit?: number;
+  },
+): Promise<NamespacePartiesResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set('limit', String(Math.trunc(options.limit)));
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return fetchJson<NamespacePartiesResponse>(
+    `/namespaces/${encodeURIComponent(namespaceId)}/parties${suffix}`,
+  );
 }
 
 export function fetchPartyUpdates(

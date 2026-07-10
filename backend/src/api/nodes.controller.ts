@@ -3,6 +3,7 @@ import { NodeCacheService } from '../cache/node-cache.service';
 import { NodeConfigService } from '../config/node-config.service';
 import { describeGrpcError } from '../grpc/grpc-error.util';
 import { GrpcOperationsService } from '../grpc/grpc-operations.service';
+import { NamespaceFingerprintService } from '../namespaces/namespace-fingerprint.service';
 import { PqsSummaryService } from '../pqs/pqs-summary.service';
 
 @Controller('/api')
@@ -11,6 +12,7 @@ export class NodesController {
     private readonly cacheService: NodeCacheService,
     private readonly configService: NodeConfigService,
     private readonly grpcOperationsService: GrpcOperationsService,
+    private readonly namespaceFingerprintService: NamespaceFingerprintService,
     private readonly pqsSummaryService: PqsSummaryService,
   ) {}
 
@@ -83,12 +85,29 @@ export class NodesController {
   }
 
   @Get('/tokens')
-  listTokens() {
+  listTokens(
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
     return (
       this.pqsSummaryService as PqsSummaryService & {
-        fetchTokens: (nodes: ReturnType<NodeConfigService['list']>) => unknown;
+        fetchTokens: (
+          nodes: ReturnType<NodeConfigService['list']>,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => unknown;
       }
-    ).fetchTokens(this.configService.list());
+    ).fetchTokens(
+      this.configService.list(),
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      {
+        before,
+        after,
+      },
+    );
   }
 
   @Get('/tokens/transfers')
@@ -339,6 +358,30 @@ export class NodesController {
     return this.buildLocalPartiesEntry(node);
   }
 
+  @Get('/nodes/:id/parties/fingerprints')
+  async listNodePartyFingerprints(
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('publicKey') publicKey?: string,
+    @Query('encoding') encoding?: string,
+    @Query('keyFormat') keyFormat?: string,
+    @Query('keyType') keyType?: string,
+  ) {
+    const node = this.getNodeConfig(id);
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
+    return this.buildPartyFingerprintsEntry(node, {
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 10,
+      before,
+      after,
+      namespacePublicKey: publicKey,
+      namespaceEncoding: encoding,
+      namespaceKeyFormat: keyFormat,
+      namespaceKeyType: keyType,
+    });
+  }
+
   @Get('/nodes/:id/updates')
   async listNodeUpdates(
     @Param('id') id: string,
@@ -424,6 +467,28 @@ export class NodesController {
     return { nodes };
   }
 
+  @Get('/parties/fingerprints')
+  async listPartyFingerprints(
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('publicKey') publicKey?: string,
+    @Query('encoding') encoding?: string,
+    @Query('keyFormat') keyFormat?: string,
+    @Query('keyType') keyType?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
+    return this.buildGlobalPartyFingerprintsEntry(this.configService.list(), {
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 10,
+      before,
+      after,
+      namespacePublicKey: publicKey,
+      namespaceEncoding: encoding,
+      namespaceKeyFormat: keyFormat,
+      namespaceKeyType: keyType,
+    });
+  }
+
   @Get('/parties/:partyId')
   async getPartyDetail(@Param('partyId') partyId: string) {
     try {
@@ -431,6 +496,46 @@ export class NodesController {
     } catch (error) {
       if (error instanceof Error && error.message === 'Party not found') {
         throw new NotFoundException(`Unknown party: ${partyId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/namespaces/:namespaceId')
+  async getNamespaceDetail(@Param('namespaceId') namespaceId: string) {
+    try {
+      return await this.pqsSummaryService.fetchNamespaceDetail(
+        this.configService.list(),
+        namespaceId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Namespace not found') {
+        throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/namespaces/:namespaceId/parties')
+  async listNamespaceParties(
+    @Param('namespaceId') namespaceId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    try {
+      return await this.pqsSummaryService.fetchNamespaceParties(this.configService.list(), namespaceId, {
+        limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+        before,
+        after,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Namespace not found') {
+        throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
       }
 
       throw error;
@@ -611,5 +716,189 @@ export class NodesController {
         participantStatusErrorTid: grpcError.tid,
       };
     }
+  }
+
+  private async buildPartyFingerprintsEntry(
+    node: ReturnType<NodesController['getNodeConfig']>,
+    options: {
+      limit: number;
+      before?: string;
+      after?: string;
+      namespacePublicKey?: string;
+      namespaceEncoding?: string;
+      namespaceKeyFormat?: string;
+      namespaceKeyType?: string;
+    },
+  ) {
+    const exactFingerprint = await this.resolveNamespaceFilter(options);
+
+    if (node.mode === 'pqs_with_grpc') {
+      try {
+        const fingerprints = await this.grpcOperationsService.listKnownPartyFingerprints(node);
+        return {
+          nodeId: node.id,
+          label: node.label,
+          mode: node.mode,
+          source: 'grpc' as const,
+          ...this.paginateFingerprints(this.filterFingerprints(fingerprints, exactFingerprint), options),
+        };
+      } catch {
+        // Fall through to PQS-derived suffixes when gRPC is unavailable.
+      }
+    }
+
+    const response = await this.pqsSummaryService.fetchActiveParties([node]);
+    const parties = response.nodes[0]?.parties ?? [];
+
+    return {
+      nodeId: node.id,
+      label: node.label,
+      mode: node.mode,
+      source: 'pqs' as const,
+      ...this.paginateFingerprints(
+        this.filterFingerprints(this.extractFingerprintsFromParties(parties), exactFingerprint),
+        options,
+      ),
+    };
+  }
+
+  private async buildGlobalPartyFingerprintsEntry(
+    nodes: ReturnType<NodeConfigService['list']>,
+    options: {
+      limit: number;
+      before?: string;
+      after?: string;
+      namespacePublicKey?: string;
+      namespaceEncoding?: string;
+      namespaceKeyFormat?: string;
+      namespaceKeyType?: string;
+    },
+  ) {
+    const exactFingerprint = await this.resolveNamespaceFilter(options);
+
+    const canUseGrpcForAll = nodes.every((node) => node.mode === 'pqs_with_grpc');
+
+    if (canUseGrpcForAll) {
+      try {
+        const fingerprints = Array.from(
+          new Set(
+            (
+              await Promise.all(
+                nodes.map((node) => this.grpcOperationsService.listKnownPartyFingerprints(node)),
+              )
+            ).flat(),
+          ),
+        ).sort((left, right) => left.localeCompare(right));
+
+        return {
+          source: 'grpc' as const,
+          ...this.paginateFingerprints(this.filterFingerprints(fingerprints, exactFingerprint), options),
+        };
+      } catch {
+        // Fall through to PQS so the global result uses one consistent source.
+      }
+    }
+
+    const response = await this.pqsSummaryService.fetchActiveParties(nodes);
+    const fingerprints = Array.from(
+      new Set(response.nodes.flatMap((node) => this.extractFingerprintsFromParties(node.parties))),
+    ).sort((left, right) => left.localeCompare(right));
+
+    return {
+      source: 'pqs' as const,
+      ...this.paginateFingerprints(this.filterFingerprints(fingerprints, exactFingerprint), options),
+    };
+  }
+
+  private extractFingerprintsFromParties(parties: string[]): string[] {
+    return Array.from(
+      new Set(
+        parties
+          .map((partyId) => {
+            const separatorIndex = partyId.indexOf('::');
+            if (separatorIndex === -1) {
+              return partyId.trim();
+            }
+
+            return partyId.slice(separatorIndex + 2).trim();
+          })
+          .filter((fingerprint) => fingerprint.length > 0),
+      ),
+    ).sort((left, right) => left.localeCompare(right));
+  }
+
+  private paginateFingerprints(
+    fingerprints: string[],
+    options: {
+      limit: number;
+      before?: string;
+      after?: string;
+    },
+  ) {
+    const sortedFingerprints = Array.from(new Set(fingerprints)).sort((left, right) =>
+      left.localeCompare(right),
+    );
+    const limit = Math.max(1, options.limit);
+
+    if (options.after) {
+      const endIndex = sortedFingerprints.findIndex((value) => value === options.after);
+      const normalizedEndIndex = endIndex >= 0 ? endIndex : sortedFingerprints.length;
+      const startIndex = Math.max(0, normalizedEndIndex - limit);
+      const page = sortedFingerprints.slice(startIndex, normalizedEndIndex);
+
+      return {
+        limit,
+        nextBefore:
+          normalizedEndIndex < sortedFingerprints.length && page.length > 0
+            ? page[page.length - 1]
+            : null,
+        nextAfter: startIndex > 0 && page.length > 0 ? page[0] : null,
+        fingerprints: page,
+      };
+    }
+
+    const startIndex = options.before
+      ? (() => {
+          const index = sortedFingerprints.findIndex((value) => value === options.before);
+          return index >= 0 ? index + 1 : 0;
+        })()
+      : 0;
+    const page = sortedFingerprints.slice(startIndex, startIndex + limit);
+
+    return {
+      limit,
+      nextBefore:
+        startIndex + limit < sortedFingerprints.length && page.length > 0
+          ? page[page.length - 1]
+          : null,
+      nextAfter: startIndex > 0 && page.length > 0 ? page[0] : null,
+      fingerprints: page,
+    };
+  }
+
+  private async resolveNamespaceFilter(options: {
+    namespacePublicKey?: string;
+    namespaceEncoding?: string;
+    namespaceKeyFormat?: string;
+    namespaceKeyType?: string;
+  }): Promise<string | null> {
+    if (!options.namespacePublicKey?.trim()) {
+      return null;
+    }
+
+    return this.namespaceFingerprintService.computeFromInput({
+      publicKey: options.namespacePublicKey,
+      encoding: options.namespaceEncoding,
+      keyFormat: options.namespaceKeyFormat,
+      keyType: options.namespaceKeyType,
+    });
+  }
+
+  private filterFingerprints(fingerprints: string[], exactFingerprint: string | null): string[] {
+    if (!exactFingerprint) {
+      return fingerprints;
+    }
+
+    return fingerprints.filter((fingerprint) => fingerprint === exactFingerprint);
   }
 }

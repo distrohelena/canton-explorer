@@ -281,6 +281,10 @@ export class PackageRegistryService implements OnModuleInit {
     return this.sdkModule;
   }
 
+  invalidatePackage(packageId: string): void {
+    this.packageCache.delete(packageId);
+  }
+
   private buildDataTypeNode(
     resolvedPackage: ResolvedPackage,
     typeId: string,

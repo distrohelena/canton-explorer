@@ -163,10 +163,14 @@ export interface TokenSummary {
   tokenId: string;
   name: string;
   symbol: string | null;
+  issuer: string | null;
   source: 'pqs';
 }
 
 export interface TokensResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
   tokens: TokenSummary[];
 }
 
@@ -201,6 +205,9 @@ export interface TokenTransferObservedNode {
 }
 
 export interface TokenTransferSummary {
+  rowId?: string;
+  movementType?: string | null;
+  source?: 'pqs' | 'pqs_inferred_holding_v2';
   tokenId: string;
   tokenName: string;
   amount: string | null;
@@ -504,6 +511,25 @@ export interface ActivePartiesResponse {
   nodes: ActivePartiesNodeEntry[];
 }
 
+export interface NodePartyFingerprintsEntry {
+  nodeId: string;
+  label: string;
+  mode: NodeMode;
+  source: 'pqs' | 'grpc';
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  fingerprints: string[];
+}
+
+export interface PartyFingerprintsResponse {
+  source: 'pqs' | 'grpc';
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  fingerprints: string[];
+}
+
 export interface PartyNodeSummary {
   nodeId: string;
   label: string;
@@ -542,13 +568,18 @@ export interface PartyTopologyParticipantMapping {
   participantId: string | null;
   participantUid: string | null;
   permission: string | null;
+  threshold: number | null;
   synchronizerIds: string[];
 }
 
 export interface PartyTopologyKeyMapping {
   keyFingerprint: string | null;
+  publicKey: string | null;
   purpose: string | null;
   keyType: string | null;
+  keyFormat: string | null;
+  keySpec: string | null;
+  threshold: number | null;
   synchronizerIds: string[];
 }
 
@@ -559,6 +590,7 @@ export interface PartyTopologyNodeEntry {
   label: string;
   status: PartyTopologyNodeStatus;
   errorMessage: string | null;
+  isLocalParty?: boolean | null;
   partyToParticipants: PartyTopologyParticipantMapping[];
   partyToKeyMappings: PartyTopologyKeyMapping[];
 }
@@ -572,4 +604,36 @@ export interface PartyDetailResponse {
   recentUpdates: PartyRecentUpdate[];
   recentContracts: PartyRecentContract[];
   partyTopologyByNode: PartyTopologyNodeEntry[];
+}
+
+export interface NamespacePartySummary {
+  partyId: string;
+}
+
+export interface NamespacePartiesResponse {
+  namespaceId: string;
+  partyCount: number;
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  parties: NamespacePartySummary[];
+}
+
+export interface NamespaceNodeSummary {
+  nodeId: string;
+  label: string;
+  recentUpdateCount: number;
+  recentContractCount: number;
+}
+
+export interface NamespaceDetailResponse {
+  namespaceId: string;
+  partyCount: number;
+  nodeCount: number;
+  recentUpdateCount: number;
+  recentContractCount: number;
+  nodes: NamespaceNodeSummary[];
+  recentUpdates: PartyRecentUpdate[];
+  recentContracts: PartyRecentContract[];
+  topologyByNode: PartyTopologyNodeEntry[];
 }

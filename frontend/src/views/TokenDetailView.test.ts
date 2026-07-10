@@ -58,15 +58,16 @@ describe('TokenDetailView', () => {
   it('renders overview, top holders, and paged recent transfers for a token', async () => {
     vi.mocked(fetchTokenDetail).mockResolvedValue({
       token: {
-        tokenId: 'canton-coin',
-        name: 'Canton Coin',
+        tokenId: 'Issuer::validator-license',
+        name: 'Validator License',
         symbol: null,
+        issuer: 'Issuer',
         source: 'pqs',
       },
       transfers: [],
     });
     vi.mocked(fetchTokenHolders).mockResolvedValue({
-      tokenId: 'canton-coin',
+      tokenId: 'Issuer::validator-license',
       limit: 10,
       nextBefore: null,
       nextAfter: null,
@@ -100,8 +101,8 @@ describe('TokenDetailView', () => {
         nextAfter: null,
         transfers: [
           {
-            tokenId: 'canton-coin',
-            tokenName: 'Canton Coin',
+            tokenId: 'Issuer::validator-license',
+            tokenName: 'Validator License',
             amount: '42.0',
             sender: 'Alice',
             receiver: 'Bob',
@@ -128,8 +129,8 @@ describe('TokenDetailView', () => {
         nextAfter: 'cursor-token-1',
         transfers: [
           {
-            tokenId: 'canton-coin',
-            tokenName: 'Canton Coin',
+            tokenId: 'Issuer::validator-license',
+            tokenName: 'Validator License',
             amount: '12.5',
             sender: 'Carol',
             receiver: 'Dave',
@@ -160,12 +161,15 @@ describe('TokenDetailView', () => {
       } as unknown as typeof Intl.DateTimeFormat,
     );
 
-    const { container, router } = await renderAt('/tokens/canton-coin');
+    const { container, router } = await renderAt('/tokens/Issuer%3A%3Avalidator-license');
 
-    expect(await screen.findByRole('heading', { name: 'Canton Coin' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Validator License' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByText('Token ID')).toBeInTheDocument();
-    expect(screen.getAllByText('canton-coin').length).toBeGreaterThan(0);
+    expect(screen.getByText('validator-license')).toBeInTheDocument();
+    expect(screen.queryByText('Issuer::validator-license')).not.toBeInTheDocument();
+    expect(screen.getByText('Issuer', { selector: 'dt' })).toBeInTheDocument();
+    expect(screen.getByText('Issuer', { selector: 'dd' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Top Holders' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Latest Transfers' })).toBeInTheDocument();
     expect(screen.getAllByText('PQS').length).toBeGreaterThan(0);
@@ -177,7 +181,9 @@ describe('TokenDetailView', () => {
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
 
-    await waitFor(() => expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'canton-coin', 10, {}));
+    await waitFor(() =>
+      expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'Issuer::validator-license', 10, {}),
+    );
 
     const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
     expect(within(transfersTable).getByText('42.0')).toBeInTheDocument();
@@ -201,6 +207,38 @@ describe('TokenDetailView', () => {
 
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens/transfers/token-update-2'));
     expect(await screen.findByText('Transfer Detail')).toBeInTheDocument();
+  });
+
+  it('prefers the token symbol over a verbose token name in the page title', async () => {
+    vi.mocked(fetchTokenDetail).mockResolvedValue({
+      token: {
+        tokenId: 'vUSDCx-SHARE',
+        name: 'USDCx Test Vault isolated-base-deposit-1783646543899 Share',
+        symbol: 'vUSDCx-SHARE',
+        issuer: null,
+        source: 'pqs',
+      },
+      transfers: [],
+    });
+    vi.mocked(fetchTokenHolders).mockResolvedValue({
+      tokenId: 'vUSDCx-SHARE',
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      holders: [],
+    });
+    vi.mocked(fetchTokenTransfers).mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    await renderAt('/tokens/vUSDCx-SHARE');
+
+    expect(await screen.findByRole('heading', { name: 'vUSDCx-SHARE' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'USDCx Test Vault isolated-base-deposit-1783646543899 Share' }))
+      .not.toBeInTheDocument();
   });
 
   it('paginates top holders with holder-specific cursors', async () => {

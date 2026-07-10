@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { resolve } from 'node:path';
 import type {
   ActivePartiesResponse,
+  NamespaceDetailResponse,
+  NamespacePartiesResponse,
   NodeContractsResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
@@ -339,6 +341,7 @@ const typedPartyDetailFixture = {
       label: 'Participant 1',
       status: 'ok',
       errorMessage: null,
+      isLocalParty: false,
       partyToParticipants: [
         {
           participantId: 'participant-1',
@@ -350,8 +353,12 @@ const typedPartyDetailFixture = {
       partyToKeyMappings: [
         {
           keyFingerprint: 'fingerprint-1',
+          publicKey: null,
           purpose: 'namespace',
           keyType: 'ed25519',
+          keyFormat: null,
+          keySpec: null,
+          threshold: null,
           synchronizerIds: [],
         },
       ],
@@ -361,11 +368,117 @@ const typedPartyDetailFixture = {
       label: 'Participant 2',
       status: 'ok',
       errorMessage: null,
+      isLocalParty: false,
       partyToParticipants: [],
       partyToKeyMappings: [],
     },
   ],
 } satisfies PartyDetailResponse;
+
+const typedNamespaceDetailFixture = {
+  namespaceId: '1220abcd',
+  partyCount: 2,
+  nodeCount: 2,
+  recentUpdateCount: 2,
+  recentContractCount: 1,
+  nodes: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      recentUpdateCount: 1,
+      recentContractCount: 0,
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+    },
+  ],
+  recentUpdates: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      eventOffset: '42',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      recordTime: '2026-07-09T12:00:00.000Z',
+      parties: ['Alice::1220abcd', 'Bob::1220abcd'],
+    },
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      eventOffset: '41',
+      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+      recordTime: '2026-07-09T11:00:00.000Z',
+      parties: ['Alice::1220abcd'],
+    },
+  ],
+  recentContracts: [
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      contractId: '00abc',
+      templateId: 'Main:Asset',
+      packageId: null,
+      packageName: null,
+      packageVersion: null,
+      recordTime: '2026-07-09T12:00:00.000Z',
+    },
+  ],
+  topologyByNode: [
+    {
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      status: 'ok',
+      errorMessage: null,
+      partyToParticipants: [
+        {
+          participantId: null,
+          participantUid: 'participant-1::1220aaa',
+          permission: 'confirmation',
+          threshold: 1,
+          synchronizerIds: ['global-domain::1220aa'],
+        },
+      ],
+      partyToKeyMappings: [
+        {
+          keyFingerprint: '1220abcd',
+          publicKey: null,
+          purpose: 'namespace',
+          keyType: 'ed25519',
+          keyFormat: 'derX509SubjectPublicKeyInfo',
+          keySpec: 'ecCurve25519',
+          threshold: 1,
+          synchronizerIds: ['global-domain::1220aa'],
+        },
+      ],
+    },
+    {
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      status: 'grpc_not_configured',
+      errorMessage: null,
+      partyToParticipants: [],
+      partyToKeyMappings: [],
+    },
+  ],
+} satisfies NamespaceDetailResponse;
+
+const typedNamespacePartiesFixture = {
+  namespaceId: '1220abcd',
+  partyCount: 2,
+  limit: 10,
+  nextBefore: null,
+  nextAfter: null,
+  parties: [
+    {
+      partyId: 'Alice::1220abcd',
+    },
+    {
+      partyId: 'Bob::1220abcd',
+    },
+  ],
+} satisfies NamespacePartiesResponse;
 
 describe('PqsSummaryService', () => {
   const originalPackageCachePath = process.env.PACKAGE_CACHE_DB_PATH;
@@ -1217,6 +1330,248 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('returns party detail for a local gRPC-only party even when PQS has no recent observations', async () => {
+    const localOnlyPartyId =
+      'ed25519_party::1220715ab025d3477024c0cf1fa9cb90b9cfdeddd249578ef2de2f9fc4cf8eb19289';
+    const participantQuery = jest.fn(async (sql: string) => {
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              parties: [],
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({
+          query: participantQuery,
+        }),
+      } as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        listLocalParties: jest.fn(async () => [localOnlyPartyId]),
+        fetchPartyTopology: jest.fn(async () => ({
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          isLocalParty: null,
+          partyToParticipants: [],
+          partyToKeyMappings: [],
+        })),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchPartyDetail?: (
+        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        partyId: string,
+      ) => Promise<PartyDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPartyDetail?.(
+        [{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' }],
+        localOnlyPartyId,
+      ),
+    ).resolves.toEqual({
+      partyId: localOnlyPartyId,
+      nodeCount: 1,
+      recentUpdateCount: 0,
+      recentContractCount: 0,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          recentUpdateCount: 0,
+          recentContractCount: 0,
+        },
+      ],
+      recentUpdates: [],
+      recentContracts: [],
+      partyTopologyByNode: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          isLocalParty: true,
+          partyToParticipants: [],
+          partyToKeyMappings: [],
+        },
+      ],
+    });
+  });
+
+  it('returns namespace detail aggregated across all matching parties by exact namespace suffix', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+      } as never,
+      undefined,
+      {
+        getPackage: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-01T10:00:00.000Z',
+          packageSize: 1024,
+          data: Buffer.from('package'),
+        }),
+      } as never,
+      undefined,
+      undefined,
+      {
+        fetchPartyTopology: jest
+          .fn()
+          .mockResolvedValueOnce({
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            status: 'ok',
+            errorMessage: null,
+            isLocalParty: true,
+            partyToParticipants: [
+              {
+                participantId: null,
+                participantUid: 'participant-1::1220aaa',
+                permission: 'confirmation',
+                threshold: 1,
+                synchronizerIds: ['global-domain::1220aa'],
+              },
+            ],
+            partyToKeyMappings: [
+              {
+                keyFingerprint: '1220abcd',
+                publicKey: null,
+                purpose: 'namespace',
+                keyType: 'ed25519',
+                keyFormat: 'derX509SubjectPublicKeyInfo',
+                keySpec: 'ecCurve25519',
+                threshold: 1,
+                synchronizerIds: ['global-domain::1220aa'],
+              },
+            ],
+          })
+          .mockResolvedValueOnce({
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            status: 'ok',
+            errorMessage: null,
+            isLocalParty: true,
+            partyToParticipants: [
+              {
+                participantId: null,
+                participantUid: 'participant-1::1220aaa',
+                permission: 'confirmation',
+                threshold: 1,
+                synchronizerIds: ['global-domain::1220aa'],
+              },
+            ],
+            partyToKeyMappings: [
+              {
+                keyFingerprint: '1220abcd',
+                publicKey: null,
+                purpose: 'namespace',
+                keyType: 'ed25519',
+                keyFormat: 'derX509SubjectPublicKeyInfo',
+                keySpec: 'ecCurve25519',
+                threshold: 1,
+                synchronizerIds: ['global-domain::1220aa'],
+              },
+            ],
+          })
+          .mockResolvedValueOnce({
+            nodeId: 'participant-2',
+            label: 'Participant 2',
+            status: 'grpc_not_configured',
+            errorMessage: null,
+            isLocalParty: null,
+            partyToParticipants: [],
+            partyToKeyMappings: [],
+          }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchNamespaceDetail?: (
+        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        namespaceId: string,
+      ) => Promise<NamespaceDetailResponse>;
+    };
+
+    (service as any).fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValueOnce(['Alice::1220abcd'])
+      .mockResolvedValueOnce(['Alice::1220abcd', 'Bob::1220abcd', 'Carol::1220eeee']);
+    (service as any).fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      updates: typedNamespaceDetailFixture.recentUpdates,
+    });
+    (service as any).fetchGlobalContracts = jest.fn().mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: typedNamespaceDetailFixture.recentContracts,
+    });
+
+    await expect(
+      service.fetchNamespaceDetail?.(
+        [
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
+        ],
+        '1220abcd',
+      ),
+    ).resolves.toEqual(typedNamespaceDetailFixture);
+  });
+
+  it('returns paginated namespace parties aggregated by exact namespace suffix', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+      } as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        listLocalParties: jest
+          .fn()
+          .mockResolvedValueOnce(['Alice::1220abcd'])
+          .mockResolvedValueOnce(['Alice::1220abcd', 'Bob::1220abcd', 'Carol::1220eeee']),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchNamespaceParties?: (
+        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        namespaceId: string,
+        options?: { limit?: number; before?: string; after?: string },
+      ) => Promise<NamespacePartiesResponse>;
+    };
+
+    (service as any).fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValueOnce(['Alice::1220abcd'])
+      .mockResolvedValueOnce(['Alice::1220abcd', 'Bob::1220abcd', 'Carol::1220eeee']);
+
+    await expect(
+      service.fetchNamespaceParties?.(
+        [
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
+        ],
+        '1220abcd',
+        { limit: 10 },
+      ),
+    ).resolves.toEqual(typedNamespacePartiesFixture);
+  });
+
   it('keeps party detail available when topology fails for one node', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
@@ -1362,6 +1717,7 @@ describe('PqsSummaryService', () => {
           label: 'Participant 1',
           status: 'ok',
           errorMessage: null,
+          isLocalParty: false,
           partyToParticipants: [],
           partyToKeyMappings: [],
         },
@@ -2306,6 +2662,39 @@ mode: 'pqs_only',
       expect.stringContaining("array['Bob', 'p|Bob']::text[] && create_events.witnesses"),
     );
     expect(query).toHaveBeenCalledWith(expect.stringContaining('\n      or '));
+  });
+
+  it('casts ACS witness arrays to text[] before applying party overlap filters', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          contract_id: '00b',
+          template_id: 'Main:Asset',
+          created_record_time: '2026-07-01T12:01:00.000Z',
+          created_event_offset: '102',
+        },
+      ],
+    });
+
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { limit: 25, parties: ['Alice'] },
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("array['Alice', 'p|Alice']::text[] && create_events.witnesses::text[]"),
+    );
   });
 
   it('joins ACS party filters with AND when requested', async () => {
@@ -3498,11 +3887,15 @@ mode: 'pqs_only',
     ]);
 
     expect(response).toEqual({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
       tokens: [
         {
           tokenId: 'canton-coin',
           name: 'Canton Coin',
           symbol: null,
+          issuer: null,
           source: 'pqs',
         },
       ],
@@ -3576,11 +3969,411 @@ mode: 'pqs_only',
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
     expect(response).toEqual({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
       tokens: [
         {
-          tokenId: 'validator-license',
+          tokenId: 'Issuer::validator-license',
           name: 'Validator License',
           symbol: 'VL',
+          issuer: 'Issuer',
+          source: 'pqs',
+        },
+      ],
+    });
+  });
+
+  it('discovers observed CIP112 tokens after forcing a package refresh on invalid_package', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-cip112-update-1',
+          event_offset: '711',
+          record_time: '2026-07-09T15:01:39.756Z',
+          template_id: 'Oz.Vault.Base.ShareToken.CIP112:ShareHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('cip112-holding-1'),
+        },
+        {
+          update_id: 'token-cip112-update-2',
+          event_offset: '710',
+          record_time: '2026-07-09T15:01:38.756Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('cip112-holding-2'),
+        },
+        {
+          update_id: 'token-cip112-update-3',
+          event_offset: '709',
+          record_time: '2026-07-09T15:01:37.756Z',
+          template_id: 'Oz.Vault.Base.ShareToken.CIP112:ReferenceShareToken',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('cip112-holding-3'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockReturnValueOnce({
+          status: 'invalid_data',
+          reason: 'invalid_package',
+        })
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'vaultIdentity', value: { kind: 'unit' } },
+              { label: 'vaultParty', value: 'Vault' },
+              { label: 'owner', value: 'Alice' },
+              { label: 'name', value: 'USDCx Test Vault Share' },
+              { label: 'symbol', value: 'vUSDCx-SHARE' },
+              { label: 'amount', value: '150.0000000000' },
+            ],
+          },
+        })
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer' },
+              { label: 'instrumentIdText', value: 'USDCx' },
+              {
+                label: 'transferPolicy',
+                value: {
+                  kind: 'enum',
+                  constructor: 'StrictVaultTransfers',
+                },
+              },
+              { label: 'account', value: { kind: 'unit' } },
+              { label: 'amount', value: '100.0000000000' },
+            ],
+          },
+        })
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'vaultIdentity', value: { kind: 'unit' } },
+              { label: 'vaultParty', value: 'Vault' },
+              { label: 'name', value: 'USDCx Test Vault Share' },
+              { label: 'symbol', value: 'vUSDCx-SHARE' },
+            ],
+          },
+        }),
+    };
+    const packageRegistry = {
+      invalidatePackage: jest.fn(),
+    };
+    const packageSyncService = {
+      syncPackagesById: jest.fn().mockResolvedValue({
+        missingPackageIds: ['vault-base-package'],
+        fetchedPackageCount: 1,
+        skippedBecauseNotDue: false,
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+      undefined,
+      packageRegistry as never,
+      undefined,
+      undefined,
+      packageSyncService as never,
+    );
+
+    const node = {
+      id: 'cnqs-extra-1',
+      label: 'CNQS Extra 1',
+      mode: 'pqs_with_grpc',
+    };
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([node]);
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining(".CIP112:"));
+    expect(packageSyncService.syncPackagesById).toHaveBeenCalledWith(node, ['vault-base-package']);
+    expect(packageRegistry.invalidatePackage).toHaveBeenCalledWith('vault-base-package');
+    expect(response).toEqual({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      tokens: [
+        {
+          tokenId: 'Issuer::USDCx',
+          name: 'USDCx',
+          symbol: null,
+          issuer: 'Issuer',
+          source: 'pqs',
+        },
+        {
+          tokenId: 'vUSDCx-SHARE',
+          name: 'USDCx Test Vault Share',
+          symbol: 'vUSDCx-SHARE',
+          issuer: null,
+          source: 'pqs',
+        },
+      ],
+    });
+  });
+
+  it('keeps same-name CIP112 tokens from different issuers as separate tokens', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'issuer-token-update-1',
+          event_offset: '801',
+          record_time: '2026-07-09T16:01:39.756Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('issuer-token-1'),
+        },
+        {
+          update_id: 'issuer-token-update-2',
+          event_offset: '800',
+          record_time: '2026-07-09T16:01:38.756Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('issuer-token-2'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer-1' },
+              { label: 'instrumentIdText', value: 'USDCx' },
+              { label: 'amount', value: '100.0000000000' },
+            ],
+          },
+        })
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer-2' },
+              { label: 'instrumentIdText', value: 'USDCx' },
+              { label: 'amount', value: '250.0000000000' },
+            ],
+          },
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
+
+    expect(response).toEqual({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      tokens: [
+        {
+          tokenId: 'Issuer-1::USDCx',
+          name: 'USDCx',
+          symbol: null,
+          issuer: 'Issuer-1',
+          source: 'pqs',
+        },
+        {
+          tokenId: 'Issuer-2::USDCx',
+          name: 'USDCx',
+          symbol: null,
+          issuer: 'Issuer-2',
+          source: 'pqs',
+        },
+      ],
+    });
+  });
+
+  it('uses CIP112 instrumentId admin and id as the canonical token identity', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'cip112-standard-token-update-1',
+          event_offset: '805',
+          record_time: '2026-07-09T16:05:39.756Z',
+          template_id: 'Oz.Vault.Base.ShareToken.CIP112:ShareHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('standard-cip112-token'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'vaultParty', value: 'AppSpecificVaultParty' },
+            {
+              label: 'instrumentId',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'admin', value: 'RegistryAdmin' },
+                  { label: 'id', value: 'USDCx-SHARE' },
+                ],
+              },
+            },
+            { label: 'instrumentIdText', value: 'legacy-usdcx-share' },
+            { label: 'symbol', value: 'vUSDCx-SHARE' },
+            { label: 'name', value: 'USDCx Test Vault Share' },
+            { label: 'owner', value: 'Alice' },
+            { label: 'amount', value: '100.0000000000' },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
+
+    expect(response.tokens).toEqual([
+      {
+        tokenId: 'RegistryAdmin::USDCx-SHARE',
+        name: 'USDCx Test Vault Share',
+        symbol: 'vUSDCx-SHARE',
+        issuer: 'RegistryAdmin',
+        source: 'pqs',
+      },
+    ]);
+  });
+
+  it('paginates discovered tokens with opaque cursors', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'page-token-1',
+          event_offset: '901',
+          record_time: '2026-07-09T18:00:00.000Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('page-token-1'),
+        },
+        {
+          update_id: 'page-token-2',
+          event_offset: '900',
+          record_time: '2026-07-09T17:59:00.000Z',
+          template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('page-token-2'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer-A' },
+              { label: 'instrumentIdText', value: 'Alpha' },
+              { label: 'amount', value: '10.0' },
+            ],
+          },
+        })
+        .mockReturnValueOnce({
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer-B' },
+              { label: 'instrumentIdText', value: 'Beta' },
+              { label: 'amount', value: '20.0' },
+            ],
+          },
+        }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [{ id: 'participant-1', label: 'Participant 1' }] as const;
+
+    const firstPage = await (
+      service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: typeof nodes,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokensResponse>;
+      }
+    ).fetchTokens(nodes, 1);
+
+    expect(firstPage).toEqual({
+      limit: 1,
+      nextBefore: expect.any(String),
+      nextAfter: null,
+      tokens: [
+        {
+          tokenId: 'Issuer-A::Alpha',
+          name: 'Alpha',
+          symbol: null,
+          issuer: 'Issuer-A',
+          source: 'pqs',
+        },
+      ],
+    });
+
+    const secondPage = await (
+      service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: typeof nodes,
+          limit?: number,
+          options?: { before?: string; after?: string },
+        ) => Promise<TokensResponse>;
+      }
+    ).fetchTokens(nodes, 1, {
+      before: firstPage.nextBefore ?? undefined,
+    });
+
+    expect(secondPage).toEqual({
+      limit: 1,
+      nextBefore: null,
+      nextAfter: expect.any(String),
+      tokens: [
+        {
+          tokenId: 'Issuer-B::Beta',
+          name: 'Beta',
+          symbol: null,
+          issuer: 'Issuer-B',
           source: 'pqs',
         },
       ],
@@ -3877,7 +4670,7 @@ mode: 'pqs_only',
 
     expect(response.transfers).toEqual([
       {
-        tokenId: 'validator-license',
+        tokenId: 'Issuer::validator-license',
         tokenName: 'Validator License',
         amount: '42.5000000000',
         sender: 'Issuer',
@@ -4463,19 +5256,20 @@ mode: 'pqs_only',
         { id: 'participant-1', label: 'Participant 1' },
         { id: 'participant-2', label: 'Participant 2' },
       ],
-      'validator-license',
+      'Issuer::validator-license',
     );
 
     expect(response).toEqual({
       token: {
-        tokenId: 'validator-license',
+        tokenId: 'Issuer::validator-license',
         name: 'Validator License',
         symbol: 'VL',
+        issuer: 'Issuer',
         source: 'pqs',
       },
       transfers: [
         {
-          tokenId: 'validator-license',
+          tokenId: 'Issuer::validator-license',
           tokenName: 'Validator License',
           amount: '42.5000000000',
           sender: 'Issuer',
@@ -4489,6 +5283,346 @@ mode: 'pqs_only',
               eventOffset: '901',
             },
           ],
+        },
+      ],
+    });
+  });
+
+  it('infers CIP112 movement rows from holding lifecycle updates', async () => {
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('/* cip112_movement_update_ids */')) {
+        return Promise.resolve({
+          rows: [
+            {
+              update_id: '1220aa11',
+              event_offset: '122205',
+              record_time: '2026-07-09T15:01:39.756Z',
+            },
+          ],
+        });
+      }
+
+      if (sql.includes('token_transfer_rows')) {
+        return Promise.resolve({ rows: [] });
+      }
+
+      if (sql.includes('from participant.lapi_events_create create_event')) {
+        const error = new Error('relation "participant.lapi_events_create" does not exist') as Error & {
+          code?: string;
+        };
+        error.code = '42P01';
+        return Promise.reject(error);
+      }
+
+      if (sql.includes("encode(activate_event.update_id, 'hex') = '1220aa11'")) {
+        return Promise.resolve({
+          rows: [
+            {
+              event_kind: 'consuming_exercise',
+              event_id: '#0:3',
+              contract_id: 'old-underlying-contract',
+              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              package_id: 'vault-base-package',
+              choice: 'TransferUnderlying',
+              witnesses: ['vault-party'],
+              contract_instance: null,
+              exercise_argument: Buffer.from('transfer-underlying-argument'),
+              exercise_result: Buffer.from('transfer-underlying-result'),
+              raw: {},
+            },
+            {
+              event_kind: 'create',
+              event_id: '#0:4',
+              contract_id: 'new-underlying-contract',
+              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              package_id: 'vault-base-package',
+              choice: null,
+              witnesses: ['vault-party'],
+              contract_instance: Buffer.from('new-underlying-contract-instance'),
+              exercise_argument: null,
+              exercise_result: null,
+              raw: {},
+            },
+            {
+              event_kind: 'create',
+              event_id: '#0:5',
+              contract_id: 'new-share-contract',
+              template_id: 'Oz.Vault.Base.ShareToken.CIP112:ShareHolding',
+              package_id: 'vault-base-package',
+              choice: null,
+              witnesses: ['vault-party'],
+              contract_instance: Buffer.from('new-share-contract-instance'),
+              exercise_argument: null,
+              exercise_result: null,
+              raw: {},
+            },
+          ],
+        });
+      }
+
+      return Promise.resolve({ rows: [] });
+    });
+    const decoder = {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          switch (contractInstance.toString()) {
+            case 'new-underlying-contract-instance':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'issuer', value: 'Issuer' },
+                    { label: 'instrumentIdText', value: 'USDCx' },
+                    {
+                      label: 'transferPolicy',
+                      value: {
+                        kind: 'enum',
+                        constructor: 'StrictVaultTransfers',
+                      },
+                    },
+                    { label: 'account', value: { kind: 'unit' } },
+                    { label: 'amount', value: '100.0000000000' },
+                  ],
+                },
+              };
+            case 'new-share-contract-instance':
+              return {
+                status: 'decoded',
+                value: {
+                  kind: 'record',
+                  fields: [
+                    { label: 'vaultIdentity', value: { kind: 'unit' } },
+                    { label: 'vaultParty', value: 'Vault' },
+                    { label: 'owner', value: 'Alice' },
+                    { label: 'name', value: 'USDCx Test Vault Share' },
+                    { label: 'symbol', value: 'vUSDCx-SHARE' },
+                    { label: 'amount', value: '100.0000000000' },
+                  ],
+                },
+              };
+            default:
+              return {
+                status: 'not_available',
+              };
+          }
+        }),
+      decodeExerciseValue: jest.fn().mockImplementation(() => ({
+        argument: {
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              {
+                label: 'receiverAccount',
+                value: { kind: 'unit' },
+              },
+              {
+                label: 'context',
+                value: { kind: 'enum', constructor: 'VaultOperationTransfer' },
+              },
+            ],
+          },
+        },
+        result: {
+          status: 'decoded',
+          value: {
+            kind: 'contract_id',
+            value: 'new-underlying-contract',
+          },
+        },
+      })),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+    const nodes = [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }] as const;
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchLatestTokenTransfers: (
+          nodes: typeof nodes,
+          limit?: number,
+        ) => Promise<TokenTransfersResponse>;
+      }
+    ).fetchLatestTokenTransfers(nodes, 25);
+
+    expect(response.transfers).toEqual([
+      {
+        rowId:
+          '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Share Mint',
+        movementType: 'Share Mint',
+        source: 'pqs_inferred_holding_v2',
+        tokenId: 'vUSDCx-SHARE',
+        tokenName: 'USDCx Test Vault Share',
+        amount: '100.0000000000',
+        sender: null,
+        receiver: 'Alice',
+        updateId: '1220aa11',
+        recordTime: '2026-07-09T15:01:39.756Z',
+        nodes: [
+          {
+            nodeId: 'cnqs-extra-1',
+            label: 'CNQS Extra 1',
+            eventOffset: '122205',
+          },
+        ],
+      },
+      {
+        rowId:
+          '1220aa11:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Holding Transfer',
+        movementType: 'Holding Transfer',
+        source: 'pqs_inferred_holding_v2',
+        tokenId: 'Issuer::USDCx',
+        tokenName: 'USDCx',
+        amount: '100.0000000000',
+        sender: null,
+        receiver: 'Alice',
+        updateId: '1220aa11',
+        recordTime: '2026-07-09T15:01:39.756Z',
+        nodes: [
+          {
+            nodeId: 'cnqs-extra-1',
+            label: 'CNQS Extra 1',
+            eventOffset: '122205',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('resolves inferred CIP112 transfer detail by row id', async () => {
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('/* cip112_movement_update_ids */')) {
+        return Promise.resolve({
+          rows: [
+            {
+              update_id: '1220bb22',
+              event_offset: '122196',
+              record_time: '2026-07-09T15:01:38.902Z',
+            },
+          ],
+        });
+      }
+
+      if (sql.includes('token_transfer_rows')) {
+        return Promise.resolve({ rows: [] });
+      }
+
+      if (sql.includes('from participant.lapi_events_create create_event')) {
+        const error = new Error('relation "participant.lapi_events_create" does not exist') as Error & {
+          code?: string;
+        };
+        error.code = '42P01';
+        return Promise.reject(error);
+      }
+
+      if (sql.includes("encode(activate_event.update_id, 'hex') = '1220bb22'")) {
+        return Promise.resolve({
+          rows: [
+            {
+              event_kind: 'non_consuming_exercise',
+              event_id: '#0:0',
+              contract_id: 'underlying-token-contract',
+              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingToken',
+              package_id: 'vault-base-package',
+              choice: 'MintUnderlying',
+              witnesses: ['mint-witness'],
+              contract_instance: null,
+              exercise_argument: Buffer.from('mint-underlying-argument'),
+              exercise_result: Buffer.from('mint-underlying-result'),
+              raw: {},
+            },
+            {
+              event_kind: 'create',
+              event_id: '#0:1',
+              contract_id: 'minted-underlying-contract',
+              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              package_id: 'vault-base-package',
+              choice: null,
+              witnesses: ['mint-witness'],
+              contract_instance: Buffer.from('minted-underlying-contract-instance'),
+              exercise_argument: null,
+              exercise_result: null,
+              raw: {},
+            },
+          ],
+        });
+      }
+
+      return Promise.resolve({ rows: [] });
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+        if (contractInstance.toString() !== 'minted-underlying-contract-instance') {
+          return { status: 'not_available' };
+        }
+
+        return {
+          status: 'decoded',
+          value: {
+            kind: 'record',
+            fields: [
+              { label: 'issuer', value: 'Issuer' },
+              { label: 'instrumentIdText', value: 'USDCx' },
+              {
+                label: 'transferPolicy',
+                value: {
+                  kind: 'enum',
+                  constructor: 'StrictVaultTransfers',
+                },
+              },
+              { label: 'account', value: { kind: 'unit' } },
+              { label: 'amount', value: '25.0000000000' },
+            ],
+          },
+        };
+      }),
+      decodeExerciseValue: jest.fn().mockImplementation(() => ({
+        argument: { status: 'decoded', value: { kind: 'unit' } },
+        result: { status: 'decoded', value: { kind: 'unit' } },
+      })),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenTransferDetail: (
+          nodes: Array<{ id: string; label: string }>,
+          transferId: string,
+        ) => Promise<TokenTransfersResponse['transfers'][number]>;
+      }
+    ).fetchTokenTransferDetail(
+      [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }],
+      '1220bb22:#0:1:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Mint',
+    );
+
+    expect(response).toEqual({
+      rowId:
+        '1220bb22:#0:1:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Mint',
+      movementType: 'Mint',
+      source: 'pqs_inferred_holding_v2',
+      tokenId: 'Issuer::USDCx',
+      tokenName: 'USDCx',
+      amount: '25.0000000000',
+      sender: 'Issuer',
+      receiver: null,
+      updateId: '1220bb22',
+      recordTime: '2026-07-09T15:01:38.902Z',
+      nodes: [
+        {
+          nodeId: 'cnqs-extra-1',
+          label: 'CNQS Extra 1',
+          eventOffset: '122196',
         },
       ],
     });
@@ -4657,7 +5791,7 @@ mode: 'pqs_only',
           options?: { before?: string; after?: string },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'validator-license', 1);
+    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 1);
 
     expect(firstPage).toEqual({
       limit: 1,
@@ -4665,7 +5799,7 @@ mode: 'pqs_only',
       nextAfter: null,
       transfers: [
         {
-          tokenId: 'validator-license',
+          tokenId: 'Issuer::validator-license',
           tokenName: 'Validator License',
           amount: '10.0000000000',
           sender: 'Issuer',
@@ -4692,7 +5826,7 @@ mode: 'pqs_only',
           options?: { before?: string; after?: string },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'validator-license', 1, {
+    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 1, {
       before: firstPage.nextBefore ?? undefined,
     });
 
@@ -4702,7 +5836,7 @@ mode: 'pqs_only',
       nextAfter: expect.any(String),
       transfers: [
         {
-          tokenId: 'validator-license',
+          tokenId: 'Issuer::validator-license',
           tokenName: 'Validator License',
           amount: '42.5000000000',
           sender: 'Issuer',
@@ -4854,14 +5988,14 @@ mode: 'pqs_only',
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'validator-license', 25, {
+    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 25, {
       fromParties: ['Issuer'],
       toParties: ['Alice'],
     });
 
     expect(response.transfers).toEqual([
       {
-        tokenId: 'validator-license',
+        tokenId: 'Issuer::validator-license',
         tokenName: 'Validator License',
         amount: '42.5000000000',
         sender: 'Issuer',
@@ -5012,14 +6146,14 @@ mode: 'pqs_only',
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'validator-license', 25, {
+    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 25, {
       amountGt: '20',
       amountLt: '50',
     });
 
     expect(response.transfers).toEqual([
       {
-        tokenId: 'validator-license',
+        tokenId: 'Issuer::validator-license',
         tokenName: 'Validator License',
         amount: '42.5000000000',
         sender: 'Issuer',
@@ -5172,11 +6306,11 @@ mode: 'pqs_only',
         { id: 'participant-1', label: 'Participant 1' },
         { id: 'participant-2', label: 'Participant 2' },
       ],
-      'validator-license',
+      'Issuer::validator-license',
     );
 
     expect(response).toEqual({
-      tokenId: 'validator-license',
+      tokenId: 'Issuer::validator-license',
       limit: 25,
       nextBefore: null,
       nextAfter: null,
@@ -5202,6 +6336,72 @@ mode: 'pqs_only',
             {
               nodeId: 'participant-1',
               label: 'Participant 1',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('returns top holders for a CIP112 token from holding creates', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'holding-update-cip112-1',
+          event_offset: '1101',
+          record_time: '2026-07-09T15:01:39.756Z',
+          template_id: 'Oz.Vault.Base.ShareToken.CIP112:ShareHolding',
+          package_id: 'vault-base-package',
+          contract_instance: Buffer.from('alice-cip112-holding'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'vaultIdentity', value: { kind: 'unit' } },
+            { label: 'vaultParty', value: 'Vault' },
+            { label: 'owner', value: 'Alice' },
+            { label: 'name', value: 'USDCx Test Vault Share' },
+            { label: 'symbol', value: 'vUSDCx-SHARE' },
+            { label: 'amount', value: '55.0000000000' },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokenHolders: (
+          nodes: Array<{ id: string; label: string }>,
+          tokenId: string,
+        ) => Promise<unknown>;
+      }
+    ).fetchTokenHolders([{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }], 'vUSDCx-SHARE');
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining(".CIP112:"));
+    expect(response).toEqual({
+      tokenId: 'vUSDCx-SHARE',
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      holders: [
+        {
+          partyId: 'Alice',
+          amount: '55.0000000000',
+          nodes: [
+            {
+              nodeId: 'cnqs-extra-1',
+              label: 'CNQS Extra 1',
             },
           ],
         },
@@ -5461,10 +6661,10 @@ mode: 'pqs_only',
           options?: { before?: string; after?: string },
         ) => Promise<TokenHoldersResponse>;
       }
-    ).fetchTokenHolders(nodes, 'validator-license', 1);
+    ).fetchTokenHolders(nodes, 'Issuer::validator-license', 1);
 
     expect(firstPage).toEqual({
-      tokenId: 'validator-license',
+      tokenId: 'Issuer::validator-license',
       limit: 1,
       nextBefore: expect.any(String),
       nextAfter: null,
@@ -5491,12 +6691,12 @@ mode: 'pqs_only',
           options?: { before?: string; after?: string },
         ) => Promise<TokenHoldersResponse>;
       }
-    ).fetchTokenHolders(nodes, 'validator-license', 1, {
+    ).fetchTokenHolders(nodes, 'Issuer::validator-license', 1, {
       before: firstPage.nextBefore ?? undefined,
     });
 
     expect(secondPage).toEqual({
-      tokenId: 'validator-license',
+      tokenId: 'Issuer::validator-license',
       limit: 1,
       nextBefore: null,
       nextAfter: expect.any(String),

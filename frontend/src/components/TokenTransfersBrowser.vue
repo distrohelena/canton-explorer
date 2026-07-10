@@ -230,14 +230,16 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
 const renderedTransfers = computed(() =>
   (tokenTransfersResponse.value?.transfers ?? []).map((transfer) => ({
     ...transfer,
-    rowKey: JSON.stringify([
-      transfer.updateId,
-      transfer.tokenId,
-      transfer.amount ?? '',
-      transfer.sender ?? '',
-      transfer.receiver ?? '',
-      transfer.recordTime ?? '',
-    ]),
+    rowKey:
+      transfer.rowId ??
+      JSON.stringify([
+        transfer.updateId,
+        transfer.tokenId,
+        transfer.amount ?? '',
+        transfer.sender ?? '',
+        transfer.receiver ?? '',
+        transfer.recordTime ?? '',
+      ]),
     recordTimeLines: formatRecordTime(transfer.recordTime),
   })),
 );
@@ -246,16 +248,16 @@ function partyLink(partyId: string): string {
   return `/parties/${encodeURIComponent(partyId)}`;
 }
 
-function transferDetailLink(updateId: string): string {
-  return `/tokens/transfers/${encodeURIComponent(updateId)}`;
+function transferDetailLink(transferId: string): string {
+  return `/tokens/transfers/${encodeURIComponent(transferId)}`;
 }
 
 function tokenDetailLink(tokenId: string): string {
   return `/tokens/${encodeURIComponent(tokenId)}`;
 }
 
-async function openTransferDetail(updateId: string) {
-  await router.push(transferDetailLink(updateId));
+async function openTransferDetail(transferId: string) {
+  await router.push(transferDetailLink(transferId));
 }
 
 async function showOlder() {
@@ -497,9 +499,9 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
           class="tokens-page__row node-updates__row--link"
           role="row"
           tabindex="0"
-          @click="openTransferDetail(transfer.updateId)"
-          @keydown.enter.prevent="openTransferDetail(transfer.updateId)"
-          @keydown.space.prevent="openTransferDetail(transfer.updateId)"
+          @click="openTransferDetail(transfer.rowId ?? transfer.updateId)"
+          @keydown.enter.prevent="openTransferDetail(transfer.rowId ?? transfer.updateId)"
+          @keydown.space.prevent="openTransferDetail(transfer.rowId ?? transfer.updateId)"
         >
           <span class="tokens-page__cell tokens-page__nodes" role="cell">
             <span
@@ -519,6 +521,9 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
               <strong>{{ transfer.tokenName }}</strong>
               <span>{{ transfer.tokenId }}</span>
             </RouterLink>
+            <span v-if="transfer.movementType" class="tokens-page__movement-pill">
+              {{ transfer.movementType }}
+            </span>
           </span>
           <span class="tokens-page__cell" role="cell">{{ transfer.amount ?? 'n/a' }}</span>
           <span class="tokens-page__cell" role="cell">

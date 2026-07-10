@@ -131,6 +131,23 @@ function partyLink(partyId: string): string {
   return `/parties/${encodeURIComponent(partyId)}`;
 }
 
+function displayTokenId(tokenId: string, issuer?: string | null): string {
+  const normalizedIssuer = issuer?.trim() ?? '';
+  if (normalizedIssuer.length === 0) {
+    return tokenId;
+  }
+
+  const issuerPrefix = `${normalizedIssuer}::`;
+  return tokenId.startsWith(issuerPrefix) ? tokenId.slice(issuerPrefix.length) : tokenId;
+}
+
+function displayTokenTitle(
+  token: Pick<TokenDetailResponse['token'], 'name' | 'symbol'>,
+): string {
+  const normalizedSymbol = token.symbol?.trim() ?? '';
+  return normalizedSymbol.length > 0 ? normalizedSymbol : token.name;
+}
+
 watch(
   () => props.tokenId,
   () => {
@@ -163,7 +180,7 @@ watch(
         <header class="node-detail__hero">
           <div>
             <p class="activity-home__eyebrow">Tokens</p>
-            <h2>{{ tokenDetail.token.name }}</h2>
+            <h2>{{ displayTokenTitle(tokenDetail.token) }}</h2>
           </div>
           <QuerySourcePill :source="tokenDetail.token.source" />
         </header>
@@ -174,11 +191,17 @@ watch(
             <dl class="detail-grid contract-detail__summary-grid">
               <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <dt>Token ID</dt>
-                <dd class="update-detail__id">{{ tokenDetail.token.tokenId }}</dd>
+                <dd class="update-detail__id">
+                  {{ displayTokenId(tokenDetail.token.tokenId, tokenDetail.token.issuer) }}
+                </dd>
               </div>
               <div class="contract-detail__summary-item">
                 <dt>Symbol</dt>
                 <dd>{{ tokenDetail.token.symbol ?? 'n/a' }}</dd>
+              </div>
+              <div class="contract-detail__summary-item">
+                <dt>Issuer</dt>
+                <dd>{{ tokenDetail.token.issuer ?? 'n/a' }}</dd>
               </div>
               <div class="contract-detail__summary-item">
                 <dt>Top Holders</dt>

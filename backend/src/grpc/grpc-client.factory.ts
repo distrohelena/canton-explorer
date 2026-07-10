@@ -16,17 +16,40 @@ type ParticipantPackageDescription = {
 type TopologyMappingContext = {
   signedByFingerprints?: string[];
 };
+type TopologyStoreSynchronizer = {
+  id?: string;
+  physicalId?: string;
+};
+type TopologyStoreId = {
+  kind?: 'authorized' | 'synchronizer' | 'temporary';
+  synchronizer?: TopologyStoreSynchronizer;
+};
 type TopologyParticipant = {
   participantUid?: string;
   permission?: unknown;
 };
+type TopologySigningPublicKey = {
+  format?: string;
+  publicKey?: Uint8Array;
+  scheme?: string;
+  usage?: string[];
+  keySpec?: string;
+};
+type TopologySigningKeysWithThreshold = {
+  threshold?: number;
+  keys?: TopologySigningPublicKey[];
+};
 type TopologyPartyToParticipantItem = {
   party?: string;
+  threshold?: number;
   participants?: TopologyParticipant[];
+  partySigningKeys?: TopologySigningKeysWithThreshold;
 };
 type TopologySigningKey = {
+  format?: string;
   usage?: string[];
   scheme?: string;
+  keySpec?: string;
 };
 type TopologyPartyToKeyMappingItem = {
   party?: string;
@@ -46,12 +69,18 @@ type AggregatedTopologyPartyResult = {
   participants?: AggregatedTopologyPartyParticipant[];
 };
 type AggregatedTopologySigningKey = {
+  fingerprint?: string;
+  format?: string;
   usage?: string[];
   scheme?: string;
+  keySpec?: string;
   publicKey?: Uint8Array;
 };
 type AggregatedTopologyEncryptionKey = {
+  fingerprint?: string;
+  format?: string;
   scheme?: string;
+  keySpec?: string;
   publicKey?: Uint8Array;
 };
 type AggregatedTopologyKeyOwnerResult = {
@@ -63,6 +92,9 @@ type AggregatedTopologyKeyOwnerResult = {
 };
 type LedgerPackageResponse = { archivePayload: Uint8Array };
 type SdkCantonClient = {
+  hashing: {
+    computePublicKeyFingerprint(publicKey: Uint8Array, format?: string): string;
+  };
   healthService: {
     checkAsync(input: { service?: string }): Promise<LedgerHealthResponse>;
   };
@@ -112,8 +144,15 @@ type SdkCantonClient = {
     listPackagesAsync(input: Record<string, never>): Promise<{ packageIds?: string[] }>;
     getPackageAsync(input: { packageId: string }): Promise<LedgerPackageResponse>;
   };
-  topologyManagerReadService: {
+  topologyManagerReadService?: {
+    listAvailableStoresAsync(input: Record<string, never>): Promise<{
+      storeIds?: TopologyStoreId[];
+    }>;
     listPartyToParticipantAsync(input: {
+      baseQuery?: {
+        storeId?: TopologyStoreId;
+        headState?: boolean;
+      };
       filterParty?: string;
       filterParticipant?: string;
     }): Promise<{
@@ -214,7 +253,8 @@ export class GrpcClientFactory {
   }
 
   private async loadSdk(): Promise<SdkModule> {
-    return import('@distrohelena/canton-typescript-sdk') as Promise<SdkModule>;
+    const sdkModulePath = '@distrohelena/canton-typescript-sdk';
+    return import(sdkModulePath) as Promise<SdkModule>;
   }
 
   private createAuthProvider(
