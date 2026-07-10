@@ -199,7 +199,7 @@ watch(
                 <dt>Symbol</dt>
                 <dd>{{ tokenDetail.token.symbol ?? 'n/a' }}</dd>
               </div>
-              <div class="contract-detail__summary-item">
+              <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <dt>Issuer</dt>
                 <dd>{{ tokenDetail.token.issuer ?? 'n/a' }}</dd>
               </div>

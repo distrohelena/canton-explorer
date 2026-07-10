@@ -186,6 +186,7 @@ describe('TokenDetailView', () => {
     );
 
     const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
+    expect(within(transfersTable).getByText('Movement')).toBeInTheDocument();
     expect(within(transfersTable).getByText('42.0')).toBeInTheDocument();
     expect(within(transfersTable).getByRole('link', { name: 'Alice' })).toHaveAttribute(
       'href',
@@ -196,6 +197,8 @@ describe('TokenDetailView', () => {
     expect(within(transfersTable).getByText('CNQS Super Validator')).toBeInTheDocument();
     expect(within(transfersTable).getByText('Jul 7, 2026')).toBeInTheDocument();
     expect(within(transfersTable).getByText('9:00:00 AM')).toBeInTheDocument();
+    expect(within(transfersTable).queryByText('Issuer::validator-license')).not.toBeInTheDocument();
+    expect(within(transfersTable).getByText('Transfer')).toBeInTheDocument();
     expect(container.querySelector('a[href="/tokens"]')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();

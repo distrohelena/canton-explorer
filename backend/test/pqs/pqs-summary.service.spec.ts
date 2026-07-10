@@ -4132,10 +4132,10 @@ mode: 'pqs_only',
           source: 'pqs',
         },
         {
-          tokenId: 'vUSDCx-SHARE',
+          tokenId: 'VaultAdmin::vault-1:share',
           name: 'USDCx Test Vault Share',
           symbol: 'vUSDCx-SHARE',
-          issuer: null,
+          issuer: 'VaultAdmin',
           source: 'pqs',
         },
       ],
@@ -5597,10 +5597,10 @@ mode: 'pqs_only',
     expect(response.transfers).toEqual([
       {
         rowId:
-          '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Share Mint',
-        movementType: 'Share Mint',
+          '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
-        tokenId: 'VaultAdmin::vUSDCx-SHARE',
+        tokenId: 'VaultAdmin::vault-1:share',
         tokenName: 'USDCx Test Vault Share',
         amount: '100.0000000000',
         sender: null,
@@ -5617,8 +5617,8 @@ mode: 'pqs_only',
       },
       {
         rowId:
-          '1220aa11:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Holding Transfer',
-        movementType: 'Holding Transfer',
+          '1220aa11:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
+        movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'Issuer::USDCx',
         tokenName: 'USDCx',
@@ -6539,12 +6539,12 @@ mode: 'pqs_only',
       }
     ).fetchTokenHolders(
       [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }],
-      'vUSDCx-SHARE',
+      'VaultAdmin::vault-1:share',
     );
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining(".CIP112:"));
     expect(response).toEqual({
-      tokenId: 'vUSDCx-SHARE',
+      tokenId: 'VaultAdmin::vault-1:share',
       limit: 25,
       nextBefore: null,
       nextAfter: null,

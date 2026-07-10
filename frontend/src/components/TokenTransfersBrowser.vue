@@ -256,6 +256,10 @@ function tokenDetailLink(tokenId: string): string {
   return `/tokens/${encodeURIComponent(tokenId)}`;
 }
 
+function transferColumnLabel(): string {
+  return props.scope === 'token' ? 'Movement' : 'Token';
+}
+
 async function openTransferDetail(transferId: string) {
   await router.push(transferDetailLink(transferId));
 }
@@ -486,7 +490,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
       >
         <div class="tokens-page__row tokens-page__row--head" role="row">
           <span role="columnheader">Nodes</span>
-          <span role="columnheader">Token</span>
+          <span role="columnheader">{{ transferColumnLabel() }}</span>
           <span role="columnheader">Amount</span>
           <span role="columnheader">From</span>
           <span role="columnheader">To</span>
@@ -513,7 +517,11 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
             </span>
           </span>
           <span class="tokens-page__cell tokens-page__token" role="cell">
+            <template v-if="props.scope === 'token'">
+              <strong>{{ transfer.movementType ?? 'Transfer' }}</strong>
+            </template>
             <RouterLink
+              v-else
               class="contract-detail__link tokens-page__token-link"
               :to="tokenDetailLink(transfer.tokenId)"
               @click.stop
@@ -521,7 +529,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
               <strong>{{ transfer.tokenName }}</strong>
               <span>{{ transfer.tokenId }}</span>
             </RouterLink>
-            <span v-if="transfer.movementType" class="tokens-page__movement-pill">
+            <span v-if="props.scope !== 'token' && transfer.movementType" class="tokens-page__movement-pill">
               {{ transfer.movementType }}
             </span>
           </span>

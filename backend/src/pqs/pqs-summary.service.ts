@@ -3998,12 +3998,18 @@ export class PqsSummaryService {
       await this.loadMergedTokenTransfers(nodes),
       options,
     );
+    const directTransfers = mergedTransfers.filter((transfer) => transfer.tokenId === normalizedTokenId);
 
-    return this.paginateTokenTransfers(
-      mergedTransfers.filter((transfer) => transfer.tokenId === normalizedTokenId),
-      limit,
+    if (directTransfers.length > 0) {
+      return this.paginateTokenTransfers(directTransfers, limit, options);
+    }
+
+    const recoveredTransfers = this.filterTokenTransfersByParties(
+      await this.recoverTokenTransfersFromActiveHolders(nodes, normalizedTokenId),
       options,
     );
+
+    return this.paginateTokenTransfers(recoveredTransfers, limit, options);
   }
 
   async fetchTokenTransferDetail(
@@ -4196,6 +4202,73 @@ export class PqsSummaryService {
     }
 
     return this.mergeTokenTransfers(successfulTransfers);
+  }
+
+  private async recoverTokenTransfersFromActiveHolders(
+    nodes: NodeConfig[],
+    tokenId: string,
+  ): Promise<TokenTransferSummary[]> {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const refreshResults = await Promise.allSettled(
+      nodes.map(async (node) => ({
+        node,
+        holders: await this.loadCachedTokenHolders(node),
+      })),
+    );
+    const candidateHolders = refreshResults
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          holders: NodeTokenHolderObservation[];
+        }> => result.status === 'fulfilled',
+      )
+      .flatMap((result) => result.value.holders)
+      .filter((holder) => holder.tokenId === tokenId && holder.contractId !== null);
+
+    const recoveredTransfers: NodeTokenTransferObservation[] = [];
+    const seenContracts = new Set<string>();
+
+    for (const holder of candidateHolders) {
+      const node = nodeById.get(holder.nodeId);
+      if (!node || !holder.contractId) {
+        continue;
+      }
+
+      const dedupeKey = `${holder.nodeId}\u0000${holder.contractId}`;
+      if (seenContracts.has(dedupeKey)) {
+        continue;
+      }
+      seenContracts.add(dedupeKey);
+
+      const client = this.clientFactory.getClient(node);
+      const contractResult = await client.query(contractDetailQuery(holder.contractId));
+      const contractRow = (contractResult.rows as ContractDetailRow[])[0];
+
+      if (!contractRow || typeof contractRow.created_update_id !== 'string') {
+        continue;
+      }
+
+      const events = await this.fetchEventsByUpdateId(
+        node,
+        client.query.bind(client),
+        contractRow.created_update_id,
+      );
+      const inferredTransfers = this.inferCip112TokenMovements(
+        node,
+        {
+          update_id: contractRow.created_update_id,
+          event_offset: contractRow.created_event_offset,
+          record_time: contractRow.created_record_time,
+        },
+        events,
+      ).filter((transfer) => transfer.tokenId === tokenId);
+
+      recoveredTransfers.push(...inferredTransfers);
+    }
+
+    return this.mergeTokenTransfers(recoveredTransfers);
   }
 
   private paginateTokenTransfers(
@@ -4950,15 +5023,13 @@ export class PqsSummaryService {
 
     if (transferExercises.length > 0) {
       for (const event of createEvents) {
-        const movementType = this.isShareLikeCip112Template(event.templateId)
-          ? 'Share Mint'
-          : 'Holding Transfer';
+        const movementType = 'Create';
         const transfer = this.buildInferredCip112Movement(
           node,
           update,
           event,
           movementType,
-          movementType === 'Holding Transfer' ? shareOwnerFallback : null,
+          !this.isShareLikeCip112Template(event.templateId) ? shareOwnerFallback : null,
         );
         if (transfer) {
           transfers.push(transfer);
@@ -4972,7 +5043,7 @@ export class PqsSummaryService {
           continue;
         }
 
-        const transfer = this.buildInferredCip112Movement(node, update, event, 'Mint');
+        const transfer = this.buildInferredCip112Movement(node, update, event, 'Create');
         if (transfer) {
           transfers.push(transfer);
         }
@@ -4986,7 +5057,7 @@ export class PqsSummaryService {
     node: NodeConfig,
     update: Cip112MovementUpdateRow,
     event: NodeUpdateDetailEvent,
-    movementType: 'Mint' | 'Holding Transfer' | 'Share Mint',
+    movementType: 'Create',
     receiverFallback: string | null = null,
   ): NodeTokenTransferObservation | null {
     if (event.createData?.status !== 'decoded') {
@@ -5162,7 +5233,7 @@ export class PqsSummaryService {
   }
 
   private isShareLikeCip112Template(templateId: string | null): boolean {
-    return typeof templateId === 'string' && templateId.endsWith(':ShareHolding');
+    return typeof templateId === 'string' && templateId.includes('.ShareToken.CIP112:');
   }
 
   private isHexTokenMovementUpdateId(updateId: string): boolean {
@@ -5335,13 +5406,14 @@ export class PqsSummaryService {
     }
 
     if (this.isCip112TemplateId(templateId)) {
-      return this.extractCip112TokenSummary(decoded);
+      return this.extractCip112TokenSummary(templateId, decoded);
     }
 
     return this.extractCip56TokenSummary(decoded);
   }
 
   private extractCip112TokenSummary(
+    templateId: string | null,
     decoded: NodeDecodeState<NodeDecodedDamlValue> | null,
   ): TokenSummary | null {
     if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
@@ -5352,13 +5424,20 @@ export class PqsSummaryService {
     const symbol = configuredSymbol ?? this.readScalarField(decoded.value, 'symbol');
     const instrumentIdText = this.readScalarField(decoded.value, 'instrumentIdText');
     const instrumentId = this.readNestedScalarField(decoded.value, ['instrumentId', 'id']);
-    const intrinsicId = instrumentId ?? symbol ?? instrumentIdText;
+    const vaultIdentityId = this.readNestedScalarField(decoded.value, ['vaultIdentity', 'id']);
+    const shareLikeIntrinsicId =
+      templateId !== null && this.isShareLikeCip112Template(templateId) && vaultIdentityId
+        ? this.normalizeShareLikeIntrinsicTokenId(vaultIdentityId)
+        : null;
+    const intrinsicId = instrumentId ?? shareLikeIntrinsicId ?? symbol ?? instrumentIdText;
     if (!intrinsicId) {
       return null;
     }
 
     const issuer =
       this.readNestedScalarField(decoded.value, ['instrumentId', 'admin'])
+      ?? this.readNestedScalarField(decoded.value, ['vaultIdentity', 'admin'])
+      ?? this.readScalarField(decoded.value, 'vaultParty')
       ?? this.readScalarField(decoded.value, 'issuer');
     const tokenId = this.buildObservedTokenId(intrinsicId, issuer);
 
@@ -5385,6 +5464,15 @@ export class PqsSummaryService {
     }
 
     return `${normalizedIssuer}::${normalizedIntrinsicId}`;
+  }
+
+  private normalizeShareLikeIntrinsicTokenId(intrinsicId: string): string {
+    const normalizedIntrinsicId = intrinsicId.trim();
+    if (normalizedIntrinsicId.endsWith(':share')) {
+      return normalizedIntrinsicId;
+    }
+
+    return `${normalizedIntrinsicId}:share`;
   }
 
   private readConfiguredDecodedTokenMetadata(

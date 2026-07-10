@@ -92,8 +92,8 @@ describe('TokensView', () => {
       nextAfter: null,
       transfers: [
         {
-          rowId: 'token-update-2:#0:5:Share Mint',
-          movementType: 'Share Mint',
+          rowId: 'token-update-2:#0:5:Create',
+          movementType: 'Create',
           source: 'pqs_inferred_holding_v2',
           tokenId: 'canton-coin',
           tokenName: 'Canton Coin',
@@ -124,7 +124,7 @@ describe('TokensView', () => {
     expect(within(transfersTable).getByText('Nodes')).toBeInTheDocument();
     expect(within(transfersTable).queryByText('Update')).not.toBeInTheDocument();
     expect(within(transfersTable).getByText('Participant 2')).toBeInTheDocument();
-    expect(within(transfersTable).getByText('Share Mint')).toBeInTheDocument();
+    expect(within(transfersTable).getByText('Create')).toBeInTheDocument();
     expect(within(transfersTable).getByText('42.0')).toBeInTheDocument();
     expect(within(transfersTable).getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
     expect(within(transfersTable).getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
@@ -175,7 +175,7 @@ describe('TokensView', () => {
       nextAfter: null,
       transfers: [
         {
-          rowId: 'token-update-2:#0:5:Share Mint',
+          rowId: 'token-update-2:#0:5:Create',
           tokenId: 'canton-coin',
           tokenName: 'Canton Coin',
           amount: '42.0',
@@ -350,7 +350,7 @@ describe('TokensView', () => {
       nextAfter: null,
       transfers: [
         {
-          rowId: 'token-update-2:#0:5:Share Mint',
+          rowId: 'token-update-2:#0:5:Create',
           tokenId: 'canton-coin',
           tokenName: 'Canton Coin',
           amount: '42.0',
@@ -394,7 +394,7 @@ describe('TokensView', () => {
       nextAfter: null,
       transfers: [
         {
-          rowId: 'token-update-2:#0:5:Share Mint',
+          rowId: 'token-update-2:#0:5:Create',
           tokenId: 'canton-coin',
           tokenName: 'Canton Coin',
           amount: '42.0',
@@ -422,7 +422,7 @@ describe('TokensView', () => {
 
     await waitFor(() =>
       expect(router.currentRoute.value.fullPath).toBe(
-        '/tokens/transfers/token-update-2%3A%230%3A5%3AShare%20Mint',
+        '/tokens/transfers/token-update-2%3A%230%3A5%3ACreate',
       ),
     );
     expect(await screen.findByText('Transfer Detail')).toBeInTheDocument();
