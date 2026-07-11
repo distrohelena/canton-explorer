@@ -109,22 +109,22 @@ interface UpdateEventRow {
   package_id?: string | null;
   choice: string | null;
   witnesses: string[] | string | null;
-  contract_instance?: Buffer | null;
-  exercise_argument?: Buffer | null;
-  exercise_result?: Buffer | null;
+  contract_instance?: unknown;
+  exercise_argument?: unknown;
+  exercise_result?: unknown;
   raw: Record<string, unknown> | null;
 }
 
 interface RewardCouponInstanceRow {
   coupon_contract_id: string | null;
-  contract_instance: Buffer | null;
+  contract_instance: unknown;
 }
 
 interface ContractDetailRow {
   contract_id: string;
   template_id: string | null;
   package_id: string | null;
-  contract_instance: Buffer | null;
+  contract_instance: unknown;
   created_update_id: string | null;
   created_event_offset: string | number | null;
   created_record_time: string | null;
@@ -176,7 +176,7 @@ interface TokenTransferRow {
   record_time: string | null;
   template_id: string | null;
   package_id: string | null;
-  contract_instance: Buffer | null;
+  contract_instance: unknown;
 }
 
 interface Cip112MovementUpdateRow {
@@ -270,6 +270,8 @@ interface PqsCoreRelations {
   contractTpe: string;
   exercises: string;
   exerciseTpe: string;
+  events: string;
+  packages: string;
   transactions: string;
 }
 
@@ -329,6 +331,8 @@ function pqsCoreRelations(node: NodeConfig): PqsCoreRelations {
     contractTpe: qualifyPqsRelation(qualifiedNode, '__contract_tpe'),
     exercises: qualifyPqsRelation(qualifiedNode, '__exercises'),
     exerciseTpe: qualifyPqsRelation(qualifiedNode, '__exercise_tpe'),
+    events: qualifyPqsRelation(qualifiedNode, '__events'),
+    packages: qualifyPqsRelation(qualifiedNode, '__packages'),
     transactions: qualifyPqsRelation(qualifiedNode, '__transactions'),
   };
 }
@@ -2190,27 +2194,32 @@ function normalizedPartyRecentContractsQuery(
   `;
 }
 
-function singleUpdateQuery(eventOffset: string): string {
+function singleUpdateQuery(node: NodeConfig, eventOffset: string): string {
+  const relations = pqsCoreRelations(node);
   const quotedOffset = `'${escapeSqlLiteral(eventOffset)}'`;
 
   return `
     select
-      update_meta.update_id::text as update_id,
-      update_meta.event_offset::text as event_offset,
-      to_char(
-        to_timestamp(update_meta.record_time / 1000000.0) at time zone 'UTC',
-        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-      ) as record_time_iso,
-      to_jsonb(update_meta) as meta
-    from participant.lapi_update_meta update_meta
-    where update_meta.event_offset::text = ${quotedOffset}
-    order by update_meta.record_time desc
+      tx.transaction_id::text as update_id,
+      tx.offset::text as event_offset,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time_iso,
+      jsonb_build_object(
+        'update_id', tx.transaction_id::text,
+        'event_offset', tx.offset::text,
+        'record_time', ${isoUtcTimestampExpression('tx.effective_at')}
+      ) as meta
+    from ${relations.transactions} tx
+    where tx.offset::text = ${quotedOffset}
+    order by tx.offset desc
     limit 1
   `;
 }
 
-function updateEventsQuery(updateId: string): string {
+function updateEventsQuery(node: NodeConfig, updateId: string): string {
+  const relations = pqsCoreRelations(node);
   const quotedId = `'${escapeSqlLiteral(updateId)}'`;
+  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
 
   return `
     select
@@ -2228,54 +2237,73 @@ function updateEventsQuery(updateId: string): string {
     from (
       select
         'create'::text as event_kind,
-        create_event.event_id::text as event_id,
-        create_event.contract_id::text as contract_id,
-        create_event.template_id::text as template_id,
-        null::text as package_id,
+        event_row.event_id::text as event_id,
+        contract_row.contract_id::text as contract_id,
+        ${contractTemplateId} as template_id,
+        coalesce(contract_row.creation_package_id, package_row.id)::text as package_id,
         null::text as choice,
-        create_event.tree_event_witnesses as witnesses,
-        null::bytea as contract_instance,
-        null::bytea as exercise_argument,
-        null::bytea as exercise_result,
-        to_jsonb(create_event) as raw
-      from participant.lapi_events_create create_event
-      where create_event.update_id::text = ${quotedId}
+        contract_row.witnesses as witnesses,
+        contract_row.payload as contract_instance,
+        null::jsonb as exercise_argument,
+        null::jsonb as exercise_result,
+        jsonb_build_object(
+          'source_table', '__contracts',
+          'transaction_id', tx.transaction_id::text,
+          'event_offset', tx.offset::text,
+          'event_id', event_row.event_id,
+          'contract_id', contract_row.contract_id,
+          'template_id', ${contractTemplateId}
+        ) as raw
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.created_at_ix = tx.ix
+      left join ${relations.events} event_row
+        on event_row.pk = contract_row.create_event_pk
+      left join ${relations.contractTpe} contract_tpe_row
+        on contract_tpe_row.pk = contract_row.tpe_pk
+      left join ${relations.packages} package_row
+        on package_row.pk = contract_row.package_pk
+      where tx.transaction_id = ${quotedId}
 
       union all
 
       select
-        'consuming_exercise'::text as event_kind,
-        exercise_event.event_id::text as event_id,
-        exercise_event.contract_id::text as contract_id,
-        exercise_event.template_id::text as template_id,
-        null::text as package_id,
-        exercise_event.choice::text as choice,
-        exercise_event.tree_event_witnesses as witnesses,
-        null::bytea as contract_instance,
-        null::bytea as exercise_argument,
-        null::bytea as exercise_result,
-        to_jsonb(exercise_event) as raw
-      from participant.lapi_events_consuming_exercise exercise_event
-      where exercise_event.update_id::text = ${quotedId}
-
-      union all
-
-      select
-        'non_consuming_exercise'::text as event_kind,
-        exercise_event.event_id::text as event_id,
-        exercise_event.contract_id::text as contract_id,
-        exercise_event.template_id::text as template_id,
-        null::text as package_id,
-        exercise_event.choice::text as choice,
-        exercise_event.tree_event_witnesses as witnesses,
-        null::bytea as contract_instance,
-        null::bytea as exercise_argument,
-        null::bytea as exercise_result,
-        to_jsonb(exercise_event) as raw
-      from participant.lapi_events_non_consuming_exercise exercise_event
-      where exercise_event.update_id::text = ${quotedId}
+        case
+          when exercise_tpe_row.consuming then 'consuming_exercise'::text
+          else 'non_consuming_exercise'::text
+        end as event_kind,
+        event_row.event_id::text as event_id,
+        exercise_row.contract_id::text as contract_id,
+        ${exerciseTemplateId} as template_id,
+        package_row.id::text as package_id,
+        exercise_tpe_row.choice::text as choice,
+        exercise_row.witnesses as witnesses,
+        null::jsonb as contract_instance,
+        exercise_row.argument as exercise_argument,
+        exercise_row.result as exercise_result,
+        jsonb_build_object(
+          'source_table', '__exercises',
+          'transaction_id', tx.transaction_id::text,
+          'event_offset', tx.offset::text,
+          'event_id', event_row.event_id,
+          'contract_id', exercise_row.contract_id,
+          'template_id', ${exerciseTemplateId},
+          'choice', exercise_tpe_row.choice
+        ) as raw
+      from ${relations.transactions} tx
+      join ${relations.exercises} exercise_row
+        on exercise_row.exercised_at_ix = tx.ix
+      left join ${relations.events} event_row
+        on event_row.pk = exercise_row.exercise_event_pk
+      left join ${relations.contractTpe} exercise_contract_tpe_row
+        on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk
+      left join ${relations.exerciseTpe} exercise_tpe_row
+        on exercise_tpe_row.pk = exercise_row.tpe_pk
+      left join ${relations.packages} package_row
+        on package_row.pk = exercise_row.package_pk
+      where tx.transaction_id = ${quotedId}
     ) update_events
-    order by event_id asc, event_kind asc, contract_id asc, template_id asc
+    order by event_id asc nulls last, event_kind asc, contract_id asc, template_id asc
   `;
 }
 
@@ -2473,8 +2501,10 @@ function normalizedUpdateEventsQuery(updateId: string): string {
   `;
 }
 
-function rewardCouponInstanceQuery(updateId: string): string {
+function rewardCouponInstanceQuery(node: NodeConfig, updateId: string): string {
+  const relations = pqsCoreRelations(node);
   const quotedId = `'${escapeSqlLiteral(normalizeByteaHex(updateId))}'`;
+  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
 
   return `
     select
@@ -2482,153 +2512,81 @@ function rewardCouponInstanceQuery(updateId: string): string {
       contract_instance
     from (
       select
-        encode(contract.contract_id, 'hex') as coupon_contract_id,
-        contract.instance as contract_instance,
-        activate_event.event_sequential_id as sort_event_sequential_id
-      from participant.lapi_events_activate_contract activate_event
-      join participant.par_contracts contract
-        on contract.internal_contract_id = activate_event.internal_contract_id
-      where encode(activate_event.update_id, 'hex') = ${quotedId}
-        and contract.template_id = 'Splice.Amulet:SvRewardCoupon'
-
-      union all
-
-      select
-        encode(contract.contract_id, 'hex') as coupon_contract_id,
-        contract.instance as contract_instance,
-        various_event.event_sequential_id as sort_event_sequential_id
-      from participant.lapi_events_various_witnessed various_event
-      join participant.par_contracts contract
-        on contract.internal_contract_id = various_event.internal_contract_id
-      where encode(various_event.update_id, 'hex') = ${quotedId}
-        and various_event.event_type = 6
-        and contract.template_id = 'Splice.Amulet:SvRewardCoupon'
+        contract_row.contract_id::text as coupon_contract_id,
+        contract_row.payload as contract_instance,
+        coalesce(contract_row.create_event_pk, 0) as sort_event_pk
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.created_at_ix = tx.ix
+      join ${relations.contractTpe} contract_tpe_row
+        on contract_tpe_row.pk = contract_row.tpe_pk
+      where tx.transaction_id = ${quotedId}
+        and ${contractTemplateId} = 'Splice.Amulet:SvRewardCoupon'
     ) reward_coupon_events
-    order by sort_event_sequential_id desc
+    order by sort_event_pk desc
     limit 1
   `;
 }
 
-function contractDetailQuery(contractId: string): string {
+function contractDetailQuery(node: NodeConfig, contractId: string): string {
+  const relations = pqsCoreRelations(node);
   const quotedId = `'${escapeSqlLiteral(normalizeByteaHex(contractId))}'`;
+  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
 
   return `
-    with contract_row as (
+    with selected_contract as (
       select
-        internal_contract_id,
-        encode(contract_id, 'hex') as contract_id,
-        package_id,
-        template_id,
-        instance
-      from participant.par_contracts
-      where encode(contract_id, 'hex') = ${quotedId}
+        contract_row.contract_id::text as contract_id,
+        ${contractTemplateId} as template_id,
+        coalesce(contract_row.creation_package_id, package_row.id)::text as package_id,
+        contract_row.payload as contract_instance,
+        contract_row.created_at_ix,
+        contract_row.archived_at_ix
+      from ${relations.contracts} contract_row
+      left join ${relations.contractTpe} contract_tpe_row
+        on contract_tpe_row.pk = contract_row.tpe_pk
+      left join ${relations.packages} package_row
+        on package_row.pk = contract_row.package_pk
+      where contract_row.contract_id = ${quotedId}
       limit 1
-    ),
-    create_events as (
-      select
-        encode(activate_event.update_id, 'hex') as update_id,
-        activate_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time,
-        activate_event.event_sequential_id
-      from participant.lapi_events_activate_contract activate_event
-      join contract_row contract_row
-        on contract_row.internal_contract_id = activate_event.internal_contract_id
-
-      union all
-
-      select
-        encode(various_event.update_id, 'hex') as update_id,
-        various_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time,
-        various_event.event_sequential_id
-      from participant.lapi_events_various_witnessed various_event
-      join contract_row contract_row
-        on contract_row.internal_contract_id = various_event.internal_contract_id
-      where various_event.event_type = 6
-    ),
-    archive_events as (
-      select
-        encode(deactivate_event.update_id, 'hex') as update_id,
-        deactivate_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(deactivate_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time,
-        deactivate_event.event_sequential_id
-      from participant.lapi_events_deactivate_contract deactivate_event
-      join contract_row contract_row
-        on contract_row.internal_contract_id = deactivate_event.internal_contract_id
-
-      union all
-
-      select
-        encode(various_event.update_id, 'hex') as update_id,
-        various_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time,
-        various_event.event_sequential_id
-      from participant.lapi_events_various_witnessed various_event
-      join contract_row contract_row
-        on contract_row.internal_contract_id = various_event.internal_contract_id
-      where various_event.event_type in (5, 7)
-        and various_event.consuming
     )
     select
       contract_row.contract_id,
       contract_row.template_id,
       contract_row.package_id,
-      contract_row.instance as contract_instance,
-      created_event.update_id as created_update_id,
-      created_event.event_offset as created_event_offset,
-      created_event.record_time as created_record_time,
-      archived_event.update_id as archived_update_id,
-      archived_event.event_offset as archived_event_offset,
-      archived_event.record_time as archived_record_time
-    from contract_row
-    left join lateral (
-      select
-        update_id,
-        event_offset,
-        record_time
-      from create_events
-      order by event_sequential_id asc
-      limit 1
-    ) created_event on true
-    left join lateral (
-      select
-        update_id,
-        event_offset,
-        record_time
-      from archive_events
-      order by event_sequential_id asc
-      limit 1
-    ) archived_event on true
+      contract_row.contract_instance,
+      created_tx.transaction_id::text as created_update_id,
+      created_tx.offset::text as created_event_offset,
+      ${isoUtcTimestampExpression('created_tx.effective_at')} as created_record_time,
+      archived_tx.transaction_id::text as archived_update_id,
+      archived_tx.offset::text as archived_event_offset,
+      ${isoUtcTimestampExpression('archived_tx.effective_at')} as archived_record_time
+    from selected_contract contract_row
+    left join ${relations.transactions} created_tx
+      on created_tx.ix = contract_row.created_at_ix
+    left join ${relations.transactions} archived_tx
+      on archived_tx.ix = contract_row.archived_at_ix
   `;
 }
 
 function tokenRowsQuery(
+  node: NodeConfig,
   limit: number,
   templateIds: readonly string[],
   templatePatterns: readonly string[] = [],
 ): string {
+  const relations = pqsCoreRelations(node);
   const normalizedLimit =
     Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(limit) : TOKEN_TRANSFER_CACHE_LIMIT;
   const quotedTemplateIds = templateIds
     .map((templateId) => `'${escapeSqlLiteral(templateId)}'`)
     .join(',\n        ');
+  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
   const patternClauses = templatePatterns.map(
-    (pattern) => `contract.template_id::text like '${escapeSqlLiteral(pattern)}'`,
+    (pattern) => `${contractTemplateId} like '${escapeSqlLiteral(pattern)}'`,
   );
   const templateFilterClause = [
-    quotedTemplateIds ? `contract.template_id in (\n        ${quotedTemplateIds}\n      )` : null,
+    quotedTemplateIds ? `${contractTemplateId} in (\n        ${quotedTemplateIds}\n      )` : null,
     ...patternClauses,
   ]
     .filter((clause): clause is string => clause !== null)
@@ -2645,103 +2603,73 @@ function tokenRowsQuery(
       contract_instance
     from (
       select
-        encode(contract.contract_id, 'hex') as contract_id,
-        encode(activate_event.update_id, 'hex') as update_id,
-        activate_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time,
-        contract.template_id::text as template_id,
-        package_string.external_string as package_id,
-        contract.instance as contract_instance
-      from participant.lapi_events_activate_contract activate_event
-      join participant.par_contracts contract
-        on contract.internal_contract_id = activate_event.internal_contract_id
-      left join participant.lapi_string_interning package_string
-        on package_string.internal_id = activate_event.representative_package_id
+        contract_row.contract_id::text as contract_id,
+        tx.transaction_id::text as update_id,
+        tx.offset::text as event_offset,
+        ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
+        ${contractTemplateId} as template_id,
+        coalesce(contract_row.creation_package_id, package_row.id)::text as package_id,
+        contract_row.payload as contract_instance
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.created_at_ix = tx.ix
+      join ${relations.contractTpe} contract_tpe_row
+        on contract_tpe_row.pk = contract_row.tpe_pk
+      left join ${relations.packages} package_row
+        on package_row.pk = contract_row.package_pk
       where ${templateFilterClause}
-
-      union all
-
-      select
-        encode(contract.contract_id, 'hex') as contract_id,
-        encode(various_event.update_id, 'hex') as update_id,
-        various_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time,
-        contract.template_id::text as template_id,
-        package_string.external_string as package_id,
-        contract.instance as contract_instance
-      from participant.lapi_events_various_witnessed various_event
-      join participant.par_contracts contract
-        on contract.internal_contract_id = various_event.internal_contract_id
-      left join participant.lapi_string_interning package_string
-        on package_string.internal_id = various_event.package_id
-      where various_event.event_type = 6
-        and (${templateFilterClause})
     ) token_transfer_rows
     order by event_offset::numeric desc
     limit ${normalizedLimit}
   `;
 }
 
-function recentCip112MovementUpdateIdsQuery(limit: number): string {
+function recentCip112MovementUpdateIdsQuery(node: NodeConfig, limit: number): string {
+  const relations = pqsCoreRelations(node);
   const normalizedLimit =
     Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(limit) : TOKEN_TRANSFER_CACHE_LIMIT;
+  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
 
   return `
     /* cip112_movement_update_ids */
     with relevant_updates as (
       select
-        encode(activate_event.update_id, 'hex') as update_id,
-        activate_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(activate_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time
-      from participant.lapi_events_activate_contract activate_event
-      join participant.par_contracts contract
-        on contract.internal_contract_id = activate_event.internal_contract_id
-      where contract.template_id::text like '${escapeSqlLiteral(CIP112_TEMPLATE_ID_LIKE_PATTERN)}'
+        tx.transaction_id::text as update_id,
+        tx.offset::text as event_offset,
+        ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.created_at_ix = tx.ix
+      join ${relations.contractTpe} contract_tpe_row
+        on contract_tpe_row.pk = contract_row.tpe_pk
+      where ${contractTemplateId} like '${escapeSqlLiteral(CIP112_TEMPLATE_ID_LIKE_PATTERN)}'
 
       union all
 
       select
-        encode(deactivate_event.update_id, 'hex') as update_id,
-        deactivate_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(deactivate_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time
-      from participant.lapi_events_deactivate_contract deactivate_event
-      left join participant.lapi_string_interning template_string
-        on template_string.internal_id = deactivate_event.template_id
-      where template_string.external_string like '${escapeSqlLiteral(CIP112_TEMPLATE_ID_LIKE_PATTERN)}'
+        tx.transaction_id::text as update_id,
+        tx.offset::text as event_offset,
+        ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.archived_at_ix = tx.ix
+      join ${relations.contractTpe} contract_tpe_row
+        on contract_tpe_row.pk = contract_row.tpe_pk
+      where ${contractTemplateId} like '${escapeSqlLiteral(CIP112_TEMPLATE_ID_LIKE_PATTERN)}'
 
       union all
 
       select
-        encode(various_event.update_id, 'hex') as update_id,
-        various_event.event_offset::text as event_offset,
-        to_char(
-          to_timestamp(various_event.record_time / 1000000.0) at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) as record_time
-      from participant.lapi_events_various_witnessed various_event
-      left join participant.par_contracts contract
-        on contract.internal_contract_id = various_event.internal_contract_id
-      left join participant.lapi_string_interning template_string
-        on template_string.internal_id = various_event.template_id
-      where (
-        various_event.event_type = 6
-        and contract.template_id::text like '${escapeSqlLiteral(CIP112_TEMPLATE_ID_LIKE_PATTERN)}'
-      ) or (
-        various_event.event_type in (5, 7)
-        and template_string.external_string like '${escapeSqlLiteral(CIP112_TEMPLATE_ID_LIKE_PATTERN)}'
-      )
+        tx.transaction_id::text as update_id,
+        tx.offset::text as event_offset,
+        ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+      from ${relations.transactions} tx
+      join ${relations.exercises} exercise_row
+        on exercise_row.exercised_at_ix = tx.ix
+      join ${relations.contractTpe} exercise_contract_tpe_row
+        on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk
+      where ${exerciseTemplateId} like '${escapeSqlLiteral(CIP112_TEMPLATE_ID_LIKE_PATTERN)}'
     )
     select
       update_id,
@@ -4856,7 +4784,7 @@ export class PqsSummaryService {
       seenContracts.add(dedupeKey);
 
       const client = this.clientFactory.getClient(node);
-      const contractResult = await client.query(contractDetailQuery(holder.contractId));
+      const contractResult = await client.query(contractDetailQuery(node, holder.contractId));
       const contractRow = (contractResult.rows as ContractDetailRow[])[0];
 
       if (!contractRow || typeof contractRow.created_update_id !== 'string') {
@@ -4985,7 +4913,7 @@ export class PqsSummaryService {
     eventOffset: string,
   ): Promise<NodeUpdateDetailResponse> {
     const client = this.clientFactory.getClient(node);
-    const detailResult = await client.query(singleUpdateQuery(eventOffset));
+    const detailResult = await client.query(singleUpdateQuery(node, eventOffset));
     const detailRows = (detailResult.rows as UpdateDetailRow[]) ?? [];
     const detailRow = detailRows[0];
 
@@ -5003,7 +4931,7 @@ export class PqsSummaryService {
     );
     const events = await this.fetchEventsByUpdateId(node, client.query.bind(client), rawUpdateId);
     const exerciseData = this.shouldResolveRewardCoupon(events)
-      ? await this.fetchRewardCouponDetails(client.query.bind(client), rawUpdateId)
+      ? await this.fetchRewardCouponDetails(node, client.query.bind(client), rawUpdateId)
       : null;
 
     return {
@@ -5023,7 +4951,7 @@ export class PqsSummaryService {
     contractId: string,
   ): Promise<NodeContractDetailResponse> {
     const client = this.clientFactory.getClient(node);
-    const result = await client.query(contractDetailQuery(contractId));
+    const result = await client.query(contractDetailQuery(node, contractId));
     const row = (result.rows as ContractDetailRow[])[0];
 
     if (!row) {
@@ -5267,6 +5195,7 @@ export class PqsSummaryService {
     const includeCip112 = options?.includeCip112 ?? true;
     const result = await client.query(
       tokenRowsQuery(
+        node,
         limit,
         includeCip112 ? TOKEN_DISCOVERY_TEMPLATE_IDS : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS,
         includeCip112 ? TOKEN_DISCOVERY_TEMPLATE_PATTERNS : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS,
@@ -5399,6 +5328,7 @@ export class PqsSummaryService {
     const includeCip112 = options?.includeCip112 ?? true;
     const result = await client.query(
       tokenRowsQuery(
+        node,
         limit,
         includeCip112 ? TOKEN_HOLDER_TEMPLATE_IDS : TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS,
         includeCip112 ? TOKEN_HOLDER_TEMPLATE_PATTERNS : TOKEN_HOLDER_NON_CIP112_TEMPLATE_PATTERNS,
@@ -5488,7 +5418,7 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
     const client = this.clientFactory.getClient(node);
-    const result = await client.query(tokenRowsQuery(limit, TOKEN_TRANSFER_TEMPLATE_IDS));
+    const result = await client.query(tokenRowsQuery(node, limit, TOKEN_TRANSFER_TEMPLATE_IDS));
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];
 
@@ -5538,7 +5468,7 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
     const client = this.clientFactory.getClient(node);
-    const result = await client.query(recentCip112MovementUpdateIdsQuery(limit));
+    const result = await client.query(recentCip112MovementUpdateIdsQuery(node, limit));
     const rows = (result.rows as Cip112MovementUpdateRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];
 
@@ -5614,7 +5544,7 @@ export class PqsSummaryService {
           continue;
         }
 
-        const transfer = this.buildInferredCip112Movement(node, update, event, 'Create');
+        const transfer = this.buildInferredCip112Movement(node, update, event, 'Mint');
         if (transfer) {
           transfers.push(transfer);
         }
@@ -5628,7 +5558,7 @@ export class PqsSummaryService {
     node: NodeConfig,
     update: Cip112MovementUpdateRow,
     event: NodeUpdateDetailEvent,
-    movementType: 'Create',
+    movementType: 'Create' | 'Mint',
     receiverFallback: string | null = null,
   ): NodeTokenTransferObservation | null {
     if (event.createData?.status !== 'decoded') {
@@ -5659,7 +5589,7 @@ export class PqsSummaryService {
       tokenId: token.tokenId,
       tokenName: token.name,
       amount: this.readScalarField(record, 'amount'),
-      sender: this.readScalarField(record, 'issuer'),
+      sender: movementType === 'Mint' ? this.readScalarField(record, 'issuer') : null,
       receiver: this.readScalarField(record, 'owner') ?? receiverFallback,
       eventOffset: this.normalizeOptionalScalar(update.event_offset) ?? '',
       updateId:
@@ -6074,19 +6004,8 @@ export class PqsSummaryService {
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     rawUpdateId: string,
   ): Promise<NodeUpdateDetailEvent[]> {
-    try {
-      const result = await query(updateEventsQuery(rawUpdateId));
-      const rows = (result.rows as UpdateEventRow[]) ?? [];
-
-      return Promise.all(rows.map((row) => this.normalizeEventRow(node, row)));
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        throw error;
-      }
-    }
-
-    const fallbackResult = await query(normalizedUpdateEventsQuery(rawUpdateId));
-    const rows = (fallbackResult.rows as UpdateEventRow[]) ?? [];
+    const result = await query(updateEventsQuery(node, rawUpdateId));
+    const rows = (result.rows as UpdateEventRow[]) ?? [];
     return Promise.all(rows.map((row) => this.normalizeEventRow(node, row)));
   }
 
@@ -6095,18 +6014,24 @@ export class PqsSummaryService {
   }
 
   private async fetchRewardCouponDetails(
+    node: NodeConfig,
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     rawUpdateId: string,
   ): Promise<NodeExerciseDecodeState | null> {
     try {
-      const result = await query(rewardCouponInstanceQuery(rawUpdateId));
+      const result = await query(rewardCouponInstanceQuery(node, rawUpdateId));
       const row = (result.rows as RewardCouponInstanceRow[])[0];
 
-      if (!row || !Buffer.isBuffer(row.contract_instance)) {
+      if (!row) {
         return null;
       }
 
-      const decoded = this.decodeRewardCouponContractInstance(row.contract_instance);
+      const decoded = await this.decodeContractData(
+        node,
+        null,
+        'Splice.Amulet:SvRewardCoupon',
+        row.contract_instance,
+      );
       if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
         return null;
       }
@@ -6282,17 +6207,24 @@ export class PqsSummaryService {
     node: NodeConfig | null,
     packageId: string | null,
     templateId: string | null,
-    contractInstance: Buffer | null,
+    contractInstance: unknown,
   ): Promise<NodeDecodeState<NodeDecodedDamlValue> | null> {
-    if (!Buffer.isBuffer(contractInstance) || !templateId) {
+    if (!templateId || contractInstance === null || contractInstance === undefined) {
       return null;
     }
 
-    if (templateId === 'Splice.Amulet:SvRewardCoupon') {
+    if (!Buffer.isBuffer(contractInstance)) {
+      const decodedJson = this.decodePqsJsonData(contractInstance);
+      if (decodedJson) {
+        return decodedJson;
+      }
+    }
+
+    if (templateId === 'Splice.Amulet:SvRewardCoupon' && Buffer.isBuffer(contractInstance)) {
       return this.decodeRewardCouponContractInstance(contractInstance);
     }
 
-    if (!this.damlValueDecoder) {
+    if (!Buffer.isBuffer(contractInstance) || !this.damlValueDecoder) {
       return null;
     }
 
@@ -6313,18 +6245,44 @@ export class PqsSummaryService {
   private async decodeExerciseData(
     node: NodeConfig | null,
     input: {
-    packageId: string | null;
-    templateId: string | null;
-    rawChoice: string | null;
-    exerciseArgument: Buffer | null;
-    exerciseResult: Buffer | null;
+      packageId: string | null;
+      templateId: string | null;
+      rawChoice: string | null;
+      exerciseArgument: unknown;
+      exerciseResult: unknown;
   }): Promise<NodeExerciseDecodeState | null> {
+    if (!Buffer.isBuffer(input.exerciseArgument) && !Buffer.isBuffer(input.exerciseResult)) {
+      const argument = this.decodePqsJsonData(input.exerciseArgument);
+      const result = this.decodePqsJsonData(input.exerciseResult);
+
+      if (argument || result) {
+        return {
+          argument: argument ?? { status: 'not_available' },
+          result: result ?? { status: 'not_available' },
+        };
+      }
+    }
+
     if (!this.damlValueDecoder) {
       return null;
     }
 
-    const initialDecode = await this.damlValueDecoder.decodeExerciseValue(input);
-    return this.retryExerciseDecodeAfterPackageRefresh(node, input, initialDecode);
+    if (
+      (input.exerciseArgument !== null && input.exerciseArgument !== undefined
+        && !Buffer.isBuffer(input.exerciseArgument))
+      || (input.exerciseResult !== null && input.exerciseResult !== undefined
+        && !Buffer.isBuffer(input.exerciseResult))
+    ) {
+      return null;
+    }
+
+    const decoderInput = {
+      ...input,
+      exerciseArgument: (input.exerciseArgument ?? null) as Buffer | null,
+      exerciseResult: (input.exerciseResult ?? null) as Buffer | null,
+    };
+    const initialDecode = await this.damlValueDecoder.decodeExerciseValue(decoderInput);
+    return this.retryExerciseDecodeAfterPackageRefresh(node, decoderInput, initialDecode);
   }
 
   private async retryContractDecodeAfterPackageRefresh(
@@ -6515,12 +6473,18 @@ export class PqsSummaryService {
       current = field;
     }
 
-    if (
-      !current ||
-      typeof current !== 'object' ||
-      !('kind' in current) ||
-      current.kind !== 'text_map'
-    ) {
+    if (current && this.isRecordValue(current)) {
+      const recordEntry = current.fields.find((candidate) => candidate.label === key)?.value;
+      if (
+        typeof recordEntry === 'string'
+        || typeof recordEntry === 'number'
+        || typeof recordEntry === 'boolean'
+      ) {
+        return String(recordEntry);
+      }
+    }
+
+    if (!current || typeof current !== 'object' || !('kind' in current) || current.kind !== 'text_map') {
       return null;
     }
 
@@ -6543,6 +6507,67 @@ export class PqsSummaryService {
     }
 
     return null;
+  }
+
+  private decodePqsJsonData(
+    value: unknown,
+  ): NodeDecodeState<NodeDecodedDamlValue> | null {
+    const decoded = this.decodePqsJsonValue(value);
+    return decoded === null
+      ? null
+      : {
+          status: 'decoded',
+          value: decoded,
+        };
+  }
+
+  private decodePqsJsonValue(value: unknown): NodeDecodedDamlValue | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return {
+        kind: 'list',
+        items: value
+          .map((item) => this.decodePqsJsonValue(item))
+          .filter((item): item is NodeDecodedDamlValue => item !== null),
+      };
+    }
+
+    if (!this.isPlainJsonObject(value)) {
+      return null;
+    }
+
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      return { kind: 'unit' };
+    }
+
+    if (
+      entries.length === 1
+      && entries[0][0] === 'number'
+      && (typeof entries[0][1] === 'string' || typeof entries[0][1] === 'number')
+    ) {
+      const numericValue = Number(entries[0][1]);
+      return Number.isFinite(numericValue) ? numericValue : String(entries[0][1]);
+    }
+
+    return {
+      kind: 'record',
+      fields: entries.map(([label, fieldValue]) => ({
+        label,
+        value: this.decodePqsJsonValue(fieldValue) ?? { kind: 'unit' },
+      })),
+    };
+  }
+
+  private isPlainJsonObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   private getFirstLengthDelimitedField(message: Buffer, fieldNumber: number): Buffer | null {
