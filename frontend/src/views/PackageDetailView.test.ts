@@ -212,6 +212,51 @@ describe('PackageDetailView', () => {
     expect(screen.getByText('No node presence recorded for this package.')).toBeInTheDocument();
   });
 
+  it('renders a not-available package state with explicit empty structure messaging', async () => {
+    vi.mocked(fetchPackageDetail).mockResolvedValue({
+      packageId: 'pqs-only-package',
+      name: 'pqs-only-package',
+      version: '3.5.2',
+      uploadedAt: null,
+      packageSize: null,
+      status: 'not_available',
+      seenOnNodes: [
+        {
+          nodeId: 'participant-1',
+          packageName: 'pqs-only-package',
+          packageVersion: '3.5.2',
+          seenAt: '2026-07-11T10:00:00.000Z',
+        },
+      ],
+      moduleCount: 0,
+      templateCount: 0,
+      dataTypeCount: 0,
+      modules: [],
+      templates: [],
+      dataTypes: [],
+    } as never);
+
+    render(PackageDetailView, {
+      props: {
+        packageId: 'pqs-only-package',
+      },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(await screen.findByText('Not Available')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('Decoded package structure is not available for this package.'),
+    ).toHaveLength(3);
+    expect(screen.getByText('participant-1')).toBeInTheDocument();
+  });
+
   it('shows section-specific empty states for decoded packages without templates', async () => {
     vi.mocked(fetchPackageDetail).mockResolvedValue({
       packageId: 'splice-api-token-allocation-v1',

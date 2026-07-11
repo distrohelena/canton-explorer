@@ -220,6 +220,51 @@ describe('PackageCacheService', () => {
     expect(service.listNodesForPackage('missing')).toEqual([]);
   });
 
+  it('falls back to node presence metadata when a package blob is not cached', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const service = new PackageCacheService();
+
+    service.recordPackagePresence(
+      'participant-1',
+      [
+        {
+          packageId: 'package-only-in-presence',
+          mainPackageId: 'package-only-in-presence',
+          name: 'scribe-only-package',
+          version: '3.5.2',
+          uploadedAt: null,
+          packageSize: null,
+        },
+      ],
+      '2026-07-11T10:00:00.000Z',
+    );
+
+    expect(service.getPackageMetadata('package-only-in-presence')).toEqual({
+      packageId: 'package-only-in-presence',
+      name: 'scribe-only-package',
+      version: '3.5.2',
+      uploadedAt: null,
+      packageSize: null,
+    });
+    expect(service.listPackages()).toContainEqual({
+      packageId: 'package-only-in-presence',
+      name: 'scribe-only-package',
+      version: '3.5.2',
+      uploadedAt: null,
+      packageSize: null,
+    });
+    expect(service.listPackagesByName('scribe-only-package')).toEqual([
+      {
+        packageId: 'package-only-in-presence',
+        name: 'scribe-only-package',
+        version: '3.5.2',
+        uploadedAt: null,
+        packageSize: null,
+      },
+    ]);
+  });
+
   it('lists all cached packages for a package name across versions', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
     process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');

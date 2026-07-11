@@ -186,10 +186,35 @@ export class PackageCacheService implements OnModuleDestroy, BeforeApplicationSh
           package_version,
           uploaded_at,
           package_size
-        from packages
-        where package_id = ?
+        from (
+          select
+            package_id,
+            package_name,
+            package_version,
+            uploaded_at,
+            package_size,
+            0 as priority,
+            null as seen_at
+          from packages
+          where package_id = ?
+
+          union all
+
+          select
+            package_id,
+            package_name,
+            package_version,
+            uploaded_at,
+            package_size,
+            1 as priority,
+            seen_at
+          from node_packages
+          where package_id = ?
+        )
+        order by priority asc, seen_at desc
+        limit 1
       `)
-      .get(packageId) as
+      .get(packageId, packageId) as
       | {
           package_id: string;
           package_name: string | null;
@@ -221,7 +246,42 @@ export class PackageCacheService implements OnModuleDestroy, BeforeApplicationSh
           package_version,
           uploaded_at,
           package_size
-        from packages
+        from (
+          select
+            package_id,
+            package_name,
+            package_version,
+            uploaded_at,
+            package_size,
+            row_number() over (
+              partition by package_id
+              order by priority asc, seen_at desc, uploaded_at desc, package_version desc, package_id asc
+            ) as row_number
+          from (
+            select
+              package_id,
+              package_name,
+              package_version,
+              uploaded_at,
+              package_size,
+              0 as priority,
+              null as seen_at
+            from packages
+
+            union all
+
+            select
+              package_id,
+              package_name,
+              package_version,
+              uploaded_at,
+              package_size,
+              1 as priority,
+              seen_at
+            from node_packages
+          )
+        )
+        where row_number = 1
         order by package_id asc
       `)
       .all() as Array<{
@@ -250,11 +310,47 @@ export class PackageCacheService implements OnModuleDestroy, BeforeApplicationSh
           package_version,
           uploaded_at,
           package_size
-        from packages
-        where package_name = ?
+        from (
+          select
+            package_id,
+            package_name,
+            package_version,
+            uploaded_at,
+            package_size,
+            row_number() over (
+              partition by package_id
+              order by priority asc, seen_at desc, uploaded_at desc, package_version desc, package_id asc
+            ) as row_number
+          from (
+            select
+              package_id,
+              package_name,
+              package_version,
+              uploaded_at,
+              package_size,
+              0 as priority,
+              null as seen_at
+            from packages
+            where package_name = ?
+
+            union all
+
+            select
+              package_id,
+              package_name,
+              package_version,
+              uploaded_at,
+              package_size,
+              1 as priority,
+              seen_at
+            from node_packages
+            where package_name = ?
+          )
+        )
+        where row_number = 1
         order by uploaded_at desc, package_version desc, package_id asc
       `)
-      .all(packageName) as Array<{
+      .all(packageName, packageName) as Array<{
       package_id: string;
       package_name: string | null;
       package_version: string | null;

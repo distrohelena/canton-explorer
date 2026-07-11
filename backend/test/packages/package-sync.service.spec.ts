@@ -25,7 +25,7 @@ describe('PackageSyncService', () => {
     }
   });
 
-  it('fetches and stores only packages that are not already cached', async () => {
+  it('records metadata-only package presence for pqs_only nodes', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'package-sync-service-'));
     process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
     const cacheService = new PackageCacheService();
@@ -83,13 +83,29 @@ describe('PackageSyncService', () => {
     };
 
     await expect(service.syncNodePackages(node as never)).resolves.toEqual({
-      fetchedPackageCount: 2,
+      fetchedPackageCount: 0,
       missingPackageIds: ['package-a', 'package-b'],
       skippedBecauseNotDue: false,
     });
 
-    expect(cacheService.listCachedPackageIds()).toEqual(['package-a', 'package-b']);
-    expect(pqsPackageService.fetchPackagesById).toHaveBeenCalledWith(node, ['package-a', 'package-b']);
+    expect(cacheService.listCachedPackageIds()).toEqual([]);
+    expect(cacheService.listPackages()).toEqual([
+      {
+        packageId: 'package-a',
+        name: 'splice-amulet',
+        version: '0.1.14',
+        uploadedAt: '1782930510606316',
+        packageSize: 1466372,
+      },
+      {
+        packageId: 'package-b',
+        name: 'daml-prim',
+        version: '0.0.0',
+        uploadedAt: '1782930510606316',
+        packageSize: 455515,
+      },
+    ]);
+    expect(pqsPackageService.fetchPackagesById).not.toHaveBeenCalled();
 
     await expect(service.syncNodePackages(node as never)).resolves.toEqual({
       fetchedPackageCount: 0,
@@ -97,7 +113,7 @@ describe('PackageSyncService', () => {
       skippedBecauseNotDue: false,
     });
 
-    expect(pqsPackageService.fetchPackagesById).toHaveBeenCalledTimes(1);
+    expect(pqsPackageService.fetchPackagesById).not.toHaveBeenCalled();
   });
 
   it('is resolvable through Nest dependency injection', async () => {
@@ -273,6 +289,78 @@ describe('PackageSyncService', () => {
     ]);
   });
 
+  it('falls back to gRPC package blobs when the PQS package lookup returns no blobs after a gRPC reference listing', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-sync-service-grpc-empty-pqs-'));
+    process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const grpcOperationsService = {
+      fetchPackageRefs: jest.fn().mockResolvedValue([
+        {
+          packageId: 'package-a',
+          mainPackageId: 'package-a',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-03T10:00:00.000Z',
+          packageSize: 2048,
+        },
+      ]),
+      fetchPackagesByRefs: jest.fn().mockResolvedValue([
+        {
+          packageId: 'package-a',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-03T10:00:00.000Z',
+          packageSize: 2048,
+          data: Buffer.from([1, 2, 3]),
+        },
+      ]),
+    };
+    const pqsPackageService = {
+      fetchPackageRefs: jest.fn(),
+      fetchPackagesById: jest.fn().mockResolvedValue([]),
+    };
+    const service = new PackageSyncService(
+      cacheService,
+      pqsPackageService as never,
+      grpcOperationsService as never,
+      15 * 60 * 1000,
+    );
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
+    };
+
+    await expect(service.syncNodePackages(node as never)).resolves.toEqual({
+      fetchedPackageCount: 1,
+      missingPackageIds: ['package-a'],
+      skippedBecauseNotDue: false,
+    });
+
+    expect(grpcOperationsService.fetchPackageRefs).toHaveBeenCalledWith(node);
+    expect(pqsPackageService.fetchPackagesById).toHaveBeenCalledWith(node, ['package-a']);
+    expect(grpcOperationsService.fetchPackagesByRefs).toHaveBeenCalledWith(node, [
+      {
+        packageId: 'package-a',
+        mainPackageId: 'package-a',
+        name: 'Main Package',
+        version: '1.2.3',
+        uploadedAt: '2026-07-03T10:00:00.000Z',
+        packageSize: 2048,
+      },
+    ]);
+  });
+
   it('falls back to PQS package references when the gRPC package listing fails', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'package-sync-service-grpc-refs-fallback-'));
     process.env.PACKAGE_CACHE_DB_PATH = join(tempDir, 'packages.sqlite');
@@ -326,13 +414,13 @@ describe('PackageSyncService', () => {
     };
 
     await expect(service.syncNodePackages(node as never)).resolves.toEqual({
-      fetchedPackageCount: 1,
+      fetchedPackageCount: 0,
       missingPackageIds: ['package-a'],
       skippedBecauseNotDue: false,
     });
 
     expect(pqsPackageService.fetchPackageRefs).toHaveBeenCalledWith(node);
-    expect(pqsPackageService.fetchPackagesById).toHaveBeenCalledWith(node, ['package-a']);
+    expect(pqsPackageService.fetchPackagesById).not.toHaveBeenCalled();
     expect(grpcOperationsService.fetchPackagesByRefs).not.toHaveBeenCalled();
   });
 

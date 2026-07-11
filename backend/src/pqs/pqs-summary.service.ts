@@ -3212,7 +3212,7 @@ export class PqsSummaryService {
         version: metadata.version,
         uploadedAt: metadata.uploadedAt,
         packageSize: metadata.packageSize,
-        status: inspection.reason === 'missing_package' ? 'missing_package' : 'invalid_package',
+        status: inspection.reason === 'missing_package' ? 'not_available' : 'invalid_package',
         seenOnNodes,
         moduleCount: 0,
         templateCount: 0,

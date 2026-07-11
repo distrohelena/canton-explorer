@@ -46,12 +46,25 @@ export class PackageSyncService {
   }
 
   async syncNodePackages(node: NodeConfig): Promise<PackageSyncResult> {
+    const existingPackageIdsForNode = new Set(
+      this.cacheService.listPackagesForNode(node.id).map((row) => row.packageId),
+    );
     const { source, packageRefs } = await this.fetchPackageRefs(node);
     const missingPackageIds = this.cacheService.recordPackagePresence(
       node.id,
       packageRefs,
       new Date().toISOString(),
     );
+
+    if (node.mode !== 'pqs_with_grpc') {
+      return {
+        missingPackageIds: packageRefs
+          .map((packageRef) => packageRef.packageId)
+          .filter((packageId) => !existingPackageIdsForNode.has(packageId)),
+        fetchedPackageCount: 0,
+        skippedBecauseNotDue: false,
+      };
+    }
 
     if (missingPackageIds.length === 0) {
       return {
@@ -95,6 +108,9 @@ export class PackageSyncService {
       };
     }
 
+    const existingPackageIdsForNode = new Set(
+      this.cacheService.listPackagesForNode(node.id).map((row) => row.packageId),
+    );
     const { source, packageRefs } = await this.fetchPackageRefs(node);
     const requestedRefs = packageRefs.filter((packageRef) =>
       normalizedPackageIds.includes(packageRef.packageId),
@@ -113,6 +129,15 @@ export class PackageSyncService {
     }
 
     this.cacheService.recordPackagePresence(node.id, requestedRefs, new Date().toISOString());
+
+    if (node.mode !== 'pqs_with_grpc') {
+      return {
+        missingPackageIds: requestedIds.filter((packageId) => !existingPackageIdsForNode.has(packageId)),
+        fetchedPackageCount: 0,
+        skippedBecauseNotDue: false,
+      };
+    }
+
     const packages = await this.fetchPackages(node, source, requestedIds, requestedRefs);
     this.cacheService.storePackages(packages);
 
@@ -150,12 +175,27 @@ export class PackageSyncService {
     missingPackageIds: string[],
     missingPackageRefs: PackageRefFetchResult['packageRefs'],
   ) {
-    if (node.mode !== 'pqs_with_grpc' || source === 'pqs') {
-      return this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+    if (node.mode !== 'pqs_with_grpc') {
+      return [];
+    }
+
+    if (source === 'pqs') {
+      return [];
     }
 
     try {
-      return await this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+      const pqsPackages = await this.pqsPackageService.fetchPackagesById(node, missingPackageIds);
+      const foundPackageIds = new Set(pqsPackages.map((pkg) => pkg.packageId));
+      const missingRefs = missingPackageRefs.filter(
+        (packageRef) => !foundPackageIds.has(packageRef.packageId),
+      );
+
+      if (missingRefs.length === 0) {
+        return pqsPackages;
+      }
+
+      const grpcPackages = await this.grpcOperationsService.fetchPackagesByRefs(node, missingRefs);
+      return [...pqsPackages, ...grpcPackages];
     } catch {
       return this.grpcOperationsService.fetchPackagesByRefs(node, missingPackageRefs);
     }

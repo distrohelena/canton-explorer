@@ -54,6 +54,8 @@ function formatDecodeStatus(status: PackageDetailResponse['status']): string {
       return 'Invalid Package';
     case 'missing_package':
       return 'Missing Package';
+    case 'not_available':
+      return 'Not Available';
   }
 }
 

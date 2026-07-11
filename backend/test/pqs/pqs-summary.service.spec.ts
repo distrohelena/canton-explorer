@@ -1858,6 +1858,67 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('returns not-available package detail when metadata exists but package bytes do not', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      { getClient: () => ({ query: jest.fn() }) } as never,
+      undefined,
+      {
+        getPackageMetadata: jest.fn().mockReturnValue({
+          packageId: 'pqs-only-package',
+          name: 'pqs-only-package',
+          version: '3.5.2',
+          uploadedAt: null,
+          packageSize: null,
+        }),
+        listNodesForPackage: jest.fn().mockReturnValue([
+          {
+            nodeId: 'participant-1',
+            packageId: 'pqs-only-package',
+            mainPackageId: 'pqs-only-package',
+            packageName: 'pqs-only-package',
+            packageVersion: '3.5.2',
+            uploadedAt: null,
+            packageSize: null,
+            seenAt: '2026-07-11T10:00:00.000Z',
+          },
+        ]),
+      } as never,
+      {
+        inspectPackage: jest.fn().mockResolvedValue({
+          ok: false,
+          reason: 'missing_package',
+        }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+    };
+
+    expect(typeof service.fetchPackageDetail).toBe('function');
+
+    await expect(service.fetchPackageDetail?.('pqs-only-package')).resolves.toEqual({
+      packageId: 'pqs-only-package',
+      name: 'pqs-only-package',
+      version: '3.5.2',
+      uploadedAt: null,
+      packageSize: null,
+      status: 'not_available',
+      seenOnNodes: [
+        {
+          nodeId: 'participant-1',
+          packageName: 'pqs-only-package',
+          packageVersion: '3.5.2',
+          seenAt: '2026-07-11T10:00:00.000Z',
+        },
+      ],
+      moduleCount: 0,
+      templateCount: 0,
+      dataTypeCount: 0,
+      modules: [],
+      templates: [],
+      dataTypes: [],
+    });
+  });
+
   it('throws Package not found for unknown package ids', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       { getClient: () => ({ query: jest.fn() }) } as never,
