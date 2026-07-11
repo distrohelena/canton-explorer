@@ -383,7 +383,7 @@ export interface PackageDetailResponse {
   version: string | null;
   uploadedAt: string | null;
   packageSize: number | null;
-  status: 'decoded' | 'invalid_package' | 'missing_package';
+  status: 'decoded' | 'invalid_package' | 'missing_package' | 'not_available';
   seenOnNodes: PackageSeenOnNode[];
   moduleCount: number;
   templateCount: number;

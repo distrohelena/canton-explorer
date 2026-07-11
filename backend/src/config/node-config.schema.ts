@@ -12,6 +12,7 @@ const nodeBaseSchema = {
   ledgerLabel: z.string().min(1).optional(),
   pqs: z.object({
     connectionUriEnv: z.string().min(1),
+    schema: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/).default('public'),
   }),
   polling: z
     .object({

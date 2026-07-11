@@ -1,5 +1,22 @@
 import { describe, expect, it } from '@jest/globals';
+import type { PackageDetailResponse } from '../../src/domain/node.types';
 import { parseNodeConfigFile } from '../../src/config/node-config.schema';
+
+const notAvailablePackageDetailFixture = {
+  packageId: 'splice-amulet',
+  name: 'splice-amulet',
+  version: '0.1.24',
+  uploadedAt: null,
+  packageSize: null,
+  status: 'not_available',
+  seenOnNodes: [],
+  moduleCount: 0,
+  templateCount: 0,
+  dataTypeCount: 0,
+  modules: [],
+  templates: [],
+  dataTypes: [],
+} satisfies PackageDetailResponse;
 
 describe('parseNodeConfigFile', () => {
   it('parses a valid participant-node config', () => {
@@ -186,5 +203,80 @@ describe('parseNodeConfigFile', () => {
       nameKeys: ['name'],
       symbolKeys: ['symbol'],
     });
+  });
+
+  it('defaults PQS schema to public when omitted', () => {
+    const result = parseNodeConfigFile({
+      nodes: [
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+      ],
+    });
+
+    expect(result.nodes[0].pqs.schema).toBe('public');
+  });
+
+  it('parses an explicit PQS schema override', () => {
+    const result = parseNodeConfigFile({
+      nodes: [
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          pqs: {
+            connectionUriEnv: 'PARTICIPANT_1_PQS_URL',
+            schema: 'scribe',
+          },
+        },
+      ],
+    });
+
+    expect(result.nodes[0].pqs.schema).toBe('scribe');
+  });
+
+  it('rejects invalid PQS schema identifiers', () => {
+    expect(() =>
+      parseNodeConfigFile({
+        nodes: [
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            role: 'participant',
+            mode: 'pqs_only',
+            pqs: {
+              connectionUriEnv: 'PARTICIPANT_1_PQS_URL',
+              schema: 'public.schema',
+            },
+          },
+        ],
+      }),
+    ).toThrow(/schema/i);
+
+    expect(() =>
+      parseNodeConfigFile({
+        nodes: [
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            role: 'participant',
+            mode: 'pqs_only',
+            pqs: {
+              connectionUriEnv: 'PARTICIPANT_1_PQS_URL',
+              schema: 'public;drop',
+            },
+          },
+        ],
+      }),
+    ).toThrow(/schema/i);
+  });
+
+  it('accepts package detail responses with not-available status', () => {
+    expect(notAvailablePackageDetailFixture.status).toBe('not_available');
   });
 });

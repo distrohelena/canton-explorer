@@ -14,7 +14,8 @@
       "mode": "pqs_with_grpc",
       "ledgerLabel": "Retail Ledger",
       "pqs": {
-        "connectionUriEnv": "PARTICIPANT_1_PQS_URL"
+        "connectionUriEnv": "PARTICIPANT_1_PQS_URL",
+        "schema": "public"
       },
       "grpc": {
         "ledgerTarget": "localhost:5012",
