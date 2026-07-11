@@ -1745,12 +1745,22 @@ export class PqsSummaryService {
     );
     const hasMoreInQuery = rawMetaRows.length > normalizedLimit;
     const trimmedMetaRows = rawMetaRows.slice(0, normalizedLimit);
-    const orderedUpdates = (useAfterCursor ? [...trimmedMetaRows].reverse() : trimmedMetaRows).map((row) => ({
-      eventOffset: this.extractEventOffset(row),
-      rawUpdateId: row.update_id,
-      updateId: this.normalizeUpdateId(row.update_id),
-      recordTime: row.record_time ?? null,
-    }));
+    const orderedUpdates = (useAfterCursor ? [...trimmedMetaRows].reverse() : trimmedMetaRows).flatMap(
+      (row) => {
+        if (typeof row.update_id !== 'string') {
+          return [];
+        }
+
+        return [
+          {
+            eventOffset: this.extractEventOffset(row),
+            rawUpdateId: row.update_id,
+            updateId: this.normalizeUpdateId(row.update_id),
+            recordTime: row.record_time ?? null,
+          },
+        ];
+      },
+    );
 
     if (orderedUpdates.length === 0) {
       return {
@@ -2026,7 +2036,9 @@ export class PqsSummaryService {
     }
 
     const rawRows = Array.from(dedupedRows.values());
-    const rawUpdateIds = rawRows.map((row) => row.update_id);
+    const rawUpdateIds = rawRows
+      .map((row) => row.update_id)
+      .filter((updateId): updateId is string => typeof updateId === 'string');
     const partiesByUpdateId =
       rawUpdateIds.length > 0
         ? await this.fetchPartiesByUpdateId(node, client.query.bind(client), rawUpdateIds)
@@ -2034,6 +2046,10 @@ export class PqsSummaryService {
 
     return rawRows
       .map((row) => {
+        if (typeof row.update_id !== 'string') {
+          return null;
+        }
+
         const normalizedUpdateId = this.normalizeUpdateId(row.update_id);
         const eventOffset = this.extractEventOffset(row);
         const exact = this.isExactMatch(query, [eventOffset, normalizedUpdateId]);
@@ -3701,23 +3717,31 @@ export class PqsSummaryService {
     const result = await client.query(pqsPartyRecentUpdatesQuery(node, partyId, limit));
     const rows = (result.rows as UpdateMetaRow[]) ?? [];
 
-    const rawUpdateIds = rows.map((row) => row.update_id);
+    const rawUpdateIds = rows
+      .map((row) => row.update_id)
+      .filter((updateId): updateId is string => typeof updateId === 'string');
     const partiesByUpdateId =
       rawUpdateIds.length > 0
         ? await this.fetchPartiesByUpdateId(node, client.query.bind(client), rawUpdateIds)
         : new Map<string, string[]>();
 
-    return rows.map((row) => {
+    return rows.flatMap((row) => {
+      if (typeof row.update_id !== 'string') {
+        return [];
+      }
+
       const updateId = this.normalizeUpdateId(row.update_id);
 
-      return {
-        nodeId: node.id,
-        label: node.label,
-        eventOffset: this.extractEventOffset(row),
-        updateId,
-        recordTime: typeof row.record_time === 'string' ? row.record_time : null,
-        parties: partiesByUpdateId.get(updateId) ?? [],
-      };
+      return [
+        {
+          nodeId: node.id,
+          label: node.label,
+          eventOffset: this.extractEventOffset(row),
+          updateId,
+          recordTime: typeof row.record_time === 'string' ? row.record_time : null,
+          parties: partiesByUpdateId.get(updateId) ?? [],
+        },
+      ];
     });
   }
 
@@ -4487,7 +4511,11 @@ export class PqsSummaryService {
     return negative ? -parsed : parsed;
   }
 
-  private normalizeUpdateId(updateId: string): string {
+  private normalizeUpdateId(updateId: string | null | undefined): string {
+    if (typeof updateId !== 'string') {
+      return '';
+    }
+
     return updateId.startsWith('\\x') ? updateId.slice(2) : updateId;
   }
 

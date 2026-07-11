@@ -275,6 +275,135 @@ describe('GrpcOperationsService', () => {
     expect(disposeAsync).toHaveBeenCalledTimes(2);
   });
 
+  it('falls back cleanly when HoldingV2 packages are not available on the participant', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const listKnownPartiesAsync = jest.fn().mockResolvedValue({
+      partyDetails: [{ party: 'Alice', isLocal: true }],
+      nextPageToken: undefined,
+    });
+    const missingPackageError = new Error(
+      'PACKAGE_NAMES_NOT_FOUND: The following package names do not match upgradable packages uploaded on this participant: [splice-api-token-holding-v2].',
+    );
+    const getActiveContractsPageAsync = jest.fn().mockRejectedValue(missingPackageError);
+    const service = new GrpcOperationsService({
+      create: () => ({
+        partyManagementService: {
+          listKnownPartiesAsync,
+        },
+        stateService: {
+          getActiveContractsPageAsync,
+        },
+        disposeAsync,
+      }),
+    } as never);
+
+    await expect(service.fetchHoldingV2Tokens(grpcNode)).resolves.toEqual([]);
+    await expect(service.fetchHoldingV2TokenHolders(grpcNode)).resolves.toEqual([]);
+    expect(disposeAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('canonicalizes native Amulet HoldingV2 data to Canton Coin', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const listKnownPartiesAsync = jest.fn().mockResolvedValue({
+      partyDetails: [{ party: 'Alice', isLocal: true }],
+      nextPageToken: undefined,
+    });
+    const getActiveContractsPageAsync = jest.fn().mockResolvedValue({
+      contracts: [
+        {
+          createdEvent: {
+            contractId: 'amulet-contract-1',
+            interfaceViews: [
+              {
+                interfaceId: {
+                  packageId: '#splice-api-token-holding-v2',
+                  moduleName: 'Splice.Api.Token.HoldingV2',
+                  entityName: 'Holding',
+                },
+                viewStatus: { code: 0 },
+                viewValue: {
+                  fields: [
+                    {
+                      label: 'account',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'owner',
+                                value: { sum: { oneofKind: 'party', party: 'Alice' } },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    {
+                      label: 'instrumentId',
+                      value: {
+                        sum: {
+                          oneofKind: 'record',
+                          record: {
+                            fields: [
+                              {
+                                label: 'admin',
+                                value: { sum: { oneofKind: 'party', party: 'DSO' } },
+                              },
+                              {
+                                label: 'id',
+                                value: { sum: { oneofKind: 'text', text: 'Amulet' } },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    {
+                      label: 'amount',
+                      value: { sum: { oneofKind: 'numeric', numeric: '42.0000000000' } },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const service = new GrpcOperationsService({
+      create: () => ({
+        partyManagementService: {
+          listKnownPartiesAsync,
+        },
+        stateService: {
+          getActiveContractsPageAsync,
+        },
+        disposeAsync,
+      }),
+    } as never);
+
+    await expect(service.fetchHoldingV2Tokens(grpcNode)).resolves.toEqual([
+      {
+        tokenId: 'canton-coin',
+        name: 'Canton Coin',
+        symbol: null,
+        issuer: null,
+        source: 'grpc',
+      },
+    ]);
+    await expect(service.fetchHoldingV2TokenHolders(grpcNode)).resolves.toEqual([
+      {
+        contractId: 'amulet-contract-1',
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        tokenId: 'canton-coin',
+        partyId: 'Alice',
+        amount: '42.0000000000',
+      },
+    ]);
+  });
+
   it('ignores OZ-specific holding metadata keys for CIP112 display metadata', async () => {
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
     const listKnownPartiesAsync = jest.fn().mockResolvedValue({

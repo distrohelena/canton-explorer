@@ -61,6 +61,9 @@ const HOLDING_V2_INTERFACE_ID = '#splice-api-token-holding-v2:Splice.Api.Token.H
 const HOLDING_V2_INTERFACE_MODULE = 'Splice.Api.Token.HoldingV2';
 const HOLDING_V2_INTERFACE_ENTITY = 'Holding';
 const HOLDING_V2_PAGE_SIZE = 500;
+const CANTON_COIN_TOKEN_ID = 'canton-coin';
+const CANTON_COIN_TOKEN_NAME = 'Canton Coin';
+const NATIVE_AMULET_INTRINSIC_ID = 'Amulet';
 
 type LedgerViewValue = {
   sum?: {
@@ -234,21 +237,30 @@ export class GrpcOperationsService {
       return [];
     }
 
-    return this.withClient(node, async (client) => {
-      const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
-      const deduped = new Map<string, TokenSummary>();
+    try {
+      return await this.withClient(node, async (client) => {
+        const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
+        const deduped = new Map<string, TokenSummary>();
 
-      for (const contract of activeContracts) {
-        const token = this.extractHoldingV2TokenSummary(contract);
-        if (token && !deduped.has(token.tokenId)) {
-          deduped.set(token.tokenId, token);
+        for (const contract of activeContracts) {
+          const token = this.extractHoldingV2TokenSummary(contract);
+          if (token && !deduped.has(token.tokenId)) {
+            deduped.set(token.tokenId, token);
+          }
         }
+
+        return Array.from(deduped.values()).sort(
+          (left, right) =>
+            left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
+        );
+      });
+    } catch (error) {
+      if (this.isMissingHoldingV2PackageError(error)) {
+        return [];
       }
 
-      return Array.from(deduped.values()).sort(
-        (left, right) => left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
-      );
-    });
+      throw error;
+    }
   }
 
   async fetchHoldingV2TokenHolders(node: NodeConfig): Promise<GrpcTokenHolderObservation[]> {
@@ -256,24 +268,33 @@ export class GrpcOperationsService {
       return [];
     }
 
-    return this.withClient(node, async (client) => {
-      const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
-      const deduped = new Map<string, GrpcTokenHolderObservation>();
+    try {
+      return await this.withClient(node, async (client) => {
+        const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
+        const deduped = new Map<string, GrpcTokenHolderObservation>();
 
-      for (const contract of activeContracts) {
-        const holder = this.extractHoldingV2TokenHolder(node, contract);
-        if (!holder) {
-          continue;
+        for (const contract of activeContracts) {
+          const holder = this.extractHoldingV2TokenHolder(node, contract);
+          if (!holder) {
+            continue;
+          }
+
+          const dedupeKey =
+            holder.contractId ?? `${holder.tokenId}\u0000${holder.partyId}\u0000${holder.amount ?? ''}`;
+          if (!deduped.has(dedupeKey)) {
+            deduped.set(dedupeKey, holder);
+          }
         }
 
-        const dedupeKey = holder.contractId ?? `${holder.tokenId}\u0000${holder.partyId}\u0000${holder.amount ?? ''}`;
-        if (!deduped.has(dedupeKey)) {
-          deduped.set(dedupeKey, holder);
-        }
+        return Array.from(deduped.values());
+      });
+    } catch (error) {
+      if (this.isMissingHoldingV2PackageError(error)) {
+        return [];
       }
 
-      return Array.from(deduped.values());
-    });
+      throw error;
+    }
   }
 
   async fetchPartyTopology(
@@ -689,6 +710,16 @@ export class GrpcOperationsService {
     const name = this.readConfiguredLedgerTokenMetadata(view, 'name') ?? intrinsicId;
     const symbol = this.readConfiguredLedgerTokenMetadata(view, 'symbol');
 
+    if (this.isNativeAmuletIntrinsicId(intrinsicId)) {
+      return {
+        tokenId: CANTON_COIN_TOKEN_ID,
+        name: CANTON_COIN_TOKEN_NAME,
+        symbol: null,
+        issuer: null,
+        source: 'grpc',
+      };
+    }
+
     return {
       tokenId: `${issuer}::${intrinsicId}`,
       name,
@@ -712,6 +743,17 @@ export class GrpcOperationsService {
     const partyId = this.readLedgerNestedScalarField(view, ['account', 'owner']);
     if (!issuer || !intrinsicId || !partyId) {
       return null;
+    }
+
+    if (this.isNativeAmuletIntrinsicId(intrinsicId)) {
+      return {
+        contractId: this.nullIfEmptyString(contract.createdEvent?.contractId),
+        nodeId: node.id,
+        label: node.label,
+        tokenId: CANTON_COIN_TOKEN_ID,
+        partyId,
+        amount: this.readLedgerScalarField(view, 'amount'),
+      };
     }
 
     return {
@@ -1304,5 +1346,20 @@ export class GrpcOperationsService {
     } finally {
       await client.disposeAsync?.();
     }
+  }
+
+  private isMissingHoldingV2PackageError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    return (
+      error.message.includes('PACKAGE_NAMES_NOT_FOUND')
+      && error.message.includes('splice-api-token-holding-v2')
+    );
+  }
+
+  private isNativeAmuletIntrinsicId(intrinsicId: string): boolean {
+    return intrinsicId.trim() === NATIVE_AMULET_INTRINSIC_ID;
   }
 }
