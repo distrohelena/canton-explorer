@@ -36,6 +36,7 @@ import type {
 
 export function resolveApiBaseUrl(
   envBaseUrl = import.meta.env.VITE_API_BASE_URL,
+  isDev = import.meta.env.DEV,
   port = typeof window !== 'undefined' ? window.location.port : undefined,
   hostname = typeof window !== 'undefined' ? window.location.hostname : undefined,
 ): string {
@@ -47,11 +48,11 @@ export function resolveApiBaseUrl(
     return envBaseUrl;
   }
 
-  if (port && port !== '46000') {
-    return '/api';
+  if (isDev && port === '46000') {
+    return 'http://localhost:4600/api';
   }
 
-  return 'http://localhost:4600/api';
+  return '/api';
 }
 
 const API_BASE = resolveApiBaseUrl();
