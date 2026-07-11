@@ -98,7 +98,10 @@ describe('TokenTransferDetailView', () => {
     );
     expect(screen.getByText('42.0')).toHaveClass('token-transfer-detail__amount');
     expect(screen.getByText('Update ID')).toBeInTheDocument();
-    expect(screen.getByText('token-update-2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'token-update-2' })).toHaveAttribute(
+      'href',
+      '/nodes/participant-1/updates/101?from=tokens',
+    );
     expect(screen.getByText('Jul 7, 2026')).toBeInTheDocument();
     expect(screen.getByText('9:00:00 AM')).toBeInTheDocument();
     expect(screen.getByText('From').closest('.contract-detail__summary-item')).toHaveClass(

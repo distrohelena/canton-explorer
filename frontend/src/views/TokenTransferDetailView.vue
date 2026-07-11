@@ -40,6 +40,15 @@ function nodeUpdateLink(nodeId: string, eventOffset: string): string {
   return `/nodes/${nodeId}/updates/${encodeURIComponent(eventOffset)}?from=tokens`;
 }
 
+const updateDetailLink = computed(() => {
+  const firstNode = transferDetail.value?.nodes[0];
+  if (!firstNode) {
+    return null;
+  }
+
+  return nodeUpdateLink(firstNode.nodeId, firstNode.eventOffset);
+});
+
 const recordTimeLines = computed(() =>
   transferDetail.value ? formatRecordTime(transferDetail.value.recordTime) : null,
 );
@@ -107,7 +116,16 @@ const recordTimeLines = computed(() =>
               </div>
               <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <dt>Update ID</dt>
-                <dd class="update-detail__id">{{ transferDetail.updateId }}</dd>
+                <dd class="update-detail__id">
+                  <RouterLink
+                    v-if="updateDetailLink"
+                    class="contract-detail__link"
+                    :to="updateDetailLink"
+                  >
+                    {{ transferDetail.updateId }}
+                  </RouterLink>
+                  <span v-else>{{ transferDetail.updateId }}</span>
+                </dd>
               </div>
               <div class="contract-detail__summary-item">
                 <dt>Record Time</dt>
