@@ -18,6 +18,23 @@ function formatVariableName(name: string | null | undefined, kind: string | null
   return name ?? 'value';
 }
 
+function formatScopeName(name: string | null | undefined, frameId: string | null | undefined): string {
+  const label = name ?? frameId ?? 'Frame';
+
+  if (!label.startsWith('$')) {
+    return label;
+  }
+
+  const normalizedHelperName = label.replace(/^\$+/, '');
+  const helperMatch = /^sc_(.+?)_(\d+)$/.exec(normalizedHelperName);
+
+  if (!helperMatch) {
+    return 'generated helper';
+  }
+
+  return `generated helper from ${helperMatch[1]}`;
+}
+
 function contractTarget(kind: string | null | undefined, value: string | null | undefined): string | null {
   if (kind !== 'contractId' || !props.nodeId || !value) {
     return null;
@@ -85,7 +102,7 @@ watch(
         @click="toggleScope(scope)"
       >
         <div class="debugger-scope-panel__scope-header">
-          <h4>{{ scope.name ?? scope.frameId ?? 'Frame' }}</h4>
+          <h4>{{ formatScopeName(scope.name, scope.frameId) }}</h4>
           <div class="debugger-scope-panel__scope-meta">
             <span class="debugger-scope-panel__scope-id">{{ scope.frameId ?? 'anonymous' }}</span>
             <span class="debugger-scope-panel__scope-chevron" aria-hidden="true">
@@ -105,7 +122,8 @@ watch(
             <strong>{{ formatVariableName(variable.name, variable.kind) }}</strong>
             <span class="debugger-scope-panel__kind">{{ variable.kind ?? 'value' }}</span>
           </div>
-          <code>
+          <div class="debugger-scope-panel__value-block">
+            <code>
             <RouterLink
               v-if="contractTarget(variable.kind, variable.value)"
               class="debugger-scope-panel__value-link"
@@ -127,7 +145,14 @@ watch(
             <template v-else>
               {{ variable.value ?? 'null' }}
             </template>
-          </code>
+            </code>
+            <div
+              v-if="variable.kind === 'contractId' && variable.contractType"
+              class="debugger-scope-panel__contract-type"
+            >
+              {{ variable.contractType }}
+            </div>
+          </div>
         </li>
       </ul>
 

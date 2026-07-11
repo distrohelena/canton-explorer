@@ -715,6 +715,21 @@ body {
   text-align: right;
 }
 
+.debugger-scope-panel__value-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.debugger-scope-panel__contract-type {
+  max-width: 100%;
+  font-size: 0.78rem;
+  color: var(--text-500);
+  text-align: right;
+  word-break: break-word;
+}
+
 .debugger-scope-panel__value-link {
   color: var(--blue-700);
   text-decoration: none;

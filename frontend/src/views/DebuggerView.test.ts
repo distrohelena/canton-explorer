@@ -82,6 +82,7 @@ describe('DebuggerView', () => {
                 name: 'owner',
                 kind: 'text',
                 value: 'Alice',
+                contractType: null,
               },
             ],
           },

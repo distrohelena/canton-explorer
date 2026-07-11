@@ -71,6 +71,7 @@ type ReplayScopeVariableLike = {
   name?: string;
   kind?: string;
   value?: string;
+  contractType?: string;
 };
 
 type ReplayScopeLike = {
@@ -175,6 +176,7 @@ export interface DebuggerScopeVariableResponse {
   name: string | null;
   kind: string | null;
   value: string | null;
+  contractType: string | null;
 }
 
 export interface DebuggerScopeResponse {
@@ -702,6 +704,7 @@ export class DebuggerService {
         name: variable.name ?? null,
         kind: variable.kind ?? null,
         value: variable.value ?? null,
+        contractType: variable.contractType ?? null,
       })),
     };
   }

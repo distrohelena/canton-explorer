@@ -16,6 +16,7 @@ describe('DebuggerScopePanel', () => {
         name: string | null;
         kind: string | null;
         value: string | null;
+        contractType: string | null;
       }>;
     }>;
     nodeId?: string | null;
@@ -51,6 +52,7 @@ describe('DebuggerScopePanel', () => {
                 name: 'owner',
                 kind: 'text',
                 value: 'Alice',
+                contractType: null,
               },
             ],
           },
@@ -76,6 +78,7 @@ describe('DebuggerScopePanel', () => {
                 name: 'selfContractId',
                 kind: 'contractId',
                 value: '00abc',
+                contractType: 'Oz.Vault.Base.Core:BaseVault',
               },
             ],
           },
@@ -87,6 +90,7 @@ describe('DebuggerScopePanel', () => {
     expect(screen.queryByText('selfContractId')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '00abc' })).toHaveAttribute('href', '/nodes/cnqs-sv/contracts/00abc');
     expect(screen.getByRole('link', { name: '00abc' })).toHaveAttribute('target', '_blank');
+    expect(screen.getByText('Oz.Vault.Base.Core:BaseVault')).toBeInTheDocument();
   });
 
   it('allows each scope frame to be collapsed and expanded', async () => {
@@ -100,6 +104,7 @@ describe('DebuggerScopePanel', () => {
                 name: 'owner',
                 kind: 'text',
                 value: 'Alice',
+                contractType: null,
               },
             ],
           },
@@ -133,6 +138,7 @@ describe('DebuggerScopePanel', () => {
                 name: 'ds10',
                 kind: 'party',
                 value: 'vault-integration-alice-simulation-user-17::12205af0d2665949f3e6ddc38133b790acf63907a1d49fdf41c43a4649b5aa2050fb',
+                contractType: null,
               },
             ],
           },
@@ -153,5 +159,20 @@ describe('DebuggerScopePanel', () => {
         name: 'vault-integration-alice-simulation-user-17::12205af0d2665949f3e6ddc38133b790acf63907a1d49fdf41c43a4649b5aa2050fb',
       }),
     ).toHaveAttribute('target', '_blank');
+  });
+
+  it('formats generated lf helper frame names for display', async () => {
+    await renderScopePanel({
+        scopes: [
+          {
+            frameId: 'frame-1',
+            name: '$$$$sc_BaseVault_8',
+            variables: [],
+          },
+        ],
+    });
+
+    expect(screen.getByText('generated helper from BaseVault')).toBeInTheDocument();
+    expect(screen.queryByText('$$$$sc_BaseVault_8')).not.toBeInTheDocument();
   });
 });

@@ -3970,6 +3970,73 @@ mode: 'pqs_only',
     });
   });
 
+  it('canonicalizes offline native Amulet holdings to Canton Coin', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'token-holding-update-amulet-1',
+          event_offset: '706',
+          record_time: '2026-07-11T18:05:39.756Z',
+          template_id: 'Splice.Api.Token.HoldingV1:Holding',
+          package_id: 'splice-api-token-holding-v1',
+          contract_instance: Buffer.from('native-amulet-holding'),
+        },
+      ],
+    });
+    const decoder = {
+      decodeContractInstance: jest.fn().mockReturnValue({
+        status: 'decoded',
+        value: {
+          kind: 'record',
+          fields: [
+            { label: 'owner', value: 'Alice' },
+            {
+              label: 'instrumentId',
+              value: {
+                kind: 'record',
+                fields: [
+                  {
+                    label: 'admin',
+                    value: 'DSO::122077e9d7a8f163db646a4b07f89b504a6597cf393ad3e3f23ce0e0e26b95d91588',
+                  },
+                  { label: 'id', value: 'Amulet' },
+                ],
+              },
+            },
+            { label: 'amount', value: '42.0000000000' },
+          ],
+        },
+      }),
+    };
+    const service = new PqsSummaryService(
+      {
+        getClient: () => ({ query }),
+      } as never,
+      decoder as never,
+    );
+
+    const response = await (
+      service as PqsSummaryService & {
+        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
+
+    expect(response).toEqual({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      tokens: [
+        {
+          tokenId: 'canton-coin',
+          name: 'Canton Coin',
+          symbol: null,
+          issuer: null,
+          source: 'pqs',
+        },
+      ],
+    });
+  });
+
   it('discovers observed CIP112 tokens from PQS-only fallback after forcing a package refresh on invalid_package', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [

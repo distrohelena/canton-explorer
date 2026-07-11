@@ -281,6 +281,7 @@ const CANTON_COIN_TOKEN_NAME = 'Canton Coin';
 const CANTON_COIN_TRANSFER_TEMPLATE_ID =
   'Splice.AmuletTransferInstruction:AmuletTransferInstruction';
 const CANTON_COIN_AMULET_TEMPLATE_ID = 'Splice.Amulet:Amulet';
+const NATIVE_AMULET_INTRINSIC_ID = 'Amulet';
 const CIP56_HOLDING_TEMPLATE_ID = 'Splice.Api.Token.HoldingV1:Holding';
 const CIP56_TRANSFER_TEMPLATE_ID = 'Splice.Api.Token.TransferInstructionV1:Transfer';
 const CIP112_TEMPLATE_ID_LIKE_PATTERN = '%.CIP112:%';
@@ -4589,15 +4590,12 @@ export class PqsSummaryService {
     }
 
     const issuer = this.readNestedScalarField(decoded.value, ['instrumentId', 'admin']);
-    const tokenId = this.buildObservedTokenId(intrinsicId, issuer);
-
-    return {
-      tokenId,
-      name: this.readConfiguredDecodedTokenMetadata(decoded.value, 'name') ?? intrinsicId,
-      symbol: this.readConfiguredDecodedTokenMetadata(decoded.value, 'symbol'),
+    return this.buildObservedTokenSummary(
+      intrinsicId,
       issuer,
-      source: 'pqs',
-    };
+      this.readConfiguredDecodedTokenMetadata(decoded.value, 'name') ?? intrinsicId,
+      this.readConfiguredDecodedTokenMetadata(decoded.value, 'symbol'),
+    );
   }
 
   private extractObservedTokenSummary(
@@ -4642,16 +4640,37 @@ export class PqsSummaryService {
       ?? this.readNestedScalarField(decoded.value, ['vaultIdentity', 'admin'])
       ?? this.readScalarField(decoded.value, 'vaultParty')
       ?? this.readScalarField(decoded.value, 'issuer');
-    const tokenId = this.buildObservedTokenId(intrinsicId, issuer);
-
-    return {
-      tokenId,
-      name:
-        this.readConfiguredDecodedTokenMetadata(decoded.value, 'name')
+    return this.buildObservedTokenSummary(
+      intrinsicId,
+      issuer,
+      this.readConfiguredDecodedTokenMetadata(decoded.value, 'name')
         ?? this.readScalarField(decoded.value, 'name')
         ?? instrumentIdText
         ?? symbol
         ?? intrinsicId,
+      symbol,
+    );
+  }
+
+  private buildObservedTokenSummary(
+    intrinsicId: string,
+    issuer: string | null,
+    fallbackName: string,
+    symbol: string | null,
+  ): TokenSummary {
+    if (this.isNativeAmuletIntrinsicId(intrinsicId)) {
+      return {
+        tokenId: CANTON_COIN_TOKEN_ID,
+        name: CANTON_COIN_TOKEN_NAME,
+        symbol: null,
+        issuer: null,
+        source: 'pqs',
+      };
+    }
+
+    return {
+      tokenId: this.buildObservedTokenId(intrinsicId, issuer),
+      name: fallbackName,
       symbol,
       issuer,
       source: 'pqs',
@@ -4667,6 +4686,10 @@ export class PqsSummaryService {
     }
 
     return `${normalizedIssuer}::${normalizedIntrinsicId}`;
+  }
+
+  private isNativeAmuletIntrinsicId(intrinsicId: string): boolean {
+    return intrinsicId.trim() === NATIVE_AMULET_INTRINSIC_ID;
   }
 
   private normalizeShareLikeIntrinsicTokenId(intrinsicId: string): string {

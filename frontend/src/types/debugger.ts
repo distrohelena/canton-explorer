@@ -21,6 +21,7 @@ export interface DebuggerScopeVariable {
   name: string | null;
   kind: string | null;
   value: string | null;
+  contractType: string | null;
 }
 
 export interface DebuggerScope {
