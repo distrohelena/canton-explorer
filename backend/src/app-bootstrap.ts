@@ -19,8 +19,13 @@ type BootstrapApp = {
   };
 };
 
-export function resolveFrontendAssetsDir(): string {
-  return join(__dirname, 'public');
+export function resolveFrontendAssetsDir(baseDir = __dirname): string {
+  const srcPublicDir = join(baseDir, 'public');
+  if (existsSync(join(srcPublicDir, 'index.html'))) {
+    return srcPublicDir;
+  }
+
+  return join(baseDir, '..', 'public');
 }
 
 export function resolveHost(host = process.env.HOST): string {

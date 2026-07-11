@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, jest } from '@jest/globals';
@@ -7,6 +7,7 @@ import {
   DEFAULT_PORT,
   configureFrontendAssets,
   resolveHost,
+  resolveFrontendAssetsDir,
   resolvePort,
   startApp,
 } from '../src/app-bootstrap';
@@ -60,6 +61,19 @@ describe('startApp', () => {
 
     expect(useStaticAssets).toHaveBeenCalledWith(tempDir);
     expect(registerGet).toHaveBeenCalledTimes(1);
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('resolves packaged frontend assets from dist/public when dist/src/public is absent', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'canton-explorer-packaged-'));
+    const compiledSrcDir = join(tempDir, 'dist', 'src');
+    const packagedPublicDir = join(tempDir, 'dist', 'public');
+    mkdirSync(packagedPublicDir, { recursive: true });
+
+    writeFileSync(join(packagedPublicDir, 'index.html'), '<html></html>', 'utf8');
+
+    expect(resolveFrontendAssetsDir(compiledSrcDir)).toBe(packagedPublicDir);
 
     rmSync(tempDir, { recursive: true, force: true });
   });
