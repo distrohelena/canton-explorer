@@ -24,6 +24,10 @@ const TokensStub = defineComponent({
   template: '<div>Tokens View</div>',
 });
 
+const DebuggerStub = defineComponent({
+  template: '<div>Debugger View</div>',
+});
+
 const TokenTransferDetailStub = defineComponent({
   template: '<div>Token Transfer Detail View</div>',
 });
@@ -65,6 +69,7 @@ async function renderAt(path: string) {
       { path: '/parties', component: PartiesStub },
       { path: '/contracts', component: ContractsStub },
       { path: '/tokens', component: TokensStub },
+      { path: '/debugger', component: DebuggerStub },
       { path: '/tokens/transfers/:updateId', component: TokenTransferDetailStub, props: true },
       { path: '/search', component: SearchResultsStub },
       { path: '/nodes/:id/updates', component: NodeUpdatesStub, props: true },
@@ -117,6 +122,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(
       screen.getByPlaceholderText('Search'),
     ).toBeInTheDocument();
@@ -141,6 +147,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Nodes View')).toBeInTheDocument();
   });
 
@@ -152,6 +159,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Parties View')).toBeInTheDocument();
   });
 
@@ -163,6 +171,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Contracts View')).toBeInTheDocument();
   });
 
@@ -174,7 +183,20 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Tokens View')).toBeInTheDocument();
+  });
+
+  it('keeps the shared shell on the debugger route', async () => {
+    const { container } = await renderAt('/debugger');
+
+    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
+    expect(screen.getByText('Debugger View')).toBeInTheDocument();
+    expect(container.querySelector('.app-shell--debugger')).not.toBeNull();
+    expect(container.querySelector('.app-frame--debugger')).not.toBeNull();
+    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
   });
 
   it('keeps the shared shell on a token transfer detail route', async () => {

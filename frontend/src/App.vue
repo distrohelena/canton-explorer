@@ -21,6 +21,7 @@ const resolvedTheme = computed<ResolvedTheme>(() =>
       : 'light'
     : themePreference.value,
 );
+const isDebuggerRoute = computed(() => route.path === '/debugger');
 const themeToggleLabel = computed(() =>
   resolvedTheme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
 );
@@ -120,7 +121,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell" :data-theme="resolvedTheme">
+  <div class="app-shell" :class="{ 'app-shell--debugger': isDebuggerRoute }" :data-theme="resolvedTheme">
     <header class="app-header">
       <div class="app-header__inner">
         <div class="app-titlebar">
@@ -158,12 +159,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </header>
-    <div class="app-frame">
+    <div class="app-frame" :class="{ 'app-frame--debugger': isDebuggerRoute }">
       <main class="app-main">
         <RouterView />
       </main>
     </div>
-    <footer class="app-footer">
+    <footer v-if="!isDebuggerRoute" class="app-footer">
       <div class="app-footer__inner">
         <p class="app-footer__text">
           powered by

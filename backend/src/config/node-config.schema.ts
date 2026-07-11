@@ -57,6 +57,13 @@ const tokenMetadataSchema = z
     symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
   });
 
+const debuggerConfigSchema = z
+  .object({
+    localDarDirectory: z.string().min(1).optional(),
+  })
+  .strict()
+  .default({});
+
 const nodeSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -74,6 +81,7 @@ const nodeSchema = z.discriminatedUnion('mode', [
 ]);
 
 const configSchema = z.object({
+  debugger: debuggerConfigSchema,
   tokenMetadata: tokenMetadataSchema.default({
     nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
     symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
@@ -84,6 +92,7 @@ const configSchema = z.object({
 export type NodeConfigFile = z.infer<typeof configSchema>;
 export type NodeConfig = z.infer<typeof nodeSchema>;
 export type TokenMetadataConfig = z.infer<typeof tokenMetadataSchema>;
+export type DebuggerConfig = z.infer<typeof debuggerConfigSchema>;
 
 export function parseNodeConfigFile(input: unknown): NodeConfigFile {
   return configSchema.parse(input);

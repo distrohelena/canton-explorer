@@ -24,6 +24,7 @@ export const router = createRouter({
     { path: '/parties', component: PartiesView },
     { path: '/contracts', component: ContractsView },
     { path: '/tokens', component: TokensView },
+    { path: '/debugger', component: () => import('./views/DebuggerView.vue') },
     { path: '/tokens/transfers/:updateId', component: TokenTransferDetailView, props: true },
     { path: '/tokens/:tokenId', component: TokenDetailView, props: true },
     { path: '/search', component: SearchResultsView },

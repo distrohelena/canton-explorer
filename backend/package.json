@@ -8,6 +8,9 @@
   "bin": {
     "canton-explorer": "bin/canton-explorer.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "bin",
     "config/nodes.example.json",
@@ -18,7 +21,11 @@
   "scripts": {
     "build": "nest build",
     "build:package": "node ./scripts/prepack.mjs",
+    "dar:debug": "node ./scripts/build-debug-dar.mjs",
+    "dar:prepare-workspace": "node ./scripts/prepare-debug-dars-from-workspace.mjs",
+    "dar:source-map": "node ./scripts/generate-daml-source-map.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "sdk:local": "node ./scripts/link-local-sdk.mjs",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

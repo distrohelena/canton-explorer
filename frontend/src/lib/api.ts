@@ -21,6 +21,7 @@ import type { PartyContractsResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
 import type { SearchResultsResponse } from '../types/search';
 import type { TemplateFilterResponse } from '../types/templates';
+import type { DebuggerEventListResponse, DebuggerSessionResponse } from '../types/debugger';
 import type {
   TokenDetailResponse,
   TokenHoldersResponse,
@@ -55,10 +56,46 @@ export function resolveApiBaseUrl(
 
 const API_BASE = resolveApiBaseUrl();
 
+async function createHttpError(response: Response): Promise<Error> {
+  const fallbackMessage = `Request failed: ${response.status}`;
+
+  try {
+    const body = (await response.json()) as {
+      message?: string | string[];
+      error?: string;
+    };
+    const message = Array.isArray(body.message)
+      ? body.message.join(', ')
+      : typeof body.message === 'string'
+        ? body.message
+        : typeof body.error === 'string'
+          ? body.error
+          : fallbackMessage;
+    return new Error(message);
+  } catch {
+    return new Error(fallbackMessage);
+  }
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw await createHttpError(response);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function postJson<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw await createHttpError(response);
   }
 
   return response.json() as Promise<T>;
@@ -255,6 +292,41 @@ export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse>
 
 export function fetchSearchResults(query: string): Promise<SearchResultsResponse> {
   return fetchJson<SearchResultsResponse>(`/search?q=${encodeURIComponent(query.trim())}`);
+}
+
+export function createDebuggerSession(nodeId: string, offset: string): Promise<DebuggerSessionResponse> {
+  return postJson<DebuggerSessionResponse>('/debugger/sessions', {
+    nodeId,
+    offset,
+  });
+}
+
+export function fetchDebuggerSession(sessionId: string): Promise<DebuggerSessionResponse> {
+  return fetchJson<DebuggerSessionResponse>(`/debugger/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export function fetchDebuggerEvents(sessionId: string): Promise<DebuggerEventListResponse> {
+  return fetchJson<DebuggerEventListResponse>(
+    `/debugger/sessions/${encodeURIComponent(sessionId)}/events`,
+  );
+}
+
+export function stepDebuggerSession(
+  sessionId: string,
+  action: 'step-back' | 'step-into' | 'step-over' | 'step-out' | 'continue',
+): Promise<DebuggerSessionResponse> {
+  return postJson<DebuggerSessionResponse>(
+    `/debugger/sessions/${encodeURIComponent(sessionId)}/actions/${action}`,
+  );
+}
+
+export function jumpDebuggerSessionToStep(
+  sessionId: string,
+  stepId: string,
+): Promise<DebuggerSessionResponse> {
+  return postJson<DebuggerSessionResponse>(
+    `/debugger/sessions/${encodeURIComponent(sessionId)}/steps/${encodeURIComponent(stepId)}/select`,
+  );
 }
 
 export function fetchTokens(options?: {

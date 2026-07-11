@@ -8,3 +8,4 @@ backend/config/nodes.local.json
 backend/data/
 data/
 frontend/.env.local
+debug-dars/

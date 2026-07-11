@@ -43,6 +43,19 @@ const recordTimeLines = computed(() =>
   updateDetail.value ? formatRecordTime(updateDetail.value.recordTime) : null,
 );
 const renderedEvents = computed(() => updateDetail.value?.events ?? []);
+const debuggerTarget = computed(() => {
+  if (!updateDetail.value) {
+    return '/debugger';
+  }
+
+  const params = new URLSearchParams({
+    nodeId: props.id,
+    updateId: updateDetail.value.updateId,
+    eventOffset: updateDetail.value.eventOffset,
+  });
+
+  return `/debugger?${params.toString()}`;
+});
 const backTarget = computed(() => {
   const source = Array.isArray(route.query.from) ? route.query.from[0] : route.query.from;
   const partyId = Array.isArray(route.query.partyId) ? route.query.partyId[0] : route.query.partyId;
@@ -262,6 +275,12 @@ function getExerciseEntries(
           aria-label="Back to overview"
         >
           ←
+        </RouterLink>
+      </div>
+
+      <div class="update-detail__action-rail">
+        <RouterLink class="update-detail__debug-action" :to="debuggerTarget">
+          Debug Offset
         </RouterLink>
       </div>
 

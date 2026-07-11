@@ -234,7 +234,7 @@ export class DamlValueDecoderService {
       const params = resolvedDataType.dataType.params ?? [];
       const args = resolvedType.sum.con?.args ?? [];
 
-      params.forEach((parameter, index) => {
+      params.forEach((parameter: any, index: number) => {
         if (parameter.varInternedStr !== undefined && args[index]) {
           nextBindings.set(
             parameter.varInternedStr,
@@ -264,7 +264,7 @@ export class DamlValueDecoderService {
 
       return {
         kind: 'record',
-        fields: expectedFields.map((field, index) => ({
+        fields: expectedFields.map((field: any, index: number) => ({
           label:
             resolveRawInternedString(packageRef.rawPackage, field.fieldInternedStr) ??
             `field${index + 1}`,
@@ -286,7 +286,7 @@ export class DamlValueDecoderService {
       }
 
       const variantField = dataType.dataCons.variant.fields.find(
-        (field) =>
+        (field: any) =>
           resolveRawInternedString(packageRef.rawPackage, field.fieldInternedStr) ===
           constructor,
       );

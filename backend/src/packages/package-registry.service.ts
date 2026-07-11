@@ -92,7 +92,7 @@ export class PackageRegistryService implements OnModuleInit {
 
     const templateChoice =
       templateResult.definition.template.choices?.find(
-        (choice) =>
+        (choice: any) =>
           resolveRawInternedString(
             templateResult.definition.packageRef.rawPackage,
             choice.nameInternedStr,
@@ -113,7 +113,7 @@ export class PackageRegistryService implements OnModuleInit {
         templateChoice,
         sdkChoice:
           templateResult.definition.sdkTemplate?.choices.find(
-            (choice) => choice.name === input.choice,
+            (choice: any) => choice.name === input.choice,
           ) ?? null,
       },
     };
@@ -296,8 +296,10 @@ export class PackageRegistryService implements OnModuleInit {
     const nextAncestry = new Set(ancestry);
     nextAncestry.add(`${resolvedPackage.packageId}::${typeId}`);
     const typeParameters = dataType.params
-      .map((parameter) => resolveRawInternedString(resolvedPackage.rawPackage, parameter.varInternedStr))
-      .filter((parameter): parameter is string => Boolean(parameter));
+      .map((parameter: any) =>
+        resolveRawInternedString(resolvedPackage.rawPackage, parameter.varInternedStr),
+      )
+      .filter((parameter: string | null | undefined): parameter is string => Boolean(parameter));
 
     switch (dataType.dataCons.oneofKind) {
       case 'record':
@@ -307,7 +309,7 @@ export class PackageRegistryService implements OnModuleInit {
           packageId: resolvedPackage.packageId,
           typeId,
           typeParameters,
-          fields: dataType.dataCons.record.fields.map((field) => ({
+          fields: dataType.dataCons.record.fields.map((field: any) => ({
             name: resolveRawInternedString(resolvedPackage.rawPackage, field.fieldInternedStr) ?? 'Unknown',
             type: this.buildTypeNode(
               resolvedPackage,
@@ -325,7 +327,7 @@ export class PackageRegistryService implements OnModuleInit {
           packageId: resolvedPackage.packageId,
           typeId,
           typeParameters,
-          constructors: dataType.dataCons.variant.fields.map((field) => ({
+          constructors: dataType.dataCons.variant.fields.map((field: any) => ({
             name: resolveRawInternedString(resolvedPackage.rawPackage, field.fieldInternedStr) ?? 'Unknown',
             type: field.type
               ? this.buildTypeNode(
@@ -345,7 +347,7 @@ export class PackageRegistryService implements OnModuleInit {
           packageId: resolvedPackage.packageId,
           typeId,
           typeParameters,
-          constructors: dataType.dataCons.enum.constructorsInternedStr.map((constructorIndex) => ({
+          constructors: dataType.dataCons.enum.constructorsInternedStr.map((constructorIndex: any) => ({
             name:
               resolveRawInternedString(resolvedPackage.rawPackage, constructorIndex) ?? 'Unknown',
             type: null,
@@ -404,7 +406,7 @@ export class PackageRegistryService implements OnModuleInit {
             expandingVariables,
           )
         : null,
-      requires: interfaceDefinition.requires.map((requiredInterface) =>
+      requires: interfaceDefinition.requires.map((requiredInterface: any) =>
         this.buildTypeReferenceNode(
           resolvedPackage,
           requiredInterface,
@@ -413,7 +415,7 @@ export class PackageRegistryService implements OnModuleInit {
           expandingVariables,
         ),
       ),
-      methods: interfaceDefinition.methods.map((method) => ({
+      methods: interfaceDefinition.methods.map((method: any) => ({
         name:
           resolveRawInternedString(
             resolvedPackage.rawPackage,
@@ -429,7 +431,7 @@ export class PackageRegistryService implements OnModuleInit {
             )
           : null,
       })),
-      choices: interfaceDefinition.choices.map((choice) => ({
+      choices: interfaceDefinition.choices.map((choice: any) => ({
         name:
           resolveRawInternedString(
             resolvedPackage.rawPackage,
@@ -484,7 +486,7 @@ export class PackageRegistryService implements OnModuleInit {
         return {
           kind: 'builtin',
           label: this.formatBuiltinTypeLabel(normalizedType.sum.builtin.builtin),
-          arguments: normalizedType.sum.builtin.args.map((argument) =>
+          arguments: normalizedType.sum.builtin.args.map((argument: any) =>
             this.buildTypeNode(
               resolvedPackage,
               argument,
@@ -527,7 +529,7 @@ export class PackageRegistryService implements OnModuleInit {
         return {
           kind: 'type_var',
           label: variableName,
-          arguments: normalizedType.sum.var.args.map((argument) =>
+          arguments: normalizedType.sum.var.args.map((argument: any) =>
             this.buildTypeNode(
               resolvedPackage,
               argument,
@@ -558,7 +560,7 @@ export class PackageRegistryService implements OnModuleInit {
         return {
           kind: 'struct',
           label: 'Struct',
-          fields: normalizedType.sum.struct.fields.map((field) => ({
+          fields: normalizedType.sum.struct.fields.map((field: any) => ({
             name: resolveRawInternedString(resolvedPackage.rawPackage, field.fieldInternedStr) ?? 'Unknown',
             type: this.buildTypeNode(
               resolvedPackage,
@@ -571,10 +573,10 @@ export class PackageRegistryService implements OnModuleInit {
         };
       case 'forall': {
         const variables = normalizedType.sum.forall.vars
-          .map((variable) =>
+          .map((variable: any) =>
             resolveRawInternedString(resolvedPackage.rawPackage, variable.varInternedStr),
           )
-          .filter((variable): variable is string => Boolean(variable));
+          .filter((variable: string | null | undefined): variable is string => Boolean(variable));
 
         return {
           kind: 'forall',
@@ -786,8 +788,10 @@ export class PackageRegistryService implements OnModuleInit {
       typeId: reference.typeId,
       arguments: argumentNodes,
       typeParameters: synonym.params
-        .map((parameter) => resolveRawInternedString(loadedPackage.rawPackage, parameter.varInternedStr))
-        .filter((parameter): parameter is string => Boolean(parameter)),
+        .map((parameter: any) =>
+          resolveRawInternedString(loadedPackage.rawPackage, parameter.varInternedStr),
+        )
+        .filter((parameter: string | null | undefined): parameter is string => Boolean(parameter)),
       definition: synonym.type
         ? this.buildTypeNode(
             loadedPackage,

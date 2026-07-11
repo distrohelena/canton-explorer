@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { DebuggerController } from './api/debugger.controller';
 import { NodesController } from './api/nodes.controller';
 import { NodeCacheService } from './cache/node-cache.service';
 import { NodeConfigService } from './config/node-config.service';
+import { DebuggerService } from './debugger/debugger.service';
 import { GrpcClientFactory } from './grpc/grpc-client.factory';
 import { GrpcOperationsService } from './grpc/grpc-operations.service';
 import { NodePollerService } from './orchestrator/node-poller.service';
@@ -15,7 +17,7 @@ import { PqsPackageService } from './packages/pqs-package.service';
 import { NamespaceFingerprintService } from './namespaces/namespace-fingerprint.service';
 
 @Module({
-  controllers: [NodesController],
+  controllers: [NodesController, DebuggerController],
   providers: [
     NodeConfigService,
     PqsClientFactory,
@@ -28,6 +30,7 @@ import { NamespaceFingerprintService } from './namespaces/namespace-fingerprint.
     PackageRegistryService,
     DamlValueDecoderService,
     PackageSyncService,
+    DebuggerService,
     NamespaceFingerprintService,
     NodePollerService,
   ],

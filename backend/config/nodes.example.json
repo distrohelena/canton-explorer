@@ -1,4 +1,7 @@
 {
+  "debugger": {
+    "localDarDirectory": "./debug-dars"
+  },
   "tokenMetadata": {
     "nameKeys": ["name"],
     "symbolKeys": ["symbol"]

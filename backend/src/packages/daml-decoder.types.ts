@@ -1,16 +1,15 @@
 import type {
-  DamlLfChoice as SdkDamlLfChoice,
-  DamlLfCompilation as SdkDamlLfCompilation,
-  DamlLfDataType as SdkDamlLfDataType,
-  DamlLfPackage as SdkDamlLfPackage,
-  DamlLfPackageLoadResult as SdkDamlLfPackageLoadResult,
-  DamlLfSemanticModel as SdkDamlLfSemanticModel,
-  DamlLfTemplate as SdkDamlLfTemplate,
-} from '@distrohelena/canton-typescript-sdk/daml-lf';
-import type {
   PackageDataTypeSummary,
   PackageTemplateSummary,
 } from '../domain/node.types';
+
+type SdkDamlLfChoice = any;
+type SdkDamlLfCompilation = any;
+type SdkDamlLfDataType = any;
+type SdkDamlLfPackage = any;
+type SdkDamlLfPackageLoadResult = any;
+type SdkDamlLfSemanticModel = any;
+type SdkDamlLfTemplate = any;
 
 export type SdkRawPackage = SdkDamlLfPackageLoadResult['rawPackage'];
 export type SdkRawModule = SdkRawPackage['modules'][number];

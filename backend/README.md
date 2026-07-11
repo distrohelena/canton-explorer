@@ -38,6 +38,32 @@ Create `./config/nodes.local.json` in the directory where you run the command. U
 The explorer also expects the PQS PostgreSQL connection strings referenced by
 `connectionUriEnv` to be available in the environment.
 
+## Local Debug DARs
+
+The debugger can prefer local source-mapped DARs before falling back to the
+participant package service.
+
+By default it scans:
+
+```bash
+./debug-dars
+```
+
+relative to the current working directory.
+
+You can also set this explicitly in `nodes.local.json`:
+
+```json
+{
+  "debugger": {
+    "localDarDirectory": "./debug-dars"
+  }
+}
+```
+
+Put sibling `*-debug.dar` files in that folder. The explorer indexes them by
+their main package id and uses them only for debugger source/artifact loading.
+
 ## Local Development
 
 From the repo root:

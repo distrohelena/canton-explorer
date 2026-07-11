@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  type DebuggerConfig,
   type NodeConfig,
   type NodeConfigFile,
   type TokenMetadataConfig,
@@ -25,5 +26,9 @@ export class NodeConfigService {
 
   getTokenMetadataConfig(): TokenMetadataConfig {
     return this.config.tokenMetadata;
+  }
+
+  getDebuggerConfig(): DebuggerConfig {
+    return this.config.debugger;
   }
 }

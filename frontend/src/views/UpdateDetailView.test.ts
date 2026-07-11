@@ -206,6 +206,10 @@ describe('UpdateDetailView', () => {
       'href',
       '/nodes/participant-1/updates',
     );
+    expect(screen.getByRole('link', { name: 'Debug Offset' })).toHaveAttribute(
+      'href',
+      '/debugger?nodeId=participant-1&updateId=1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1&eventOffset=0000000000000001',
+    );
     expect(screen.queryByText('Back to overview')).not.toBeInTheDocument();
   });
 
