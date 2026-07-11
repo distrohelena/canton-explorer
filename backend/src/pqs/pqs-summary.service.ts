@@ -53,6 +53,7 @@ import {
   type GrpcTokenHolderObservation,
 } from '../grpc/grpc-operations.service';
 import { PackageSyncService } from '../packages/package-sync.service';
+import { qualifyPqsRelation } from './pqs-schema';
 
 interface SummaryRow {
   pqs_database: string;
@@ -264,6 +265,14 @@ interface SearchMatchedPackageName extends SearchPackageNameResult {
   exact: boolean;
 }
 
+interface PqsCoreRelations {
+  contracts: string;
+  contractTpe: string;
+  exercises: string;
+  exerciseTpe: string;
+  transactions: string;
+}
+
 const SEARCH_GROUP_LIMIT = 25;
 const CANTON_COIN_TOKEN_ID = 'canton-coin';
 const CANTON_COIN_TOKEN_NAME = 'Canton Coin';
@@ -305,6 +314,35 @@ const TOKEN_TRANSFER_TEMPLATE_IDS = [
 const INFERRED_HOLDING_V2_SOURCE = 'pqs_inferred_holding_v2';
 const TOKEN_TRANSFER_CACHE_TTL_MS = 5 * 60 * 1000;
 const TOKEN_TRANSFER_CACHE_LIMIT = 250;
+
+function pqsCoreRelations(node: NodeConfig): PqsCoreRelations {
+  const qualifiedNode = {
+    ...node,
+    pqs: {
+      connectionUriEnv: node.pqs?.connectionUriEnv ?? '',
+      schema: node.pqs?.schema ?? 'public',
+    },
+  } as NodeConfig;
+
+  return {
+    contracts: qualifyPqsRelation(qualifiedNode, '__contracts'),
+    contractTpe: qualifyPqsRelation(qualifiedNode, '__contract_tpe'),
+    exercises: qualifyPqsRelation(qualifiedNode, '__exercises'),
+    exerciseTpe: qualifyPqsRelation(qualifiedNode, '__exercise_tpe'),
+    transactions: qualifyPqsRelation(qualifiedNode, '__transactions'),
+  };
+}
+
+function isoUtcTimestampExpression(expression: string): string {
+  return `to_char(${expression} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+}
+
+function contractTemplateIdentifierExpression(alias: string): string {
+  return `case
+    when ${alias}.module_name is null or ${alias}.entity_name is null then null
+    else ${alias}.module_name || ':' || ${alias}.entity_name
+  end`;
+}
 
 const ACTIVE_QUERY = `
   select
@@ -811,6 +849,508 @@ function normalizeTokenIssuerFilters(values?: string[]): string[] {
         .filter((value) => value.length > 0),
     ),
   );
+}
+
+function summaryQuery(node: NodeConfig): string {
+  const relations = pqsCoreRelations(node);
+
+  return `
+    select
+      current_database() as pqs_database,
+      (
+        select count(*)::int
+        from ${relations.contracts} contract_row
+        where contract_row.archived_at_ix is null
+      ) as active_contract_count,
+      (
+        select max(tx.offset)::text
+        from ${relations.transactions} tx
+      ) as latest_offset,
+      (
+        select ${isoUtcTimestampExpression('max(tx.effective_at)')}
+        from ${relations.transactions} tx
+      ) as latest_event_at,
+      (
+        select count(*)::int
+        from ${relations.transactions} tx
+      ) as total_update_count
+  `;
+}
+
+function pqsActivityBucketsQuery(node: NodeConfig, days: number, bucketMinutes: number): string {
+  const relations = pqsCoreRelations(node);
+  const normalizedDays = Number.isFinite(days) && days > 0 ? Math.trunc(days) : 30;
+  const normalizedBucketMinutes =
+    Number.isFinite(bucketMinutes) && bucketMinutes > 0 ? Math.trunc(bucketMinutes) : 15;
+  const bucketSeconds = normalizedBucketMinutes * 60;
+  const minEffectiveAt = new Date(
+    Date.now() - normalizedDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  return `
+    select
+      to_char(
+        to_timestamp(floor(extract(epoch from tx.effective_at) / ${bucketSeconds}) * ${bucketSeconds}) at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ) as bucket_timestamp,
+      count(*)::int as activity_value,
+      max(tx.offset)::text as latest_offset
+    from ${relations.transactions} tx
+    where tx.effective_at >= '${escapeSqlLiteral(minEffectiveAt)}'::timestamptz
+    group by 1
+    order by 1 asc
+  `;
+}
+
+function buildPqsUpdatePartyExistsCondition(node: NodeConfig, partyId: string): string {
+  const relations = pqsCoreRelations(node);
+  const contractMatch = partyWitnessArrayMatchCondition('contract_row.witnesses', partyId);
+  const exerciseMatch = partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId);
+
+  return `(
+    exists (
+      select 1
+      from ${relations.contracts} contract_row
+      where (contract_row.created_at_ix = tx.ix or contract_row.archived_at_ix = tx.ix)
+        and ${contractMatch}
+    )
+    or exists (
+      select 1
+      from ${relations.exercises} exercise_row
+      where exercise_row.exercised_at_ix = tx.ix
+        and ${exerciseMatch}
+    )
+  )`;
+}
+
+function buildPqsUpdateTemplateExistsCondition(node: NodeConfig, templateId: string): string {
+  const relations = pqsCoreRelations(node);
+  const normalizedTemplateId = normalizeTemplateFilterValue(templateId);
+  const quotedTemplateId = `'${escapeSqlLiteral(normalizedTemplateId)}'`;
+  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
+
+  return `(
+    exists (
+      select 1
+      from (
+        select ${contractTemplateId} as template_id
+        from ${relations.contracts} contract_row
+        join ${relations.contractTpe} contract_tpe_row
+          on contract_tpe_row.pk = contract_row.tpe_pk
+        where contract_row.created_at_ix = tx.ix
+
+        union all
+
+        select ${contractTemplateId} as template_id
+        from ${relations.contracts} contract_row
+        join ${relations.contractTpe} contract_tpe_row
+          on contract_tpe_row.pk = contract_row.tpe_pk
+        where contract_row.archived_at_ix = tx.ix
+
+        union all
+
+        select ${exerciseTemplateId} as template_id
+        from ${relations.exercises} exercise_row
+        join ${relations.contractTpe} exercise_contract_tpe_row
+          on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk
+        where exercise_row.exercised_at_ix = tx.ix
+      ) update_event_templates
+      where update_event_templates.template_id = ${quotedTemplateId}
+    )
+  )`;
+}
+
+function buildPqsUpdatesFilterClause(
+  node: NodeConfig,
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+): string | null {
+  const partyConditions = normalizePartyFilters(parties).map((party) =>
+    buildPqsUpdatePartyExistsCondition(node, party),
+  );
+  const templateConditions = normalizeTemplateFilters(templates).map((templateId) =>
+    buildPqsUpdateTemplateExistsCondition(node, templateId),
+  );
+  const groups: string[] = [];
+
+  if (partyConditions.length > 0) {
+    const partyJoiner =
+      normalizePartyFilterMode(partyMode) === 'and' ? '\n      and ' : '\n      or ';
+    groups.push(
+      partyConditions.length === 1
+        ? partyConditions[0]
+        : `(\n      ${partyConditions.join(partyJoiner)}\n    )`,
+    );
+  }
+
+  if (templateConditions.length > 0) {
+    groups.push(
+      templateConditions.length === 1
+        ? templateConditions[0]
+        : `(\n      ${templateConditions.join('\n      or ')}\n    )`,
+    );
+  }
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return groups.length === 1 ? groups[0] : `(\n      ${groups.join('\n      and ')}\n    )`;
+}
+
+function buildPqsHideSpliceUpdatesClause(node: NodeConfig): string {
+  const relations = pqsCoreRelations(node);
+  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
+
+  return `
+    exists (
+      select 1
+      from (
+        select ${contractTemplateId} as template_id
+        from ${relations.contracts} contract_row
+        join ${relations.contractTpe} contract_tpe_row
+          on contract_tpe_row.pk = contract_row.tpe_pk
+        where contract_row.created_at_ix = tx.ix
+
+        union all
+
+        select ${contractTemplateId} as template_id
+        from ${relations.contracts} contract_row
+        join ${relations.contractTpe} contract_tpe_row
+          on contract_tpe_row.pk = contract_row.tpe_pk
+        where contract_row.archived_at_ix = tx.ix
+
+        union all
+
+        select ${exerciseTemplateId} as template_id
+        from ${relations.exercises} exercise_row
+        join ${relations.contractTpe} exercise_contract_tpe_row
+          on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk
+        where exercise_row.exercised_at_ix = tx.ix
+      ) update_event_templates
+      where update_event_templates.template_id is null
+        or update_event_templates.template_id not like 'Splice.%'
+    )
+  `;
+}
+
+function pqsRecentUpdatesQuery(
+  node: NodeConfig,
+  limit: number,
+  before?: string,
+  after?: string,
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+  hideSplice?: boolean,
+): string {
+  const relations = pqsCoreRelations(node);
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const filterClause = buildPqsUpdatesFilterClause(node, parties, templates, partyMode);
+  const hideSpliceClause = hideSplice ? buildPqsHideSpliceUpdatesClause(node) : null;
+  const queryLimit = limit + 1;
+  const afterFilters = [
+    normalizedAfter ? `tx.offset > ${normalizedAfter}` : null,
+    filterClause,
+    hideSpliceClause,
+  ].filter((value): value is string => Boolean(value));
+  const olderFilters = [
+    normalizedBefore ? `tx.offset < ${normalizedBefore}` : null,
+    filterClause,
+    hideSpliceClause,
+  ].filter((value): value is string => Boolean(value));
+
+  if (normalizedAfter && !normalizedBefore) {
+    const whereClause = afterFilters.length > 0 ? `where ${afterFilters.join('\n      and ')}` : '';
+    return `
+      select
+        tx.transaction_id::text as update_id,
+        tx.offset::text as event_offset,
+        ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+      from ${relations.transactions} tx
+      ${whereClause}
+      order by tx.offset asc
+      limit ${queryLimit}
+    `;
+  }
+
+  const whereClause = olderFilters.length > 0 ? `where ${olderFilters.join('\n      and ')}` : '';
+
+  return `
+    select
+      tx.transaction_id::text as update_id,
+      tx.offset::text as event_offset,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+    from ${relations.transactions} tx
+    ${whereClause}
+    order by tx.offset desc
+    limit ${queryLimit}
+  `;
+}
+
+function pqsSearchUpdatesQuery(node: NodeConfig, searchQuery: string, limit: number): string {
+  const relations = pqsCoreRelations(node);
+  const quotedQuery = escapeSqlLiteral(searchQuery);
+
+  return `
+    select
+      tx.transaction_id::text as update_id,
+      tx.offset::text as event_offset,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+    from ${relations.transactions} tx
+    where tx.offset::text like '${quotedQuery}%'
+      or tx.transaction_id like '${quotedQuery}%'
+    order by tx.effective_at desc nulls last, tx.offset desc
+    limit ${limit}
+  `;
+}
+
+function pqsRecentUpdatePartiesQuery(node: NodeConfig, updateIds: string[]): string {
+  const relations = pqsCoreRelations(node);
+  const quotedIds = updateIds.map((updateId) => `'${escapeSqlLiteral(updateId)}'`).join(', ');
+
+  return `
+    select
+      update_id,
+      array_agg(distinct party order by party) as parties
+    from (
+      select
+        tx.transaction_id::text as update_id,
+        unnest(contract_row.witnesses) as party
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.created_at_ix = tx.ix
+      where tx.transaction_id in (${quotedIds})
+
+      union
+
+      select
+        tx.transaction_id::text as update_id,
+        unnest(contract_row.witnesses) as party
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.archived_at_ix = tx.ix
+      where tx.transaction_id in (${quotedIds})
+
+      union
+
+      select
+        tx.transaction_id::text as update_id,
+        unnest(exercise_row.witnesses) as party
+      from ${relations.transactions} tx
+      join ${relations.exercises} exercise_row
+        on exercise_row.exercised_at_ix = tx.ix
+      where tx.transaction_id in (${quotedIds})
+    ) update_parties
+    group by update_id
+  `;
+}
+
+function pqsActivePartiesQuery(node: NodeConfig): string {
+  const relations = pqsCoreRelations(node);
+
+  return `
+    select
+      array_agg(distinct party order by party) as parties
+    from (
+      select unnest(contract_row.witnesses) as party
+      from ${relations.contracts} contract_row
+
+      union
+
+      select unnest(exercise_row.witnesses) as party
+      from ${relations.exercises} exercise_row
+    ) observed_parties
+  `;
+}
+
+function pqsPartyRecentUpdatesQuery(node: NodeConfig, partyId: string, limit: number): string {
+  const relations = pqsCoreRelations(node);
+  const contractMatch = partyWitnessArrayMatchCondition('contract_row.witnesses', partyId);
+  const exerciseMatch = partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId);
+
+  return `
+    select
+      tx.transaction_id::text as update_id,
+      tx.offset::text as event_offset,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+    from ${relations.transactions} tx
+    where exists (
+      select 1
+      from ${relations.contracts} contract_row
+      where (contract_row.created_at_ix = tx.ix or contract_row.archived_at_ix = tx.ix)
+        and ${contractMatch}
+    )
+    or exists (
+      select 1
+      from ${relations.exercises} exercise_row
+      where exercise_row.exercised_at_ix = tx.ix
+        and ${exerciseMatch}
+    )
+    order by tx.offset desc
+    limit ${limit}
+  `;
+}
+
+function buildPqsActiveContractsFilterClause(
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+  hideSplice?: boolean,
+): string | null {
+  const partyConditions = normalizePartyFilters(parties).map((party) =>
+    partyWitnessArrayMatchCondition('contract_row.witnesses', party),
+  );
+  const templateExpression = contractTemplateIdentifierExpression('contract_tpe_row');
+  const templateConditions = normalizeTemplateFilters(templates).map((templateId) => {
+    const quotedTemplateId = `'${escapeSqlLiteral(templateId)}'`;
+    return `${templateExpression} = ${quotedTemplateId}`;
+  });
+  const groups: string[] = [];
+
+  if (partyConditions.length > 0) {
+    const partyJoiner =
+      normalizePartyFilterMode(partyMode) === 'and' ? '\n      and ' : '\n      or ';
+    groups.push(
+      partyConditions.length === 1
+        ? partyConditions[0]
+        : `(\n      ${partyConditions.join(partyJoiner)}\n    )`,
+    );
+  }
+
+  if (templateConditions.length > 0) {
+    groups.push(
+      templateConditions.length === 1
+        ? templateConditions[0]
+        : `(\n      ${templateConditions.join('\n      or ')}\n    )`,
+    );
+  }
+
+  if (hideSplice) {
+    groups.push(`${templateExpression} not like 'Splice.%'`);
+  }
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return groups.length === 1 ? groups[0] : `(\n      ${groups.join('\n      and ')}\n    )`;
+}
+
+function pqsActiveContractsQuery(
+  node: NodeConfig,
+  limit: number,
+  before?: string,
+  after?: string,
+  parties?: string[],
+  templates?: string[],
+  partyMode?: string,
+  hideSplice?: boolean,
+): string {
+  const relations = pqsCoreRelations(node);
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const queryLimit = limit + 1;
+  const useAfterCursor = Boolean(normalizedAfter && !normalizedBefore);
+  const cursorFilter = useAfterCursor
+    ? `tx.offset > ${normalizedAfter}`
+    : normalizedBefore
+      ? `tx.offset < ${normalizedBefore}`
+      : null;
+  const orderDirection = useAfterCursor ? 'asc' : 'desc';
+  const filterClause = buildPqsActiveContractsFilterClause(
+    parties,
+    templates,
+    partyMode,
+    hideSplice,
+  );
+  const whereConditions = [
+    'contract_row.archived_at_ix is null',
+    cursorFilter,
+    filterClause,
+  ].filter((value): value is string => Boolean(value));
+  const whereClause =
+    whereConditions.length > 0 ? `where ${whereConditions.join('\n      and ')}` : '';
+
+  return `
+    select
+      contract_row.contract_id::text as contract_id,
+      ${contractTemplateIdentifierExpression('contract_tpe_row')} as template_id,
+      ${isoUtcTimestampExpression('tx.effective_at')} as created_record_time,
+      tx.offset::text as created_event_offset
+    from ${relations.contracts} contract_row
+    join ${relations.contractTpe} contract_tpe_row
+      on contract_tpe_row.pk = contract_row.tpe_pk
+    join ${relations.transactions} tx
+      on tx.ix = contract_row.created_at_ix
+    ${whereClause}
+    order by tx.offset ${orderDirection}
+    limit ${queryLimit}
+  `;
+}
+
+function pqsSearchContractsQuery(node: NodeConfig, searchQuery: string, limit: number): string {
+  const relations = pqsCoreRelations(node);
+  const quotedQuery = escapeSqlLiteral(searchQuery);
+
+  return `
+    select
+      contract_row.contract_id::text as contract_id,
+      ${contractTemplateIdentifierExpression('contract_tpe_row')} as template_id,
+      ${isoUtcTimestampExpression('tx.effective_at')} as created_record_time
+    from ${relations.contracts} contract_row
+    join ${relations.contractTpe} contract_tpe_row
+      on contract_tpe_row.pk = contract_row.tpe_pk
+    join ${relations.transactions} tx
+      on tx.ix = contract_row.created_at_ix
+    where contract_row.contract_id like '${quotedQuery}%'
+      and contract_row.archived_at_ix is null
+    order by tx.effective_at desc nulls last, contract_row.contract_id asc
+    limit ${limit}
+  `;
+}
+
+function pqsPartyRecentContractsQuery(
+  node: NodeConfig,
+  partyId: string,
+  limit: number,
+  before?: string,
+  after?: string,
+): string {
+  const relations = pqsCoreRelations(node);
+  const witnessMatch = partyWitnessArrayMatchCondition('contract_row.witnesses', partyId);
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const queryLimit = limit + 1;
+  const sortDirection = normalizedAfter && !normalizedBefore ? 'asc' : 'desc';
+  const cursorClause =
+    normalizedAfter && !normalizedBefore
+      ? `and tx.offset > ${normalizedAfter}`
+      : normalizedBefore
+        ? `and tx.offset < ${normalizedBefore}`
+        : '';
+
+  return `
+    select
+      contract_row.contract_id::text as contract_id,
+      ${contractTemplateIdentifierExpression('contract_tpe_row')} as template_id,
+      contract_row.creation_package_id::text as package_id,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
+      tx.offset::text as created_event_offset
+    from ${relations.contracts} contract_row
+    join ${relations.contractTpe} contract_tpe_row
+      on contract_tpe_row.pk = contract_row.tpe_pk
+    join ${relations.transactions} tx
+      on tx.ix = contract_row.created_at_ix
+    where ${witnessMatch}
+      ${cursorClause}
+    order by tx.offset ${sortDirection}
+    limit ${queryLimit}
+  `;
 }
 
 function buildUpdatePartyExistsCondition(partyId: string): string {
@@ -2482,7 +3022,7 @@ export class PqsSummaryService {
 
   async fetchSummary(node: NodeConfig): Promise<LedgerSummary> {
     const client = this.clientFactory.getClient(node);
-    const result = await this.querySummary(client.query.bind(client));
+    const result = await client.query(summaryQuery(node));
     const row = result.rows[0] ?? this.defaultRow();
 
     return {
@@ -2559,6 +3099,7 @@ export class PqsSummaryService {
     const useAfterCursor = Boolean(after && !before);
     const query = client.query.bind(client);
     const rawMetaRows = await this.queryRecentUpdateMetaRows(
+      node,
       query,
       normalizedLimit,
       before,
@@ -2589,6 +3130,7 @@ export class PqsSummaryService {
     }
 
     const partiesByUpdateId = await this.fetchPartiesByUpdateId(
+      node,
       query,
       orderedUpdates.map((update) => update.rawUpdateId),
     );
@@ -2839,7 +3381,7 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<SearchMatchedUpdate[]> {
     const client = this.clientFactory.getClient(node);
-    const rows = await this.querySearchUpdateMetaRows(client.query.bind(client), query, limit);
+    const rows = await this.querySearchUpdateMetaRows(node, client.query.bind(client), query, limit);
     const dedupedRows = new Map<string, UpdateMetaRow>();
 
     for (const row of rows) {
@@ -2853,7 +3395,7 @@ export class PqsSummaryService {
     const rawUpdateIds = rawRows.map((row) => row.update_id);
     const partiesByUpdateId =
       rawUpdateIds.length > 0
-        ? await this.fetchPartiesByUpdateId(client.query.bind(client), rawUpdateIds)
+        ? await this.fetchPartiesByUpdateId(node, client.query.bind(client), rawUpdateIds)
         : new Map<string, string[]>();
 
     return rawRows
@@ -2920,7 +3462,7 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<SearchMatchedContract[]> {
     const client = this.clientFactory.getClient(node);
-    const result = await client.query(searchContractsQuery(query, limit));
+    const result = await client.query(pqsSearchContractsQuery(node, query, limit));
     const rows = (result.rows as ActiveContractRow[]) ?? [];
 
     return rows
@@ -3049,24 +3591,17 @@ export class PqsSummaryService {
   }
 
   private async querySearchUpdateMetaRows(
+    node: NodeConfig,
     queryFn: (sql: string) => Promise<{ rows: unknown[] }>,
     searchQuery: string,
     limit: number,
   ): Promise<UpdateMetaRow[]> {
-    try {
-      const result = await queryFn(searchUpdatesQuery(searchQuery, limit));
-      return (result.rows as UpdateMetaRow[]) ?? [];
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        throw error;
-      }
-    }
-
-    const fallbackResult = await queryFn(normalizedSearchUpdatesQuery(searchQuery, limit));
-    return (fallbackResult.rows as UpdateMetaRow[]) ?? [];
+    const result = await queryFn(pqsSearchUpdatesQuery(node, searchQuery, limit));
+    return (result.rows as UpdateMetaRow[]) ?? [];
   }
 
   private async queryRecentUpdateMetaRows(
+    node: NodeConfig,
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     limit: number,
     before?: string,
@@ -3076,21 +3611,10 @@ export class PqsSummaryService {
     mode?: string,
     hideSplice?: boolean,
   ): Promise<UpdateMetaRow[]> {
-    try {
-      const result = await query(
-        recentUpdatesQuery(limit, before, after, parties, templates, mode, hideSplice),
-      );
-      return (result.rows as UpdateMetaRow[]) ?? [];
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        throw error;
-      }
-    }
-
-    const fallbackResult = await query(
-      normalizedRecentUpdatesQuery(limit, before, after, parties, templates, mode, hideSplice),
+    const result = await query(
+      pqsRecentUpdatesQuery(node, limit, before, after, parties, templates, mode, hideSplice),
     );
-    return (fallbackResult.rows as UpdateMetaRow[]) ?? [];
+    return (result.rows as UpdateMetaRow[]) ?? [];
   }
 
   async fetchNodeContracts(
@@ -3118,7 +3642,8 @@ export class PqsSummaryService {
     const hideSplice = options?.hideSplice === true;
     const useAfterCursor = Boolean(after && !before);
     const result = await client.query(
-      activeContractsQuery(
+      pqsActiveContractsQuery(
+        node,
         normalizedLimit,
         before,
         after,
@@ -3172,7 +3697,7 @@ export class PqsSummaryService {
     bucketMinutes = 15,
   ): Promise<Array<{ timestamp: string; activityValue: number; latestOffset: string | null }>> {
     const client = this.clientFactory.getClient(node);
-    const result = await client.query(activityBucketsQuery(days, bucketMinutes));
+    const result = await client.query(pqsActivityBucketsQuery(node, days, bucketMinutes));
     const rows = (result.rows as ActivityBucketRow[]) ?? [];
 
     return rows
@@ -4471,7 +4996,11 @@ export class PqsSummaryService {
     const rawUpdateId = this.extractRawUpdateId(detailRow);
     const matchedEventOffset = this.extractEventOffset(detailRow);
     const canonicalUpdateId = this.normalizeUpdateId(rawUpdateId);
-    const partiesByUpdateId = await this.fetchPartiesByUpdateId(client.query.bind(client), [rawUpdateId]);
+    const partiesByUpdateId = await this.fetchPartiesByUpdateId(
+      node,
+      client.query.bind(client),
+      [rawUpdateId],
+    );
     const events = await this.fetchEventsByUpdateId(node, client.query.bind(client), rawUpdateId);
     const exerciseData = this.shouldResolveRewardCoupon(events)
       ? await this.fetchRewardCouponDetails(client.query.bind(client), rawUpdateId)
@@ -4549,24 +5078,13 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<PartyDetailResponse['recentUpdates']> {
     const client = this.clientFactory.getClient(node);
-    let rows: UpdateMetaRow[] = [];
-
-    try {
-      const result = await client.query(partyRecentUpdatesQuery(partyId, limit));
-      rows = (result.rows as UpdateMetaRow[]) ?? [];
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        throw error;
-      }
-
-      const result = await client.query(normalizedPartyRecentUpdatesQuery(partyId, limit));
-      rows = (result.rows as UpdateMetaRow[]) ?? [];
-    }
+    const result = await client.query(pqsPartyRecentUpdatesQuery(node, partyId, limit));
+    const rows = (result.rows as UpdateMetaRow[]) ?? [];
 
     const rawUpdateIds = rows.map((row) => row.update_id);
     const partiesByUpdateId =
       rawUpdateIds.length > 0
-        ? await this.fetchPartiesByUpdateId(client.query.bind(client), rawUpdateIds)
+        ? await this.fetchPartiesByUpdateId(node, client.query.bind(client), rawUpdateIds)
         : new Map<string, string[]>();
 
     return rows.map((row) => {
@@ -4613,23 +5131,10 @@ export class PqsSummaryService {
     const before = options?.before;
     const after = options?.after;
     const useAfterCursor = Boolean(after && !before);
-    let rows: PartyContractRow[] = [];
-
-    try {
-      const result = await client.query(
-        partyRecentContractsQuery(partyId, normalizedLimit, before, after),
-      );
-      rows = (result.rows as PartyContractRow[]) ?? [];
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        throw error;
-      }
-
-      const result = await client.query(
-        normalizedPartyRecentContractsQuery(partyId, normalizedLimit, before, after),
-      );
-      rows = (result.rows as PartyContractRow[]) ?? [];
-    }
+    const result = await client.query(
+      pqsPartyRecentContractsQuery(node, partyId, normalizedLimit, before, after),
+    );
+    const rows = (result.rows as PartyContractRow[]) ?? [];
 
     const hasMoreInQuery = rows.length > normalizedLimit;
     const trimmedRows = rows.slice(0, normalizedLimit);
@@ -4692,48 +5197,26 @@ export class PqsSummaryService {
 
   private async fetchActivePartiesForNode(node: NodeConfig): Promise<string[]> {
     const client = this.clientFactory.getClient(node);
-
-    try {
-      const result = await client.query(activePartiesQuery());
-      const row = (result.rows as ActivePartiesRow[])[0];
-      return this.normalizeParties(row?.parties ?? null);
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        throw error;
-      }
-    }
-
-    const fallbackResult = await client.query(normalizedActivePartiesQuery());
-    const fallbackRow = (fallbackResult.rows as ActivePartiesRow[])[0];
-    return this.normalizeParties(fallbackRow?.parties ?? null);
+    const result = await client.query(pqsActivePartiesQuery(node));
+    const row = (result.rows as ActivePartiesRow[])[0];
+    return this.normalizeParties(row?.parties ?? null);
   }
 
   private async fetchPartiesByUpdateId(
+    node: NodeConfig,
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     updateIds: string[],
   ): Promise<Map<string, string[]>> {
+    if (updateIds.length === 0) {
+      return new Map();
+    }
+
     try {
-      const result = await query(recentUpdatePartiesQuery(updateIds));
+      const result = await query(pqsRecentUpdatePartiesQuery(node, updateIds));
       const rows = (result.rows as UpdatePartiesRow[]) ?? [];
 
       return new Map(
         rows.map((row) => [
-          this.normalizeUpdateId(row.update_id),
-          this.normalizeParties(row.parties),
-        ]),
-      );
-    } catch (error) {
-      if (!this.shouldFallbackToNormalizedEventTables(error)) {
-        return new Map();
-      }
-    }
-
-    try {
-      const fallbackResult = await query(normalizedRecentUpdatePartiesQuery(updateIds));
-      const fallbackRows = (fallbackResult.rows as UpdatePartiesRow[]) ?? [];
-
-      return new Map(
-        fallbackRows.map((row) => [
           this.normalizeUpdateId(row.update_id),
           this.normalizeParties(row.parties),
         ]),

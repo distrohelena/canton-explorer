@@ -1022,8 +1022,7 @@ describe('PqsSummaryService', () => {
   it('returns a party summary aggregated across nodes', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from participant.lapi_update_meta update_meta') &&
-        sql.includes('participant.lapi_events_create create_event') &&
+        sql.includes('from "public"."__transactions" tx') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -1050,7 +1049,7 @@ describe('PqsSummaryService', () => {
         };
       }
 
-      if (sql.includes('create_event.contract_id::text as contract_id')) {
+      if (sql.includes('contract_row.contract_id::text as contract_id')) {
         return {
           rows: [
             {
@@ -1068,8 +1067,7 @@ describe('PqsSummaryService', () => {
 
     const participant2Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from participant.lapi_update_meta update_meta') &&
-        sql.includes('participant.lapi_events_create create_event') &&
+        sql.includes('from "public"."__transactions" tx') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -1096,7 +1094,7 @@ describe('PqsSummaryService', () => {
         };
       }
 
-      if (sql.includes('create_event.contract_id::text as contract_id')) {
+      if (sql.includes('contract_row.contract_id::text as contract_id')) {
         return {
           rows: [
             {
@@ -1161,7 +1159,7 @@ describe('PqsSummaryService', () => {
     const prefixedPartyId = `p|${strippedPartyId}`;
     const participantQuery = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from participant.lapi_update_meta update_meta') &&
+        sql.includes('from "public"."__transactions" tx') &&
         sql.includes("'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
         sql.includes("'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
         sql.includes('event_offset')
@@ -1189,7 +1187,7 @@ describe('PqsSummaryService', () => {
       }
 
       if (
-        sql.includes('create_event.contract_id::text as contract_id') &&
+        sql.includes('contract_row.contract_id::text as contract_id') &&
         sql.includes("'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
         sql.includes("'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'")
       ) {
@@ -1575,8 +1573,7 @@ describe('PqsSummaryService', () => {
   it('keeps party detail available when topology fails for one node', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from participant.lapi_update_meta update_meta') &&
-        sql.includes('participant.lapi_events_create create_event') &&
+        sql.includes('from "public"."__transactions" tx') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -1603,7 +1600,7 @@ describe('PqsSummaryService', () => {
         };
       }
 
-      if (sql.includes('create_event.contract_id::text as contract_id')) {
+      if (sql.includes('contract_row.contract_id::text as contract_id')) {
         return {
           rows: [
             {
@@ -1941,7 +1938,7 @@ describe('PqsSummaryService', () => {
     );
   });
 
-  it('returns a normalized ledger summary from the active() query', async () => {
+  it('returns a normalized ledger summary from schema-qualified PQS tables', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [
         {
@@ -1967,29 +1964,25 @@ mode: 'pqs_only',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('from active()'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "public"."__contracts" contract_row'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "public"."__transactions" tx'));
     expect(summary.activeContractCount).toBe(12);
     expect(summary.totalUpdateCount).toBe(1442);
     expect(summary.ledgerLabel).toBe('Retail Ledger');
   });
 
-  it('falls back to participant tables when active() is unavailable', async () => {
-    const query = jest
-      .fn()
-      .mockRejectedValueOnce(
-        Object.assign(new Error('function active() does not exist'), { code: '42883' }),
-      )
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            pqs_database: 'participant-app-user',
-            active_contract_count: '11',
-            latest_offset: '42',
-            latest_event_at: '2026-07-01T22:51:02.433Z',
-            total_update_count: '912',
-          },
-        ],
-      });
+  it('uses the configured non-default PQS schema for summary queries', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          pqs_database: 'participant-app-user',
+          active_contract_count: '11',
+          latest_offset: '42',
+          latest_event_at: '2026-07-01T22:51:02.433Z',
+          total_update_count: '912',
+        },
+      ],
+    });
 
     const service = new PqsSummaryService({
       getClient: () => ({ query }),
@@ -2001,14 +1994,11 @@ mode: 'pqs_only',
 role: 'participant',
 mode: 'pqs_only',
       ledgerLabel: 'Quickstart App User',
-      pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL' },
+      pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL', schema: 'scribe' },
     });
 
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('from active()'));
-    expect(query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('participant.par_active_contracts'),
-    );
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "scribe"."__contracts" contract_row'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "scribe"."__transactions" tx'));
     expect(summary).toEqual({
       ledgerLabel: 'Quickstart App User',
       pqsDatabase: 'participant-app-user',
@@ -2063,16 +2053,20 @@ mode: 'pqs_only',
 
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('from participant.lapi_update_meta'),
+      expect.stringContaining('from "public"."__transactions" tx'),
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('order by update_meta.event_offset::numeric desc'),
+      expect.stringContaining('order by tx.offset desc'),
     );
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 26'));
     expect(query).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('participant.lapi_events_create'),
+      expect.stringContaining('join "public"."__contracts" contract_row'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('join "public"."__exercises" exercise_row'),
     );
     expect(updates).toEqual({
       nodeId: 'participant-1',
@@ -2100,14 +2094,9 @@ mode: 'pqs_only',
     });
   });
 
-  it('falls back to normalized participant event tables for recent updates when legacy event tables are unavailable', async () => {
-    const missingLegacyRelation = Object.assign(
-      new Error('relation "participant.lapi_events_create" does not exist'),
-      { code: '42P01' },
-    );
+  it('applies party filters in schema-qualified recent update queries', async () => {
     const query = jest
       .fn()
-      .mockRejectedValueOnce(missingLegacyRelation)
       .mockResolvedValueOnce({
         rows: [
           {
@@ -2117,7 +2106,6 @@ mode: 'pqs_only',
           },
         ],
       })
-      .mockRejectedValueOnce(missingLegacyRelation)
       .mockResolvedValueOnce({
         rows: [
           {
@@ -2163,40 +2151,17 @@ mode: 'pqs_only',
       ],
     });
 
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('participant.lapi_events_create create_event'),
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('participant.lapi_events_activate_contract activate_event'),
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('participant.lapi_filter_activate_witness'),
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("'Alice'"),
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      3,
-      expect.stringContaining('participant.lapi_events_create'),
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      4,
-      expect.stringContaining('participant.lapi_events_activate_contract'),
-    );
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('from "public"."__transactions" tx'));
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Alice'"));
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'p|Alice'"));
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('contract_row.witnesses'));
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('exercise_row.witnesses'));
+    expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('from "public"."__contracts" contract_row'));
   });
 
-  it('applies template filters when fetching recent updates from normalized participant event tables', async () => {
-    const missingLegacyRelation = Object.assign(
-      new Error('relation "participant.lapi_events_create" does not exist'),
-      { code: '42P01' },
-    );
+  it('applies template filters when fetching recent updates from schema-qualified PQS tables', async () => {
     const query = jest
       .fn()
-      .mockRejectedValueOnce(missingLegacyRelation)
       .mockResolvedValueOnce({
         rows: [
           {
@@ -2206,7 +2171,6 @@ mode: 'pqs_only',
           },
         ],
       })
-      .mockRejectedValueOnce(missingLegacyRelation)
       .mockResolvedValueOnce({
         rows: [
           {
@@ -2246,19 +2210,14 @@ mode: 'pqs_only',
     );
 
     expect(query).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.stringContaining("where update_event_templates.template_id = 'Splice.DsoRules:DsoRules'"),
     );
   });
 
-  it('pushes hide Splice filtering into normalized recent updates queries without per-update event lookups', async () => {
-    const missingLegacyRelation = Object.assign(
-      new Error('relation "participant.lapi_events_create" does not exist'),
-      { code: '42P01' },
-    );
+  it('pushes hide Splice filtering into schema-qualified recent updates queries without per-update event lookups', async () => {
     const query = jest
       .fn()
-      .mockRejectedValueOnce(missingLegacyRelation)
       .mockResolvedValueOnce({
         rows: [
           {
@@ -2268,7 +2227,6 @@ mode: 'pqs_only',
           },
         ],
       })
-      .mockRejectedValueOnce(missingLegacyRelation)
       .mockResolvedValueOnce({
         rows: [
           {
@@ -2328,16 +2286,9 @@ mode: 'pqs_only',
       ],
     });
 
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('contract_tpe_row.module_name'));
     expect(query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("regexp_replace(coalesce(contract.template_id::text, ''), '^t\\\\|#[^:]+:', '')"),
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("regexp_replace(coalesce(template_string.external_string, ''), '^t\\\\|#[^:]+:', '')"),
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.stringContaining("update_event_templates.template_id not like 'Splice.%'"),
     );
     expect(fetchEventsSpy).not.toHaveBeenCalled();
@@ -2584,7 +2535,7 @@ mode: 'pqs_only',
       ),
     ).resolves.toEqual(typedNodeContractsFixture);
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by create_event_offset::numeric desc'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by tx.offset desc'));
     expect(query).toHaveBeenCalledWith(expect.stringContaining('limit 3'));
   });
 
@@ -2895,9 +2846,7 @@ mode: 'pqs_only',
       },
     ]);
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('from participant.lapi_update_meta'),
-    );
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "public"."__transactions" tx'));
   });
 
   it('returns a single update detail for canonical, raw, and display-normalized ids', async () => {
