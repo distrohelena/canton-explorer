@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import type { CSSProperties } from 'vue';
+import { RouterLink, useRoute } from 'vue-router';
+import DebuggerControlPanel from '../components/DebuggerControlPanel.vue';
 import DebuggerEventList from '../components/DebuggerEventList.vue';
 import DebuggerScopePanel from '../components/DebuggerScopePanel.vue';
 import MonacoCodeSurface from '../components/MonacoCodeSurface.vue';
@@ -25,18 +27,27 @@ const actionLoading = ref(false);
 const eventLoading = ref(false);
 const error = ref<string | null>(null);
 const workspace = ref<HTMLElement | null>(null);
+const controlPanel = ref<HTMLElement | null>(null);
 const editorWidth = ref<number | null>(null);
+const viewportWidth = ref(typeof window === 'undefined' ? 1280 : window.innerWidth);
+const controlPanelPosition = ref<{ x: number; y: number } | null>(null);
 let themeObserver: MutationObserver | null = null;
 let resizePointerId: number | null = null;
+let controlPanelPointerId: number | null = null;
+let controlPanelDragOffsetX = 0;
+let controlPanelDragOffsetY = 0;
 
 const RESIZE_HANDLE_WIDTH = 14;
 const SUMMARY_MIN_WIDTH = 320;
 const EDITOR_MIN_WIDTH = 420;
 const EDITOR_RESIZE_STEP = 48;
+const CONTROL_PANEL_INSET = 16;
 
 function syncTheme() {
   theme.value = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
 }
+
+const isCompactWorkspace = computed(() => viewportWidth.value <= 980);
 
 function clampEditorWidth(nextWidth: number) {
   const workspaceElement = workspace.value;
@@ -63,6 +74,115 @@ function releaseResize() {
   window.removeEventListener('pointerup', handleResizePointerUp);
   window.removeEventListener('pointercancel', handleResizePointerUp);
   document.body.classList.remove('debugger-view--resizing');
+}
+
+function clampControlPanelPosition(nextPosition: { x: number; y: number }) {
+  const workspaceElement = workspace.value;
+  const panelElement = controlPanel.value;
+
+  if (!workspaceElement || !panelElement) {
+    return nextPosition;
+  }
+
+  const maxX = Math.max(
+    CONTROL_PANEL_INSET,
+    workspaceElement.clientWidth - panelElement.offsetWidth - CONTROL_PANEL_INSET,
+  );
+  const maxY = Math.max(
+    CONTROL_PANEL_INSET,
+    workspaceElement.clientHeight - panelElement.offsetHeight - CONTROL_PANEL_INSET,
+  );
+
+  return {
+    x: Math.min(Math.max(nextPosition.x, CONTROL_PANEL_INSET), maxX),
+    y: Math.min(Math.max(nextPosition.y, CONTROL_PANEL_INSET), maxY),
+  };
+}
+
+function ensureDefaultControlPanelPosition() {
+  if (isCompactWorkspace.value) {
+    return;
+  }
+
+  const workspaceElement = workspace.value;
+  const panelElement = controlPanel.value;
+
+  if (!workspaceElement || !panelElement) {
+    return;
+  }
+
+  const centeredX = Math.max(
+    CONTROL_PANEL_INSET,
+    Math.round((workspaceElement.clientWidth - panelElement.offsetWidth) / 2),
+  );
+
+  controlPanelPosition.value = clampControlPanelPosition({
+    x: centeredX,
+    y: CONTROL_PANEL_INSET,
+  });
+}
+
+function releaseControlPanelDrag() {
+  controlPanelPointerId = null;
+  window.removeEventListener('pointermove', handleControlPanelPointerMove);
+  window.removeEventListener('pointerup', handleControlPanelPointerUp);
+  window.removeEventListener('pointercancel', handleControlPanelPointerUp);
+  document.body.classList.remove('debugger-view--dragging-panel');
+}
+
+function handleControlPanelPointerMove(event: PointerEvent) {
+  const workspaceElement = workspace.value;
+
+  if (!workspaceElement) {
+    return;
+  }
+
+  const bounds = workspaceElement.getBoundingClientRect();
+  controlPanelPosition.value = clampControlPanelPosition({
+    x: event.clientX - bounds.left - controlPanelDragOffsetX,
+    y: event.clientY - bounds.top - controlPanelDragOffsetY,
+  });
+}
+
+function handleControlPanelPointerUp(event?: PointerEvent) {
+  if (event && controlPanelPointerId !== null && event.pointerId !== controlPanelPointerId) {
+    return;
+  }
+
+  releaseControlPanelDrag();
+}
+
+function beginControlPanelDrag(event: PointerEvent) {
+  if (isCompactWorkspace.value || !controlPanel.value) {
+    return;
+  }
+
+  const panelBounds = controlPanel.value.getBoundingClientRect();
+  controlPanelPointerId = event.pointerId;
+  controlPanelDragOffsetX = event.clientX - panelBounds.left;
+  controlPanelDragOffsetY = event.clientY - panelBounds.top;
+  document.body.classList.add('debugger-view--dragging-panel');
+  window.addEventListener('pointermove', handleControlPanelPointerMove);
+  window.addEventListener('pointerup', handleControlPanelPointerUp);
+  window.addEventListener('pointercancel', handleControlPanelPointerUp);
+}
+
+function handleViewportResize() {
+  viewportWidth.value = window.innerWidth;
+
+  if (isCompactWorkspace.value) {
+    releaseControlPanelDrag();
+    return;
+  }
+
+  if (controlPanelPosition.value === null) {
+    void nextTick().then(() => {
+      ensureDefaultControlPanelPosition();
+    });
+    return;
+  }
+
+  controlPanelPosition.value = clampControlPanelPosition(controlPanelPosition.value);
 }
 
 function handleResizePointerMove(event: PointerEvent) {
@@ -197,6 +317,14 @@ const phaseLabel = computed(() => {
     .replace(/^./, (character) => character.toUpperCase());
 });
 
+const updateDetailTarget = computed(() => {
+  if (!session.value?.nodeId || !session.value.offset) {
+    return null;
+  }
+
+  return `/nodes/${encodeURIComponent(session.value.nodeId)}/updates/${encodeURIComponent(session.value.offset)}`;
+});
+
 const currentScopes = computed(() => session.value?.currentStep.scopes ?? []);
 const realLedgerEvents = computed(() => replayEvents.value);
 const liveReplayEvents = computed(() => {
@@ -216,6 +344,27 @@ const workspaceStyle = computed(() =>
         gridTemplateColumns: `${editorWidth.value}px ${RESIZE_HANDLE_WIDTH}px minmax(${SUMMARY_MIN_WIDTH}px, 1fr)`,
       },
 );
+
+const controlPanelStyle = computed<CSSProperties>(() => {
+  if (isCompactWorkspace.value) {
+    return {
+      top: `${CONTROL_PANEL_INSET}px`,
+      left: `${CONTROL_PANEL_INSET}px`,
+      right: `${CONTROL_PANEL_INSET}px`,
+    };
+  }
+
+  if (controlPanelPosition.value === null) {
+    return {
+      visibility: 'hidden' as const,
+    };
+  }
+
+  return {
+    left: `${controlPanelPosition.value.x}px`,
+    top: `${controlPanelPosition.value.y}px`,
+  };
+});
 
 async function syncEvents(sessionId: string) {
   eventLoading.value = true;
@@ -311,11 +460,25 @@ async function selectEventStep(stepId: string) {
 }
 
 watch([nodeId, eventOffset], () => {
+  controlPanelPosition.value = null;
   void loadDebuggerSession();
 });
 
+watch(
+  () => session.value?.sessionId,
+  async (nextSessionId) => {
+    if (!nextSessionId) {
+      return;
+    }
+
+    await nextTick();
+    ensureDefaultControlPanelPosition();
+  },
+);
+
 onMounted(() => {
   syncTheme();
+  viewportWidth.value = window.innerWidth;
   themeObserver = new MutationObserver(() => {
     syncTheme();
   });
@@ -323,12 +486,15 @@ onMounted(() => {
     attributes: true,
     attributeFilter: ['data-theme'],
   });
+  window.addEventListener('resize', handleViewportResize);
   void loadDebuggerSession();
 });
 
 onBeforeUnmount(() => {
   themeObserver?.disconnect();
   releaseResize();
+  releaseControlPanelDrag();
+  window.removeEventListener('resize', handleViewportResize);
 });
 </script>
 
@@ -344,6 +510,22 @@ onBeforeUnmount(() => {
       :style="workspaceStyle"
       data-testid="debugger-workspace"
     >
+      <div
+        ref="controlPanel"
+        class="debugger-view__floating-controls"
+        :style="controlPanelStyle"
+        data-testid="debugger-floating-controls"
+      >
+        <DebuggerControlPanel
+          :action-loading="actionLoading"
+          :is-terminal="session.isTerminal"
+          :current-step-index="session.currentStepIndex"
+          @drag-start="beginControlPanelDrag"
+          @refresh="refreshSession"
+          @action="runAction"
+        />
+      </div>
+
       <section class="debugger-view__editor-shell" data-testid="debugger-editor-shell">
         <MonacoCodeSurface
           :model-value="sourceText"
@@ -366,110 +548,77 @@ onBeforeUnmount(() => {
       />
 
       <aside class="debugger-view__summary" data-testid="debugger-summary">
-        <div class="debugger-view__summary-header">
-          <div class="debugger-view__panel-meta">
-            <div class="debugger-view__signal-row">
-              <span class="debugger-view__signal">Replay Session</span>
-              <span class="debugger-view__status">{{ stepLabel }}</span>
-              <span class="debugger-view__status">{{ phaseLabel }}</span>
+        <div class="debugger-view__summary-columns">
+          <div class="debugger-view__summary-column debugger-view__summary-column--context" data-testid="debugger-summary-context">
+            <div class="debugger-view__summary-header">
+              <div class="debugger-view__panel-meta">
+                <div class="debugger-view__signal-row">
+                  <span class="debugger-view__signal">Replay Session</span>
+                  <span class="debugger-view__status">{{ stepLabel }}</span>
+                  <span class="debugger-view__status">{{ phaseLabel }}</span>
+                </div>
+                <h2>Launch Context</h2>
+              </div>
             </div>
-            <h2>Launch Context</h2>
+
+            <div class="debugger-view__summary-section">
+              <h3>Execution Script</h3>
+              <p class="debugger-view__panel-copy">
+                {{ session.source?.path ?? 'Source mapping unavailable for this step.' }}
+              </p>
+            </div>
+
+            <dl class="detail-grid debugger-view__summary-grid">
+              <div>
+                <dt>Node</dt>
+                <dd>{{ session.nodeId }}</dd>
+              </div>
+              <div>
+                <dt>Event Offset</dt>
+                <dd class="update-detail__id">{{ session.offset }}</dd>
+              </div>
+              <div class="debugger-view__summary-item debugger-view__summary-item--canonical">
+                <dt>Canonical Update ID</dt>
+                <dd class="update-detail__canonical">
+                  <RouterLink
+                    v-if="updateDetailTarget && (session.updateId ?? updateId)"
+                    class="update-detail__debug-action"
+                    :to="updateDetailTarget"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {{ session.updateId ?? updateId }}
+                  </RouterLink>
+                  <span v-else>{{ session.updateId ?? updateId ?? 'n/a' }}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Session</dt>
+                <dd class="update-detail__canonical">{{ session.sessionId }}</dd>
+              </div>
+              <div>
+                <dt>Step</dt>
+                <dd>{{ stepLabel }}</dd>
+              </div>
+              <div>
+                <dt>Phase</dt>
+                <dd>{{ phaseLabel }}</dd>
+              </div>
+            </dl>
+
+            <DebuggerScopePanel :scopes="currentScopes" :node-id="session.nodeId" />
+          </div>
+
+          <div class="debugger-view__summary-column debugger-view__summary-column--events" data-testid="debugger-summary-events">
+            <DebuggerEventList
+              :real-events="realLedgerEvents"
+              :replay-events="liveReplayEvents"
+              :current-step-id="session.currentStep.stepId"
+              :loading="eventLoading"
+              @select-step="selectEventStep"
+            />
           </div>
         </div>
-
-        <div class="debugger-view__summary-section">
-          <h3>Execution Script</h3>
-          <p class="debugger-view__panel-copy">
-            {{ session.source?.path ?? 'Source mapping unavailable for this step.' }}
-          </p>
-        </div>
-
-        <dl class="detail-grid debugger-view__summary-grid">
-          <div>
-            <dt>Node</dt>
-            <dd>{{ session.nodeId }}</dd>
-          </div>
-          <div>
-            <dt>Event Offset</dt>
-            <dd class="update-detail__id">{{ session.offset }}</dd>
-          </div>
-          <div>
-            <dt>Canonical Update ID</dt>
-            <dd class="update-detail__canonical">{{ session.updateId ?? updateId ?? 'n/a' }}</dd>
-          </div>
-          <div>
-            <dt>Session</dt>
-            <dd class="update-detail__canonical">{{ session.sessionId }}</dd>
-          </div>
-          <div>
-            <dt>Step</dt>
-            <dd>{{ stepLabel }}</dd>
-          </div>
-          <div>
-            <dt>Phase</dt>
-            <dd>{{ phaseLabel }}</dd>
-          </div>
-        </dl>
-
-        <div class="debugger-view__actions">
-          <button
-            type="button"
-            class="node-updates__filter-toggle debugger-view__action-button"
-            :disabled="actionLoading || session.currentStepIndex <= 0"
-            @click="runAction('step-back')"
-          >
-            Step Back
-          </button>
-          <button
-            type="button"
-            class="node-updates__filter-toggle debugger-view__action-button"
-            :disabled="actionLoading"
-            @click="refreshSession"
-          >
-            Refresh
-          </button>
-          <button
-            type="button"
-            class="node-updates__filter-toggle debugger-view__action-button"
-            :disabled="actionLoading || session.isTerminal"
-            @click="runAction('step-into')"
-          >
-            Step Into
-          </button>
-          <button
-            type="button"
-            class="node-updates__filter-toggle debugger-view__action-button"
-            :disabled="actionLoading || session.isTerminal"
-            @click="runAction('step-over')"
-          >
-            Step Over
-          </button>
-          <button
-            type="button"
-            class="node-updates__filter-toggle debugger-view__action-button"
-            :disabled="actionLoading || session.isTerminal"
-            @click="runAction('step-out')"
-          >
-            Step Out
-          </button>
-          <button
-            type="button"
-            class="node-updates__filter-toggle debugger-view__action-button"
-            :disabled="actionLoading || session.isTerminal"
-            @click="runAction('continue')"
-          >
-            Continue
-          </button>
-        </div>
-
-        <DebuggerScopePanel :scopes="currentScopes" />
-        <DebuggerEventList
-          :real-events="realLedgerEvents"
-          :replay-events="liveReplayEvents"
-          :current-step-id="session.currentStep.stepId"
-          :loading="eventLoading"
-          @select-step="selectEventStep"
-        />
       </aside>
     </div>
   </section>

@@ -106,6 +106,15 @@ describe('DebuggerEventList', () => {
 
     await fireEvent.click(screen.getByTestId('debugger-event-1'));
 
+    expect(screen.getByTestId('debugger-event-details-1')).toBeInTheDocument();
+    expect(screen.getByText('Choice Argument')).toBeInTheDocument();
+    expect(screen.getByText('Payload')).toBeInTheDocument();
+    expect(screen.getByText('{}')).toBeInTheDocument();
+    expect(emitted().selectStep).toBeUndefined();
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Real Events' }));
+    await fireEvent.click(screen.getByTestId('real-debugger-event-1'));
+
     expect(emitted().selectStep).toEqual([['step-1']]);
   });
 });
