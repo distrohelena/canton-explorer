@@ -24,10 +24,107 @@ const loading = ref(false);
 const actionLoading = ref(false);
 const eventLoading = ref(false);
 const error = ref<string | null>(null);
+const workspace = ref<HTMLElement | null>(null);
+const editorWidth = ref<number | null>(null);
 let themeObserver: MutationObserver | null = null;
+let resizePointerId: number | null = null;
+
+const RESIZE_HANDLE_WIDTH = 14;
+const SUMMARY_MIN_WIDTH = 320;
+const EDITOR_MIN_WIDTH = 420;
+const EDITOR_RESIZE_STEP = 48;
 
 function syncTheme() {
   theme.value = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
+
+function clampEditorWidth(nextWidth: number) {
+  const workspaceElement = workspace.value;
+
+  if (!workspaceElement) {
+    return nextWidth;
+  }
+
+  const maxWidth = Math.max(
+    EDITOR_MIN_WIDTH,
+    workspaceElement.clientWidth - SUMMARY_MIN_WIDTH - RESIZE_HANDLE_WIDTH,
+  );
+
+  return Math.min(Math.max(nextWidth, EDITOR_MIN_WIDTH), maxWidth);
+}
+
+function setEditorWidth(nextWidth: number) {
+  editorWidth.value = clampEditorWidth(nextWidth);
+}
+
+function releaseResize() {
+  resizePointerId = null;
+  window.removeEventListener('pointermove', handleResizePointerMove);
+  window.removeEventListener('pointerup', handleResizePointerUp);
+  window.removeEventListener('pointercancel', handleResizePointerUp);
+  document.body.classList.remove('debugger-view--resizing');
+}
+
+function handleResizePointerMove(event: PointerEvent) {
+  const workspaceElement = workspace.value;
+
+  if (!workspaceElement) {
+    return;
+  }
+
+  const bounds = workspaceElement.getBoundingClientRect();
+  setEditorWidth(event.clientX - bounds.left);
+}
+
+function handleResizePointerUp(event?: PointerEvent) {
+  if (event && resizePointerId !== null && event.pointerId !== resizePointerId) {
+    return;
+  }
+
+  releaseResize();
+}
+
+function beginResize(event: PointerEvent) {
+  if (window.innerWidth <= 980) {
+    return;
+  }
+
+  resizePointerId = event.pointerId;
+  document.body.classList.add('debugger-view--resizing');
+  window.addEventListener('pointermove', handleResizePointerMove);
+  window.addEventListener('pointerup', handleResizePointerUp);
+  window.addEventListener('pointercancel', handleResizePointerUp);
+  handleResizePointerMove(event);
+}
+
+function resizeEditorBy(delta: number) {
+  const workspaceElement = workspace.value;
+
+  if (!workspaceElement) {
+    return;
+  }
+
+  const fallbackWidth = Math.max(
+    EDITOR_MIN_WIDTH,
+    Math.round((workspaceElement.clientWidth - RESIZE_HANDLE_WIDTH) * 0.6),
+  );
+  setEditorWidth((editorWidth.value ?? fallbackWidth) + delta);
+}
+
+function handleResizeKeydown(event: KeyboardEvent) {
+  if (window.innerWidth <= 980) {
+    return;
+  }
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    resizeEditorBy(-EDITOR_RESIZE_STEP);
+  }
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    resizeEditorBy(EDITOR_RESIZE_STEP);
+  }
 }
 
 const nodeId = computed(() => {
@@ -59,7 +156,7 @@ const sourceText = computed(() => {
 
 const sourceLanguage = computed(() => {
   const path = session.value?.source?.path?.toLowerCase() ?? '';
-  return path.endsWith('.daml') ? 'haskell' : 'plaintext';
+  return path.endsWith('.daml') ? 'daml' : 'plaintext';
 });
 
 const highlightRange = computed(() => {
@@ -111,6 +208,14 @@ const liveReplayEvents = computed(() => {
     (event) => event.stepIndex <= session.value!.currentStepIndex,
   );
 });
+
+const workspaceStyle = computed(() =>
+  editorWidth.value === null
+    ? undefined
+    : {
+        gridTemplateColumns: `${editorWidth.value}px ${RESIZE_HANDLE_WIDTH}px minmax(${SUMMARY_MIN_WIDTH}px, 1fr)`,
+      },
+);
 
 async function syncEvents(sessionId: string) {
   eventLoading.value = true;
@@ -223,6 +328,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   themeObserver?.disconnect();
+  releaseResize();
 });
 </script>
 
@@ -231,7 +337,13 @@ onBeforeUnmount(() => {
     <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
     <p v-else-if="loading && !session" class="node-detail__message">Loading debugger session...</p>
 
-    <div v-if="session" class="debugger-view__workspace">
+    <div
+      v-if="session"
+      ref="workspace"
+      class="debugger-view__workspace"
+      :style="workspaceStyle"
+      data-testid="debugger-workspace"
+    >
       <section class="debugger-view__editor-shell" data-testid="debugger-editor-shell">
         <MonacoCodeSurface
           :model-value="sourceText"
@@ -241,6 +353,17 @@ onBeforeUnmount(() => {
           aria-label="DAML debugger code surface"
         />
       </section>
+
+      <div
+        class="debugger-view__divider"
+        role="separator"
+        aria-label="Resize editor panel"
+        aria-orientation="vertical"
+        tabindex="0"
+        data-testid="debugger-editor-divider"
+        @pointerdown="beginResize"
+        @keydown="handleResizeKeydown"
+      />
 
       <aside class="debugger-view__summary" data-testid="debugger-summary">
         <div class="debugger-view__summary-header">

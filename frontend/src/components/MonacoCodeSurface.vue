@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import type * as MonacoEditor from 'monaco-editor';
-import { loadMonaco } from '../lib/monaco';
+import { EXPLORER_MONACO_DARK_THEME, loadMonaco } from '../lib/monaco';
 
 type MonacoModule = typeof MonacoEditor;
 type MonacoEditorInstance = MonacoEditor.editor.IStandaloneCodeEditor;
@@ -40,7 +40,7 @@ let resizeObserver: ResizeObserver | null = null;
 let highlightDecorations: string[] = [];
 
 function resolveMonacoTheme(theme: 'light' | 'dark') {
-  return theme === 'light' ? 'vs' : 'vs-dark';
+  return theme === 'light' ? 'vs' : EXPLORER_MONACO_DARK_THEME;
 }
 
 async function mountEditor() {

@@ -4,6 +4,14 @@ import type { DebuggerScope } from '../types/debugger';
 defineProps<{
   scopes: DebuggerScope[];
 }>();
+
+function formatVariableName(name: string | null | undefined, kind: string | null | undefined): string {
+  if (kind === 'contractId' && name === 'selfContractId') {
+    return 'self';
+  }
+
+  return name ?? 'value';
+}
 </script>
 
 <template>
@@ -29,8 +37,8 @@ defineProps<{
           :key="`${scope.frameId ?? 'scope'}:${variable.name ?? 'variable'}`"
           class="debugger-scope-panel__variable"
         >
-          <div>
-            <strong>{{ variable.name ?? 'value' }}</strong>
+          <div class="debugger-scope-panel__variable-meta">
+            <strong>{{ formatVariableName(variable.name, variable.kind) }}</strong>
             <span class="debugger-scope-panel__kind">{{ variable.kind ?? 'value' }}</span>
           </div>
           <code>{{ variable.value ?? 'null' }}</code>

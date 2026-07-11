@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { defineComponent } from 'vue';
@@ -12,8 +12,12 @@ vi.mock('../components/MonacoCodeSurface.vue', () => ({
         type: String,
         required: true,
       },
+      language: {
+        type: String,
+        default: 'plaintext',
+      },
     },
-    template: '<div data-testid="monaco-stub">{{ modelValue }}</div>',
+    template: '<div data-testid="monaco-stub" :data-language="language">{{ modelValue }}</div>',
   }),
 }));
 
@@ -164,6 +168,8 @@ describe('DebuggerView', () => {
     expect(screen.getByText('Main.daml')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-editor-shell')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-editor-shell')).toContainElement(screen.getByTestId('monaco-stub'));
+    expect(screen.getByTestId('monaco-stub')).toHaveAttribute('data-language', 'daml');
+    expect(screen.getByTestId('debugger-editor-divider')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Step Into' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Step Back' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Step Over' })).toBeInTheDocument();
@@ -177,5 +183,66 @@ describe('DebuggerView', () => {
     expect(screen.getByRole('tab', { name: 'Replay Events' })).toBeInTheDocument();
     expect(screen.getByText(/Vault\.Archive/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
+  });
+
+  it('lets the user resize the editor panel with the splitter keyboard controls', async () => {
+    vi.mocked(createDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 0,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: null,
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: {
+        path: 'Main.daml',
+        content: 'template Main where\n  signatory issuer\n',
+        startLine: 10,
+        startColumn: 1,
+        endLine: 12,
+        endColumn: 20,
+      },
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'session-1',
+      currentStepId: 'step-0',
+      realEvents: [],
+      replayEvents: [],
+    });
+
+    await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
+
+    const workspace = await screen.findByTestId('debugger-workspace');
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1280,
+    });
+    Object.defineProperty(workspace, 'clientWidth', {
+      configurable: true,
+      value: 1200,
+    });
+
+    const divider = screen.getByTestId('debugger-editor-divider');
+
+    await fireEvent.keyDown(divider, { key: 'ArrowRight' });
+
+    expect(workspace.getAttribute('style')).toContain('grid-template-columns: 760px 14px minmax(320px, 1fr);');
+
+    await fireEvent.keyDown(divider, { key: 'ArrowLeft' });
+
+    expect(workspace.getAttribute('style')).toContain('grid-template-columns: 712px 14px minmax(320px, 1fr);');
   });
 });
