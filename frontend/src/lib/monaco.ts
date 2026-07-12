@@ -295,9 +295,7 @@ function defineExplorerThemes(monaco: MonacoModule) {
 
 export async function loadMonaco(): Promise<MonacoModule> {
   if (!monacoPromise) {
-    monacoPromise = (
-      import('monaco-editor/esm/vs/editor/editor.api') as Promise<MonacoModule>
-    ).then((monaco) => {
+    monacoPromise = import('./monaco-runtime').then(({ default: monaco }) => {
       configureMonacoWorkers();
       defineExplorerLanguages(monaco);
       defineExplorerThemes(monaco);
