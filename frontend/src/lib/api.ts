@@ -401,6 +401,7 @@ export function fetchLatestTokenTransfers(
     after?: string;
     fromParties?: string[];
     toParties?: string[];
+    movementTypes?: string[];
     amountGt?: string;
     amountLt?: string;
   },
@@ -420,6 +421,11 @@ export function fetchLatestTokenTransfers(
   for (const party of options?.toParties ?? []) {
     if (party.trim()) {
       params.append('toParty', party);
+    }
+  }
+  for (const movementType of options?.movementTypes ?? []) {
+    if (movementType.trim()) {
+      params.append('movementType', movementType.trim());
     }
   }
   if (options?.amountGt?.trim()) {
@@ -441,6 +447,7 @@ export function fetchTokenTransfers(
     after?: string;
     fromParties?: string[];
     toParties?: string[];
+    movementTypes?: string[];
     amountGt?: string;
     amountLt?: string;
   },
@@ -460,6 +467,11 @@ export function fetchTokenTransfers(
   for (const party of options?.toParties ?? []) {
     if (party.trim()) {
       params.append('toParty', party);
+    }
+  }
+  for (const movementType of options?.movementTypes ?? []) {
+    if (movementType.trim()) {
+      params.append('movementType', movementType.trim());
     }
   }
   if (options?.amountGt?.trim()) {

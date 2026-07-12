@@ -163,7 +163,12 @@ describe('DebuggerView', () => {
     expect(screen.queryByRole('heading', { name: 'DAML Debugger' })).not.toBeInTheDocument();
     expect(screen.getAllByText('cnqs-sv').length).toBeGreaterThan(0);
     expect(screen.getAllByText('42').length).toBeGreaterThan(0);
-    expect(screen.getByText('205')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: '205' }),
+    ).toHaveAttribute('href', '/nodes/cnqs-sv/updates/205');
+    expect(
+      screen.getByRole('link', { name: '205' }),
+    ).toHaveAttribute('target', '_blank');
     expect(
       screen.getByRole('link', { name: '42' }),
     ).toHaveAttribute('href', '/nodes/cnqs-sv/updates/205');

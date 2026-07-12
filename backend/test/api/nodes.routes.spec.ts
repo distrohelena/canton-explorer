@@ -5,6 +5,7 @@ import { NodesController } from '../../src/api/nodes.controller';
 import { NodeCacheService } from '../../src/cache/node-cache.service';
 import { NodeConfigService } from '../../src/config/node-config.service';
 import { GrpcOperationsService } from '../../src/grpc/grpc-operations.service';
+import { NamespaceFingerprintService } from '../../src/namespaces/namespace-fingerprint.service';
 import { PqsSummaryService } from '../../src/pqs/pqs-summary.service';
 
 describe('NodesController routes', () => {
@@ -66,6 +67,12 @@ describe('NodesController routes', () => {
             fetchNodePackages: jest.fn(),
             fetchActiveParties: jest.fn(),
             fetchPartyDetail: jest.fn().mockRejectedValue(new Error('Party not found')),
+          },
+        },
+        {
+          provide: NamespaceFingerprintService,
+          useValue: {
+            summarize: jest.fn(),
           },
         },
       ],

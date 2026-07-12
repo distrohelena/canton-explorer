@@ -212,6 +212,64 @@ describe('TokenDetailView', () => {
     expect(await screen.findByText('Transfer Detail')).toBeInTheDocument();
   });
 
+  it('passes movement type from URL state through the token-scoped transfer query', async () => {
+    vi.mocked(fetchTokenDetail).mockResolvedValue({
+      token: {
+        tokenId: 'Issuer::validator-license',
+        name: 'Validator License',
+        symbol: null,
+        issuer: 'Issuer',
+        source: 'pqs',
+      },
+      transfers: [],
+    });
+    vi.mocked(fetchTokenHolders).mockResolvedValue({
+      tokenId: 'Issuer::validator-license',
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      holders: [],
+    });
+    vi.mocked(fetchTokenTransfers).mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [
+        {
+          rowId: 'token-update-2:#0:1:Main:Holding:Create',
+          movementType: 'Create',
+          tokenId: 'Issuer::validator-license',
+          tokenName: 'Validator License',
+          amount: '42.0',
+          sender: null,
+          receiver: 'Alice',
+          updateId: 'token-update-2',
+          recordTime: '2026-07-07T12:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'CNQS App Provider',
+              eventOffset: '29615',
+            },
+          ],
+        },
+      ],
+    });
+
+    await renderAt(
+      '/tokens/Issuer%3A%3Avalidator-license?transfersMovementType=Create&transfersMovementType=Mint',
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Validator License' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'Issuer::validator-license', 10, {
+        movementTypes: ['Create', 'Mint'],
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Remove movement type filter Create' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove movement type filter Mint' })).toBeInTheDocument();
+  });
+
   it('prefers the token symbol over a verbose token name in the page title', async () => {
     vi.mocked(fetchTokenDetail).mockResolvedValue({
       token: {

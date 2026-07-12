@@ -102,6 +102,7 @@ interface ActivePartiesRow {
 }
 
 interface UpdateEventRow {
+  update_id?: string | null;
   event_kind: 'create' | 'consuming_exercise' | 'non_consuming_exercise';
   event_id: string | null;
   contract_id: string | null;
@@ -281,6 +282,12 @@ const CANTON_COIN_TOKEN_NAME = 'Canton Coin';
 const CANTON_COIN_TRANSFER_TEMPLATE_ID =
   'Splice.AmuletTransferInstruction:AmuletTransferInstruction';
 const CANTON_COIN_AMULET_TEMPLATE_ID = 'Splice.Amulet:Amulet';
+const AMULET_RULES_TEMPLATE_ID = 'Splice.AmuletRules:AmuletRules';
+const NATIVE_AMULET_SUPPORT_TEMPLATE_IDS = [
+  CANTON_COIN_AMULET_TEMPLATE_ID,
+  AMULET_RULES_TEMPLATE_ID,
+  'Splice.Amulet:ValidatorRight',
+] as const;
 const NATIVE_AMULET_INTRINSIC_ID = 'Amulet';
 const CIP56_HOLDING_TEMPLATE_ID = 'Splice.Api.Token.HoldingV1:Holding';
 const CIP56_TRANSFER_TEMPLATE_ID = 'Splice.Api.Token.TransferInstructionV1:Transfer';
@@ -1345,14 +1352,15 @@ function singleUpdateQuery(node: NodeConfig, eventOffset: string): string {
   `;
 }
 
-function updateEventsQuery(node: NodeConfig, updateId: string): string {
+function updateEventsByUpdateIdsQuery(node: NodeConfig, updateIds: string[]): string {
   const relations = pqsCoreRelations(node);
-  const quotedId = `'${escapeSqlLiteral(updateId)}'`;
+  const quotedIds = updateIds.map((updateId) => `'${escapeSqlLiteral(updateId)}'`).join(', ');
   const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
   const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
 
   return `
     select
+      update_id,
       event_kind,
       event_id,
       contract_id,
@@ -1366,6 +1374,7 @@ function updateEventsQuery(node: NodeConfig, updateId: string): string {
       raw
     from (
       select
+        tx.transaction_id::text as update_id,
         'create'::text as event_kind,
         event_row.event_id::text as event_id,
         contract_row.contract_id::text as contract_id,
@@ -1393,11 +1402,12 @@ function updateEventsQuery(node: NodeConfig, updateId: string): string {
         on contract_tpe_row.pk = contract_row.tpe_pk
       left join ${relations.packages} package_row
         on package_row.pk = contract_row.package_pk
-      where tx.transaction_id = ${quotedId}
+      where tx.transaction_id in (${quotedIds})
 
       union all
 
       select
+        tx.transaction_id::text as update_id,
         case
           when exercise_tpe_row.consuming then 'consuming_exercise'::text
           else 'non_consuming_exercise'::text
@@ -1431,10 +1441,14 @@ function updateEventsQuery(node: NodeConfig, updateId: string): string {
         on exercise_tpe_row.pk = exercise_row.tpe_pk
       left join ${relations.packages} package_row
         on package_row.pk = exercise_row.package_pk
-      where tx.transaction_id = ${quotedId}
+      where tx.transaction_id in (${quotedIds})
     ) update_events
-    order by event_id asc nulls last, event_kind asc, contract_id asc, template_id asc
+    order by update_id asc nulls last, event_id asc nulls last, event_kind asc, contract_id asc, template_id asc
   `;
+}
+
+function updateEventsQuery(node: NodeConfig, updateId: string): string {
+  return updateEventsByUpdateIdsQuery(node, [updateId]);
 }
 
 function rewardCouponInstanceQuery(node: NodeConfig, updateId: string): string {
@@ -1464,9 +1478,11 @@ function rewardCouponInstanceQuery(node: NodeConfig, updateId: string): string {
   `;
 }
 
-function contractDetailQuery(node: NodeConfig, contractId: string): string {
+function contractDetailsQuery(node: NodeConfig, contractIds: string[]): string {
   const relations = pqsCoreRelations(node);
-  const quotedId = `'${escapeSqlLiteral(normalizeByteaHex(contractId))}'`;
+  const quotedIds = contractIds
+    .map((contractId) => `'${escapeSqlLiteral(normalizeByteaHex(contractId))}'`)
+    .join(', ');
   const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
 
   return `
@@ -1483,8 +1499,7 @@ function contractDetailQuery(node: NodeConfig, contractId: string): string {
         on contract_tpe_row.pk = contract_row.tpe_pk
       left join ${relations.packages} package_row
         on package_row.pk = contract_row.package_pk
-      where contract_row.contract_id = ${quotedId}
-      limit 1
+      where contract_row.contract_id in (${quotedIds})
     )
     select
       contract_row.contract_id,
@@ -1503,6 +1518,10 @@ function contractDetailQuery(node: NodeConfig, contractId: string): string {
     left join ${relations.transactions} archived_tx
       on archived_tx.ix = contract_row.archived_at_ix
   `;
+}
+
+function contractDetailQuery(node: NodeConfig, contractId: string): string {
+  return contractDetailsQuery(node, [contractId]);
 }
 
 function tokenRowsQuery(
@@ -1557,6 +1576,23 @@ function tokenRowsQuery(
     ) token_transfer_rows
     order by event_offset::numeric desc
     limit ${normalizedLimit}
+  `;
+}
+
+function nativeAmuletSupportQuery(node: NodeConfig): string {
+  const relations = pqsCoreRelations(node);
+  const templateIds = NATIVE_AMULET_SUPPORT_TEMPLATE_IDS
+    .map((templateId) => `'${escapeSqlLiteral(templateId)}'`)
+    .join(',\n        ');
+  const templateId = contractTemplateIdentifierExpression('contract_tpe_row');
+
+  return `
+    select ${templateId} as template_id
+    from ${relations.contractTpe} contract_tpe_row
+    where ${templateId} in (
+        ${templateIds}
+      )
+    limit 1
   `;
 }
 
@@ -3182,11 +3218,12 @@ export class PqsSummaryService {
       after?: string;
       fromParties?: string[];
       toParties?: string[];
+      movementTypes?: string[];
       amountGt?: string;
       amountLt?: string;
     },
   ): Promise<TokenTransfersResponse> {
-    const mergedTransfers = this.filterTokenTransfersByParties(
+    const mergedTransfers = this.filterTokenTransfers(
       await this.loadMergedTokenTransfers(nodes),
       options,
     );
@@ -3203,13 +3240,14 @@ export class PqsSummaryService {
       after?: string;
       fromParties?: string[];
       toParties?: string[];
+      movementTypes?: string[];
       amountGt?: string;
       amountLt?: string;
     },
   ): Promise<TokenTransfersResponse> {
     const normalizedTokenId = this.normalizeTokenId(tokenId);
     await this.findObservedToken(nodes, normalizedTokenId);
-    const mergedTransfers = this.filterTokenTransfersByParties(
+    const mergedTransfers = this.filterTokenTransfers(
       await this.loadMergedTokenTransfers(nodes),
       options,
     );
@@ -3219,7 +3257,7 @@ export class PqsSummaryService {
       return this.paginateTokenTransfers(directTransfers, limit, options);
     }
 
-    const recoveredTransfers = this.filterTokenTransfersByParties(
+    const recoveredTransfers = this.filterTokenTransfers(
       await this.recoverTokenTransfersFromActiveHolders(nodes, normalizedTokenId),
       options,
     );
@@ -3445,7 +3483,15 @@ export class PqsSummaryService {
         transfers: await this.loadCachedTokenTransfers(node),
       })),
     );
-    const successfulTransfers = refreshResults
+    const successfulRefreshes = refreshResults.filter(
+      (
+        result,
+      ): result is PromiseFulfilledResult<{
+        node: NodeConfig;
+        transfers: NodeTokenTransferObservation[];
+      }> => result.status === 'fulfilled',
+    );
+    const successfulTransfers = successfulRefreshes
       .filter(
         (
           result,
@@ -3456,7 +3502,7 @@ export class PqsSummaryService {
       )
       .flatMap((result) => result.value.transfers);
 
-    if (successfulTransfers.length === 0) {
+    if (successfulRefreshes.length === 0) {
       const firstFailure = refreshResults.find(
         (result): result is PromiseRejectedResult => result.status === 'rejected',
       );
@@ -3493,10 +3539,10 @@ export class PqsSummaryService {
 
     const recoveredTransfers: NodeTokenTransferObservation[] = [];
     const seenContracts = new Set<string>();
+    const contractIdsByNode = new Map<string, string[]>();
 
     for (const holder of candidateHolders) {
-      const node = nodeById.get(holder.nodeId);
-      if (!node || !holder.contractId) {
+      if (!nodeById.has(holder.nodeId) || !holder.contractId) {
         continue;
       }
 
@@ -3505,31 +3551,55 @@ export class PqsSummaryService {
         continue;
       }
       seenContracts.add(dedupeKey);
+      const nodeContractIds = contractIdsByNode.get(holder.nodeId);
+      if (nodeContractIds) {
+        nodeContractIds.push(holder.contractId);
+      } else {
+        contractIdsByNode.set(holder.nodeId, [holder.contractId]);
+      }
+    }
 
-      const client = this.clientFactory.getClient(node);
-      const contractResult = await client.query(contractDetailQuery(node, holder.contractId));
-      const contractRow = (contractResult.rows as ContractDetailRow[])[0];
-
-      if (!contractRow || typeof contractRow.created_update_id !== 'string') {
+    for (const [nodeId, contractIds] of contractIdsByNode) {
+      const node = nodeById.get(nodeId);
+      if (!node) {
         continue;
       }
 
-      const events = await this.fetchEventsByUpdateId(
+      const client = this.clientFactory.getClient(node);
+      const contractRows = await this.fetchContractDetailsByIds(
         node,
         client.query.bind(client),
-        contractRow.created_update_id,
+        contractIds,
       );
-      const inferredTransfers = this.inferCip112TokenMovements(
+      const eventsByUpdateId = await this.fetchEventsByUpdateIds(
         node,
-        {
-          update_id: contractRow.created_update_id,
-          event_offset: contractRow.created_event_offset,
-          record_time: contractRow.created_record_time,
-        },
-        events,
-      ).filter((transfer) => transfer.tokenId === tokenId);
+        client.query.bind(client),
+        contractRows
+          .map((contractRow) => contractRow.created_update_id)
+          .filter((updateId): updateId is string => typeof updateId === 'string'),
+      );
 
-      recoveredTransfers.push(...inferredTransfers);
+      for (const contractRow of contractRows) {
+        if (typeof contractRow.created_update_id !== 'string') {
+          continue;
+        }
+
+        const events = eventsByUpdateId.get(contractRow.created_update_id) ?? [];
+        const inferredTransfers = this.extractCip112TokenMovements(
+          node,
+          {
+            update_id: contractRow.created_update_id,
+            event_offset: contractRow.created_event_offset,
+            record_time: contractRow.created_record_time,
+          },
+          events,
+          {
+            canonicalShareTokenId: tokenId,
+          },
+        ).filter((transfer) => transfer.tokenId === tokenId);
+
+        recoveredTransfers.push(...inferredTransfers);
+      }
     }
 
     return this.mergeTokenTransfers(recoveredTransfers);
@@ -3590,23 +3660,26 @@ export class PqsSummaryService {
     };
   }
 
-  private filterTokenTransfersByParties(
+  private filterTokenTransfers(
     transfers: TokenTransferSummary[],
     options?: {
       fromParties?: string[];
       toParties?: string[];
+      movementTypes?: string[];
       amountGt?: string;
       amountLt?: string;
     },
   ): TokenTransferSummary[] {
     const activeFromParties = normalizePartyFilters(options?.fromParties);
     const activeToParties = normalizePartyFilters(options?.toParties);
+    const activeMovementTypes = this.normalizeTokenTransferMovementTypeFilters(options?.movementTypes);
     const amountGt = options?.amountGt?.trim() || null;
     const amountLt = options?.amountLt?.trim() || null;
 
     if (
       activeFromParties.length === 0 &&
       activeToParties.length === 0 &&
+      activeMovementTypes.length === 0 &&
       amountGt === null &&
       amountLt === null
     ) {
@@ -3620,6 +3693,9 @@ export class PqsSummaryService {
       const matchesTo =
         activeToParties.length === 0 ||
         (transfer.receiver !== null && activeToParties.includes(transfer.receiver));
+      const matchesMovementType =
+        activeMovementTypes.length === 0 ||
+        activeMovementTypes.includes(this.effectiveTokenTransferMovementType(transfer).toLowerCase());
       const matchesAmountGt =
         amountGt === null ||
         (transfer.amount !== null && this.compareNumericStrings(transfer.amount, amountGt) > 0);
@@ -3627,7 +3703,7 @@ export class PqsSummaryService {
         amountLt === null ||
         (transfer.amount !== null && this.compareNumericStrings(transfer.amount, amountLt) < 0);
 
-      return matchesFrom && matchesTo && matchesAmountGt && matchesAmountLt;
+      return matchesFrom && matchesTo && matchesMovementType && matchesAmountGt && matchesAmountLt;
     });
   }
 
@@ -3861,17 +3937,16 @@ export class PqsSummaryService {
 
     const useGrpcHoldingViews =
       node.mode === 'pqs_with_grpc' && this.grpcOperationsService !== undefined;
-    const [pqsTokens, grpcTokens] = await Promise.all([
-      this.fetchObservedTokensForNode(node, TOKEN_TRANSFER_CACHE_LIMIT, {
-        includeCip112: !useGrpcHoldingViews,
-      }),
+    const [pqsTokens, grpcTokens, builtinTokens] = await Promise.all([
+      this.fetchObservedTokensForNode(node, TOKEN_TRANSFER_CACHE_LIMIT),
       useGrpcHoldingViews
         ? this.grpcOperationsService!.fetchHoldingV2Tokens(node)
         : Promise.resolve([] as TokenSummary[]),
+      this.fetchBuiltinTokensForNode(node),
     ]);
     const dedupedTokens = new Map<string, TokenSummary>();
 
-    for (const token of [...pqsTokens, ...grpcTokens]) {
+    for (const token of [...pqsTokens, ...grpcTokens, ...builtinTokens]) {
       if (!dedupedTokens.has(token.tokenId)) {
         dedupedTokens.set(token.tokenId, token);
       }
@@ -3883,6 +3958,40 @@ export class PqsSummaryService {
       tokens,
     });
     return tokens;
+  }
+
+  private async fetchBuiltinTokensForNode(node: NodeConfig): Promise<TokenSummary[]> {
+    const client = this.clientFactory.getClient(node);
+    const result = await client.query(nativeAmuletSupportQuery(node));
+    const rows = Array.isArray(result.rows) ? result.rows : [];
+
+    const hasNativeAmuletSupport = rows.some((row) => {
+      if (!row || typeof row !== 'object') {
+        return false;
+      }
+
+      const templateId = (row as { template_id?: unknown }).template_id;
+      return (
+        typeof templateId === 'string' &&
+        NATIVE_AMULET_SUPPORT_TEMPLATE_IDS.includes(
+          this.normalizeTemplateIdentifier(templateId) as (typeof NATIVE_AMULET_SUPPORT_TEMPLATE_IDS)[number],
+        )
+      );
+    });
+
+    if (!hasNativeAmuletSupport) {
+      return [];
+    }
+
+    return [
+      {
+        tokenId: CANTON_COIN_TOKEN_ID,
+        name: CANTON_COIN_TOKEN_NAME,
+        symbol: null,
+        issuer: null,
+        source: 'pqs',
+      },
+    ];
   }
 
   private async fetchObservedTokensForNode(
@@ -4170,6 +4279,14 @@ export class PqsSummaryService {
     const result = await client.query(recentCip112MovementUpdateIdsQuery(node, limit));
     const rows = (result.rows as Cip112MovementUpdateRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];
+    const rawUpdateIds = rows
+      .map((row) => (typeof row.update_id === 'string' ? row.update_id : null))
+      .filter((updateId): updateId is string => Boolean(updateId && this.isHexTokenMovementUpdateId(updateId)));
+    const eventsByUpdateId = await this.fetchEventsByUpdateIds(
+      node,
+      client.query.bind(client),
+      rawUpdateIds,
+    );
 
     for (const row of rows) {
       const rawUpdateId = typeof row.update_id === 'string' ? row.update_id : null;
@@ -4177,8 +4294,128 @@ export class PqsSummaryService {
         continue;
       }
 
-      const events = await this.fetchEventsByUpdateId(node, client.query.bind(client), rawUpdateId);
-      transfers.push(...this.inferCip112TokenMovements(node, row, events));
+      const events = eventsByUpdateId.get(rawUpdateId) ?? [];
+      transfers.push(...this.extractCip112TokenMovements(node, row, events));
+    }
+
+    return transfers;
+  }
+
+  private extractCip112TokenMovements(
+    node: NodeConfig,
+    update: Cip112MovementUpdateRow,
+    events: NodeUpdateDetailEvent[],
+    options?: {
+      canonicalShareTokenId?: string | null;
+    },
+  ): NodeTokenTransferObservation[] {
+    const standardTransfers = this.extractStandardCip112TokenMovements(node, update, events, options);
+    if (standardTransfers.length > 0) {
+      return standardTransfers;
+    }
+
+    return this.inferCip112TokenMovements(node, update, events, options);
+  }
+
+  private extractStandardCip112TokenMovements(
+    node: NodeConfig,
+    update: Cip112MovementUpdateRow,
+    events: NodeUpdateDetailEvent[],
+    options?: {
+      canonicalShareTokenId?: string | null;
+    },
+  ): NodeTokenTransferObservation[] {
+    const createTokensById = new Map<string, TokenSummary>();
+
+    for (const event of events) {
+      if (
+        event.eventKind !== 'create' ||
+        !this.isCip112TemplateId(event.templateId) ||
+        event.createData?.status !== 'decoded'
+      ) {
+        continue;
+      }
+
+      const token = this.extractObservedTokenSummary(event.templateId, event.createData);
+      if (token) {
+        createTokensById.set(token.tokenId, token);
+      }
+    }
+
+    const transfers: NodeTokenTransferObservation[] = [];
+    const eventLogExercises = events.filter(
+      (event) =>
+        event.eventKind === 'non_consuming_exercise' &&
+        (event.choice === 'HoldingsChange' || event.choice === 'EventLog_HoldingsChange') &&
+        event.exerciseData?.argument.status === 'decoded' &&
+        this.isRecordValue(event.exerciseData.argument.value),
+    );
+
+    for (const event of eventLogExercises) {
+      const argument = event.exerciseData?.argument;
+      if (!argument || argument.status !== 'decoded' || !this.isRecordValue(argument.value)) {
+        continue;
+      }
+
+      const account = this.findRecordField(argument.value, 'account');
+      const transferLegs = this.readListField(argument.value, 'transferLegSides');
+      const admin = this.readScalarField(argument.value, 'admin');
+      if (!account || !admin || transferLegs.length === 0) {
+        continue;
+      }
+
+      for (const leg of transferLegs) {
+        if (!this.isRecordValue(leg)) {
+          continue;
+        }
+
+        const side = this.readConstructorField(leg, 'side');
+        if (side !== 'SenderSide') {
+          continue;
+        }
+
+        const transferLegId = this.readScalarField(leg, 'transferLegId');
+        const amount = this.readScalarField(leg, 'amount');
+        const instrumentId = this.readScalarField(leg, 'instrumentId');
+        const otherSideAccount = this.findRecordField(leg, 'otherside');
+        if (!transferLegId || !instrumentId || !otherSideAccount) {
+          continue;
+        }
+
+        const token = this.resolveEventLogTokenSummary(
+          admin,
+          instrumentId,
+          createTokensById,
+          options?.canonicalShareTokenId ?? null,
+        );
+        const movementType = this.classifyEventLogMovementType(
+          account,
+          otherSideAccount,
+          admin,
+          instrumentId,
+        );
+
+        transfers.push({
+          rowId: this.buildTokenTransferLegRowId(
+            typeof update.update_id === 'string' ? this.normalizeUpdateId(update.update_id) : '',
+            event.eventId,
+            transferLegId,
+            movementType,
+          ),
+          movementType,
+          source: 'pqs',
+          nodeId: node.id,
+          label: node.label,
+          tokenId: token.tokenId,
+          tokenName: token.name,
+          amount,
+          sender: this.readAccountParty(account),
+          receiver: this.readAccountParty(otherSideAccount),
+          eventOffset: this.normalizeOptionalScalar(update.event_offset) ?? '',
+          updateId: typeof update.update_id === 'string' ? this.normalizeUpdateId(update.update_id) : '',
+          recordTime: typeof update.record_time === 'string' ? update.record_time : null,
+        });
+      }
     }
 
     return transfers;
@@ -4188,6 +4425,9 @@ export class PqsSummaryService {
     node: NodeConfig,
     update: Cip112MovementUpdateRow,
     events: NodeUpdateDetailEvent[],
+    options?: {
+      canonicalShareTokenId?: string | null;
+    },
   ): NodeTokenTransferObservation[] {
     const createEvents = events.filter(
       (event) =>
@@ -4220,8 +4460,10 @@ export class PqsSummaryService {
           : null,
       )
       .find((owner): owner is string => Boolean(owner));
+    const shouldEmitCreateMovements =
+      transferExercises.length > 0 || (transferExercises.length === 0 && mintExercises.length === 0);
 
-    if (transferExercises.length > 0) {
+    if (shouldEmitCreateMovements) {
       for (const event of createEvents) {
         const movementType = 'Create';
         const transfer = this.buildInferredCip112Movement(
@@ -4230,6 +4472,7 @@ export class PqsSummaryService {
           event,
           movementType,
           !this.isShareLikeCip112Template(event.templateId) ? shareOwnerFallback : null,
+          options?.canonicalShareTokenId,
         );
         if (transfer) {
           transfers.push(transfer);
@@ -4259,6 +4502,7 @@ export class PqsSummaryService {
     event: NodeUpdateDetailEvent,
     movementType: 'Create' | 'Mint',
     receiverFallback: string | null = null,
+    canonicalShareTokenId: string | null = null,
   ): NodeTokenTransferObservation | null {
     if (event.createData?.status !== 'decoded') {
       return null;
@@ -4273,6 +4517,10 @@ export class PqsSummaryService {
     if (!token) {
       return null;
     }
+    const tokenId =
+      canonicalShareTokenId && this.isShareLikeCip112Template(event.templateId)
+        ? canonicalShareTokenId
+        : token.tokenId;
 
     return {
       rowId: this.buildTokenMovementRowId(
@@ -4285,7 +4533,7 @@ export class PqsSummaryService {
       source: INFERRED_HOLDING_V2_SOURCE,
       nodeId: node.id,
       label: node.label,
-      tokenId: token.tokenId,
+      tokenId,
       tokenName: token.name,
       amount: this.readScalarField(record, 'amount'),
       sender: movementType === 'Mint' ? this.readScalarField(record, 'issuer') : null,
@@ -4420,6 +4668,25 @@ export class PqsSummaryService {
     return tokenId.trim();
   }
 
+  private normalizeTokenTransferMovementTypeFilters(
+    movementTypes: readonly string[] | null | undefined,
+  ): string[] {
+    return Array.from(
+      new Set(
+        (movementTypes ?? [])
+          .map((movementType) => movementType.trim().toLowerCase())
+          .filter((movementType) => movementType.length > 0),
+      ),
+    );
+  }
+
+  private effectiveTokenTransferMovementType(transfer: TokenTransferSummary): string {
+    const normalizedMovementType = transfer.movementType?.trim();
+    return normalizedMovementType && normalizedMovementType.length > 0
+      ? normalizedMovementType
+      : 'Transfer';
+  }
+
   private isCip112TemplateId(templateId: string | null): boolean {
     return typeof templateId === 'string' && templateId.includes('.CIP112:');
   }
@@ -4447,6 +4714,67 @@ export class PqsSummaryService {
     movementType: string,
   ): string {
     return [updateId, eventId ?? '', templateId ?? '', movementType].join(':');
+  }
+
+  private buildTokenTransferLegRowId(
+    updateId: string,
+    eventId: string | null,
+    transferLegId: string,
+    movementType: string,
+  ): string {
+    return [updateId, eventId ?? '', transferLegId, movementType].join(':');
+  }
+
+  private resolveEventLogTokenSummary(
+    admin: string,
+    instrumentId: string,
+    tokensById: Map<string, TokenSummary>,
+    canonicalShareTokenId: string | null,
+  ): TokenSummary {
+    const fallbackToken = this.buildObservedTokenSummary(
+      instrumentId,
+      admin,
+      this.isNativeAmuletIntrinsicId(instrumentId) ? CANTON_COIN_TOKEN_NAME : instrumentId,
+      null,
+    );
+    const tokenId =
+      canonicalShareTokenId && fallbackToken.tokenId === this.normalizeShareLikeIntrinsicTokenId(instrumentId)
+        ? canonicalShareTokenId
+        : fallbackToken.tokenId;
+
+    return tokensById.get(tokenId) ?? tokensById.get(fallbackToken.tokenId) ?? {
+      ...fallbackToken,
+      tokenId,
+    };
+  }
+
+  private classifyEventLogMovementType(
+    senderAccount: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    receiverAccount: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    admin: string,
+    instrumentId: string,
+  ): 'Mint' | 'Burn' | 'Transfer' {
+    if (this.isSyntheticEventLogAccount(senderAccount, admin, `${instrumentId}:mint`)) {
+      return 'Mint';
+    }
+
+    if (this.isSyntheticEventLogAccount(receiverAccount, admin, `${instrumentId}:burn`)) {
+      return 'Burn';
+    }
+
+    return 'Transfer';
+  }
+
+  private isSyntheticEventLogAccount(
+    account: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    provider: string,
+    expectedId: string,
+  ): boolean {
+    return (
+      this.readOptionalScalarField(account, 'owner') === null &&
+      this.readOptionalScalarField(account, 'provider') === provider &&
+      this.readScalarField(account, 'id') === expectedId
+    );
   }
 
   private compareNumericStrings(left: string | null, right: string | null): number {
@@ -4729,9 +5057,60 @@ export class PqsSummaryService {
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     rawUpdateId: string,
   ): Promise<NodeUpdateDetailEvent[]> {
-    const result = await query(updateEventsQuery(node, rawUpdateId));
+    const eventsByUpdateId = await this.fetchEventsByUpdateIds(node, query, [rawUpdateId]);
+    return eventsByUpdateId.get(rawUpdateId) ?? [];
+  }
+
+  private async fetchEventsByUpdateIds(
+    node: NodeConfig,
+    query: (sql: string) => Promise<{ rows: unknown[] }>,
+    rawUpdateIds: string[],
+  ): Promise<Map<string, NodeUpdateDetailEvent[]>> {
+    if (rawUpdateIds.length === 0) {
+      return new Map();
+    }
+
+    const result = await query(updateEventsByUpdateIdsQuery(node, rawUpdateIds));
     const rows = (result.rows as UpdateEventRow[]) ?? [];
-    return Promise.all(rows.map((row) => this.normalizeEventRow(node, row)));
+    const onlyRequestedUpdateId = rawUpdateIds.length === 1 ? rawUpdateIds[0] : null;
+    const normalizedRows = await Promise.all(
+      rows.map(async (row) => ({
+        updateId:
+          typeof row.update_id === 'string'
+            ? row.update_id
+            : onlyRequestedUpdateId,
+        event: await this.normalizeEventRow(node, row),
+      })),
+    );
+    const eventsByUpdateId = new Map<string, NodeUpdateDetailEvent[]>();
+
+    for (const { updateId, event } of normalizedRows) {
+      if (!updateId) {
+        continue;
+      }
+
+      const existingEvents = eventsByUpdateId.get(updateId);
+      if (existingEvents) {
+        existingEvents.push(event);
+      } else {
+        eventsByUpdateId.set(updateId, [event]);
+      }
+    }
+
+    return eventsByUpdateId;
+  }
+
+  private async fetchContractDetailsByIds(
+    node: NodeConfig,
+    query: (sql: string) => Promise<{ rows: unknown[] }>,
+    contractIds: string[],
+  ): Promise<ContractDetailRow[]> {
+    if (contractIds.length === 0) {
+      return [];
+    }
+
+    const result = await query(contractDetailsQuery(node, contractIds));
+    return (result.rows as ContractDetailRow[]) ?? [];
   }
 
   private shouldResolveRewardCoupon(events: NodeUpdateDetailEvent[]): boolean {
@@ -5174,6 +5553,99 @@ export class PqsSummaryService {
     }
 
     return null;
+  }
+
+  private readOptionalScalarField(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    label: string,
+  ): string | null {
+    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    if (field === null || field === undefined) {
+      return null;
+    }
+
+    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+      return String(field);
+    }
+
+    if (
+      typeof field === 'object' &&
+      field !== null &&
+      'kind' in field &&
+      field.kind === 'contract_id'
+    ) {
+      return field.value;
+    }
+
+    if (typeof field !== 'object' || !('kind' in field) || field.kind !== 'optional') {
+      return null;
+    }
+
+    const innerValue = field.value;
+    if (
+      typeof innerValue === 'string' ||
+      typeof innerValue === 'number' ||
+      typeof innerValue === 'boolean'
+    ) {
+      return String(innerValue);
+    }
+
+    if (
+      typeof innerValue === 'object' &&
+      innerValue !== null &&
+      'kind' in innerValue &&
+      innerValue.kind === 'contract_id'
+    ) {
+      return innerValue.value;
+    }
+
+    return null;
+  }
+
+  private readConstructorField(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    label: string,
+  ): string | null {
+    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    if (field === null || field === undefined) {
+      return null;
+    }
+
+    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+      return String(field);
+    }
+
+    if (typeof field !== 'object' || !('kind' in field)) {
+      return null;
+    }
+
+    if (field.kind === 'enum') {
+      return field.constructor;
+    }
+
+    if (field.kind === 'variant') {
+      return field.constructor;
+    }
+
+    return null;
+  }
+
+  private readListField(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+    label: string,
+  ): NodeDecodedDamlValue[] {
+    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    if (!field || typeof field !== 'object' || !('kind' in field) || field.kind !== 'list') {
+      return [];
+    }
+
+    return field.items;
+  }
+
+  private readAccountParty(
+    value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
+  ): string | null {
+    return this.readOptionalScalarField(value, 'owner') ?? this.readOptionalScalarField(value, 'provider');
   }
 
   private readTextMapEntryField(

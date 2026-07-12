@@ -44,11 +44,20 @@ const loadingTransfers = ref(true);
 const showAdvancedFilter = ref(false);
 const fromPartyFilterDraft = ref('');
 const toPartyFilterDraft = ref('');
+const movementTypeDraft = ref('');
 const amountGtDraft = ref('');
 const amountLtDraft = ref('');
 
 function queryKey(
-  base: 'before' | 'after' | 'fromParty' | 'toParty' | 'amountGt' | 'amountLt' | 'limit',
+  base:
+    | 'before'
+    | 'after'
+    | 'fromParty'
+    | 'toParty'
+    | 'movementType'
+    | 'amountGt'
+    | 'amountLt'
+    | 'limit',
 ): string {
   if (!props.queryPrefix) {
     return base;
@@ -85,6 +94,9 @@ const activeFromPartyFilters = computed(() =>
 const activeToPartyFilters = computed(() =>
   uniqueValues(readQueryList(route.query[queryKey('toParty')])),
 );
+const activeMovementTypeFilters = computed(() =>
+  uniqueValues(readQueryList(route.query[queryKey('movementType')])),
+);
 const activeAmountGt = computed(() => readQueryCursor(route.query[queryKey('amountGt')]) ?? '');
 const activeAmountLt = computed(() => readQueryCursor(route.query[queryKey('amountLt')]) ?? '');
 const activePageSize = computed(() => normalizePageSize(route.query[queryKey('limit')]));
@@ -93,6 +105,7 @@ function hasAdvancedFilterQuery(): boolean {
   return (
     activeFromPartyFilters.value.length > 0 ||
     activeToPartyFilters.value.length > 0 ||
+    activeMovementTypeFilters.value.length > 0 ||
     activeAmountGt.value.length > 0 ||
     activeAmountLt.value.length > 0
   );
@@ -103,6 +116,7 @@ function buildQuery(options?: {
   after?: string;
   fromParties?: string[];
   toParties?: string[];
+  movementTypes?: string[];
   amountGt?: string;
   amountLt?: string;
   limit?: number;
@@ -112,6 +126,7 @@ function buildQuery(options?: {
   delete nextQuery[queryKey('after')];
   delete nextQuery[queryKey('fromParty')];
   delete nextQuery[queryKey('toParty')];
+  delete nextQuery[queryKey('movementType')];
   delete nextQuery[queryKey('amountGt')];
   delete nextQuery[queryKey('amountLt')];
   delete nextQuery[queryKey('limit')];
@@ -130,6 +145,10 @@ function buildQuery(options?: {
 
   if ((options?.toParties?.length ?? 0) > 0) {
     nextQuery[queryKey('toParty')] = options?.toParties;
+  }
+
+  if ((options?.movementTypes?.length ?? 0) > 0) {
+    nextQuery[queryKey('movementType')] = uniqueValues(options?.movementTypes ?? []);
   }
 
   if (options?.amountGt?.trim()) {
@@ -164,6 +183,7 @@ async function loadTransfers() {
     const after = readQueryCursor(route.query[queryKey('after')]);
     const fromParties = activeFromPartyFilters.value;
     const toParties = activeToPartyFilters.value;
+    const movementTypes = activeMovementTypeFilters.value;
     const amountGt = activeAmountGt.value;
     const amountLt = activeAmountLt.value;
     const limit = activePageSize.value;
@@ -172,6 +192,7 @@ async function loadTransfers() {
       after?: string;
       fromParties?: string[];
       toParties?: string[];
+      movementTypes?: string[];
       amountGt?: string;
       amountLt?: string;
     } = {};
@@ -190,6 +211,10 @@ async function loadTransfers() {
 
     if (toParties.length > 0) {
       options.toParties = toParties;
+    }
+
+    if (movementTypes.length > 0) {
+      options.movementTypes = movementTypes;
     }
 
     if (amountGt.length > 0) {
@@ -275,6 +300,7 @@ async function showOlder() {
       before: cursor,
       fromParties: activeFromPartyFilters.value,
       toParties: activeToPartyFilters.value,
+      movementTypes: activeMovementTypeFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
       limit: activePageSize.value,
@@ -293,6 +319,7 @@ async function showNewer() {
       after: cursor,
       fromParties: activeFromPartyFilters.value,
       toParties: activeToPartyFilters.value,
+      movementTypes: activeMovementTypeFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
       limit: activePageSize.value,
@@ -305,6 +332,7 @@ async function setPageSize(limit: number) {
     buildQuery({
       fromParties: activeFromPartyFilters.value,
       toParties: activeToPartyFilters.value,
+      movementTypes: activeMovementTypeFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
       limit,
@@ -327,6 +355,7 @@ async function addFromPartyFilter() {
     buildQuery({
       fromParties: uniqueValues([...activeFromPartyFilters.value, nextParty]),
       toParties: activeToPartyFilters.value,
+      movementTypes: activeMovementTypeFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
       limit: activePageSize.value,
@@ -345,6 +374,26 @@ async function addToPartyFilter() {
     buildQuery({
       fromParties: activeFromPartyFilters.value,
       toParties: uniqueValues([...activeToPartyFilters.value, nextParty]),
+      movementTypes: activeMovementTypeFilters.value,
+      amountGt: activeAmountGt.value,
+      amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
+    }),
+  );
+}
+
+async function addMovementTypeFilter() {
+  const nextMovementType = movementTypeDraft.value.trim();
+  if (!nextMovementType) {
+    return;
+  }
+
+  movementTypeDraft.value = '';
+  await pushQuery(
+    buildQuery({
+      fromParties: activeFromPartyFilters.value,
+      toParties: activeToPartyFilters.value,
+      movementTypes: uniqueValues([...activeMovementTypeFilters.value, nextMovementType]),
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
       limit: activePageSize.value,
@@ -357,6 +406,7 @@ async function removeFromPartyFilter(party: string) {
     buildQuery({
       fromParties: activeFromPartyFilters.value.filter((candidate) => candidate !== party),
       toParties: activeToPartyFilters.value,
+      movementTypes: activeMovementTypeFilters.value,
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
       limit: activePageSize.value,
@@ -369,6 +419,20 @@ async function removeToPartyFilter(party: string) {
     buildQuery({
       fromParties: activeFromPartyFilters.value,
       toParties: activeToPartyFilters.value.filter((candidate) => candidate !== party),
+      movementTypes: activeMovementTypeFilters.value,
+      amountGt: activeAmountGt.value,
+      amountLt: activeAmountLt.value,
+      limit: activePageSize.value,
+    }),
+  );
+}
+
+async function removeMovementTypeFilter(movementType: string) {
+  await pushQuery(
+    buildQuery({
+      fromParties: activeFromPartyFilters.value,
+      toParties: activeToPartyFilters.value,
+      movementTypes: activeMovementTypeFilters.value.filter((candidate) => candidate !== movementType),
       amountGt: activeAmountGt.value,
       amountLt: activeAmountLt.value,
       limit: activePageSize.value,
@@ -388,10 +452,12 @@ watch(
   () => [
     route.query[queryKey('fromParty')],
     route.query[queryKey('toParty')],
+    route.query[queryKey('movementType')],
     route.query[queryKey('amountGt')],
     route.query[queryKey('amountLt')],
   ],
   () => {
+    movementTypeDraft.value = '';
     amountGtDraft.value = activeAmountGt.value;
     amountLtDraft.value = activeAmountLt.value;
     if (hasAdvancedFilterQuery()) {
@@ -402,7 +468,10 @@ watch(
 );
 
 watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
-  if (nextAmountGt === activeAmountGt.value && nextAmountLt === activeAmountLt.value) {
+  if (
+    nextAmountGt === activeAmountGt.value &&
+    nextAmountLt === activeAmountLt.value
+  ) {
     return;
   }
 
@@ -410,6 +479,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
     buildQuery({
       fromParties: activeFromPartyFilters.value,
       toParties: activeToPartyFilters.value,
+      movementTypes: activeMovementTypeFilters.value,
       amountGt: nextAmountGt,
       amountLt: nextAmountLt,
       limit: activePageSize.value,
@@ -447,14 +517,18 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
         :id="advancedFilterId"
         v-model:from-draft="fromPartyFilterDraft"
         v-model:to-draft="toPartyFilterDraft"
+        v-model:movement-type-draft="movementTypeDraft"
         v-model:amount-gt-draft="amountGtDraft"
         v-model:amount-lt-draft="amountLtDraft"
         :active-from-parties="activeFromPartyFilters"
         :active-to-parties="activeToPartyFilters"
+        :active-movement-types="activeMovementTypeFilters"
         @add-from-party-filter="addFromPartyFilter"
         @add-to-party-filter="addToPartyFilter"
+        @add-movement-type-filter="addMovementTypeFilter"
         @remove-from-party-filter="removeFromPartyFilter"
         @remove-to-party-filter="removeToPartyFilter"
+        @remove-movement-type-filter="removeMovementTypeFilter"
       />
     </Transition>
 

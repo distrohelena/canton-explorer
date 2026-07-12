@@ -3,21 +3,26 @@ const props = defineProps<{
   id: string;
   fromDraft: string;
   toDraft: string;
+  movementTypeDraft: string;
   amountGtDraft: string;
   amountLtDraft: string;
   activeFromParties: string[];
   activeToParties: string[];
+  activeMovementTypes: string[];
 }>();
 
 const emit = defineEmits<{
   'update:fromDraft': [value: string];
   'update:toDraft': [value: string];
+  'update:movementTypeDraft': [value: string];
   'update:amountGtDraft': [value: string];
   'update:amountLtDraft': [value: string];
   addFromPartyFilter: [];
   addToPartyFilter: [];
+  addMovementTypeFilter: [];
   removeFromPartyFilter: [party: string];
   removeToPartyFilter: [party: string];
+  removeMovementTypeFilter: [movementType: string];
 }>();
 
 function handleFromDraftInput(event: Event) {
@@ -28,6 +33,14 @@ function handleFromDraftInput(event: Event) {
 function handleToDraftInput(event: Event) {
   const target = event.target;
   emit('update:toDraft', target instanceof HTMLInputElement ? target.value : props.toDraft);
+}
+
+function handleMovementTypeDraftInput(event: Event) {
+  const target = event.target;
+  emit(
+    'update:movementTypeDraft',
+    target instanceof HTMLSelectElement ? target.value : props.movementTypeDraft,
+  );
 }
 
 function handleAmountGtDraftInput(event: Event) {
@@ -127,6 +140,51 @@ function handleAmountLtDraftInput(event: Event) {
             class="node-updates__advanced-filter-chip-remove"
             :aria-label="`Remove to party filter ${party}`"
             @click="$emit('removeToPartyFilter', party)"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div class="node-updates__advanced-filter-field">
+        <span>Movement Type</span>
+        <div class="node-updates__advanced-filter-input-row">
+          <div class="node-updates__advanced-filter-select-shell">
+            <select
+              class="node-updates__advanced-filter-select"
+              :value="movementTypeDraft"
+              aria-label="Movement Type"
+              @input="handleMovementTypeDraftInput"
+            >
+              <option value="">All Movement Types</option>
+              <option value="Transfer">Transfer</option>
+              <option value="Create">Create</option>
+              <option value="Mint">Mint</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            class="node-updates__advanced-filter-add"
+            aria-label="Add movement type filter"
+            @click="$emit('addMovementTypeFilter')"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div v-if="activeMovementTypes.length > 0" class="node-updates__advanced-filter-chips">
+        <div
+          v-for="movementType in activeMovementTypes"
+          :key="movementType"
+          class="node-updates__advanced-filter-chip"
+        >
+          <span>{{ movementType }}</span>
+          <button
+            type="button"
+            class="node-updates__advanced-filter-chip-remove"
+            :aria-label="`Remove movement type filter ${movementType}`"
+            @click="$emit('removeMovementTypeFilter', movementType)"
           >
             ×
           </button>

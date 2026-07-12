@@ -876,6 +876,23 @@ describe('fetchNodes', () => {
     );
   });
 
+  it('loads latest token transfers with repeated movement type filters from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchLatestTokenTransfers(25, {
+      movementTypes: ['Create', 'Mint'],
+    });
+
+    expect(result.transfers[0]?.updateId).toBe('token-update-2');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/tokens/transfers?movementType=Create&movementType=Mint&limit=25',
+    );
+  });
+
   it('loads a token detail by token id from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -965,6 +982,23 @@ describe('fetchNodes', () => {
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:4600/api/tokens/validator-license/transfers?amountGt=20&amountLt=50&limit=25',
+    );
+  });
+
+  it('loads token-scoped transfers with repeated movement type filters from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedScopedTokenTransfersFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTokenTransfers('validator-license', 25, {
+      movementTypes: ['Transfer', 'Mint'],
+    });
+
+    expect(result.transfers[0]?.tokenId).toBe('validator-license');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/tokens/validator-license/transfers?movementType=Transfer&movementType=Mint&limit=25',
     );
   });
 

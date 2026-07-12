@@ -695,6 +695,58 @@ describe('TokensView', () => {
     expect(container.querySelector('input[value="100"]')).not.toBeNull();
   });
 
+  it('passes movement type from URL state through the latest transfer query', async () => {
+    vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
+      {
+        tokenId: 'canton-coin',
+        name: 'Canton Coin',
+        symbol: null,
+        issuer: null,
+        source: 'pqs',
+      },
+    ]));
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [
+        {
+          rowId: 'token-update-2:#0:1:Main:Holding:Create',
+          movementType: 'Create',
+          tokenId: 'canton-coin',
+          tokenName: 'Canton Coin',
+          amount: '42.0',
+          sender: null,
+          receiver: 'Bob',
+          updateId: 'token-update-2',
+          recordTime: '2026-07-07T12:00:00.000Z',
+          nodes: [
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+              eventOffset: '202',
+            },
+          ],
+        },
+      ],
+    });
+
+    await renderAt('/tokens?movementType=Create&movementType=Mint');
+
+    expect((await screen.findAllByText('Canton Coin')).length).toBeGreaterThan(0);
+
+    const transfersBrowserSection = sectionForHeading('Latest Transfers');
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
+      movementTypes: ['Create', 'Mint'],
+    });
+    expect(
+      within(transfersBrowserSection).getByRole('button', { name: 'Advanced Filter' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('heading', { name: 'Advanced Filter Parameters' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove movement type filter Create' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove movement type filter Mint' })).toBeInTheDocument();
+  });
+
   it('opens the known tokens advanced filter from URL state and passes token filters', async () => {
     vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
       {

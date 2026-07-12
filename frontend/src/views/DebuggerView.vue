@@ -575,7 +575,18 @@ onBeforeUnmount(() => {
               </div>
               <div>
                 <dt>Event Offset</dt>
-                <dd class="update-detail__id">{{ session.offset }}</dd>
+                <dd class="update-detail__id">
+                  <RouterLink
+                    v-if="updateDetailTarget"
+                    class="update-detail__debug-action"
+                    :to="updateDetailTarget"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {{ session.offset }}
+                  </RouterLink>
+                  <span v-else>{{ session.offset }}</span>
+                </dd>
               </div>
               <div class="debugger-view__summary-item debugger-view__summary-item--canonical">
                 <dt>Canonical Update ID</dt>

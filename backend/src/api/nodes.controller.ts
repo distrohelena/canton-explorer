@@ -133,6 +133,7 @@ export class NodesController {
     @Query('after') after?: string,
     @Query('fromParty') fromParty?: string | string[],
     @Query('toParty') toParty?: string | string[],
+    @Query('movementType') movementType?: string | string[],
     @Query('amountGt') amountGt?: string,
     @Query('amountLt') amountLt?: string,
   ) {
@@ -148,6 +149,7 @@ export class NodesController {
             after?: string;
             fromParties?: string[];
             toParties?: string[];
+            movementTypes?: string[];
             amountGt?: string;
             amountLt?: string;
           },
@@ -161,6 +163,11 @@ export class NodesController {
         after,
         fromParties: Array.isArray(fromParty) ? fromParty : fromParty ? [fromParty] : undefined,
         toParties: Array.isArray(toParty) ? toParty : toParty ? [toParty] : undefined,
+        movementTypes: Array.isArray(movementType)
+          ? movementType
+          : movementType
+            ? [movementType]
+            : undefined,
         amountGt,
         amountLt,
       },
@@ -195,6 +202,7 @@ export class NodesController {
     @Query('after') after?: string,
     @Query('fromParty') fromParty?: string | string[],
     @Query('toParty') toParty?: string | string[],
+    @Query('movementType') movementType?: string | string[],
     @Query('amountGt') amountGt?: string,
     @Query('amountLt') amountLt?: string,
   ) {
@@ -212,6 +220,7 @@ export class NodesController {
               after?: string;
               fromParties?: string[];
               toParties?: string[];
+              movementTypes?: string[];
               amountGt?: string;
               amountLt?: string;
             },
@@ -226,6 +235,11 @@ export class NodesController {
           after,
           fromParties: Array.isArray(fromParty) ? fromParty : fromParty ? [fromParty] : undefined,
           toParties: Array.isArray(toParty) ? toParty : toParty ? [toParty] : undefined,
+          movementTypes: Array.isArray(movementType)
+            ? movementType
+            : movementType
+              ? [movementType]
+              : undefined,
           amountGt,
           amountLt,
         },

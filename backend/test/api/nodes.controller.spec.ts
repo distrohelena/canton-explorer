@@ -1412,11 +1412,77 @@ describe('NodesController', () => {
   });
 
   it('returns cached activity history grouped by node', () => {
+    const now = new Date();
+    const recentDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0, 0),
+    );
+    const staleDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 8, 0, 0, 0, 0),
+    );
+    const oldDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 20, 0, 0, 0, 0),
+    );
+    const oldTimestamp = new Date(
+      Date.UTC(
+        oldDay.getUTCFullYear(),
+        oldDay.getUTCMonth(),
+        oldDay.getUTCDate(),
+        12,
+        0,
+        0,
+        0,
+      ),
+    ).toISOString();
+    const staleTimestamp = new Date(
+      Date.UTC(
+        staleDay.getUTCFullYear(),
+        staleDay.getUTCMonth(),
+        staleDay.getUTCDate(),
+        12,
+        0,
+        0,
+        0,
+      ),
+    ).toISOString();
+    const recentBucketInput = new Date(
+      Date.UTC(
+        recentDay.getUTCFullYear(),
+        recentDay.getUTCMonth(),
+        recentDay.getUTCDate(),
+        11,
+        55,
+        0,
+        0,
+      ),
+    ).toISOString();
+    const recentBucketTimestamp = new Date(
+      Date.UTC(
+        recentDay.getUTCFullYear(),
+        recentDay.getUTCMonth(),
+        recentDay.getUTCDate(),
+        11,
+        45,
+        0,
+        0,
+      ),
+    ).toISOString();
+    const recentLatestTimestamp = new Date(
+      Date.UTC(
+        recentDay.getUTCFullYear(),
+        recentDay.getUTCMonth(),
+        recentDay.getUTCDate(),
+        12,
+        0,
+        0,
+        0,
+      ),
+    ).toISOString();
+
     cache.recordActivitySample({
       nodeId: 'participant-1',
       label: 'Participant 1',
       status: 'healthy',
-      timestamp: '2026-06-23T12:00:00.000Z',
+      timestamp: oldTimestamp,
       activeContractCount: 11,
       latestOffset: '000000000000123400',
       totalUpdateCount: 10,
@@ -1425,7 +1491,7 @@ describe('NodesController', () => {
       nodeId: 'participant-1',
       label: 'Participant 1',
       status: 'healthy',
-      timestamp: '2026-06-29T12:00:00.000Z',
+      timestamp: staleTimestamp,
       activeContractCount: 13,
       latestOffset: '000000000000123455',
       totalUpdateCount: 12,
@@ -1434,7 +1500,7 @@ describe('NodesController', () => {
       nodeId: 'participant-1',
       label: 'Participant 1',
       status: 'healthy',
-      timestamp: '2026-07-01T11:55:00.000Z',
+      timestamp: recentBucketInput,
       activeContractCount: 12,
       latestOffset: '000000000000123456',
       totalUpdateCount: 12,
@@ -1443,7 +1509,7 @@ describe('NodesController', () => {
       nodeId: 'participant-1',
       label: 'Participant 1',
       status: 'healthy',
-      timestamp: '2026-07-01T12:00:00.000Z',
+      timestamp: recentLatestTimestamp,
       activeContractCount: 15,
       latestOffset: '000000000000123457',
       totalUpdateCount: 15,
@@ -1464,13 +1530,13 @@ describe('NodesController', () => {
           latestActiveContractCount: 15,
           samples: [
             {
-              timestamp: '2026-07-01T11:45:00.000Z',
+              timestamp: recentBucketTimestamp,
               activityValue: 0,
               activeContractCount: 12,
               latestOffset: '000000000000123456',
             },
             {
-              timestamp: '2026-07-01T12:00:00.000Z',
+              timestamp: recentLatestTimestamp,
               activityValue: 3,
               activeContractCount: 15,
               latestOffset: '000000000000123457',
@@ -1726,11 +1792,12 @@ describe('NodesController', () => {
           after?: string,
           fromParty?: string | string[],
           toParty?: string | string[],
+          movementType?: string,
           amountGt?: string,
           amountLt?: string,
         ) => Promise<unknown>;
       }
-    ).listTokenTransfers('25', undefined, undefined, undefined, undefined, '10.5', '100.0');
+    ).listTokenTransfers('25', undefined, undefined, undefined, undefined, undefined, '10.5', '100.0');
 
     expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -1745,6 +1812,38 @@ describe('NodesController', () => {
         toParties: undefined,
         amountGt: '10.5',
         amountLt: '100.0',
+      },
+    );
+  });
+
+  it('passes token transfer movement type filters through to the PQS summary service', async () => {
+    await (
+      controller as unknown as {
+        listTokenTransfers: (
+          limit?: string,
+          before?: string,
+          after?: string,
+          fromParty?: string | string[],
+          toParty?: string | string[],
+          movementType?: string | string[],
+        ) => Promise<unknown>;
+      }
+    ).listTokenTransfers('25', undefined, undefined, undefined, undefined, ['Create', 'Mint']);
+
+    expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      25,
+      {
+        before: undefined,
+        after: undefined,
+        fromParties: undefined,
+        toParties: undefined,
+        movementTypes: ['Create', 'Mint'],
+        amountGt: undefined,
+        amountLt: undefined,
       },
     );
   });
@@ -1834,11 +1933,22 @@ describe('NodesController', () => {
           after?: string,
           fromParty?: string | string[],
           toParty?: string | string[],
+          movementType?: string,
           amountGt?: string,
           amountLt?: string,
         ) => Promise<unknown>;
       }
-    ).listTransfersByToken('validator-license', '25', undefined, undefined, undefined, undefined, '20', '50');
+    ).listTransfersByToken(
+      'validator-license',
+      '25',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '20',
+      '50',
+    );
 
     expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -1854,6 +1964,49 @@ describe('NodesController', () => {
         toParties: undefined,
         amountGt: '20',
         amountLt: '50',
+      },
+    );
+    expect(response).toEqual(typedScopedTokenTransfersFixture);
+  });
+
+  it('passes token-scoped transfer movement type filters through to the PQS summary service', async () => {
+    const response = await (
+      controller as unknown as {
+        listTransfersByToken: (
+          tokenId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+          fromParty?: string | string[],
+          toParty?: string | string[],
+          movementType?: string | string[],
+        ) => Promise<unknown>;
+      }
+    ).listTransfersByToken(
+      'validator-license',
+      '25',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['Transfer', 'Mint'],
+    );
+
+    expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      'validator-license',
+      25,
+      {
+        before: undefined,
+        after: undefined,
+        fromParties: undefined,
+        toParties: undefined,
+        movementTypes: ['Transfer', 'Mint'],
+        amountGt: undefined,
+        amountLt: undefined,
       },
     );
     expect(response).toEqual(typedScopedTokenTransfersFixture);
