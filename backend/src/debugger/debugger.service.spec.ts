@@ -1,4 +1,5 @@
 import { DebuggerService } from './debugger.service';
+import { BadRequestException } from '@nestjs/common';
 
 describe('DebuggerService', () => {
   function createService() {
@@ -212,5 +213,72 @@ describe('DebuggerService', () => {
     expect(service.listEvents('session-1').realEvents.map((event) => event.eventKind)).toEqual([
       'consuming_exercise',
     ]);
+  });
+
+  it('surfaces a high-level visibility error when replay cannot hydrate hidden contracts', async () => {
+    const grpcClientFactory = {
+      create: jest.fn().mockResolvedValue({
+        disposeAsync: jest.fn().mockResolvedValue(undefined),
+      }),
+    };
+    const pqsSummaryService = {
+      fetchUpdateDetail: jest.fn().mockResolvedValue({
+        parties: ['Alice'],
+        events: [],
+      }),
+    };
+    const nodeConfigService = {
+      list: jest.fn().mockReturnValue([
+        {
+          id: 'cnqs-app-provider',
+          mode: 'pqs_with_grpc',
+          grpc: {},
+        },
+      ]),
+      getDebuggerConfig: jest.fn().mockReturnValue({}),
+    };
+    const service = new DebuggerService(
+      grpcClientFactory as never,
+      {} as never,
+      {} as never,
+      pqsSummaryService as never,
+      nodeConfigService as never,
+    );
+
+    (service as never as { loadSdkModules: () => Promise<unknown> }).loadSdkModules = async () => ({
+      debuggerSdk: {
+        ReplayUpdateLoader: class {
+          async loadOrThrowAsync() {
+            return {
+              offset: '249',
+              updateId: 'update-1',
+              entrypoint: {
+                kind: 'exercise',
+                argument: {},
+              },
+              events: [],
+            };
+          }
+        },
+        LedgerReplayEnvironmentBuilder: class {
+          async buildOrThrowAsync() {
+            throw new Error(
+              'CONTRACT_EVENTS_NOT_FOUND(11,abcd1234): Contract events not found, or not visible.',
+            );
+          }
+        },
+      },
+      damlLfSdk: {},
+      rootSdk: {},
+    });
+    (service as never as { getSessionStore: () => Promise<unknown> }).getSessionStore = async () => ({
+      dispose: jest.fn(),
+    });
+    (service as never as { createPackageReadService: () => Promise<unknown> }).createPackageReadService =
+      async () => ({});
+
+    await expect(service.createSession('cnqs-app-provider', '249')).rejects.toThrow(
+      new BadRequestException('Debug offset is not fully visible in any connected gRPC node.'),
+    );
   });
 });

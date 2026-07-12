@@ -379,6 +379,12 @@ export class DebuggerService {
         );
       }
 
+      if (this.isReplayVisibilityError(message)) {
+        throw new BadRequestException(
+          'Debug offset is not fully visible in any connected gRPC node.',
+        );
+      }
+
       throw new InternalServerErrorException(message);
     } finally {
       await client.disposeAsync?.();
@@ -1100,6 +1106,15 @@ export class DebuggerService {
     }
 
     return entries;
+  }
+
+  private isReplayVisibilityError(message: string): boolean {
+    return (
+      message.includes('CONTRACT_EVENTS_NOT_FOUND')
+      || message.includes('CONTRACT_PAYLOAD_NOT_FOUND')
+      || message.includes('Contract events not found, or not visible.')
+      || message.includes('Contract payload not found, or not visible.')
+    );
   }
 
   private getLocalDebugDarDirectory(): string | null {
