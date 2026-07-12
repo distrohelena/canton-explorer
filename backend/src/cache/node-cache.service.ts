@@ -112,15 +112,36 @@ export class NodeCacheService {
   listActivityHistory(requestedDays?: number): NodeActivityHistoryResponse {
     const windowDays = this.normalizeWindowDays(requestedDays);
     const generatedAt = new Date().toISOString();
-    const nodes = [...this.activityHistory.values()]
-      .sort((left, right) => left.label.localeCompare(right.label))
-      .map<NodeActivitySeries>((series) => ({
-        nodeId: series.nodeId,
-        label: series.label,
-        status: series.status,
-        latestActiveContractCount: series.latestActiveContractCount,
-        samples: this.sliceSamplesForWindow(series.samples, windowDays, generatedAt),
-      }));
+    const nodeIds = new Set<string>([
+      ...this.snapshots.keys(),
+      ...this.activityHistory.keys(),
+    ]);
+    const nodes = [...nodeIds]
+      .map<NodeActivitySeries | null>((nodeId) => {
+        const snapshot = this.snapshots.get(nodeId);
+        const series = this.activityHistory.get(nodeId);
+
+        if (!snapshot && !series) {
+          return null;
+        }
+
+        return {
+          nodeId,
+          label: snapshot?.label ?? series?.label ?? nodeId,
+          status: snapshot?.status ?? series?.status ?? 'down',
+          latestActiveContractCount:
+            snapshot?.ledgerSummary.activeContractCount
+            ?? series?.latestActiveContractCount
+            ?? 0,
+          samples: this.sliceSamplesForWindow(
+            series?.samples ?? [],
+            windowDays,
+            generatedAt,
+          ),
+        };
+      })
+      .filter((series): series is NodeActivitySeries => series !== null)
+      .sort((left, right) => left.label.localeCompare(right.label));
 
     return {
       generatedAt,

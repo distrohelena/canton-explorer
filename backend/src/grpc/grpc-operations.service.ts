@@ -16,6 +16,7 @@ import type {
 } from '../domain/node.types';
 import type { CachedPackageBlob, CachedPackageRef } from '../packages/package-cache.service';
 import { GrpcClientFactory } from './grpc-client.factory';
+import { encodeDamlLfArchive } from './daml-lf-archive';
 
 export interface GrpcPartyTopologyParticipantMapping {
   participantId: string | null;
@@ -552,8 +553,8 @@ export class GrpcOperationsService {
       const packageRefs = await Promise.all(
         (fallbackResponse.packageIds ?? []).map(async (packageId) => {
           const packageResponse = await client.packageService.getPackageAsync({ packageId });
-          const archivePayload = Buffer.from(packageResponse.archivePayload);
-          const metadata = await this.decodePackageArchiveMetadata(archivePayload);
+          const archiveBytes = this.buildPackageArchive(packageId, packageResponse.archivePayload);
+          const metadata = await this.decodePackageArchiveMetadata(archiveBytes);
 
           return {
             packageId,
@@ -561,7 +562,7 @@ export class GrpcOperationsService {
             name: metadata.name,
             version: metadata.version,
             uploadedAt: null,
-            packageSize: archivePayload.length,
+            packageSize: archiveBytes.length,
           };
         }),
       );
@@ -591,7 +592,7 @@ export class GrpcOperationsService {
             version: packageRef.version,
             uploadedAt: packageRef.uploadedAt,
             packageSize: packageRef.packageSize,
-            data: Buffer.from(response.archivePayload),
+            data: this.buildPackageArchive(packageRef.packageId, response.archivePayload),
           };
         }),
       );
@@ -1323,16 +1324,20 @@ export class GrpcOperationsService {
   }
 
   private async decodePackageArchiveMetadata(
-    archivePayload: Buffer,
+    archiveBytes: Buffer,
   ): Promise<{ name: string | null; version: string | null }> {
     const sdk = await import('@distrohelena/canton-typescript-sdk/daml-lf');
     const packageLoader = new sdk.DamlLfPackageLoader();
-    const decodedPackage = packageLoader.loadPackageOrThrow(archivePayload);
+    const decodedPackage = packageLoader.loadPackageOrThrow(archiveBytes);
 
     return {
       name: decodedPackage.packageName || null,
       version: decodedPackage.packageVersion || null,
     };
+  }
+
+  private buildPackageArchive(packageId: string, archivePayload: Uint8Array): Buffer {
+    return encodeDamlLfArchive(packageId, archivePayload);
   }
 
   private async withClient<T>(

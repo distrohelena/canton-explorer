@@ -5,6 +5,13 @@ import MonacoCodeSurface from './MonacoCodeSurface.vue';
 
 const deltaDecorations = vi.fn(() => []);
 const setTheme = vi.fn();
+const createEditor = vi.fn(() => ({
+  deltaDecorations,
+  layout: vi.fn(),
+  revealLineInCenter: vi.fn(),
+  updateOptions: vi.fn(),
+  dispose: vi.fn(),
+}));
 const createModel = vi.fn(() => ({
   getValue: () => 'template Example where',
   dispose: vi.fn(),
@@ -19,13 +26,7 @@ vi.mock('../lib/monaco', () => ({
     },
     editor: {
       createModel,
-      create: vi.fn(() => ({
-        deltaDecorations,
-        layout: vi.fn(),
-        revealLineInCenter: vi.fn(),
-        updateOptions: vi.fn(),
-        dispose: vi.fn(),
-      })),
+      create: createEditor,
       setModelLanguage,
       setTheme,
     },
@@ -36,6 +37,7 @@ describe('MonacoCodeSurface', () => {
   afterEach(() => {
     deltaDecorations.mockClear();
     setTheme.mockClear();
+    createEditor.mockClear();
     createModel.mockClear();
     setModelLanguage.mockClear();
     vi.restoreAllMocks();
@@ -99,5 +101,33 @@ describe('MonacoCodeSurface', () => {
     await nextTick();
 
     expect(createModel).toHaveBeenCalledWith('template Example where', 'daml');
+  });
+
+  it('enables the Monaco minimap when requested', async () => {
+    render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where',
+        minimap: true,
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+
+    expect(createEditor).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        minimap: expect.objectContaining({
+          enabled: true,
+          renderCharacters: true,
+          side: 'right',
+          size: 'fill',
+          maxColumn: 160,
+        }),
+        scrollbar: expect.objectContaining({
+          verticalScrollbarSize: 18,
+        }),
+      }),
+    );
   });
 });

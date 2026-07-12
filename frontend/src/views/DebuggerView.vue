@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CSSProperties } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
+import type { LocationQueryRaw } from 'vue-router';
 import DebuggerControlPanel from '../components/DebuggerControlPanel.vue';
 import DebuggerEventList from '../components/DebuggerEventList.vue';
 import DebuggerScopePanel from '../components/DebuggerScopePanel.vue';
@@ -18,10 +19,25 @@ import type {
   DebuggerSessionResponse,
 } from '../types/debugger';
 
+interface DebuggerSourceTab {
+  readonly path: string;
+  readonly content: string;
+  readonly language: 'daml' | 'plaintext';
+  readonly highlightRange: {
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+  } | null;
+}
+
 const route = useRoute();
+const router = useRouter();
 const theme = ref<'light' | 'dark'>('dark');
 const session = ref<DebuggerSessionResponse | null>(null);
 const replayEvents = ref<DebuggerReplayEventSummary[]>([]);
+const openSourceTabs = ref<DebuggerSourceTab[]>([]);
+const activeSourcePath = ref<string | null>(null);
 const loading = ref(false);
 const actionLoading = ref(false);
 const eventLoading = ref(false);
@@ -36,6 +52,8 @@ let resizePointerId: number | null = null;
 let controlPanelPointerId: number | null = null;
 let controlPanelDragOffsetX = 0;
 let controlPanelDragOffsetY = 0;
+let syncingRouteFromSession = false;
+let pendingLoadKey: string | null = null;
 
 const RESIZE_HANDLE_WIDTH = 14;
 const SUMMARY_MIN_WIDTH = 320;
@@ -262,25 +280,30 @@ const eventOffset = computed(() => {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 });
 
-const sourceText = computed(() => {
-  if (session.value?.source?.content) {
-    return session.value.source.content;
-  }
-
-  if (!session.value) {
-    return '';
-  }
-
-  return JSON.stringify(session.value.currentStep, null, 2);
+const routeSessionId = computed(() => {
+  const value = route.query.sessionId;
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 });
 
-const sourceLanguage = computed(() => {
-  const path = session.value?.source?.path?.toLowerCase() ?? '';
-  return path.endsWith('.daml') ? 'daml' : 'plaintext';
+const routeStepId = computed(() => {
+  const value = route.query.stepId;
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 });
 
-const highlightRange = computed(() => {
-  const source = session.value?.source;
+const routeReplayKey = computed(() => JSON.stringify({
+  nodeId: nodeId.value,
+  eventOffset: eventOffset.value,
+  sessionId: routeSessionId.value,
+  stepId: routeStepId.value,
+}));
+
+function resolveSourceLanguage(path: string | null | undefined): 'daml' | 'plaintext' {
+  return path?.toLowerCase().endsWith('.daml') ? 'daml' : 'plaintext';
+}
+
+function resolveSourceHighlightRange(
+  source: DebuggerSessionResponse['source'],
+): DebuggerSourceTab['highlightRange'] {
   if (
     !source
     || source.startLine === null
@@ -297,6 +320,77 @@ const highlightRange = computed(() => {
     endLine: source.endLine,
     endColumn: source.endColumn,
   };
+}
+
+function rememberSessionSource(
+  nextSession: DebuggerSessionResponse | null,
+  options?: { reset?: boolean },
+) {
+  if (options?.reset) {
+    openSourceTabs.value = [];
+    activeSourcePath.value = null;
+  }
+
+  const source = nextSession?.source;
+
+  if (!source?.path || typeof source.content !== 'string') {
+    return;
+  }
+
+  const nextTab: DebuggerSourceTab = {
+    path: source.path,
+    content: source.content,
+    language: resolveSourceLanguage(source.path),
+    highlightRange: resolveSourceHighlightRange(source),
+  };
+  const existingIndex = openSourceTabs.value.findIndex((tab) => tab.path === nextTab.path);
+
+  if (existingIndex >= 0) {
+    const nextTabs = [...openSourceTabs.value];
+    nextTabs.splice(existingIndex, 1, nextTab);
+    openSourceTabs.value = nextTabs;
+  } else {
+    openSourceTabs.value = [...openSourceTabs.value, nextTab];
+  }
+
+  activeSourcePath.value = nextTab.path;
+}
+
+function formatSourceTabLabel(path: string): string {
+  const normalizedPath = path.replace(/\\/g, '/');
+  const segments = normalizedPath.split('/').filter((segment) => segment.length > 0);
+
+  return segments.at(-1) ?? path;
+}
+
+function selectSourceTab(path: string) {
+  activeSourcePath.value = path;
+}
+
+const activeSourceTab = computed(() =>
+  openSourceTabs.value.find((tab) => tab.path === activeSourcePath.value)
+  ?? openSourceTabs.value.at(-1)
+  ?? null,
+);
+
+const sourceText = computed(() => {
+  if (activeSourceTab.value) {
+    return activeSourceTab.value.content;
+  }
+
+  if (!session.value) {
+    return '';
+  }
+
+  return JSON.stringify(session.value.currentStep, null, 2);
+});
+
+const sourceLanguage = computed(() => {
+  return activeSourceTab.value?.language ?? 'plaintext';
+});
+
+const highlightRange = computed(() => {
+  return activeSourceTab.value?.highlightRange ?? null;
 });
 
 const stepLabel = computed(() => {
@@ -377,6 +471,66 @@ async function syncEvents(sessionId: string) {
   }
 }
 
+function buildDebuggerQuery(nextSession: DebuggerSessionResponse | null): LocationQueryRaw {
+  const nextQuery: LocationQueryRaw = { ...route.query };
+
+  if (nodeId.value) {
+    nextQuery.nodeId = nodeId.value;
+  } else {
+    delete nextQuery.nodeId;
+  }
+
+  if (updateId.value) {
+    nextQuery.updateId = updateId.value;
+  } else {
+    delete nextQuery.updateId;
+  }
+
+  if (eventOffset.value) {
+    nextQuery.eventOffset = eventOffset.value;
+  } else {
+    delete nextQuery.eventOffset;
+  }
+
+  if (nextSession?.sessionId) {
+    nextQuery.sessionId = nextSession.sessionId;
+  } else {
+    delete nextQuery.sessionId;
+  }
+
+  if (nextSession?.currentStep.stepId) {
+    nextQuery.stepId = nextSession.currentStep.stepId;
+  } else {
+    delete nextQuery.stepId;
+  }
+
+  return nextQuery;
+}
+
+async function syncRouteToSession(nextSession: DebuggerSessionResponse | null) {
+  const nextQuery = buildDebuggerQuery(nextSession);
+  const queryKeys = ['nodeId', 'updateId', 'eventOffset', 'sessionId', 'stepId'] as const;
+  const routeChanged = queryKeys.some((key) => {
+    const currentValue = route.query[key];
+    const nextValue = nextQuery[key];
+    return String(currentValue ?? '') !== String(nextValue ?? '');
+  });
+
+  if (!routeChanged) {
+    return;
+  }
+
+  syncingRouteFromSession = true;
+
+  try {
+    await router.replace({
+      query: nextQuery,
+    });
+  } finally {
+    syncingRouteFromSession = false;
+  }
+}
+
 async function loadDebuggerSession() {
   if (!nodeId.value || !eventOffset.value) {
     session.value = null;
@@ -384,18 +538,57 @@ async function loadDebuggerSession() {
     return;
   }
 
-  loading.value = true;
-  error.value = null;
-
   try {
-    const nextSession = await createDebuggerSession(nodeId.value, eventOffset.value);
+    if (
+      session.value
+      && session.value.nodeId === nodeId.value
+      && session.value.offset === eventOffset.value
+      && (!routeSessionId.value || session.value.sessionId === routeSessionId.value)
+      && (!routeStepId.value || session.value.currentStep.stepId === routeStepId.value)
+    ) {
+      return;
+    }
+
+    const loadKey = routeReplayKey.value;
+
+    if (pendingLoadKey === loadKey) {
+      return;
+    }
+
+    pendingLoadKey = loadKey;
+    loading.value = true;
+    error.value = null;
+
+    let nextSession: DebuggerSessionResponse;
+
+    if (routeSessionId.value) {
+      try {
+        nextSession = await fetchDebuggerSession(routeSessionId.value);
+      } catch {
+        nextSession = await createDebuggerSession(nodeId.value, eventOffset.value);
+      }
+    } else {
+      nextSession = await createDebuggerSession(nodeId.value, eventOffset.value);
+    }
+
+    if (routeStepId.value && nextSession.currentStep.stepId !== routeStepId.value) {
+      nextSession = await jumpDebuggerSessionToStep(nextSession.sessionId, routeStepId.value);
+    }
+
+    rememberSessionSource(nextSession, {
+      reset: nextSession.sessionId !== session.value?.sessionId,
+    });
     session.value = nextSession;
     await syncEvents(nextSession.sessionId);
+    await syncRouteToSession(nextSession);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
     session.value = null;
     replayEvents.value = [];
   } finally {
+    if (pendingLoadKey === routeReplayKey.value) {
+      pendingLoadKey = null;
+    }
     loading.value = false;
   }
 }
@@ -412,8 +605,10 @@ async function runAction(
 
   try {
     const nextSession = await stepDebuggerSession(session.value.sessionId, action);
+    rememberSessionSource(nextSession);
     session.value = nextSession;
     await syncEvents(nextSession.sessionId);
+    await syncRouteToSession(nextSession);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
@@ -431,8 +626,10 @@ async function refreshSession() {
 
   try {
     const nextSession = await fetchDebuggerSession(session.value.sessionId);
+    rememberSessionSource(nextSession);
     session.value = nextSession;
     await syncEvents(nextSession.sessionId);
+    await syncRouteToSession(nextSession);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
@@ -450,8 +647,10 @@ async function selectEventStep(stepId: string) {
 
   try {
     const nextSession = await jumpDebuggerSessionToStep(session.value.sessionId, stepId);
+    rememberSessionSource(nextSession);
     session.value = nextSession;
     await syncEvents(nextSession.sessionId);
+    await syncRouteToSession(nextSession);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
@@ -459,10 +658,20 @@ async function selectEventStep(stepId: string) {
   }
 }
 
-watch([nodeId, eventOffset], () => {
-  controlPanelPosition.value = null;
-  void loadDebuggerSession();
-});
+watch(
+  routeReplayKey,
+  () => {
+    if (syncingRouteFromSession) {
+      return;
+    }
+
+    controlPanelPosition.value = null;
+    void loadDebuggerSession();
+  },
+  {
+    immediate: true,
+  },
+);
 
 watch(
   () => session.value?.sessionId,
@@ -487,7 +696,9 @@ onMounted(() => {
     attributeFilter: ['data-theme'],
   });
   window.addEventListener('resize', handleViewportResize);
-  void loadDebuggerSession();
+  void nextTick(() => {
+    ensureDefaultControlPanelPosition();
+  });
 });
 
 onBeforeUnmount(() => {
@@ -527,10 +738,32 @@ onBeforeUnmount(() => {
       </div>
 
       <section class="debugger-view__editor-shell" data-testid="debugger-editor-shell">
+        <div
+          v-if="openSourceTabs.length > 0"
+          class="debugger-view__editor-tabs"
+          role="tablist"
+          aria-label="Open DAML source files"
+        >
+          <button
+            v-for="sourceTab in openSourceTabs"
+            :key="sourceTab.path"
+            type="button"
+            role="tab"
+            class="debugger-view__editor-tab"
+            :class="{ 'debugger-view__editor-tab--active': sourceTab.path === activeSourcePath }"
+            :aria-selected="sourceTab.path === activeSourcePath"
+            :title="sourceTab.path"
+            :data-testid="`debugger-source-tab-${sourceTab.path}`"
+            @click="selectSourceTab(sourceTab.path)"
+          >
+            {{ formatSourceTabLabel(sourceTab.path) }}
+          </button>
+        </div>
         <MonacoCodeSurface
           :model-value="sourceText"
           :theme="theme"
           :language="sourceLanguage"
+          :minimap="true"
           :highlight-range="highlightRange"
           aria-label="DAML debugger code surface"
         />
@@ -568,7 +801,7 @@ onBeforeUnmount(() => {
               </p>
             </div>
 
-            <dl class="detail-grid debugger-view__summary-grid">
+            <dl class="detail-grid debugger-view__summary-grid debugger-view__launch-context-grid">
               <div>
                 <dt>Node</dt>
                 <dd>{{ session.nodeId }}</dd>
@@ -578,7 +811,7 @@ onBeforeUnmount(() => {
                 <dd class="update-detail__id">
                   <RouterLink
                     v-if="updateDetailTarget"
-                    class="update-detail__debug-action"
+                    class="debugger-view__detail-link"
                     :to="updateDetailTarget"
                     target="_blank"
                     rel="noreferrer"
@@ -593,7 +826,7 @@ onBeforeUnmount(() => {
                 <dd class="update-detail__canonical">
                   <RouterLink
                     v-if="updateDetailTarget && (session.updateId ?? updateId)"
-                    class="update-detail__debug-action"
+                    class="debugger-view__detail-link"
                     :to="updateDetailTarget"
                     target="_blank"
                     rel="noreferrer"
@@ -605,15 +838,7 @@ onBeforeUnmount(() => {
               </div>
               <div>
                 <dt>Session</dt>
-                <dd class="update-detail__canonical">{{ session.sessionId }}</dd>
-              </div>
-              <div>
-                <dt>Step</dt>
-                <dd>{{ stepLabel }}</dd>
-              </div>
-              <div>
-                <dt>Phase</dt>
-                <dd>{{ phaseLabel }}</dd>
+                <dd class="debugger-view__session-id">{{ session.sessionId }}</dd>
               </div>
             </dl>
 

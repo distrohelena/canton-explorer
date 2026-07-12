@@ -204,4 +204,63 @@ describe('NodeCacheService', () => {
       },
     ]);
   });
+
+  it('includes degraded nodes with empty activity when they have snapshots but no history', () => {
+    const cache = new NodeCacheService();
+
+    cache.upsert({
+      id: 'participant-2',
+      label: 'Participant 2',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      ledgerLabel: 'Participant 2 Ledger',
+      status: 'degraded',
+      latencyMs: 5,
+      lastSuccessAt: null,
+      lastErrorAt: '2026-07-02T12:45:00.000Z',
+      errorSummary: 'PQS unavailable',
+      serviceInfo: {
+        target: 'localhost:6901',
+        reachable: false,
+        healthCheckImplemented: false,
+        servingStatus: null,
+      },
+      ledgerSummary: {
+        ledgerLabel: 'Participant 2 Ledger',
+        pqsDatabase: 'unavailable',
+        activeContractCount: 0,
+        latestOffset: null,
+        latestEventAt: null,
+        totalUpdateCount: 0,
+      },
+      sourceStatus: {
+        pqs: {
+          ok: false,
+          checkedAt: '2026-07-02T12:45:00.000Z',
+          latencyMs: 5,
+          message: 'connect ECONNREFUSED',
+        },
+        grpc: {
+          ok: false,
+          checkedAt: '2026-07-02T12:45:00.000Z',
+          latencyMs: 5,
+          message: 'connect ECONNREFUSED',
+        },
+      },
+    });
+
+    expect(cache.listActivityHistory(7)).toEqual({
+      generatedAt: expect.any(String),
+      windowMinutes: 10080,
+      nodes: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          status: 'degraded',
+          latestActiveContractCount: 0,
+          samples: [],
+        },
+      ],
+    });
+  });
 });

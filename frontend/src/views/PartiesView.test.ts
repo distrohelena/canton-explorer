@@ -815,4 +815,74 @@ describe('PartiesView', () => {
     expect(screen.getByText(/Please contact the operator/)).toBeInTheDocument();
     expect(screen.queryByText('No local parties found for this node.')).not.toBeInTheDocument();
   });
+
+  it('shows a pqs error message instead of the empty-state copy when active party loading fails', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+        ledgerLabel: 'Retail Ledger 2',
+        status: 'degraded',
+        latencyMs: 1,
+        lastSuccessAt: null,
+        lastErrorAt: null,
+        errorSummary: 'PQS unavailable',
+        serviceInfo: {
+          target: 'localhost:5012',
+          reachable: true,
+          healthCheckImplemented: true,
+          servingStatus: 'SERVING',
+        },
+        ledgerSummary: {
+          ledgerLabel: 'Retail Ledger 2',
+          pqsDatabase: 'participant_2',
+          activeContractCount: 1,
+          latestOffset: null,
+          latestEventAt: null,
+        },
+        sourceStatus: {
+          pqs: { ok: false, checkedAt: '', latencyMs: 1, message: 'connect ECONNREFUSED' },
+          grpc: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+        },
+      },
+    ]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      parties: [],
+      activePartiesStatus: 'pqs_error',
+      activePartiesError: 'connect ECONNREFUSED 127.0.0.1:5542',
+    });
+    vi.mocked(fetchNodeLocalParties).mockResolvedValue({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      parties: [],
+      localPartiesStatus: 'ok',
+      localPartiesError: null,
+      localPartiesErrorCode: null,
+      localPartiesErrorDetails: null,
+      localPartiesErrorTid: null,
+    });
+
+    render(PartiesView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(
+      await screen.findByText('PQS error while listing active parties for this node.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('connect ECONNREFUSED 127.0.0.1:5542')).toBeInTheDocument();
+    expect(screen.queryByText('No active parties found for this node.')).not.toBeInTheDocument();
+  });
 });

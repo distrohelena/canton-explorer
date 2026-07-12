@@ -335,7 +335,14 @@ watch(
                           <span class="party-topology__field party-topology__field--key-identity">
                             <span class="party-topology__stacked-value">
                               <strong>Fingerprint</strong>
-                              <span>{{ keyMapping.keyFingerprint ?? 'Not Present' }}</span>
+                              <RouterLink
+                                v-if="keyMapping.keyFingerprint"
+                                class="contract-detail__link"
+                                :to="`/namespaces/${encodeURIComponent(keyMapping.keyFingerprint)}`"
+                              >
+                                {{ keyMapping.keyFingerprint }}
+                              </RouterLink>
+                              <span v-else>Not Present</span>
                             </span>
                             <span class="party-topology__stacked-value">
                               <strong>Public Key</strong>

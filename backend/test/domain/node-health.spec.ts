@@ -26,7 +26,7 @@ describe('computeNodeStatus', () => {
     ).toBe('degraded');
   });
 
-  it('returns down when PQS is unavailable and nothing usable remains', () => {
+  it('returns degraded when PQS is unavailable and nothing usable remains', () => {
     expect(
       computeNodeStatus({
         pqsOk: false,
@@ -35,6 +35,6 @@ describe('computeNodeStatus', () => {
         isStale: true,
         hasUsableSnapshot: false,
       }),
-    ).toBe('down');
+    ).toBe('degraded');
   });
 });

@@ -75,6 +75,9 @@ describe('ContractDetailView', () => {
     expect(await screen.findByRole('heading', { name: 'Participant 1 Contract' })).toBeInTheDocument();
     expect(screen.getByText('00abc')).toBeInTheDocument();
     expect(screen.getByText('Main:Asset')).toBeInTheDocument();
+    expect(screen.getByText('Template ID').closest('.contract-detail__summary-item')).toHaveClass(
+      'contract-detail__summary-item--full-row',
+    );
     expect(screen.getByText('main-package')).toBeInTheDocument();
     expect(screen.getByText('Package Name')).toBeInTheDocument();
     expect(screen.getByText('Main Package')).toBeInTheDocument();

@@ -13,6 +13,7 @@ const props = withDefaults(
     language?: string;
     theme?: 'light' | 'dark';
     readOnly?: boolean;
+    minimap?: boolean;
     ariaLabel?: string;
     highlightRange?: {
       startLine: number;
@@ -25,6 +26,7 @@ const props = withDefaults(
     language: 'plaintext',
     theme: 'dark',
     readOnly: true,
+    minimap: false,
     ariaLabel: 'Code editor',
     highlightRange: null,
   },
@@ -64,12 +66,24 @@ async function mountEditor() {
       model: model.value,
       readOnly: props.readOnly,
       automaticLayout: false,
-      minimap: { enabled: false },
+      minimap: props.minimap
+        ? {
+            enabled: true,
+            renderCharacters: true,
+            side: 'right',
+            size: 'fill',
+            maxColumn: 160,
+          }
+        : { enabled: false },
       scrollBeyondLastLine: false,
       lineNumbers: 'on',
       wordWrap: 'on',
       glyphMargin: true,
       renderLineHighlight: 'all',
+      scrollbar: {
+        verticalScrollbarSize: props.minimap ? 18 : 12,
+        horizontalScrollbarSize: 12,
+      },
       fontSize: 13,
       tabSize: 2,
       ariaLabel: props.ariaLabel,
@@ -159,6 +173,27 @@ watch(
   () => props.readOnly,
   (nextReadOnly) => {
     editor.value?.updateOptions({ readOnly: nextReadOnly });
+  },
+);
+
+watch(
+  () => props.minimap,
+  (nextMinimap) => {
+    editor.value?.updateOptions({
+      minimap: nextMinimap
+        ? {
+            enabled: true,
+            renderCharacters: true,
+            side: 'right',
+            size: 'fill',
+            maxColumn: 160,
+          }
+        : { enabled: false },
+      scrollbar: {
+        verticalScrollbarSize: nextMinimap ? 18 : 12,
+        horizontalScrollbarSize: 12,
+      },
+    });
   },
 );
 

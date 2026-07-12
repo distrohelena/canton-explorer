@@ -293,9 +293,15 @@ describe('PartyDetailView', () => {
     expect(screen.getByText('Confirmation')).toBeInTheDocument();
     expect(screen.queryByText('submission')).not.toBeInTheDocument();
     expect(screen.getAllByText('Threshold')).toHaveLength(2);
-    expect(screen.getByText('fingerprint-1')).toBeInTheDocument();
-    expect(screen.getByText('fingerprint-2')).toBeInTheDocument();
-    expect(screen.getByText('fingerprint-1').closest('.party-topology__field'))
+    expect(screen.getByRole('link', { name: 'fingerprint-1' })).toHaveAttribute(
+      'href',
+      '/namespaces/fingerprint-1',
+    );
+    expect(screen.getByRole('link', { name: 'fingerprint-2' })).toHaveAttribute(
+      'href',
+      '/namespaces/fingerprint-2',
+    );
+    expect(screen.getByRole('link', { name: 'fingerprint-1' }).closest('.party-topology__field'))
       .toHaveClass('party-topology__field--key-identity');
     expect(screen.getByText('Namespace')).toBeInTheDocument();
     expect(screen.getByText('Proof-of-Ownership')).toBeInTheDocument();

@@ -1008,12 +1008,54 @@ describe('PqsSummaryService', () => {
           label: 'Participant 1',
           mode: 'pqs_only',
           parties: ['Alice', 'Bob'],
+          activePartiesStatus: 'ok',
+          activePartiesError: null,
         },
         {
           nodeId: 'participant-2',
           label: 'Participant 2',
           mode: 'pqs_with_grpc',
           parties: [],
+          activePartiesStatus: 'ok',
+          activePartiesError: null,
+        },
+      ],
+    });
+  });
+
+  it('returns a node-level PQS error entry when active party lookup fails', async () => {
+    const participant1Query = jest.fn(async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+    });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({
+          query: participant1Query,
+        }),
+      } as never,
+      undefined,
+      undefined,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchActiveParties?: (
+        nodes: Array<{ id: string; label: string; mode: 'pqs_only' | 'pqs_with_grpc' }>,
+      ) => Promise<ActivePartiesResponse>;
+    };
+
+    await expect(
+      service.fetchActiveParties?.([
+        { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+      ]),
+    ).resolves.toEqual({
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          mode: 'pqs_with_grpc',
+          parties: [],
+          activePartiesStatus: 'pqs_error',
+          activePartiesError: 'connect ECONNREFUSED 127.0.0.1:5542',
         },
       ],
     });
@@ -1530,6 +1572,173 @@ describe('PqsSummaryService', () => {
     ).resolves.toEqual(typedNamespaceDetailFixture);
   });
 
+  it('keeps namespace detail available when PQS fails for one node', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+      } as never,
+      undefined,
+      {
+        getPackage: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-01T10:00:00.000Z',
+          packageSize: 1024,
+          data: Buffer.from('package'),
+        }),
+      } as never,
+      undefined,
+      undefined,
+      {
+        fetchPartyTopology: jest
+          .fn()
+          .mockResolvedValueOnce({
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            status: 'ok',
+            errorMessage: null,
+            isLocalParty: true,
+            partyToParticipants: [
+              {
+                participantId: null,
+                participantUid: 'participant-1::1220aaa',
+                permission: 'confirmation',
+                threshold: 1,
+                synchronizerIds: ['global-domain::1220aa'],
+              },
+            ],
+            partyToKeyMappings: [
+              {
+                keyFingerprint: '1220abcd',
+                publicKey: null,
+                purpose: 'namespace',
+                keyType: 'ed25519',
+                keyFormat: 'derX509SubjectPublicKeyInfo',
+                keySpec: 'ecCurve25519',
+                threshold: 1,
+                synchronizerIds: ['global-domain::1220aa'],
+              },
+            ],
+          }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchNamespaceDetail?: (
+        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        namespaceId: string,
+      ) => Promise<NamespaceDetailResponse>;
+    };
+
+    (service as any).fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValueOnce(['Alice::1220abcd'])
+      .mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:5542'));
+    (service as any).fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '42',
+          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          recordTime: '2026-07-09T12:00:00.000Z',
+          parties: ['Alice::1220abcd'],
+        },
+      ],
+    });
+    (service as any).fetchGlobalContracts = jest.fn().mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          recordTime: '2026-07-09T12:00:00.000Z',
+        },
+      ],
+    });
+
+    await expect(
+      service.fetchNamespaceDetail?.(
+        [
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
+        ],
+        '1220abcd',
+      ),
+    ).resolves.toEqual({
+      namespaceId: '1220abcd',
+      partyCount: 1,
+      nodeCount: 1,
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          recentUpdateCount: 1,
+          recentContractCount: 1,
+        },
+      ],
+      recentUpdates: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '42',
+          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          recordTime: '2026-07-09T12:00:00.000Z',
+          parties: ['Alice::1220abcd'],
+        },
+      ],
+      recentContracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          packageId: null,
+          packageName: null,
+          packageVersion: null,
+          recordTime: '2026-07-09T12:00:00.000Z',
+        },
+      ],
+      topologyByNode: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          partyToParticipants: [
+            {
+              participantId: null,
+              participantUid: 'participant-1::1220aaa',
+              permission: 'confirmation',
+              threshold: 1,
+              synchronizerIds: ['global-domain::1220aa'],
+            },
+          ],
+          partyToKeyMappings: [
+            {
+              keyFingerprint: '1220abcd',
+              publicKey: null,
+              purpose: 'namespace',
+              keyType: 'ed25519',
+              keyFormat: 'derX509SubjectPublicKeyInfo',
+              keySpec: 'ecCurve25519',
+              threshold: 1,
+              synchronizerIds: ['global-domain::1220aa'],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('returns paginated namespace parties aggregated by exact namespace suffix', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
@@ -1568,6 +1777,47 @@ describe('PqsSummaryService', () => {
         { limit: 10 },
       ),
     ).resolves.toEqual(typedNamespacePartiesFixture);
+  });
+
+  it('returns namespace parties from healthy nodes when another node PQS is unavailable', async () => {
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchNamespaceParties?: (
+        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        namespaceId: string,
+        options?: { limit?: number; before?: string; after?: string },
+      ) => Promise<NamespacePartiesResponse>;
+    };
+
+    (service as any).fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValueOnce(['Alice::1220abcd'])
+      .mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:5542'));
+
+    await expect(
+      service.fetchNamespaceParties?.(
+        [
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
+        ],
+        '1220abcd',
+        { limit: 10 },
+      ),
+    ).resolves.toEqual({
+      namespaceId: '1220abcd',
+      partyCount: 1,
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      parties: [
+        {
+          partyId: 'Alice::1220abcd',
+        },
+      ],
+    });
   });
 
   it('keeps party detail available when topology fails for one node', async () => {
@@ -1657,6 +1907,149 @@ describe('PqsSummaryService', () => {
             partyToParticipants: [],
             partyToKeyMappings: [],
           }),
+      } as never,
+    ) as PqsSummaryService & {
+      fetchPartyDetail?: (
+        nodes: Array<{ id: string; label: string }>,
+        partyId: string,
+      ) => Promise<PartyDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPartyDetail?.(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ],
+        'Alice',
+      ),
+    ).resolves.toEqual({
+      partyId: 'Alice',
+      nodeCount: 1,
+      recentUpdateCount: 1,
+      recentContractCount: 1,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          recentUpdateCount: 1,
+          recentContractCount: 1,
+        },
+      ],
+      recentUpdates: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '0000000000000001',
+          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          recordTime: '2026-07-01T12:00:00.000Z',
+          parties: ['Alice'],
+        },
+      ],
+      recentContracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          packageId: 'main-package',
+          packageName: 'Main Package',
+          packageVersion: '1.2.3',
+          recordTime: '2026-07-01T12:00:00.000Z',
+        },
+      ],
+      partyTopologyByNode: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          isLocalParty: false,
+          partyToParticipants: [],
+          partyToKeyMappings: [],
+        },
+      ],
+    });
+  });
+
+  it('keeps party detail available when PQS fails for one node', async () => {
+    const participant1Query = jest.fn(async (sql: string) => {
+      if (
+        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('event_offset') &&
+        sql.includes("'Alice'") &&
+        sql.includes("'p|Alice'")
+      ) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              event_offset: '0000000000000001',
+              record_time: '2026-07-01T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('array_agg(distinct party order by party) as parties')) {
+        return {
+          rows: [
+            {
+              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              parties: ['Alice'],
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('contract_row.contract_id::text as contract_id')) {
+        return {
+          rows: [
+            {
+              contract_id: '00abc',
+              template_id: 'Main:Asset',
+              package_id: 'main-package',
+              record_time: '2026-07-01T12:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const participant2Query = jest.fn(async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+    });
+
+    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+      {
+        getClient: (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      } as never,
+      undefined,
+      {
+        getPackage: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: '2026-07-01T10:00:00.000Z',
+          packageSize: 1024,
+          data: Buffer.from('package'),
+        }),
+      } as never,
+      undefined,
+      undefined,
+      {
+        fetchPartyTopology: jest.fn().mockResolvedValue({
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          partyToParticipants: [],
+          partyToKeyMappings: [],
+        }),
       } as never,
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
@@ -2493,6 +2886,63 @@ mode: 'pqs_only',
     expect(olderPage.nextBefore).toEqual(expect.any(String));
   });
 
+  it('returns global recent updates from healthy nodes when another node PQS is unavailable', async () => {
+    const service = new PqsSummaryService({
+      getClient: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchRecentUpdates: jest.Mock;
+    };
+
+    serviceWithFetch.fetchRecentUpdates = jest.fn(
+      async (node: { id: string; label: string }) => {
+        if (node.id === 'participant-2') {
+          throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+        }
+
+        return {
+          nodeId: node.id,
+          label: node.label,
+          limit: 25,
+          nextBefore: null,
+          nextAfter: null,
+          updates: [
+            {
+              eventOffset: '103',
+              updateId: 'update-103',
+              recordTime: '2026-07-01T12:03:00.000Z',
+              parties: ['Alice'],
+            },
+          ],
+        };
+      },
+    );
+
+    await expect(
+      service.fetchGlobalRecentUpdates(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ] as never,
+        10,
+      ),
+    ).resolves.toEqual({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          eventOffset: '103',
+          updateId: 'update-103',
+          recordTime: '2026-07-01T12:03:00.000Z',
+          parties: ['Alice'],
+        },
+      ],
+    });
+  });
+
   it('returns active contracts newest first with an older-page cursor', async () => {
     const query = jest.fn().mockResolvedValueOnce({
       rows: [
@@ -2537,6 +2987,125 @@ mode: 'pqs_only',
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining('order by tx.offset desc'));
     expect(query).toHaveBeenCalledWith(expect.stringContaining('limit 3'));
+  });
+
+  it('returns global contracts from healthy nodes when another node PQS is unavailable', async () => {
+    const service = new PqsSummaryService({
+      getClient: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchNodeContracts: jest.Mock;
+    };
+
+    serviceWithFetch.fetchNodeContracts = jest.fn(
+      async (node: { id: string; label: string }) => {
+        if (node.id === 'participant-2') {
+          throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+        }
+
+        return {
+          nodeId: node.id,
+          label: node.label,
+          limit: 25,
+          nextBefore: null,
+          nextAfter: null,
+          contracts: [
+            {
+              contractId: '00abc',
+              templateId: 'Main:Vault',
+              createdRecordTime: '2026-07-01T12:03:00.000Z',
+            },
+          ],
+        };
+      },
+    );
+
+    await expect(
+      service.fetchGlobalContracts(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ] as never,
+        10,
+      ),
+    ).resolves.toEqual({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Vault',
+          recordTime: '2026-07-01T12:03:00.000Z',
+        },
+      ],
+    });
+  });
+
+  it('returns party contracts from healthy nodes when another node PQS is unavailable', async () => {
+    const service = new PqsSummaryService({
+      getClient: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchPartyContractsForNode: jest.Mock;
+    };
+
+    serviceWithFetch.fetchPartyContractsForNode = jest.fn(
+      async (node: { id: string; label: string }) => {
+        if (node.id === 'participant-2') {
+          throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+        }
+
+        return {
+          nodeId: node.id,
+          label: node.label,
+          limit: 25,
+          nextBefore: null,
+          nextAfter: null,
+          contracts: [
+            {
+              nodeId: node.id,
+              label: node.label,
+              contractId: '00abc',
+              templateId: 'Main:Vault',
+              packageId: 'main-package',
+              packageName: 'Main Package',
+              packageVersion: '1.2.3',
+              recordTime: '2026-07-01T12:03:00.000Z',
+            },
+          ],
+        };
+      },
+    );
+
+    await expect(
+      service.fetchPartyContracts(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ] as never,
+        'Alice',
+        { limit: 10 },
+      ),
+    ).resolves.toEqual({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Vault',
+          packageId: 'main-package',
+          packageName: 'Main Package',
+          packageVersion: '1.2.3',
+          recordTime: '2026-07-01T12:03:00.000Z',
+        },
+      ],
+    });
   });
 
   it('reverses newer ACS pages when an after cursor is used', async () => {

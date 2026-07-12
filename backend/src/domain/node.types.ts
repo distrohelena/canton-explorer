@@ -500,6 +500,8 @@ export interface ActivePartiesNodeEntry {
   label: string;
   mode: NodeMode;
   parties: string[];
+  activePartiesStatus?: 'ok' | 'pqs_error';
+  activePartiesError?: string | null;
   localPartiesStatus?: 'ok' | 'grpc_not_configured' | 'grpc_error';
   localPartiesError?: string | null;
   localPartiesErrorCode?: string | null;

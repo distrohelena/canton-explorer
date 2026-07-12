@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { resolve } from 'node:path';
 import { GrpcOperationsService } from '../../src/grpc/grpc-operations.service';
+import { extractDamlLfArchivePayloadOrThrow } from '../../src/grpc/daml-lf-archive';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
 import { SAMPLE_DAML_FIXTURE } from '../fixtures/daml/fixture-manifest';
 
@@ -1239,6 +1240,15 @@ describe('GrpcOperationsService', () => {
   });
 
   it('fetches package references and package archive payloads through the SDK', async () => {
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(
+      process.cwd(),
+      'test/fixtures/daml/package-cache.sqlite',
+    );
+    const cachedPackage = new PackageCacheService().getPackage(SAMPLE_DAML_FIXTURE.packageId);
+    if (!cachedPackage) {
+      throw new Error('Missing DAML fixture package');
+    }
+    const archivePayload = extractDamlLfArchivePayloadOrThrow(new Uint8Array(cachedPackage.data));
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
     const service = new GrpcOperationsService({
       create: () => ({
@@ -1246,9 +1256,9 @@ describe('GrpcOperationsService', () => {
           listPackagesAsync: jest.fn().mockResolvedValue({
             packageDescriptions: [
               {
-                packageId: 'package-a',
-                name: 'Main Package',
-                version: '1.2.3',
+                packageId: SAMPLE_DAML_FIXTURE.packageId,
+                name: 'splice-amulet',
+                version: '0.1.18',
                 uploadedAt: new Date('2026-07-03T10:00:00.000Z'),
                 size: 2048,
               },
@@ -1257,7 +1267,7 @@ describe('GrpcOperationsService', () => {
         },
         packageService: {
           getPackageAsync: jest.fn().mockResolvedValue({
-            archivePayload: new Uint8Array([1, 2, 3]),
+            archivePayload,
           }),
         },
         disposeAsync,
@@ -1284,22 +1294,22 @@ describe('GrpcOperationsService', () => {
 
     expect(refs).toEqual([
       {
-        packageId: 'package-a',
-        mainPackageId: 'package-a',
-        name: 'Main Package',
-        version: '1.2.3',
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        mainPackageId: SAMPLE_DAML_FIXTURE.packageId,
+        name: 'splice-amulet',
+        version: '0.1.18',
         uploadedAt: '2026-07-03T10:00:00.000Z',
         packageSize: 2048,
       },
     ]);
     expect(packages).toEqual([
       expect.objectContaining({
-        packageId: 'package-a',
-        name: 'Main Package',
-        version: '1.2.3',
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        name: 'splice-amulet',
+        version: '0.1.18',
         uploadedAt: '2026-07-03T10:00:00.000Z',
         packageSize: 2048,
-        data: Buffer.from([1, 2, 3]),
+        data: Buffer.from(cachedPackage.data),
       }),
     ]);
     expect(disposeAsync).toHaveBeenCalledTimes(2);
@@ -1314,6 +1324,7 @@ describe('GrpcOperationsService', () => {
     if (!cachedPackage) {
       throw new Error('Missing DAML fixture package');
     }
+    const archivePayload = extractDamlLfArchivePayloadOrThrow(new Uint8Array(cachedPackage.data));
 
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
     const service = new GrpcOperationsService({
@@ -1330,7 +1341,7 @@ describe('GrpcOperationsService', () => {
             packageIds: [SAMPLE_DAML_FIXTURE.packageId],
           }),
           getPackageAsync: jest.fn().mockResolvedValue({
-            archivePayload: new Uint8Array(cachedPackage.data),
+            archivePayload,
           }),
         },
         disposeAsync,

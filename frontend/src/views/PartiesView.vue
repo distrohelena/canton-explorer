@@ -166,6 +166,22 @@ const selectedLocalNodeErrorTid = computed(() => {
   return selectedNode.value?.localPartiesErrorTid ?? null;
 });
 
+const selectedActiveNodeStatus = computed(() => {
+  if (selectedMode.value !== 'active') {
+    return null;
+  }
+
+  return selectedNode.value?.activePartiesStatus ?? 'ok';
+});
+
+const selectedActiveNodeError = computed(() => {
+  if (selectedMode.value !== 'active') {
+    return null;
+  }
+
+  return selectedNode.value?.activePartiesError ?? null;
+});
+
 const isSelectedNodeLoading = computed(() => {
   if (!selectedNodeId.value) {
     return false;
@@ -709,7 +725,22 @@ onMounted(async () => {
           >
             {{ party }}
           </RouterLink>
-          <p v-if="selectedParties.length === 0" class="update-detail__empty">
+          <p
+            v-if="selectedActiveNodeStatus === 'pqs_error'"
+            class="update-detail__empty"
+          >
+            PQS error while listing active parties for this node.
+          </p>
+          <p
+            v-if="selectedActiveNodeStatus === 'pqs_error' && selectedActiveNodeError"
+            class="package-detail__seen-meta parties-page__results-copy"
+          >
+            {{ selectedActiveNodeError }}
+          </p>
+          <p
+            v-if="selectedParties.length === 0 && selectedActiveNodeStatus !== 'pqs_error'"
+            class="update-detail__empty"
+          >
             {{ isAllNodesSelected ? 'No active parties found across selected nodes.' : 'No active parties found for this node.' }}
           </p>
         </div>

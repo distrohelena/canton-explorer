@@ -10,7 +10,7 @@ export interface ComputeNodeStatusArgs {
 
 export function computeNodeStatus(args: ComputeNodeStatusArgs): NodeStatus {
   if (!args.pqsOk && !args.hasUsableSnapshot) {
-    return 'down';
+    return 'degraded';
   }
 
   if (args.isStale) {

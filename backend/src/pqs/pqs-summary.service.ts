@@ -1899,7 +1899,7 @@ export class PqsSummaryService {
         break;
       }
 
-      const responses = await Promise.all(
+      const settled = await Promise.allSettled(
         nodesToFetch.map((state) =>
           this.fetchRecentUpdates(state.node, {
             limit: pageSize,
@@ -1912,8 +1912,34 @@ export class PqsSummaryService {
         ),
       );
 
-      responses.forEach((response, index) => {
+      const successfulResponses: Array<{
+        state: (typeof nodeStates)[number];
+        response: Awaited<ReturnType<PqsSummaryService['fetchRecentUpdates']>>;
+      }> = [];
+
+      settled.forEach((result, index) => {
         const state = nodesToFetch[index];
+
+        if (!state) {
+          return;
+        }
+
+        if (result.status !== 'fulfilled') {
+          state.exhausted = true;
+          return;
+        }
+
+        successfulResponses.push({
+          state,
+          response: result.value,
+        });
+      });
+
+      if (successfulResponses.length === 0) {
+        throw settled.find((result) => result.status === 'rejected')?.reason;
+      }
+
+      successfulResponses.forEach(({ response, state }) => {
 
         for (const update of response.updates) {
           mergedUpdatesByKey.set(`${state.node.id}:${update.eventOffset}:${update.updateId}`, {
@@ -2511,38 +2537,76 @@ export class PqsSummaryService {
 
   async fetchActiveParties(nodes: NodeConfig[]): Promise<ActivePartiesResponse> {
     return {
-      nodes: await Promise.all(
-        nodes.map(async (node) => ({
-          nodeId: node.id,
-          label: node.label,
-          mode: node.mode,
-          parties: await this.fetchActivePartiesForNode(node),
-        })),
-      ),
+      nodes: await Promise.all(nodes.map(async (node) => this.buildActivePartiesEntry(node))),
     };
+  }
+
+  private async buildActivePartiesEntry(node: NodeConfig): Promise<ActivePartiesResponse['nodes'][number]> {
+    try {
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        parties: await this.fetchActivePartiesForNode(node),
+        activePartiesStatus: 'ok',
+        activePartiesError: null,
+      };
+    } catch (error) {
+      return {
+        nodeId: node.id,
+        label: node.label,
+        mode: node.mode,
+        parties: [],
+        activePartiesStatus: 'pqs_error',
+        activePartiesError: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   async fetchPartyDetail(nodes: NodeConfig[], partyId: string): Promise<PartyDetailResponse> {
     const normalizedPartyId = this.normalizePartyIdentifier(partyId);
     const grpcOperationsService = this.grpcOperationsService;
-    const activePartiesByNode = await Promise.all(
-      nodes.map(async (node) => ({
-        node,
-        parties: await this.fetchActivePartiesForNode(node),
-      })),
-    );
-    const recentUpdatesByNode = await Promise.all(
-      nodes.map(async (node) => ({
-        node,
-        updates: await this.fetchPartyRecentUpdatesForNode(node, normalizedPartyId, 10),
-      })),
-    );
-    const recentContractsByNode = await Promise.all(
-      nodes.map(async (node) => ({
-        node,
-        contracts: await this.fetchPartyRecentContractsForNode(node, normalizedPartyId, 10),
-      })),
-    );
+    const activePartiesByNode = (
+      await Promise.allSettled(
+        nodes.map(async (node) => ({
+          node,
+          parties: await this.fetchActivePartiesForNode(node),
+        })),
+      )
+    )
+      .filter((result): result is PromiseFulfilledResult<{ node: NodeConfig; parties: string[] }> =>
+        result.status === 'fulfilled')
+      .map((result) => result.value);
+    const recentUpdatesByNode = (
+      await Promise.allSettled(
+        nodes.map(async (node) => ({
+          node,
+          updates: await this.fetchPartyRecentUpdatesForNode(node, normalizedPartyId, 10),
+        })),
+      )
+    )
+      .filter((
+        result,
+      ): result is PromiseFulfilledResult<{
+        node: NodeConfig;
+        updates: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentUpdatesForNode']>>;
+      }> => result.status === 'fulfilled')
+      .map((result) => result.value);
+    const recentContractsByNode = (
+      await Promise.allSettled(
+        nodes.map(async (node) => ({
+          node,
+          contracts: await this.fetchPartyRecentContractsForNode(node, normalizedPartyId, 10),
+        })),
+      )
+    )
+      .filter((
+        result,
+      ): result is PromiseFulfilledResult<{
+        node: NodeConfig;
+        contracts: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentContractsForNode']>>;
+      }> => result.status === 'fulfilled')
+      .map((result) => result.value);
     const localPartiesByNode = grpcOperationsService
       ? await Promise.all(
           nodes.map(async (node) => {
@@ -2685,14 +2749,19 @@ export class PqsSummaryService {
   ): Promise<NamespaceDetailResponse> {
     const normalizedNamespaceId = namespaceId.trim();
     const grpcOperationsService = this.grpcOperationsService;
-    const activePartiesByNode = await Promise.all(
-      nodes.map(async (node) => ({
-        node,
-        parties: (await this.fetchActivePartiesForNode(node)).filter(
-          (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
-        ),
-      })),
-    );
+    const activePartiesByNode = (
+      await Promise.allSettled(
+        nodes.map(async (node) => ({
+          node,
+          parties: (await this.fetchActivePartiesForNode(node)).filter(
+            (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+          ),
+        })),
+      )
+    )
+      .filter((result): result is PromiseFulfilledResult<{ node: NodeConfig; parties: string[] }> =>
+        result.status === 'fulfilled')
+      .map((result) => result.value);
     const localPartiesByNode = grpcOperationsService
       ? await Promise.all(
           nodes.map(async (node) => {
@@ -2825,13 +2894,17 @@ export class PqsSummaryService {
     const normalizedNamespaceId = namespaceId.trim();
     const matchingParties = new Set<string>();
 
-    const activePartiesByNode = await Promise.all(
-      nodes.map(async (node) =>
-        (await this.fetchActivePartiesForNode(node)).filter(
-          (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+    const activePartiesByNode = (
+      await Promise.allSettled(
+        nodes.map(async (node) =>
+          (await this.fetchActivePartiesForNode(node)).filter(
+            (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+          ),
         ),
-      ),
-    );
+      )
+    )
+      .filter((result): result is PromiseFulfilledResult<string[]> => result.status === 'fulfilled')
+      .map((result) => result.value);
 
     for (const parties of activePartiesByNode) {
       for (const partyId of parties) {
@@ -2977,7 +3050,7 @@ export class PqsSummaryService {
         break;
       }
 
-      const responses = await Promise.all(
+      const settled = await Promise.allSettled(
         nodesToFetch.map((state) =>
           this.fetchNodeContracts(state.node, {
             limit: pageSize,
@@ -2990,8 +3063,34 @@ export class PqsSummaryService {
         ),
       );
 
-      responses.forEach((response, index) => {
+      const successfulResponses: Array<{
+        state: (typeof nodeStates)[number];
+        response: Awaited<ReturnType<PqsSummaryService['fetchNodeContracts']>>;
+      }> = [];
+
+      settled.forEach((result, index) => {
         const state = nodesToFetch[index];
+
+        if (!state) {
+          return;
+        }
+
+        if (result.status !== 'fulfilled') {
+          state.exhausted = true;
+          return;
+        }
+
+        successfulResponses.push({
+          state,
+          response: result.value,
+        });
+      });
+
+      if (successfulResponses.length === 0) {
+        throw settled.find((result) => result.status === 'rejected')?.reason;
+      }
+
+      successfulResponses.forEach(({ response, state }) => {
 
         for (const contract of response.contracts) {
           mergedContractsByKey.set(`${state.node.id}:${contract.contractId}`, {
@@ -3103,7 +3202,7 @@ export class PqsSummaryService {
         break;
       }
 
-      const responses = await Promise.all(
+      const settled = await Promise.allSettled(
         nodesToFetch.map((state) =>
           this.fetchPartyContractsForNode(state.node, normalizedPartyId, {
             limit: pageSize,
@@ -3112,9 +3211,34 @@ export class PqsSummaryService {
         ),
       );
 
-      responses.forEach((response, index) => {
+      const successfulResponses: Array<{
+        state: (typeof nodeStates)[number];
+        response: Awaited<ReturnType<PqsSummaryService['fetchPartyContractsForNode']>>;
+      }> = [];
+
+      settled.forEach((result, index) => {
         const state = nodesToFetch[index];
 
+        if (!state) {
+          return;
+        }
+
+        if (result.status !== 'fulfilled') {
+          state.exhausted = true;
+          return;
+        }
+
+        successfulResponses.push({
+          state,
+          response: result.value,
+        });
+      });
+
+      if (successfulResponses.length === 0) {
+        throw settled.find((result) => result.status === 'rejected')?.reason;
+      }
+
+      successfulResponses.forEach(({ response, state }) => {
         for (const contract of response.contracts) {
           mergedContractsByKey.set(`${contract.nodeId}:${contract.contractId}`, contract);
         }

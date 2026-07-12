@@ -202,7 +202,7 @@ const contractDataEntries = computed(() => {
                 <dt>Contract ID</dt>
                 <dd class="update-detail__id">{{ contractDetail.contractId }}</dd>
               </div>
-              <div class="contract-detail__summary-item">
+              <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <dt>Template ID</dt>
                 <dd>{{ contractDetail.templateId ?? 'n/a' }}</dd>
               </div>

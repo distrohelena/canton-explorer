@@ -366,6 +366,8 @@ const typedActivePartiesFixture = {
       label: 'Participant 1',
       mode: 'pqs_only',
       parties: ['Alice', 'Bob'],
+      activePartiesStatus: 'ok',
+      activePartiesError: null,
     },
   ],
 };

@@ -1,9 +1,15 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { defineComponent } from 'vue';
 import DebuggerView from './DebuggerView.vue';
-import { createDebuggerSession, fetchDebuggerEvents } from '../lib/api';
+import {
+  createDebuggerSession,
+  fetchDebuggerEvents,
+  fetchDebuggerSession,
+  jumpDebuggerSessionToStep,
+  stepDebuggerSession,
+} from '../lib/api';
 
 vi.mock('../components/MonacoCodeSurface.vue', () => ({
   default: defineComponent({
@@ -41,13 +47,14 @@ describe('DebuggerView', () => {
       routes: [
         { path: '/', component: { template: '<div>Home</div>' } },
         { path: '/debugger', component: DebuggerView },
+        { path: '/nodes/:nodeId/updates/:offset', component: { template: '<div>Update detail</div>' } },
       ],
     });
 
     router.push(path);
     await router.isReady();
 
-    return render(
+    const rendered = render(
       {
         template: '<RouterView />',
       },
@@ -57,6 +64,11 @@ describe('DebuggerView', () => {
         },
       },
     );
+
+    return {
+      ...rendered,
+      router,
+    };
   }
 
   it('renders the debugger shell with route-driven launch context', async () => {
@@ -157,7 +169,7 @@ describe('DebuggerView', () => {
       ],
     });
 
-    await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
+    const { router } = await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
 
     expect(await screen.findByRole('heading', { name: 'Launch Context' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'DAML Debugger' })).not.toBeInTheDocument();
@@ -177,10 +189,11 @@ describe('DebuggerView', () => {
     ).toHaveAttribute('target', '_blank');
     expect(screen.getAllByText('1 / 12').length).toBeGreaterThan(0);
     expect(screen.getByText('Execution Script')).toBeInTheDocument();
-    expect(screen.getByText('Main.daml')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Main.daml' })).toBeInTheDocument();
     expect(screen.getByTestId('debugger-editor-shell')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-editor-shell')).toContainElement(screen.getByTestId('monaco-stub'));
     expect(screen.getByTestId('monaco-stub')).toHaveAttribute('data-language', 'daml');
+    expect(screen.getByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('debugger-editor-divider')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-floating-controls')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-summary-context')).toContainElement(
@@ -192,17 +205,115 @@ describe('DebuggerView', () => {
     expect(screen.getByTestId('debugger-summary-events')).toContainElement(
       screen.getByRole('heading', { name: 'Ledger Events' }),
     );
-    expect(screen.getByRole('button', { name: 'Step Into' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Step Back' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Step Over' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Step Out' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
-    expect(screen.getByTestId('debugger-summary')).not.toContainElement(screen.getByRole('button', { name: 'Step Into' }));
+    const controlPanel = screen.getByTestId('debugger-control-panel');
+    expect(within(controlPanel).getByText('Step Into')).toBeInTheDocument();
+    expect(within(controlPanel).getByText('Step Back')).toBeInTheDocument();
+    expect(within(controlPanel).getByText('Step Over')).toBeInTheDocument();
+    expect(within(controlPanel).getByText('Step Out')).toBeInTheDocument();
+    expect(within(controlPanel).getByText('Continue')).toBeInTheDocument();
+    expect(screen.getByTestId('debugger-summary')).not.toContainElement(within(controlPanel).getByText('Step Into'));
     expect(screen.getByText('owner')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Real Events' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Replay Events' })).toBeInTheDocument();
-    expect(screen.getByText(/Vault\.Archive/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
+    await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('session-1'));
+    await waitFor(() => expect(router.currentRoute.value.query.stepId).toBe('step-0'));
+  });
+
+  it('opens stepped-into source files as persistent editor tabs', async () => {
+    vi.mocked(createDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 0,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: {
+          path: 'Main.daml',
+          startLine: 10,
+          startColumn: 1,
+          endLine: 12,
+          endColumn: 20,
+        },
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: {
+        path: 'Main.daml',
+        content: 'template Main where\n  signatory issuer\n',
+        startLine: 10,
+        startColumn: 1,
+        endLine: 12,
+        endColumn: 20,
+      },
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'session-1',
+      currentStepId: 'step-0',
+      realEvents: [],
+      replayEvents: [],
+    });
+    vi.mocked(stepDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 1,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-1',
+        stepIndex: 1,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: {
+          path: 'Vault.daml',
+          startLine: 30,
+          startColumn: 1,
+          endLine: 36,
+          endColumn: 18,
+        },
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: {
+        path: 'Vault.daml',
+        content: 'choice Archive : ()\n  controller owner\n  do pure ()\n',
+        startLine: 30,
+        startColumn: 1,
+        endLine: 36,
+        endColumn: 18,
+      },
+    });
+
+    await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
+
+    expect(screen.getByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('monaco-stub')).toHaveTextContent('template Main where');
+
+    await fireEvent.click(screen.getByText('Step Into'));
+
+    expect(screen.getByRole('tab', { name: 'Main.daml' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Vault.daml' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('monaco-stub')).toHaveTextContent('choice Archive : ()');
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Main.daml' }));
+
+    expect(screen.getByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Vault.daml' })).toBeInTheDocument();
+    expect(screen.getByTestId('monaco-stub')).toHaveTextContent('template Main where');
   });
 
   it('lets the user resize the editor panel with the splitter keyboard controls', async () => {
@@ -377,5 +488,138 @@ describe('DebuggerView', () => {
       clientX: 560,
       clientY: 180,
     });
+  });
+
+  it('restores a debugger session and selected step from the route query', async () => {
+    vi.mocked(fetchDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 0,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: null,
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: null,
+    });
+    vi.mocked(jumpDebuggerSessionToStep).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 7,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-7',
+        stepIndex: 7,
+        phase: 'stateEffect',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: null,
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: null,
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'session-1',
+      currentStepId: 'step-7',
+      realEvents: [],
+      replayEvents: [],
+    });
+
+    const { router } = await renderAt(
+      '/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205&sessionId=session-1&stepId=step-7',
+    );
+
+    expect((await screen.findAllByText('8 / 12')).length).toBeGreaterThan(0);
+    await waitFor(() => expect(fetchDebuggerSession).toHaveBeenCalledWith('session-1'));
+    await waitFor(() => expect(jumpDebuggerSessionToStep).toHaveBeenCalledWith('session-1', 'step-7'));
+    await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('session-1'));
+    await waitFor(() => expect(router.currentRoute.value.query.stepId).toBe('step-7'));
+  });
+
+  it('updates the route query when the current debugger step changes', async () => {
+    vi.mocked(createDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 0,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: null,
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: null,
+    });
+    vi.mocked(stepDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 1,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-1',
+        stepIndex: 1,
+        phase: 'stateEffect',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: null,
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: null,
+    });
+    vi.mocked(fetchDebuggerEvents)
+      .mockResolvedValueOnce({
+        sessionId: 'session-1',
+        currentStepId: 'step-0',
+        realEvents: [],
+        replayEvents: [],
+      })
+      .mockResolvedValueOnce({
+        sessionId: 'session-1',
+        currentStepId: 'step-1',
+        realEvents: [],
+        replayEvents: [],
+      });
+
+    const { router } = await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
+
+    await screen.findAllByText('1 / 12');
+    await fireEvent.click(within(screen.getByTestId('debugger-control-panel')).getByText('Step Into'));
+
+    await waitFor(() => expect(stepDebuggerSession).toHaveBeenCalledWith('session-1', 'step-into'));
+    expect((await screen.findAllByText('2 / 12')).length).toBeGreaterThan(0);
+    await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('session-1'));
+    await waitFor(() => expect(router.currentRoute.value.query.stepId).toBe('step-1'));
   });
 });
