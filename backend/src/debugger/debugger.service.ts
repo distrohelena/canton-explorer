@@ -67,11 +67,20 @@ type ReplaySessionStoreLike = {
   dispose(sessionId: string): void;
 };
 
+type ReplaySourceLocationLike = {
+  path?: string;
+  startLine?: number;
+  startColumn?: number;
+  endLine?: number;
+  endColumn?: number;
+};
+
 type ReplayScopeVariableLike = {
   name?: string;
   kind?: string;
   value?: string;
   contractType?: string;
+  sourceLocation?: ReplaySourceLocationLike;
 };
 
 type ReplayScopeLike = {
@@ -107,13 +116,7 @@ type ReplayStepLike = {
   scopes?: ReplayScopeLike[];
   locals?: unknown[];
   arguments?: unknown[];
-  sourceLocation?: {
-    path?: string;
-    startLine?: number;
-    startColumn?: number;
-    endLine?: number;
-    endColumn?: number;
-  };
+  sourceLocation?: ReplaySourceLocationLike;
   valuePreview?: {
     kind: string;
     display: string;
@@ -177,6 +180,7 @@ export interface DebuggerScopeVariableResponse {
   kind: string | null;
   value: string | null;
   contractType: string | null;
+  sourceLocation: DebuggerStepResponse['sourceLocation'];
 }
 
 export interface DebuggerScopeResponse {
@@ -711,6 +715,7 @@ export class DebuggerService {
         kind: variable.kind ?? null,
         value: variable.value ?? null,
         contractType: variable.contractType ?? null,
+        sourceLocation: this.mapSourceLocation(variable.sourceLocation),
       })),
     };
   }
@@ -741,7 +746,7 @@ export class DebuggerService {
   }
 
   private mapSourceLocation(
-    sourceLocation?: ReplayStepLike['sourceLocation'],
+    sourceLocation?: ReplaySourceLocationLike,
   ): DebuggerStepResponse['sourceLocation'] {
     return sourceLocation
       ? {

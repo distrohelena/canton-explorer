@@ -41,7 +41,20 @@ describe('DebuggerService', () => {
           {
             frameId: 'frame-1',
             name: 'Archive',
-            variables: [{ name: 'owner', kind: 'text', value: 'Alice' }],
+            variables: [
+              {
+                name: 'owner',
+                kind: 'text',
+                value: 'Alice',
+                sourceLocation: {
+                  path: 'Main.daml',
+                  startLine: 10,
+                  startColumn: 14,
+                  endLine: 10,
+                  endColumn: 19,
+                },
+              },
+            ],
           },
         ],
         locals: [],
@@ -188,6 +201,13 @@ describe('DebuggerService', () => {
               expect.objectContaining({
                 name: 'owner',
                 value: 'Alice',
+                sourceLocation: {
+                  path: 'Main.daml',
+                  startLine: 10,
+                  startColumn: 14,
+                  endLine: 10,
+                  endColumn: 19,
+                },
               }),
             ],
           }),
