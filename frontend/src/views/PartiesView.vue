@@ -703,7 +703,10 @@ onMounted(async () => {
             </button>
           </div>
         </section>
-        <div v-else class="parties-page__results-header">
+        <div
+          v-else-if="selectedMode === 'all' && selectableNodes.length === 0"
+          class="parties-page__results-header"
+        >
           <div>
             <h3>No gRPC nodes available</h3>
             <p class="package-detail__seen-meta parties-page__results-copy">

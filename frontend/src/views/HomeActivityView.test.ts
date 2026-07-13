@@ -3,6 +3,7 @@ import { nextTick, reactive, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomeActivityView from './HomeActivityView.vue';
 import { fetchLatestContracts, fetchLatestUpdates, fetchTemplates } from '../lib/api';
+import type { ActivityHistoryResponse } from '../types/activity';
 
 const pushMock = vi.fn();
 const routeState = reactive<{
@@ -13,7 +14,7 @@ const routeState = reactive<{
   fullPath: '/',
 });
 
-const history = ref({
+const history = ref<ActivityHistoryResponse>({
   generatedAt: '2026-07-01T12:00:00.000Z',
   windowMinutes: 1440,
   nodes: [
@@ -237,7 +238,7 @@ describe('HomeActivityView', () => {
   });
 
   it('renders per-node activity history on the home page', async () => {
-    render(HomeActivityView, {
+    const { container } = render(HomeActivityView, {
       global: {
         stubs: {
           RouterLink: {
@@ -250,6 +251,9 @@ describe('HomeActivityView', () => {
 
     expect(screen.getByRole('heading', { name: 'Network Activity' })).toBeInTheDocument();
     expect(screen.getByText('Participant 1')).toBeInTheDocument();
+    expect(container.querySelector('.activity-home__grid')).toHaveClass(
+      'activity-home__grid--single',
+    );
     expect(screen.getByText('15 active contracts')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-pressed', 'true');
@@ -863,6 +867,42 @@ describe('HomeActivityView', () => {
     );
     expect(container.querySelector('.activity-panel__axis-label--end')?.textContent).toBe(
       expectedEndLabel,
+    );
+  });
+
+  it('keeps the date axis for degraded nodes without activity samples', () => {
+    history.value = {
+      generatedAt: '2026-07-01T12:00:00.000Z',
+      windowMinutes: 10080,
+      nodes: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          status: 'degraded' as const,
+          latestActiveContractCount: 0,
+          samples: [],
+        },
+      ],
+    };
+    selectedDays.value = 7;
+
+    const { container } = render(HomeActivityView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(container.querySelector('.activity-panel__axis')).not.toBeNull();
+    expect(container.querySelector('.activity-panel__axis-label--start')?.textContent).toBe(
+      'Jun 24',
+    );
+    expect(container.querySelector('.activity-panel__axis-label--end')?.textContent).toBe(
+      'Jul 1',
     );
   });
 

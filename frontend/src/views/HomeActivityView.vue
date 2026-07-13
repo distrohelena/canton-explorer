@@ -49,10 +49,6 @@ function chartDomain(
   windowMinutes: number,
   generatedAt: string | null,
 ): ChartDomain | null {
-  if (series.samples.length === 0) {
-    return null;
-  }
-
   const endMs = resolveChartEndMs(series, generatedAt);
   const windowDurationMs = Math.max(windowMinutes, 1) * 60 * 1000;
 
@@ -297,7 +293,10 @@ function verticalScaleLabels(
     <p v-else-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
 
     <template v-else-if="nodes.length > 0">
-      <div class="activity-home__grid">
+      <div
+        class="activity-home__grid"
+        :class="{ 'activity-home__grid--single': nodes.length === 1 }"
+      >
         <RouterLink
           v-for="series in nodes"
           :key="series.nodeId"

@@ -195,6 +195,9 @@ describe('PartiesView', () => {
     );
     expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
     expect(
+      screen.queryByRole('heading', { name: 'No gRPC nodes available' }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.getByText('PQS').closest('.results-header__actions'),
     ).not.toBeNull();
     expect(fetchNodeActiveParties).toHaveBeenCalledTimes(1);

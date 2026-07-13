@@ -134,6 +134,9 @@ describe('App', () => {
     expect(screen.getByRole('contentinfo')).toHaveTextContent(
       'powered by @distrohelena/canton-typescript-sdk',
     );
+    expect(screen.getByRole('contentinfo')).toHaveTextContent(
+      `version ${__CANTON_EXPLORER_VERSION__}`,
+    );
     expect(
       screen.getByRole('link', { name: '@distrohelena/canton-typescript-sdk' }),
     ).toHaveAttribute('href', 'https://www.npmjs.com/package/@distrohelena/canton-typescript-sdk');

@@ -1529,7 +1529,7 @@ describe('NodesController', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           status: 'healthy',
-          latestActiveContractCount: 15,
+          latestActiveContractCount: 12,
           samples: [
             {
               timestamp: recentBucketTimestamp,

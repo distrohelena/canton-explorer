@@ -5,6 +5,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 const router = useRouter();
 const route = useRoute();
 const searchTerm = ref('');
+const explorerVersion = __CANTON_EXPLORER_VERSION__;
 const THEME_STORAGE_KEY = 'canton-explorer-theme';
 type ThemePreference = 'system' | 'light' | 'dark';
 type ResolvedTheme = 'light' | 'dark';
@@ -176,6 +177,7 @@ onBeforeUnmount(() => {
           >
             @distrohelena/canton-typescript-sdk
           </a>
+          <span> · version {{ explorerVersion }}</span>
         </p>
       </div>
     </footer>

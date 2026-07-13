@@ -64,6 +64,38 @@ You can also set this explicitly in `nodes.local.json`:
 Put sibling `*-debug.dar` files in that folder. The explorer indexes them by
 their main package id and uses them only for debugger source/artifact loading.
 
+## Generate Debug DARs
+
+The published package includes the debug-DAR generation scripts. From an
+installed package, prepare debug DARs for every DAML package in a workspace:
+
+```bash
+npm --prefix ./node_modules/@distrohelena/canton-explorer \
+  run dar:prepare-workspace -- \
+  --workspace-root /path/to/daml-workspace \
+  --output-dir /path/to/debug-dars
+```
+
+For one package, generate the source map and inject it into a sibling debug DAR:
+
+```bash
+npm --prefix ./node_modules/@distrohelena/canton-explorer \
+  run dar:source-map -- \
+  --input /path/to/package.dar \
+  --workspace-root /path/to/daml-workspace
+
+npm --prefix ./node_modules/@distrohelena/canton-explorer \
+  run dar:debug -- \
+  --input /path/to/package.dar \
+  --source-map /path/to/package-source-map.json \
+  --source-root /path/to/daml-project/daml=daml \
+  --output /path/to/debug-dars/package-debug.dar
+```
+
+The generated debug DAR must retain the same compiled `.dalf` payloads as the
+original DAR. See the repository's `docs/debug-dar.md` for source-copy rules
+and source-map options.
+
 ## Local Development
 
 From the repo root:

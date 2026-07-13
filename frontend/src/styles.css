@@ -1294,6 +1294,11 @@ h3 {
   gap: 18px;
 }
 
+.activity-home__grid--single {
+  grid-template-columns: minmax(min(100%, 560px), 560px);
+  justify-content: start;
+}
+
 .activity-home__updates-section {
   display: flex;
   flex-direction: column;
@@ -1442,7 +1447,7 @@ h3 {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 8px;
+  margin: 8px 0 0 44px;
 }
 
 .activity-panel__axis-label {

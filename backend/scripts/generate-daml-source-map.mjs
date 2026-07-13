@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { findDebugDalfEntry } from './dar-archive-entries.mjs'
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
@@ -210,15 +211,7 @@ function resolveDebugDalfBytes(options, archive) {
     return readFileSync(options.debugDalfPath)
   }
 
-  const debugEntry = archive.entries.find(
-    (entry) =>
-      (
-        entry.path.startsWith('debug/') ||
-        entry.path.endsWith('/data/debug-locations.dalf')
-      ) &&
-      entry.path.endsWith('.dalf'),
-  )
-
+  const debugEntry = findDebugDalfEntry(archive)
   return debugEntry?.bytes
 }
 
