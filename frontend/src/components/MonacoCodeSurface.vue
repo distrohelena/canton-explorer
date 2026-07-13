@@ -82,6 +82,7 @@ async function mountEditor() {
       model: model.value,
       readOnly: props.readOnly,
       automaticLayout: false,
+      fixedOverflowWidgets: true,
       minimap: props.minimap
         ? {
             enabled: true,
@@ -92,6 +93,7 @@ async function mountEditor() {
           }
         : { enabled: false },
       scrollBeyondLastLine: false,
+      stickyScroll: { enabled: false },
       lineNumbers: 'on',
       wordWrap: 'on',
       glyphMargin: true,

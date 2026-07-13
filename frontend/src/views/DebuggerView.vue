@@ -15,6 +15,8 @@ import {
   jumpDebuggerSessionToStep,
   stepDebuggerSession,
 } from '../lib/api';
+import { resolveDamlFunctionVariableRanges } from '../lib/daml-hover-resolution';
+import { resolveDefaultControlPanelX } from '../lib/debugger-layout';
 import type {
   DebuggerReplayEventSummary,
   DebuggerSessionResponse,
@@ -131,13 +133,12 @@ function ensureDefaultControlPanelPosition() {
     return;
   }
 
-  const centeredX = Math.max(
-    CONTROL_PANEL_INSET,
-    Math.round((workspaceElement.clientWidth - panelElement.offsetWidth) / 2),
-  );
-
   controlPanelPosition.value = clampControlPanelPosition({
-    x: centeredX,
+    x: resolveDefaultControlPanelX(
+      workspaceElement.clientWidth,
+      panelElement.offsetWidth,
+      CONTROL_PANEL_INSET,
+    ),
     y: CONTROL_PANEL_INSET,
   });
 }
@@ -351,7 +352,7 @@ function rangesMatch(
     && left.endColumn === right.endColumn;
 }
 
-function extractExactSourceSlice(
+function findProvableExactIdentifierRanges(
   content: string,
   location: DebuggerSourceLocation & {
     startLine: number;
@@ -359,16 +360,19 @@ function extractExactSourceSlice(
     endLine: number;
     endColumn: number;
   },
-): string | null {
+): Array<{
+  name: string;
+  range: MonacoDebuggerHoverVariable['range'];
+}> {
   if (location.startLine !== location.endLine) {
-    return null;
+    return [];
   }
 
   const lines = content.split(/\r?\n/u);
   const line = lines[location.startLine - 1];
 
   if (typeof line !== 'string') {
-    return null;
+    return [];
   }
 
   const startIndex = location.startColumn - 1;
@@ -380,10 +384,38 @@ function extractExactSourceSlice(
     || startIndex > line.length
     || endIndex > line.length
   ) {
-    return null;
+    return [];
   }
 
-  return line.slice(startIndex, endIndex);
+  const exactSlice = line.slice(startIndex, endIndex);
+  const matches = exactSlice.matchAll(/[A-Za-z_$][A-Za-z0-9_'$]*/gu);
+
+  return [...matches].flatMap((match) => {
+    const name = match[0];
+    const relativeStartIndex = match.index;
+
+    if (typeof relativeStartIndex !== 'number') {
+      return [];
+    }
+
+    const absoluteStartIndex = startIndex + relativeStartIndex;
+
+    if (absoluteStartIndex > 0 && line[absoluteStartIndex - 1] === '.') {
+      return [];
+    }
+
+    return [
+      {
+        name,
+        range: {
+          startLine: location.startLine,
+          startColumn: absoluteStartIndex + 1,
+          endLine: location.endLine,
+          endColumn: absoluteStartIndex + name.length + 1,
+        },
+      },
+    ];
+  });
 }
 
 function resolveSourceHighlightRange(
@@ -552,40 +584,66 @@ const hoverVariables = computed<MonacoDebuggerHoverVariable[]>(() => {
     return directHoverVariables;
   }
 
-  const exactSourceSlice = extractExactSourceSlice(activeTab.content, currentLocation);
-
-  if (!exactSourceSlice || !/^[A-Za-z_$][A-Za-z0-9_'$]*$/u.test(exactSourceSlice)) {
-    return directHoverVariables;
-  }
-
-  const matchingVariables = currentScopes.value.flatMap((scope) =>
-    scope.variables.filter((variable) => {
-      const name = typeof variable.name === 'string' ? variable.name.trim() : '';
-      return name === exactSourceSlice && variable.value !== null;
-    }),
+  const fallbackRanges = [
+    ...findProvableExactIdentifierRanges(activeTab.content, currentLocation),
+    ...resolveDamlFunctionVariableRanges(
+      activeTab.content,
+      currentLocation.startLine,
+      currentScopes.value.flatMap((scope) =>
+        scope.variables.flatMap((variable) =>
+          typeof variable.name === 'string' ? [variable.name] : [],
+        ),
+      ),
+    ),
+  ].filter((range, index, allRanges) =>
+    allRanges.findIndex((candidate) =>
+      candidate.name === range.name && rangesMatch(candidate.range, range.range),
+    ) === index,
+  ).sort((left, right) =>
+    left.range.startLine - right.range.startLine
+    || left.range.startColumn - right.range.startColumn
+    || left.range.endLine - right.range.endLine
+    || left.range.endColumn - right.range.endColumn,
   );
 
-  if (matchingVariables.length !== 1) {
-    return directHoverVariables;
-  }
+  const fallbackHoverVariables = fallbackRanges
+    .flatMap(({ name, range }) => {
+      const matchingVariables = currentScopes.value.flatMap((scope) =>
+        scope.variables.filter((variable) => {
+          const variableName = typeof variable.name === 'string' ? variable.name.trim() : '';
+          return variableName === name && variable.value !== null;
+        }),
+      );
 
-  const [matchedVariable] = matchingVariables;
-  const fallbackHoverVariable: MonacoDebuggerHoverVariable = {
-    name: exactSourceSlice,
-    kind: matchedVariable.kind,
-    value: matchedVariable.value,
-    contractType: matchedVariable.contractType,
-    range: buildHoverRange(currentLocation),
-  };
+      if (matchingVariables.length !== 1) {
+        return [];
+      }
 
-  const alreadyCovered = directHoverVariables.some((variable) =>
-    variable.name === fallbackHoverVariable.name
-    && rangesMatch(variable.range, fallbackHoverVariable.range),
-  );
+      const [matchedVariable] = matchingVariables;
+      return [
+        {
+          name,
+          kind: matchedVariable.kind,
+          value: matchedVariable.value,
+          contractType: matchedVariable.contractType,
+          range,
+        } satisfies MonacoDebuggerHoverVariable,
+      ];
+    })
+    .filter((fallbackHoverVariable, index, allVariables) =>
+      allVariables.findIndex((variable) =>
+        variable.name === fallbackHoverVariable.name
+        && rangesMatch(variable.range, fallbackHoverVariable.range),
+      ) === index,
+    )
+    .filter((fallbackHoverVariable) =>
+      !directHoverVariables.some((variable) =>
+        variable.name === fallbackHoverVariable.name
+        && rangesMatch(variable.range, fallbackHoverVariable.range),
+      ),
+    );
 
-  return alreadyCovered
-    ? directHoverVariables
-    : [...directHoverVariables, fallbackHoverVariable];
+  return [...directHoverVariables, ...fallbackHoverVariables];
 });
 const realLedgerEvents = computed(() => replayEvents.value);
 const liveReplayEvents = computed(() => {

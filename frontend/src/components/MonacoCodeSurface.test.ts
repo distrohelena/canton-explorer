@@ -164,6 +164,43 @@ describe('MonacoCodeSurface', () => {
     );
   });
 
+  it('configures Monaco overflow widgets to escape clipped debugger containers', async () => {
+    render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+        language: 'daml',
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+
+    expect(createEditor).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        fixedOverflowWidgets: true,
+      }),
+    );
+  });
+
+  it('disables sticky scroll so debugger source text receives hover events', async () => {
+    render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+
+    expect(createEditor).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        stickyScroll: expect.objectContaining({ enabled: false }),
+      }),
+    );
+  });
+
   it('shows debugger hover content only inside proven variable ranges', async () => {
     const model = {
       getValue: () => 'template Example where\n  signatory owner\n',

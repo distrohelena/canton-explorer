@@ -28,7 +28,7 @@ vi.mock('../components/MonacoCodeSurface.vue', () => ({
       },
     },
     template:
-      '<div data-testid="monaco-stub" :data-language="language" :data-hover-count="hoverVariables.length">{{ modelValue }}</div>',
+      '<div data-testid="monaco-stub" :data-language="language" :data-hover-count="hoverVariables.length" :data-hover-json="JSON.stringify(hoverVariables)">{{ modelValue }}</div>',
   }),
 }));
 
@@ -502,6 +502,123 @@ describe('DebuggerView', () => {
     await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
 
     expect(await screen.findByTestId('monaco-stub')).toHaveAttribute('data-hover-count', '1');
+  });
+
+  it('derives all proven parameter hovers from the current DAML function', async () => {
+    vi.mocked(createDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 2,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-110',
+        stepIndex: 2,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [
+          {
+            frameId: 'frame-1',
+            name: 'Archive',
+            variables: [
+              {
+                name: 'args',
+                kind: 'ledgerValue',
+                value: 'BaseDepositArgs',
+                contractType: null,
+                sourceLocation: null,
+              },
+              {
+                name: 'operation',
+                kind: 'text',
+                value: 'should-not-hover',
+                contractType: null,
+                sourceLocation: null,
+              },
+            ],
+          },
+        ],
+        locals: [],
+        arguments: [],
+        sourceLocation: {
+          path: 'daml/Oz/Vault/Base/Core.daml',
+          startLine: 4,
+          startColumn: 44,
+          endLine: 4,
+          endColumn: 58,
+          precision: 'exact',
+        },
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: {
+        path: 'daml/Oz/Vault/Base/Core.daml',
+        content: [
+          '-- helper',
+          '',
+          'executeBaseDepositLike vaultIdentity vaultParty assetInstrumentId shareTokenCid virtualAssets virtualShares name symbol args = do',
+          '  validateBaseOperationPositiveAmount args.operation args.amount',
+        ].join('\n'),
+        startLine: 4,
+        startColumn: 44,
+        endLine: 4,
+        endColumn: 58,
+      },
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'session-1',
+      currentStepId: 'step-110',
+      realEvents: [],
+      replayEvents: [],
+    });
+
+    await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
+
+    const monacoStub = await screen.findByTestId('monaco-stub');
+    expect(monacoStub).toHaveAttribute('data-hover-count', '3');
+    expect(monacoStub).toHaveAttribute(
+      'data-hover-json',
+      JSON.stringify([
+        {
+          name: 'args',
+          kind: 'ledgerValue',
+          value: 'BaseDepositArgs',
+          contractType: null,
+          range: {
+            startLine: 3,
+            startColumn: 121,
+            endLine: 3,
+            endColumn: 125,
+          },
+        },
+        {
+          name: 'args',
+          kind: 'ledgerValue',
+          value: 'BaseDepositArgs',
+          contractType: null,
+          range: {
+            startLine: 4,
+            startColumn: 39,
+            endLine: 4,
+            endColumn: 43,
+          },
+        },
+        {
+          name: 'args',
+          kind: 'ledgerValue',
+          value: 'BaseDepositArgs',
+          contractType: null,
+          range: {
+            startLine: 4,
+            startColumn: 54,
+            endLine: 4,
+            endColumn: 58,
+          },
+        },
+      ]),
+    );
   });
 
   it('lets the user resize the editor panel with the splitter keyboard controls', async () => {

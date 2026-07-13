@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
-import type { PackageTypeNode } from '../types/packages';
+import type { PackageTypeField, PackageTypeNode } from '../types/packages';
 import {
   formatPackageTypeLabel,
   resolveDebuggerSchemaNode,
@@ -160,18 +160,32 @@ function objectEntries(
     .sort(([left], [right]) => left.localeCompare(right, undefined, { numeric: true }));
 }
 
+function entrySchemaField(
+  key: string,
+  index: number,
+  schemaNode: PackageTypeNode | null,
+): PackageTypeField | null {
+  const structuralNode = unwrapDebuggerSchemaNode(schemaNode);
+
+  if (structuralNode?.kind !== 'record' && structuralNode?.kind !== 'struct') {
+    return null;
+  }
+
+  if (/^\d+$/.test(key)) {
+    return structuralNode.fields?.[index] ?? null;
+  }
+
+  return structuralNode.fields?.find((field) => field.name === key) ?? null;
+}
+
 function entrySchemaLabel(
   key: string,
   index: number,
   schemaNode: PackageTypeNode | null,
 ): string {
-  const structuralNode = unwrapDebuggerSchemaNode(schemaNode);
+  const field = entrySchemaField(key, index, schemaNode);
 
-  if (structuralNode?.kind === 'record' || structuralNode?.kind === 'struct') {
-    return structuralNode.fields?.[index]?.name ?? (/^\d+$/.test(key) ? `[${key}]` : key);
-  }
-
-  return /^\d+$/.test(key) ? `[${key}]` : key;
+  return field?.name ?? (/^\d+$/.test(key) ? `[${key}]` : key);
 }
 
 function entrySchemaNode(
@@ -179,11 +193,13 @@ function entrySchemaNode(
   index: number,
   schemaNode: PackageTypeNode | null,
 ): PackageTypeNode | null {
-  const structuralNode = unwrapDebuggerSchemaNode(schemaNode);
+  const field = entrySchemaField(key, index, schemaNode);
 
-  if (structuralNode?.kind === 'record' || structuralNode?.kind === 'struct') {
-    return structuralNode.fields?.[index]?.type ?? null;
+  if (field) {
+    return field.type;
   }
+
+  const structuralNode = unwrapDebuggerSchemaNode(schemaNode);
 
   if (Array.isArray(structuralNode?.arguments) && /^\d+$/.test(key)) {
     return structuralNode.arguments[index] ?? null;
