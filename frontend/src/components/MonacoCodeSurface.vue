@@ -195,7 +195,7 @@ function formatMarkdownCodeSpan(value: string) {
 function formatHoverContents(match: MonacoDebuggerHoverVariable) {
   return [
     { value: formatMarkdownCodeSpan(match.name) },
-    match.kind ? { value: `kind: ${formatMarkdownCodeSpan(match.kind)}` } : null,
+    match.kind !== null ? { value: `kind: ${formatMarkdownCodeSpan(match.kind)}` } : null,
     match.value !== null ? { value: `value: ${formatMarkdownCodeSpan(match.value)}` } : null,
     match.contractType !== null
       ? { value: `contract type: ${formatMarkdownCodeSpan(match.contractType)}` }

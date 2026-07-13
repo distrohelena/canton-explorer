@@ -9,6 +9,7 @@ let hoverProvider: {
   provideHover: (model: unknown, position: { lineNumber: number; column: number }) => unknown;
 } | null = null;
 const disposeHoverProvider = vi.fn();
+const hoverProviderDisposables: Array<{ dispose: ReturnType<typeof vi.fn> }> = [];
 const registerHoverProvider = vi.fn(
   (
     _language: string,
@@ -17,7 +18,13 @@ const registerHoverProvider = vi.fn(
     },
   ) => {
     hoverProvider = provider;
-    return { dispose: disposeHoverProvider };
+    const disposable = {
+      dispose: vi.fn(() => {
+        disposeHoverProvider();
+      }),
+    };
+    hoverProviderDisposables.push(disposable);
+    return disposable;
   },
 );
 const createEditor = vi.fn(() => ({
@@ -64,6 +71,7 @@ describe('MonacoCodeSurface', () => {
     setModelLanguage.mockClear();
     hoverProvider = null;
     disposeHoverProvider.mockClear();
+    hoverProviderDisposables.length = 0;
     registerHoverProvider.mockClear();
     vi.restoreAllMocks();
   });
@@ -198,6 +206,190 @@ describe('MonacoCodeSurface', () => {
     expect(hoverProvider?.provideHover(model, { lineNumber: 1, column: 1 })).toBeNull();
   });
 
+  it('returns no debugger hover content for a different Monaco model', async () => {
+    const model = {
+      getValue: () => 'template Example where\n  signatory owner\n',
+      dispose: vi.fn(),
+    };
+    createModel.mockReturnValueOnce(model);
+
+    render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+        language: 'daml',
+        hoverVariables: [
+          {
+            name: 'owner',
+            kind: 'text',
+            value: 'Alice',
+            contractType: null,
+            range: {
+              startLine: 2,
+              startColumn: 13,
+              endLine: 2,
+              endColumn: 18,
+            },
+          },
+        ],
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+
+    expect(hoverProvider?.provideHover({ getValue: () => model.getValue() }, { lineNumber: 2, column: 14 })).toBeNull();
+  });
+
+  it('disposes the old hover provider and registers a new one when language changes', async () => {
+    const model = {
+      getValue: () => 'template Example where\n  signatory owner\n',
+      dispose: vi.fn(),
+    };
+    createModel.mockReturnValueOnce(model);
+
+    const hoverVariables = [
+      {
+        name: 'owner',
+        kind: 'text',
+        value: 'Alice',
+        contractType: null,
+        range: {
+          startLine: 2,
+          startColumn: 13,
+          endLine: 2,
+          endColumn: 18,
+        },
+      },
+    ];
+    const { rerender } = render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+        language: 'daml',
+        hoverVariables,
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+    const firstProvider = hoverProvider;
+    const firstDisposable = hoverProviderDisposables[0];
+
+    await rerender({
+      modelValue: 'template Example where\n  signatory owner\n',
+      language: 'plaintext',
+      hoverVariables,
+    });
+    await nextTick();
+
+    expect(firstDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(registerHoverProvider).toHaveBeenCalledTimes(2);
+    expect(registerHoverProvider).toHaveBeenLastCalledWith('plaintext', expect.anything());
+    expect(hoverProvider).not.toBe(firstProvider);
+  });
+
+  it('re-registers the hover provider when hover variables change without accumulating providers', async () => {
+    const model = {
+      getValue: () => 'template Example where\n  signatory owner\n',
+      dispose: vi.fn(),
+    };
+    createModel.mockReturnValueOnce(model);
+
+    const { rerender } = render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+        language: 'daml',
+        hoverVariables: [
+          {
+            name: 'owner',
+            kind: 'text',
+            value: 'Alice',
+            contractType: null,
+            range: {
+              startLine: 2,
+              startColumn: 13,
+              endLine: 2,
+              endColumn: 18,
+            },
+          },
+        ],
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+    const firstProvider = hoverProvider;
+    const firstDisposable = hoverProviderDisposables[0];
+
+    await rerender({
+      modelValue: 'template Example where\n  signatory owner\n',
+      language: 'daml',
+      hoverVariables: [
+        {
+          name: 'owner',
+          kind: 'text',
+          value: 'Bob',
+          contractType: null,
+          range: {
+            startLine: 2,
+            startColumn: 13,
+            endLine: 2,
+            endColumn: 18,
+          },
+        },
+      ],
+    });
+    await nextTick();
+
+    expect(firstDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(registerHoverProvider).toHaveBeenCalledTimes(2);
+    expect(hoverProviderDisposables[1].dispose).not.toHaveBeenCalled();
+    expect(hoverProvider).not.toBe(firstProvider);
+    expect(hoverProvider?.provideHover(model, { lineNumber: 2, column: 14 })).toEqual({
+      contents: [
+        { value: '`owner`' },
+        { value: 'kind: `text`' },
+        { value: 'value: `Bob`' },
+      ],
+    });
+  });
+
+  it('disposes the active hover provider on unmount', async () => {
+    const model = {
+      getValue: () => 'template Example where\n  signatory owner\n',
+      dispose: vi.fn(),
+    };
+    createModel.mockReturnValueOnce(model);
+
+    const { unmount } = render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+        language: 'daml',
+        hoverVariables: [
+          {
+            name: 'owner',
+            kind: 'text',
+            value: 'Alice',
+            contractType: null,
+            range: {
+              startLine: 2,
+              startColumn: 13,
+              endLine: 2,
+              endColumn: 18,
+            },
+          },
+        ],
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+    const activeDisposable = hoverProviderDisposables[0];
+
+    unmount();
+
+    expect(activeDisposable.dispose).toHaveBeenCalledTimes(1);
+  });
+
   it('treats debugger hover ranges as start-inclusive and end-exclusive', async () => {
     const model = {
       getValue: () => 'template Example where\n  signatory owner\n',
@@ -330,6 +522,42 @@ describe('MonacoCodeSurface', () => {
         { value: 'value: ``` Ali``ce ```' },
         { value: 'contract type: `` `Example` ``' },
       ],
+    });
+  });
+
+  it('includes empty debugger hover kind values', async () => {
+    const model = {
+      getValue: () => 'template Example where\n  signatory owner\n',
+      dispose: vi.fn(),
+    };
+    createModel.mockReturnValueOnce(model);
+
+    render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+        language: 'daml',
+        hoverVariables: [
+          {
+            name: 'owner',
+            kind: '',
+            value: null,
+            contractType: null,
+            range: {
+              startLine: 2,
+              startColumn: 13,
+              endLine: 2,
+              endColumn: 18,
+            },
+          },
+        ],
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+
+    expect(hoverProvider?.provideHover(model, { lineNumber: 2, column: 14 })).toEqual({
+      contents: [{ value: '`owner`' }, { value: 'kind: ``' }],
     });
   });
 });
