@@ -7,6 +7,19 @@ type MonacoModule = typeof MonacoEditor;
 type MonacoEditorInstance = MonacoEditor.editor.IStandaloneCodeEditor;
 type MonacoModel = MonacoEditor.editor.ITextModel;
 
+export interface MonacoDebuggerHoverVariable {
+  name: string;
+  kind: string | null;
+  value: string | null;
+  contractType: string | null;
+  range: {
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+  };
+}
+
 const props = withDefaults(
   defineProps<{
     modelValue: string;
@@ -21,6 +34,7 @@ const props = withDefaults(
       endLine: number;
       endColumn: number;
     } | null;
+    hoverVariables?: MonacoDebuggerHoverVariable[];
   }>(),
   {
     language: 'plaintext',
@@ -29,6 +43,7 @@ const props = withDefaults(
     minimap: false,
     ariaLabel: 'Code editor',
     highlightRange: null,
+    hoverVariables: () => [],
   },
 );
 
@@ -40,6 +55,7 @@ const editor = shallowRef<MonacoEditorInstance | null>(null);
 const model = shallowRef<MonacoModel | null>(null);
 let resizeObserver: ResizeObserver | null = null;
 let highlightDecorations: string[] = [];
+let hoverProviderDisposable: MonacoEditor.IDisposable | null = null;
 
 function resolveMonacoTheme(theme: 'light' | 'dark') {
   return theme === 'light' ? 'vs' : EXPLORER_MONACO_DARK_THEME;
@@ -99,6 +115,7 @@ async function mountEditor() {
     });
     resizeObserver.observe(container.value);
     applyHighlightRange();
+    registerHoverProvider();
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : 'Failed to load Monaco editor';
   } finally {
@@ -140,6 +157,73 @@ function applyHighlightRange() {
   activeEditor.revealLineInCenter(startLine);
 }
 
+function containsPosition(
+  range: MonacoDebuggerHoverVariable['range'],
+  position: { lineNumber: number; column: number },
+) {
+  if (position.lineNumber < range.startLine || position.lineNumber > range.endLine) {
+    return false;
+  }
+
+  if (position.lineNumber === range.startLine && position.column < range.startColumn) {
+    return false;
+  }
+
+  if (position.lineNumber === range.endLine && position.column >= range.endColumn) {
+    return false;
+  }
+
+  return true;
+}
+
+function rangeSize(range: MonacoDebuggerHoverVariable['range']) {
+  return (range.endLine - range.startLine) * 1_000_000 + (range.endColumn - range.startColumn);
+}
+
+function escapeMarkdownCode(value: string) {
+  return value.replace(/`/g, '\\`');
+}
+
+function formatHoverContents(match: MonacoDebuggerHoverVariable) {
+  return [
+    { value: `\`${escapeMarkdownCode(match.name)}\`` },
+    match.kind ? { value: `kind: \`${escapeMarkdownCode(match.kind)}\`` } : null,
+    match.value !== null ? { value: `value: \`${escapeMarkdownCode(match.value)}\`` } : null,
+    match.contractType !== null
+      ? { value: `contract type: \`${escapeMarkdownCode(match.contractType)}\`` }
+      : null,
+  ].filter((content): content is { value: string } => content !== null);
+}
+
+function disposeHoverProvider() {
+  hoverProviderDisposable?.dispose();
+  hoverProviderDisposable = null;
+}
+
+function registerHoverProvider() {
+  const monaco = monacoModule.value;
+
+  disposeHoverProvider();
+
+  if (!monaco || !model.value) {
+    return;
+  }
+
+  hoverProviderDisposable = monaco.languages.registerHoverProvider(props.language, {
+    provideHover(providerModel, position) {
+      if (providerModel !== model.value) {
+        return null;
+      }
+
+      const match = [...props.hoverVariables]
+        .filter((entry) => containsPosition(entry.range, position))
+        .sort((left, right) => rangeSize(left.range) - rangeSize(right.range))[0];
+
+      return match ? { contents: formatHoverContents(match) } : null;
+    },
+  });
+}
+
 watch(
   () => props.modelValue,
   (nextValue) => {
@@ -159,6 +243,7 @@ watch(
     }
 
     monacoModule.value.editor.setModelLanguage(model.value, nextLanguage);
+    registerHoverProvider();
   },
 );
 
@@ -205,11 +290,20 @@ watch(
   { deep: true },
 );
 
+watch(
+  () => props.hoverVariables,
+  () => {
+    registerHoverProvider();
+  },
+  { deep: true },
+);
+
 onMounted(() => {
   void mountEditor();
 });
 
 onBeforeUnmount(() => {
+  disposeHoverProvider();
   resizeObserver?.disconnect();
   if (editor.value) {
     highlightDecorations = editor.value.deltaDecorations(highlightDecorations, []);
