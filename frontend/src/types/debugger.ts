@@ -17,11 +17,20 @@ export interface DebuggerStateDelta {
   consuming: boolean | null;
 }
 
+export interface DebuggerSourceLocation {
+  path: string | null;
+  startLine: number | null;
+  startColumn: number | null;
+  endLine: number | null;
+  endColumn: number | null;
+}
+
 export interface DebuggerScopeVariable {
   name: string | null;
   kind: string | null;
   value: string | null;
   contractType: string | null;
+  sourceLocation?: DebuggerSourceLocation | null;
 }
 
 export interface DebuggerScope {
@@ -41,13 +50,7 @@ export interface DebuggerStep {
   scopes: DebuggerScope[];
   locals: unknown[];
   arguments: unknown[];
-  sourceLocation: {
-    path: string | null;
-    startLine: number | null;
-    startColumn: number | null;
-    endLine: number | null;
-    endColumn: number | null;
-  } | null;
+  sourceLocation: DebuggerSourceLocation | null;
   valuePreview: {
     kind: string;
     display: string;
@@ -69,7 +72,7 @@ export interface DebuggerReplayEventSummary {
   choiceArgument: unknown;
   payload: unknown;
   consuming: boolean | null;
-  sourceLocation: DebuggerStep['sourceLocation'];
+  sourceLocation: DebuggerSourceLocation | null;
 }
 
 export interface DebuggerRealEventSummary {

@@ -7,6 +7,7 @@ import DebuggerControlPanel from '../components/DebuggerControlPanel.vue';
 import DebuggerEventList from '../components/DebuggerEventList.vue';
 import DebuggerScopePanel from '../components/DebuggerScopePanel.vue';
 import MonacoCodeSurface from '../components/MonacoCodeSurface.vue';
+import type { MonacoDebuggerHoverVariable } from '../components/MonacoCodeSurface.vue';
 import {
   createDebuggerSession,
   fetchDebuggerEvents,
@@ -17,6 +18,7 @@ import {
 import type {
   DebuggerReplayEventSummary,
   DebuggerSessionResponse,
+  DebuggerSourceLocation,
 } from '../types/debugger';
 
 interface DebuggerSourceTab {
@@ -301,6 +303,28 @@ function resolveSourceLanguage(path: string | null | undefined): 'daml' | 'plain
   return path?.toLowerCase().endsWith('.daml') ? 'daml' : 'plaintext';
 }
 
+function normalizeSourcePath(path: string | null | undefined): string | null {
+  return path ? path.replace(/\\/g, '/') : null;
+}
+
+function isCompleteSourceLocation(
+  location: DebuggerSourceLocation | null | undefined,
+): location is DebuggerSourceLocation & {
+  path: string;
+  startLine: number;
+  startColumn: number;
+  endLine: number;
+  endColumn: number;
+} {
+  return Boolean(
+    location?.path
+    && typeof location.startLine === 'number'
+    && typeof location.startColumn === 'number'
+    && typeof location.endLine === 'number'
+    && typeof location.endColumn === 'number',
+  );
+}
+
 function resolveSourceHighlightRange(
   source: DebuggerSessionResponse['source'],
 ): DebuggerSourceTab['highlightRange'] {
@@ -420,6 +444,44 @@ const updateDetailTarget = computed(() => {
 });
 
 const currentScopes = computed(() => session.value?.currentStep.scopes ?? []);
+const hoverVariables = computed<MonacoDebuggerHoverVariable[]>(() => {
+  const activePath = normalizeSourcePath(activeSourceTab.value?.path);
+
+  if (!activePath) {
+    return [];
+  }
+
+  return currentScopes.value.flatMap((scope) =>
+    scope.variables.flatMap((variable) => {
+      const name = typeof variable.name === 'string' ? variable.name.trim() : '';
+      const location = variable.sourceLocation;
+
+      if (
+        name.length === 0
+        || variable.value === null
+        || !isCompleteSourceLocation(location)
+        || normalizeSourcePath(location.path) !== activePath
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          name,
+          kind: variable.kind,
+          value: variable.value,
+          contractType: variable.contractType,
+          range: {
+            startLine: location.startLine,
+            startColumn: location.startColumn,
+            endLine: location.endLine,
+            endColumn: location.endColumn,
+          },
+        },
+      ];
+    }),
+  );
+});
 const realLedgerEvents = computed(() => replayEvents.value);
 const liveReplayEvents = computed(() => {
   if (!session.value) {
@@ -765,6 +827,7 @@ onBeforeUnmount(() => {
           :language="sourceLanguage"
           :minimap="true"
           :highlight-range="highlightRange"
+          :hover-variables="hoverVariables"
           aria-label="DAML debugger code surface"
         />
       </section>

@@ -22,8 +22,13 @@ vi.mock('../components/MonacoCodeSurface.vue', () => ({
         type: String,
         default: 'plaintext',
       },
+      hoverVariables: {
+        type: Array,
+        default: () => [],
+      },
     },
-    template: '<div data-testid="monaco-stub" :data-language="language">{{ modelValue }}</div>',
+    template:
+      '<div data-testid="monaco-stub" :data-language="language" :data-hover-count="hoverVariables.length">{{ modelValue }}</div>',
   }),
 }));
 
@@ -314,6 +319,119 @@ describe('DebuggerView', () => {
     expect(screen.getByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Vault.daml' })).toBeInTheDocument();
     expect(screen.getByTestId('monaco-stub')).toHaveTextContent('template Main where');
+  });
+
+  it('passes only proven scoped variables for the active source hovers', async () => {
+    vi.mocked(createDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 0,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [
+          {
+            frameId: 'frame-1',
+            name: 'Archive',
+            variables: [
+              {
+                name: 'owner',
+                kind: 'text',
+                value: 'Alice',
+                contractType: null,
+                sourceLocation: {
+                  path: 'daml\\Main.daml',
+                  startLine: 2,
+                  startColumn: 12,
+                  endLine: 2,
+                  endColumn: 17,
+                },
+              },
+              {
+                name: 'owner',
+                kind: 'text',
+                value: 'Bob',
+                contractType: null,
+              },
+              {
+                name: 'issuer',
+                kind: 'text',
+                value: 'Issuer',
+                contractType: null,
+                sourceLocation: {
+                  path: 'daml\\Main.daml',
+                  startLine: 3,
+                  startColumn: null,
+                  endLine: 3,
+                  endColumn: 18,
+                },
+              },
+              {
+                name: 'observer',
+                kind: 'text',
+                value: 'Observer',
+                contractType: null,
+                sourceLocation: {
+                  path: 'daml\\Other.daml',
+                  startLine: 4,
+                  startColumn: 5,
+                  endLine: 4,
+                  endColumn: 13,
+                },
+              },
+              {
+                name: 'controller',
+                kind: 'text',
+                value: null,
+                contractType: null,
+                sourceLocation: {
+                  path: 'daml\\Main.daml',
+                  startLine: 5,
+                  startColumn: 3,
+                  endLine: 5,
+                  endColumn: 13,
+                },
+              },
+            ],
+          },
+        ],
+        locals: [],
+        arguments: [],
+        sourceLocation: {
+          path: 'daml/Main.daml',
+          startLine: 1,
+          startColumn: 1,
+          endLine: 6,
+          endColumn: 1,
+        },
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: {
+        path: 'daml/Main.daml',
+        content: 'template Main where\n  signatory owner\n  observer issuer\n',
+        startLine: 1,
+        startColumn: 1,
+        endLine: 6,
+        endColumn: 1,
+      },
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'session-1',
+      currentStepId: 'step-0',
+      realEvents: [],
+      replayEvents: [],
+    });
+
+    await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
+
+    expect(await screen.findByTestId('monaco-stub')).toHaveAttribute('data-hover-count', '1');
   });
 
   it('lets the user resize the editor panel with the splitter keyboard controls', async () => {
