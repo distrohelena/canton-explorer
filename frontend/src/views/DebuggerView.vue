@@ -325,6 +325,67 @@ function isCompleteSourceLocation(
   );
 }
 
+function buildHoverRange(
+  location: DebuggerSourceLocation & {
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+  },
+): MonacoDebuggerHoverVariable['range'] {
+  return {
+    startLine: location.startLine,
+    startColumn: location.startColumn,
+    endLine: location.endLine,
+    endColumn: location.endColumn,
+  };
+}
+
+function rangesMatch(
+  left: MonacoDebuggerHoverVariable['range'],
+  right: MonacoDebuggerHoverVariable['range'],
+): boolean {
+  return left.startLine === right.startLine
+    && left.startColumn === right.startColumn
+    && left.endLine === right.endLine
+    && left.endColumn === right.endColumn;
+}
+
+function extractExactSourceSlice(
+  content: string,
+  location: DebuggerSourceLocation & {
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+  },
+): string | null {
+  if (location.startLine !== location.endLine) {
+    return null;
+  }
+
+  const lines = content.split(/\r?\n/u);
+  const line = lines[location.startLine - 1];
+
+  if (typeof line !== 'string') {
+    return null;
+  }
+
+  const startIndex = location.startColumn - 1;
+  const endIndex = location.endColumn - 1;
+
+  if (
+    startIndex < 0
+    || endIndex < startIndex
+    || startIndex > line.length
+    || endIndex > line.length
+  ) {
+    return null;
+  }
+
+  return line.slice(startIndex, endIndex);
+}
+
 function resolveSourceHighlightRange(
   source: DebuggerSessionResponse['source'],
 ): DebuggerSourceTab['highlightRange'] {
@@ -445,13 +506,14 @@ const updateDetailTarget = computed(() => {
 
 const currentScopes = computed(() => session.value?.currentStep.scopes ?? []);
 const hoverVariables = computed<MonacoDebuggerHoverVariable[]>(() => {
-  const activePath = normalizeSourcePath(activeSourceTab.value?.path);
+  const activeTab = activeSourceTab.value;
+  const activePath = normalizeSourcePath(activeTab?.path);
 
   if (!activePath) {
     return [];
   }
 
-  return currentScopes.value.flatMap((scope) =>
+  const directHoverVariables = currentScopes.value.flatMap((scope) =>
     scope.variables.flatMap((variable) => {
       const name = typeof variable.name === 'string' ? variable.name.trim() : '';
       const location = variable.sourceLocation;
@@ -471,16 +533,59 @@ const hoverVariables = computed<MonacoDebuggerHoverVariable[]>(() => {
           kind: variable.kind,
           value: variable.value,
           contractType: variable.contractType,
-          range: {
-            startLine: location.startLine,
-            startColumn: location.startColumn,
-            endLine: location.endLine,
-            endColumn: location.endColumn,
-          },
+          range: buildHoverRange(location),
         },
       ];
     }),
   );
+
+  const currentStep = session.value?.currentStep;
+  const currentLocation = currentStep?.sourceLocation;
+
+  if (
+    !activeTab
+    || !currentStep
+    || !isCompleteSourceLocation(currentLocation)
+    || currentLocation.precision !== 'exact'
+    || normalizeSourcePath(currentLocation.path) !== activePath
+  ) {
+    return directHoverVariables;
+  }
+
+  const exactSourceSlice = extractExactSourceSlice(activeTab.content, currentLocation);
+
+  if (!exactSourceSlice || !/^[A-Za-z_$][A-Za-z0-9_'$]*$/u.test(exactSourceSlice)) {
+    return directHoverVariables;
+  }
+
+  const matchingVariables = currentScopes.value.flatMap((scope) =>
+    scope.variables.filter((variable) => {
+      const name = typeof variable.name === 'string' ? variable.name.trim() : '';
+      return name === exactSourceSlice && variable.value !== null;
+    }),
+  );
+
+  if (matchingVariables.length !== 1) {
+    return directHoverVariables;
+  }
+
+  const [matchedVariable] = matchingVariables;
+  const fallbackHoverVariable: MonacoDebuggerHoverVariable = {
+    name: exactSourceSlice,
+    kind: matchedVariable.kind,
+    value: matchedVariable.value,
+    contractType: matchedVariable.contractType,
+    range: buildHoverRange(currentLocation),
+  };
+
+  const alreadyCovered = directHoverVariables.some((variable) =>
+    variable.name === fallbackHoverVariable.name
+    && rangesMatch(variable.range, fallbackHoverVariable.range),
+  );
+
+  return alreadyCovered
+    ? directHoverVariables
+    : [...directHoverVariables, fallbackHoverVariable];
 });
 const realLedgerEvents = computed(() => replayEvents.value);
 const liveReplayEvents = computed(() => {

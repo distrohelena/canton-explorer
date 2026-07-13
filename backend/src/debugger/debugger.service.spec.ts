@@ -30,6 +30,7 @@ describe('DebuggerService', () => {
           startColumn: 1,
           endLine: 858,
           endColumn: 20,
+          precision: 'fallback',
         },
       },
       {
@@ -65,6 +66,7 @@ describe('DebuggerService', () => {
           startColumn: 1,
           endLine: 869,
           endColumn: 18,
+          precision: 'exact',
         },
         stateDelta: {
           kind: 'exercise',
@@ -207,11 +209,20 @@ describe('DebuggerService', () => {
                   startColumn: 14,
                   endLine: 10,
                   endColumn: 19,
+                  precision: null,
                 },
               }),
             ],
           }),
         ],
+        sourceLocation: {
+          path: 'Main.daml',
+          startLine: 869,
+          startColumn: 1,
+          endLine: 869,
+          endColumn: 18,
+          precision: 'exact',
+        },
         stateDelta: expect.objectContaining({
           kind: 'exercise',
           eventOrdinal: 0,

@@ -23,6 +23,7 @@ export interface DebuggerSourceLocation {
   startColumn: number | null;
   endLine: number | null;
   endColumn: number | null;
+  precision?: 'exact' | 'fallback' | null;
 }
 
 export interface DebuggerScopeVariable {

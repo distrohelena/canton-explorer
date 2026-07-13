@@ -73,6 +73,7 @@ type ReplaySourceLocationLike = {
   startColumn?: number;
   endLine?: number;
   endColumn?: number;
+  precision?: string;
 };
 
 type ReplayScopeVariableLike = {
@@ -203,6 +204,7 @@ export interface DebuggerStepResponse {
     startColumn: number | null;
     endLine: number | null;
     endColumn: number | null;
+    precision?: string | null;
   } | null;
   valuePreview: {
     kind: string;
@@ -755,6 +757,7 @@ export class DebuggerService {
           startColumn: sourceLocation.startColumn ?? null,
           endLine: sourceLocation.endLine ?? null,
           endColumn: sourceLocation.endColumn ?? null,
+          precision: sourceLocation.precision ?? null,
         }
       : null;
   }

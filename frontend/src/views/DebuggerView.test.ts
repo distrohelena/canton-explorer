@@ -434,6 +434,76 @@ describe('DebuggerView', () => {
     expect(await screen.findByTestId('monaco-stub')).toHaveAttribute('data-hover-count', '1');
   });
 
+  it('falls back to the exact current-step identifier when variable ranges are unavailable', async () => {
+    vi.mocked(createDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'cnqs-sv',
+      updateId: '42',
+      offset: '205',
+      stepCount: 12,
+      currentStepIndex: 0,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'enterExpression',
+        stackFrames: [],
+        scopes: [
+          {
+            frameId: 'frame-1',
+            name: 'Archive',
+            variables: [
+              {
+                name: 'owner',
+                kind: 'text',
+                value: 'Alice',
+                contractType: null,
+                sourceLocation: null,
+              },
+              {
+                name: 'issuer',
+                kind: 'text',
+                value: 'Issuer',
+                contractType: null,
+                sourceLocation: null,
+              },
+            ],
+          },
+        ],
+        locals: [],
+        arguments: [],
+        sourceLocation: {
+          path: 'daml/Main.daml',
+          startLine: 2,
+          startColumn: 13,
+          endLine: 2,
+          endColumn: 18,
+          precision: 'exact',
+        },
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: {
+        path: 'daml/Main.daml',
+        content: 'template Main where\n  signatory owner\n',
+        startLine: 1,
+        startColumn: 1,
+        endLine: 2,
+        endColumn: 18,
+      },
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'session-1',
+      currentStepId: 'step-0',
+      realEvents: [],
+      replayEvents: [],
+    });
+
+    await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
+
+    expect(await screen.findByTestId('monaco-stub')).toHaveAttribute('data-hover-count', '1');
+  });
+
   it('lets the user resize the editor panel with the splitter keyboard controls', async () => {
     vi.mocked(createDebuggerSession).mockResolvedValue({
       sessionId: 'session-1',
