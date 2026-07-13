@@ -90,6 +90,34 @@ npm run start:frontend
 
 This builds the frontend once and serves the built assets on `http://localhost:46000` without file watching or hot reload.
 
+## Generate debug DARs
+
+The debugger can show DAML source and source locations when it has a companion
+`*-debug.dar` for the package being replayed. Generate these from a built DAML
+workspace and write them into the explorer's local `debug-dars/` directory:
+
+```bash
+npm run dar:prepare-workspace --workspace backend -- \
+  --workspace-root /path/to/daml-workspace \
+  --output-dir ./debug-dars
+```
+
+The command scans `**/.daml/dist/*.dar`, skips existing `*-debug.dar` files,
+and creates matching debug DARs with the original compiled payload, source map,
+and DAML source files. Ensure the backend is configured to load that directory:
+
+```json
+{
+  "debugger": {
+    "localDarDirectory": "./debug-dars"
+  }
+}
+```
+
+The default is already `./debug-dars`, relative to the backend's working
+directory. For generating one DAR or customizing source-map inputs, see
+[Debug DARs](docs/debug-dar.md).
+
 ## Test
 
 ```bash
