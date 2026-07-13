@@ -180,17 +180,25 @@ function rangeSize(range: MonacoDebuggerHoverVariable['range']) {
   return (range.endLine - range.startLine) * 1_000_000 + (range.endColumn - range.startColumn);
 }
 
-function escapeMarkdownCode(value: string) {
-  return value.replace(/`/g, '\\`');
+function formatMarkdownCodeSpan(value: string) {
+  const backtickRuns = value.match(/`+/g) ?? [];
+  const longestBacktickRun = backtickRuns.reduce((longest, run) => Math.max(longest, run.length), 0);
+
+  if (longestBacktickRun === 0) {
+    return `\`${value}\``;
+  }
+
+  const delimiter = '`'.repeat(longestBacktickRun + 1);
+  return `${delimiter} ${value} ${delimiter}`;
 }
 
 function formatHoverContents(match: MonacoDebuggerHoverVariable) {
   return [
-    { value: `\`${escapeMarkdownCode(match.name)}\`` },
-    match.kind ? { value: `kind: \`${escapeMarkdownCode(match.kind)}\`` } : null,
-    match.value !== null ? { value: `value: \`${escapeMarkdownCode(match.value)}\`` } : null,
+    { value: formatMarkdownCodeSpan(match.name) },
+    match.kind ? { value: `kind: ${formatMarkdownCodeSpan(match.kind)}` } : null,
+    match.value !== null ? { value: `value: ${formatMarkdownCodeSpan(match.value)}` } : null,
     match.contractType !== null
-      ? { value: `contract type: \`${escapeMarkdownCode(match.contractType)}\`` }
+      ? { value: `contract type: ${formatMarkdownCodeSpan(match.contractType)}` }
       : null,
   ].filter((content): content is { value: string } => content !== null);
 }

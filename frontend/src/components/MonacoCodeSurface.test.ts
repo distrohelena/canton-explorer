@@ -291,4 +291,45 @@ describe('MonacoCodeSurface', () => {
       ],
     });
   });
+
+  it('formats debugger hover code spans safely when values contain backticks', async () => {
+    const model = {
+      getValue: () => 'template Example where\n  signatory owner\n',
+      dispose: vi.fn(),
+    };
+    createModel.mockReturnValueOnce(model);
+
+    render(MonacoCodeSurface, {
+      props: {
+        modelValue: 'template Example where\n  signatory owner\n',
+        language: 'daml',
+        hoverVariables: [
+          {
+            name: 'own`er',
+            kind: 'te`xt',
+            value: 'Ali``ce',
+            contractType: '`Example`',
+            range: {
+              startLine: 2,
+              startColumn: 13,
+              endLine: 2,
+              endColumn: 18,
+            },
+          },
+        ],
+      },
+    });
+
+    await Promise.resolve();
+    await nextTick();
+
+    expect(hoverProvider?.provideHover(model, { lineNumber: 2, column: 14 })).toEqual({
+      contents: [
+        { value: '`` own`er ``' },
+        { value: 'kind: `` te`xt ``' },
+        { value: 'value: ``` Ali``ce ```' },
+        { value: 'contract type: `` `Example` ``' },
+      ],
+    });
+  });
 });
