@@ -175,4 +175,33 @@ describe('LegacyTransactionRedirectView', () => {
       expect(router.currentRoute.value.fullPath).toBe('/nodes/participant-2/updates/29'),
     );
   });
+
+  it('ignores a stale response after leaving the legacy route', async () => {
+    let resolveSearch!: (results: SearchResultsResponse) => void;
+    vi.mocked(fetchSearchResults).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      }),
+    );
+
+    const router = await renderAt('/tx/stale-update');
+
+    await waitFor(() => expect(fetchSearchResults).toHaveBeenCalledWith('stale-update'));
+    await router.push('/search');
+    resolveSearch(
+      searchResults([
+        {
+          nodeId: 'stale-node',
+          label: 'Stale Node',
+          eventOffset: '1',
+          updateId: 'stale-update',
+          recordTime: null,
+          parties: [],
+        },
+      ]),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(router.currentRoute.value.fullPath).toBe('/search');
+  });
 });

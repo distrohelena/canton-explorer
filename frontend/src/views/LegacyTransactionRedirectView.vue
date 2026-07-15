@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchSearchResults } from '../lib/api';
+
+defineProps<{ updateId: string }>();
 
 const route = useRoute();
 const router = useRouter();
@@ -48,6 +50,10 @@ watch(updateId, (value) => {
     void resolveLegacyTransaction(value);
   }
 }, { immediate: true });
+
+onBeforeUnmount(() => {
+  resolutionSequence += 1;
+});
 </script>
 
 <template>
