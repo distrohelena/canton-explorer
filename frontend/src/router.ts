@@ -15,6 +15,7 @@ import PackageFamilyView from './views/PackageFamilyView.vue';
 import PartyDetailView from './views/PartyDetailView.vue';
 import NamespaceDetailView from './views/NamespaceDetailView.vue';
 import SearchResultsView from './views/SearchResultsView.vue';
+import LegacyTransactionRedirectView from './views/LegacyTransactionRedirectView.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -27,6 +28,7 @@ export const router = createRouter({
     { path: '/debugger', component: () => import('./views/DebuggerView.vue') },
     { path: '/tokens/transfers/:updateId', component: TokenTransferDetailView, props: true },
     { path: '/tokens/:tokenId', component: TokenDetailView, props: true },
+    { path: '/tx/:updateId', component: LegacyTransactionRedirectView, props: true },
     { path: '/search', component: SearchResultsView },
     { path: '/nodes/:id/updates', component: NodeUpdatesView, props: true },
     { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailView, props: true },
