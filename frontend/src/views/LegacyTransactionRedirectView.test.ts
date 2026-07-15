@@ -145,4 +145,34 @@ describe('LegacyTransactionRedirectView', () => {
     resolveSearch(searchResults());
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/search?q=pending-update'));
   });
+
+  it('resolves a new update ID when the route is reused', async () => {
+    vi.mocked(fetchSearchResults).mockImplementation((query) => {
+      if (query === 'first') {
+        return new Promise(() => {});
+      }
+
+      return Promise.resolve(
+        searchResults([
+          {
+            nodeId: 'participant-2',
+            label: 'Participant 2',
+            eventOffset: '29',
+            updateId: 'second',
+            recordTime: null,
+            parties: [],
+          },
+        ]),
+      );
+    });
+
+    const router = await renderAt('/tx/first');
+
+    await waitFor(() => expect(fetchSearchResults).toHaveBeenCalledWith('first'));
+    await router.push('/tx/second');
+    await waitFor(() => expect(fetchSearchResults).toHaveBeenCalledWith('second'));
+    await waitFor(() =>
+      expect(router.currentRoute.value.fullPath).toBe('/nodes/participant-2/updates/29'),
+    );
+  });
 });
