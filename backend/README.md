@@ -38,6 +38,11 @@ Create `./config/nodes.local.json` in the directory where you run the command. U
 The explorer also expects the PQS PostgreSQL connection strings referenced by
 `connectionUriEnv` to be available in the environment.
 
+For self-signed ES256 gRPC authentication, set the environment variable named
+by `privateKeyEnv` to the base64url encoding of the JSON private P-256 JWK. The
+auth configuration uses `sub`, `aud`, and `privateKeyEnv`; see
+`config/nodes.example.json` for the complete shape.
+
 ## Local Debug DARs
 
 The debugger can prefer local source-mapped DARs before falling back to the

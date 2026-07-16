@@ -66,6 +66,40 @@ describe('parseNodeConfigFile', () => {
     });
   });
 
+  it('parses self-signed es256 grpc auth settings', () => {
+    const result = parseNodeConfigFile({
+      nodes: [
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_with_grpc',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+          grpc: {
+            ledgerTarget: 'localhost:5012',
+            ledgerAdminTarget: 'localhost:5013',
+            participantAdminTarget: 'localhost:5014',
+            useTls: false,
+            connectTimeoutMs: 5000,
+            auth: {
+              kind: 'self_signed_es256',
+              sub: 'ledger-api-user',
+              aud: 'https://canton.network.global',
+              privateKeyEnv: 'CANTON_ES256_PRIVATE_JWK',
+            },
+          },
+        },
+      ],
+    });
+
+    expect(result.nodes[0].grpc.auth).toEqual({
+      kind: 'self_signed_es256',
+      sub: 'ledger-api-user',
+      aud: 'https://canton.network.global',
+      privateKeyEnv: 'CANTON_ES256_PRIVATE_JWK',
+    });
+  });
+
   it('rejects a config with no node id', () => {
     expect(() =>
       parseNodeConfigFile({
@@ -164,6 +198,39 @@ describe('parseNodeConfigFile', () => {
       }),
     ).toThrow(/audience/i);
   });
+
+  it.each(['sub', 'aud', 'privateKeyEnv'] as const)(
+    'rejects an empty self-signed es256 %s setting',
+    (field) => {
+      expect(() =>
+        parseNodeConfigFile({
+          nodes: [
+            {
+              id: 'participant-1',
+              label: 'Participant 1',
+              role: 'participant',
+              mode: 'pqs_with_grpc',
+              pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+              grpc: {
+                ledgerTarget: 'localhost:5012',
+                ledgerAdminTarget: 'localhost:5013',
+                participantAdminTarget: 'localhost:5014',
+                useTls: false,
+                connectTimeoutMs: 5000,
+                auth: {
+                  kind: 'self_signed_es256',
+                  sub: 'ledger-api-user',
+                  aud: 'https://canton.network.global',
+                  privateKeyEnv: 'CANTON_ES256_PRIVATE_JWK',
+                  [field]: '',
+                },
+              },
+            },
+          ],
+        }),
+      ).toThrow(new RegExp(field));
+    },
+  );
 
   it('requires separate ledger admin and participant admin targets for grpc-enabled nodes', () => {
     expect(() =>

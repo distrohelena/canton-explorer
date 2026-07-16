@@ -24,10 +24,10 @@
         "useTls": false,
         "connectTimeoutMs": 5000,
         "auth": {
-          "kind": "shared_secret_jwt",
-          "user": "ledger-api-user",
-          "audience": "https://canton.network.global",
-          "secret": "unsafe"
+          "kind": "self_signed_es256",
+          "sub": "ledger-api-user",
+          "aud": "https://canton.network.global",
+          "privateKeyEnv": "CANTON_ES256_PRIVATE_JWK"
         }
       },
       "polling": {

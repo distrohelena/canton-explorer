@@ -24,6 +24,27 @@ npm run pack:dry-run
 4. Optionally adjust `tokenMetadata.nameKeys` and `tokenMetadata.symbolKeys` in `nodes.local.json` if your token metadata uses non-default keys inside `meta.values`.
 5. Install dependencies with `npm install`.
 
+### gRPC authentication
+
+The example uses self-signed ES256 JWT authentication. Set the environment
+variable named by `nodes[].grpc.auth.privateKeyEnv` to the base64url encoding of
+the JSON private P-256 JWK. The JWT contains the configured `sub` and `aud`
+claims and is sent through the SDK's bearer-token gRPC auth provider.
+
+The auth block has this shape:
+
+```json
+{
+  "kind": "self_signed_es256",
+  "sub": "ledger-api-user",
+  "aud": "https://canton.network.global",
+  "privateKeyEnv": "CANTON_ES256_PRIVATE_JWK"
+}
+```
+
+The existing `shared_secret_jwt` auth mode remains supported for deployments
+that use an HMAC-signed token.
+
 ### PQS schema setup
 
 The explorer expects the `__...` PQS tables such as `__contracts`, `__transactions`, and `__packages`.

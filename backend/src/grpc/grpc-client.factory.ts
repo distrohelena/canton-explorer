@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { NodeConfig } from '../config/node-config.schema';
 import { createSharedSecretJwt } from './shared-secret-jwt';
+import { createSelfSignedEs256Jwt } from './self-signed-es256-jwt';
 
 type AuthProvider = { getHeadersAsync(): Promise<Record<string, string>> };
 
@@ -335,6 +336,22 @@ export class GrpcClientFactory {
             secret: node.grpc.auth.secret,
           }),
         );
+      case 'self_signed_es256': {
+        const privateKeyJwkBase64Url = process.env[node.grpc.auth.privateKeyEnv];
+        if (!privateKeyJwkBase64Url) {
+          throw new Error(
+            `Missing ES256 private JWK environment variable: ${node.grpc.auth.privateKeyEnv}`,
+          );
+        }
+
+        return new sdk.BearerTokenAuthProvider(
+          createSelfSignedEs256Jwt({
+            sub: node.grpc.auth.sub,
+            aud: node.grpc.auth.aud,
+            privateKeyJwkBase64Url,
+          }),
+        );
+      }
       default:
         return undefined;
     }

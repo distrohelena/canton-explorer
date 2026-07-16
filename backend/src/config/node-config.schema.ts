@@ -32,6 +32,14 @@ const grpcAuthSchema = z
         secret: z.string().min(1),
       })
       .strict(),
+    z
+      .object({
+        kind: z.literal('self_signed_es256'),
+        sub: z.string().min(1),
+        aud: z.string().min(1),
+        privateKeyEnv: z.string().min(1),
+      })
+      .strict(),
   ])
   .optional();
 

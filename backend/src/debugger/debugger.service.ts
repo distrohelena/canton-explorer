@@ -1015,7 +1015,14 @@ export class DebuggerService {
     canReadAsAnyParty: boolean;
   }> {
     const authConfig = node.grpc.auth;
-    if (!authConfig || authConfig.kind !== 'shared_secret_jwt') {
+    const userId =
+      authConfig?.kind === 'shared_secret_jwt'
+        ? authConfig.user
+        : authConfig?.kind === 'self_signed_es256'
+          ? authConfig.sub
+          : undefined;
+
+    if (!userId) {
       return {
         parties: [],
         canReadAsAnyParty: false,
@@ -1023,7 +1030,7 @@ export class DebuggerService {
     }
 
     const response = await client.userManagementService.listUserRightsAsync({
-      userId: authConfig.user,
+      userId,
     });
 
     const rights = response.rights ?? [];

@@ -312,4 +312,44 @@ describe('DebuggerService', () => {
       new BadRequestException('Debug offset is not fully visible in any connected gRPC node.'),
     );
   });
+
+  it('uses the self-signed es256 subject when resolving debugger rights', async () => {
+    const service = new DebuggerService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const listUserRightsAsync = jest.fn().mockResolvedValue({
+      rights: [
+        { type: 'canReadAs', party: 'Alice' },
+        { type: 'canReadAsAnyParty' },
+      ],
+    });
+
+    const result = await (
+      service as never as {
+        fetchGrantedReplayAccess: (
+          node: unknown,
+          client: unknown,
+        ) => Promise<{ parties: string[]; canReadAsAnyParty: boolean }>;
+      }
+    ).fetchGrantedReplayAccess(
+      {
+        grpc: {
+          auth: {
+            kind: 'self_signed_es256',
+            sub: 'ledger-api-user',
+            aud: 'https://canton.network.global',
+            privateKeyEnv: 'CANTON_ES256_PRIVATE_JWK',
+          },
+        },
+      },
+      { userManagementService: { listUserRightsAsync } },
+    );
+
+    expect(listUserRightsAsync).toHaveBeenCalledWith({ userId: 'ledger-api-user' });
+    expect(result).toEqual({ parties: ['Alice'], canReadAsAnyParty: true });
+  });
 });
