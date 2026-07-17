@@ -352,6 +352,14 @@ export class GrpcClientFactory {
           }),
         );
       }
+      case 'static_token': {
+        const token = process.env[node.grpc.auth.tokenEnv];
+        if (!token) {
+          throw new Error(`Missing static token environment variable: ${node.grpc.auth.tokenEnv}`);
+        }
+
+        return new sdk.BearerTokenAuthProvider(token);
+      }
       default:
         return undefined;
     }
