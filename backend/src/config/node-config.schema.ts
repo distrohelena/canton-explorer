@@ -40,6 +40,12 @@ const grpcAuthSchema = z
         privateKeyEnv: z.string().min(1),
       })
       .strict(),
+    z
+      .object({
+        kind: z.literal('static_token'),
+        tokenEnv: z.string().min(1).refine((value) => value.trim().length > 0),
+      })
+      .strict(),
   ])
   .optional();
 

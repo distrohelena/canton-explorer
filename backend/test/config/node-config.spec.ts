@@ -100,6 +100,69 @@ describe('parseNodeConfigFile', () => {
     });
   });
 
+  it('parses static-token grpc auth settings', () => {
+    const result = parseNodeConfigFile({
+      nodes: [
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_with_grpc',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+          grpc: {
+            ledgerTarget: 'localhost:5012',
+            ledgerAdminTarget: 'localhost:5013',
+            participantAdminTarget: 'localhost:5014',
+            useTls: false,
+            connectTimeoutMs: 5000,
+            auth: {
+              kind: 'static_token',
+              tokenEnv: 'CANTON_STATIC_TOKEN',
+            },
+          },
+        },
+      ],
+    });
+
+    expect(result.nodes[0].grpc.auth).toEqual({
+      kind: 'static_token',
+      tokenEnv: 'CANTON_STATIC_TOKEN',
+    });
+  });
+
+  it.each([
+    ['missing tokenEnv', {}],
+    ['non-string tokenEnv', { tokenEnv: 123 }],
+    ['empty tokenEnv', { tokenEnv: '' }],
+    ['whitespace-only tokenEnv', { tokenEnv: '   ' }],
+    ['unknown token field', { tokenEnv: 'CANTON_STATIC_TOKEN', token: 'unsafe' }],
+  ])('rejects static-token auth with %s', (_caseName, authFields) => {
+    expect(() =>
+      parseNodeConfigFile({
+        nodes: [
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            role: 'participant',
+            mode: 'pqs_with_grpc',
+            pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+            grpc: {
+              ledgerTarget: 'localhost:5012',
+              ledgerAdminTarget: 'localhost:5013',
+              participantAdminTarget: 'localhost:5014',
+              useTls: false,
+              connectTimeoutMs: 5000,
+              auth: {
+                kind: 'static_token',
+                ...authFields,
+              },
+            },
+          },
+        ],
+      }),
+    ).toThrow(/token/i);
+  });
+
   it('rejects a config with no node id', () => {
     expect(() =>
       parseNodeConfigFile({
