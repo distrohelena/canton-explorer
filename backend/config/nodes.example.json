@@ -24,10 +24,8 @@
         "useTls": false,
         "connectTimeoutMs": 5000,
         "auth": {
-          "kind": "self_signed_es256",
-          "sub": "ledger-api-user",
-          "aud": "https://canton.network.global",
-          "privateKeyEnv": "CANTON_ES256_PRIVATE_JWK"
+          "kind": "static_token",
+          "tokenEnv": "CANTON_STATIC_TOKEN"
         }
       },
       "polling": {

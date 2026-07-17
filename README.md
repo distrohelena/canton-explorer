@@ -26,10 +26,27 @@ npm run pack:dry-run
 
 ### gRPC authentication
 
-The example uses self-signed ES256 JWT authentication. Set the environment
+The example uses a pre-issued static bearer token. Set the environment
+variable named by `nodes[].grpc.auth.tokenEnv` to the complete token. The
+token is passed unchanged to the SDK's bearer-token gRPC auth provider; keep it
+in deployment secret management rather than in the node configuration.
+
+The static-token auth block has this shape:
+
+```json
+{
+  "kind": "static_token",
+  "tokenEnv": "CANTON_STATIC_TOKEN"
+}
+```
+
+Static tokens are opaque and do not configure a Canton user for debugger
+rights lookup. The debugger therefore does not infer identity from the token.
+
+Self-signed ES256 JWT authentication remains supported. Set the environment
 variable named by `nodes[].grpc.auth.privateKeyEnv` to the base64url encoding of
-the JSON private P-256 JWK. The JWT contains the configured `sub` and `aud`
-claims and is sent through the SDK's bearer-token gRPC auth provider.
+the JSON private P-256 JWK. Its JWT contains the configured `sub` and `aud`
+claims.
 
 The auth block has this shape:
 
@@ -42,8 +59,8 @@ The auth block has this shape:
 }
 ```
 
-The existing `shared_secret_jwt` auth mode remains supported for deployments
-that use an HMAC-signed token.
+The existing `shared_secret_jwt` auth mode also remains supported for
+deployments that use an HMAC-signed token.
 
 ### PQS schema setup
 
