@@ -352,4 +352,39 @@ describe('DebuggerService', () => {
     expect(listUserRightsAsync).toHaveBeenCalledWith({ userId: 'ledger-api-user' });
     expect(result).toEqual({ parties: ['Alice'], canReadAsAnyParty: true });
   });
+
+  it('does not resolve debugger rights for a static token', async () => {
+    const service = new DebuggerService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const listUserRightsAsync = jest.fn().mockResolvedValue({
+      rights: [{ type: 'canReadAsAnyParty' }],
+    });
+
+    const result = await (
+      service as never as {
+        fetchGrantedReplayAccess: (
+          node: unknown,
+          client: unknown,
+        ) => Promise<{ parties: string[]; canReadAsAnyParty: boolean }>;
+      }
+    ).fetchGrantedReplayAccess(
+      {
+        grpc: {
+          auth: {
+            kind: 'static_token',
+            tokenEnv: 'CANTON_STATIC_TOKEN',
+          },
+        },
+      },
+      { userManagementService: { listUserRightsAsync } },
+    );
+
+    expect(listUserRightsAsync).not.toHaveBeenCalled();
+    expect(result).toEqual({ parties: [], canReadAsAnyParty: false });
+  });
 });
