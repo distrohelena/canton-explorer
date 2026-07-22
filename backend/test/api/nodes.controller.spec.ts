@@ -144,10 +144,7 @@ const typedNodeContractsFixture = {
 } satisfies NodeContractsResponse;
 
 const typedTemplateFilterFixture = {
-  templates: [
-    { templateId: 'Main:Asset' },
-    { templateId: 'Main:Wallet' },
-  ],
+  templates: [{ templateId: 'Main:Asset' }, { templateId: 'Main:Wallet' }],
 } satisfies TemplateFilterResponse;
 
 const typedNodeParticipantStatusFixture = {
@@ -537,6 +534,7 @@ describe('NodesController', () => {
     fetchTokenDetail: jest.Mock;
     fetchTokenHolders: jest.Mock;
     fetchGlobalRecentUpdates: jest.Mock;
+    fetchGlobalContracts: jest.Mock;
     fetchRecentUpdates: jest.Mock;
     fetchUpdateDetail: jest.Mock;
     fetchContractDetail: jest.Mock;
@@ -553,11 +551,14 @@ describe('NodesController', () => {
     fetchNamespaceParties: jest.Mock;
     fetchPartyUpdates: jest.Mock;
     fetchPartyContracts: jest.Mock;
+    fetchTrafficPurchases: jest.Mock;
+    fetchGlobalTrafficPurchases: jest.Mock;
   };
   let grpcOperationsService: {
     listLocalParties: jest.Mock;
     listKnownPartyFingerprints: jest.Mock;
     fetchParticipantStatus: jest.Mock;
+    fetchTrafficStates: jest.Mock;
   };
   let namespaceFingerprintService: {
     computeFromInput: jest.Mock;
@@ -593,6 +594,12 @@ describe('NodesController', () => {
             parties: ['Alice'],
           },
         ],
+      }),
+      fetchGlobalContracts: jest.fn().mockResolvedValue({
+        limit: 25,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: [],
       }),
       fetchRecentUpdates: jest.fn().mockResolvedValue({
         nodeId: 'participant-1',
@@ -633,8 +640,7 @@ describe('NodesController', () => {
           },
         ],
         meta: {
-          update_id:
-            '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           record_time: 1782907200000000,
           event_offset: '0000000000000001',
         },
@@ -717,6 +723,21 @@ describe('NodesController', () => {
         nextAfter: null,
         contracts: typedPartyDetailFixture.recentContracts,
       }),
+      fetchTrafficPurchases: jest.fn().mockResolvedValue({
+        nodeId: 'participant-2',
+        label: 'Participant 2',
+        limit: 25,
+        nextBefore: null,
+        purchases: [],
+      }),
+      fetchGlobalTrafficPurchases: jest.fn().mockResolvedValue({
+        limit: 10,
+        nextBefore: null,
+        nextAfter: null,
+        purchases: [],
+        current: [],
+        historyStatus: [],
+      }),
     };
     grpcOperationsService = {
       listLocalParties: jest.fn().mockResolvedValue(['LocalAlice', 'LocalBob']),
@@ -725,6 +746,7 @@ describe('NodesController', () => {
         participantStatus: typedNodeParticipantStatusFixture.participantStatus,
         notInitialized: null,
       }),
+      fetchTrafficStates: jest.fn().mockResolvedValue([]),
     };
     namespaceFingerprintService = {
       computeFromInput: jest.fn().mockResolvedValue('1220alice'),
@@ -875,7 +897,9 @@ describe('NodesController', () => {
   });
 
   it('returns 404 for an unknown package name', async () => {
-    pqsSummaryService.fetchPackagesByName.mockRejectedValueOnce(new Error('Package family not found'));
+    pqsSummaryService.fetchPackagesByName.mockRejectedValueOnce(
+      new Error('Package family not found'),
+    );
 
     await expect(controller.listPackagesByName('missing-package')).rejects.toBeInstanceOf(
       NotFoundException,
@@ -920,6 +944,27 @@ describe('NodesController', () => {
       },
     );
     expect(response).toEqual(typedNodeContractsFixture);
+  });
+
+  it('passes selected global contract nodes through to the PQS summary service', async () => {
+    await controller.listGlobalContracts('10', undefined, undefined, ['participant-2']);
+
+    expect(pqsSummaryService.fetchGlobalContracts).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      10,
+      {
+        before: undefined,
+        after: undefined,
+        nodeIds: ['participant-2'],
+        parties: undefined,
+        templates: undefined,
+        partyMode: undefined,
+        hideSplice: undefined,
+      },
+    );
   });
 
   it('returns filtered active contracts for a known node id', async () => {
@@ -973,6 +1018,130 @@ describe('NodesController', () => {
       expect.objectContaining({ id: 'participant-2', label: 'Participant 2' }),
     );
     expect(response).toEqual(typedNodeParticipantStatusFixture);
+  });
+
+  it('returns current traffic state and PQS purchase history for a known node', async () => {
+    grpcOperationsService.fetchTrafficStates.mockResolvedValueOnce([
+      {
+        synchronizerId: 'global-sync',
+        extraTrafficPurchased: '1000000',
+        extraTrafficConsumed: '250000',
+        baseTrafficRemainder: '50000',
+        lastConsumedCost: '1200',
+        timestamp: '2026-07-21T12:00:00.000Z',
+        serial: 7,
+      },
+    ]);
+    pqsSummaryService.fetchTrafficPurchases.mockResolvedValueOnce({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      limit: 10,
+      nextBefore: null,
+      purchases: [
+        {
+          updateId: 'update-traffic-1',
+          eventOffset: '42',
+          recordTime: '2026-07-21T12:00:00.000Z',
+          purchasedTraffic: '1000000',
+          amuletPaid: '12.5000000000',
+        },
+      ],
+    });
+
+    const response = await (
+      controller as unknown as {
+        getNodeTrafficPurchases: (id: string, limit?: string, before?: string) => Promise<unknown>;
+      }
+    ).getNodeTrafficPurchases('participant-2', '10');
+
+    expect(response).toEqual({
+      nodeId: 'participant-2',
+      label: 'Participant 2',
+      mode: 'pqs_with_grpc',
+      current: {
+        status: 'ok',
+        states: [
+          {
+            synchronizerId: 'global-sync',
+            extraTrafficPurchased: '1000000',
+            extraTrafficConsumed: '250000',
+            baseTrafficRemainder: '50000',
+            lastConsumedCost: '1200',
+            timestamp: '2026-07-21T12:00:00.000Z',
+            serial: 7,
+          },
+        ],
+        error: null,
+      },
+      history: {
+        status: 'ok',
+        limit: 10,
+        nextBefore: null,
+        purchases: [
+          {
+            updateId: 'update-traffic-1',
+            eventOffset: '42',
+            recordTime: '2026-07-21T12:00:00.000Z',
+            purchasedTraffic: '1000000',
+            amuletPaid: '12.5000000000',
+          },
+        ],
+        error: null,
+      },
+    });
+    expect(grpcOperationsService.fetchTrafficStates).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+    );
+    expect(pqsSummaryService.fetchTrafficPurchases).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+      { limit: 10, before: undefined },
+    );
+  });
+
+  it('forwards global traffic purchase filters and selected nodes', async () => {
+    const response = await (
+      controller as unknown as {
+        listGlobalTrafficPurchases: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).listGlobalTrafficPurchases(
+      '10',
+      'before-cursor',
+      undefined,
+      ['participant-1', 'participant-2'],
+      '2026-07-01',
+      '2026-07-31',
+      '100',
+      undefined,
+      '1',
+      '20',
+    );
+
+    expect(pqsSummaryService.fetchGlobalTrafficPurchases).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'participant-1' }),
+        expect.objectContaining({ id: 'participant-2' }),
+      ]),
+      10,
+      {
+        before: 'before-cursor',
+        after: undefined,
+        nodeIds: ['participant-1', 'participant-2'],
+        minDate: '2026-07-01',
+        maxDate: '2026-07-31',
+        purchasedMin: '100',
+        purchasedMax: undefined,
+        paidMin: '1',
+        paidMax: '20',
+      },
+    );
+    expect(response).toEqual({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      purchases: [],
+      current: [],
+      historyStatus: [],
+    });
   });
 
   it('returns 404 when node package lookup uses an unknown node id', async () => {
@@ -1113,7 +1282,12 @@ describe('NodesController', () => {
 
   it('returns party fingerprints for a single known gRPC node id', async () => {
     const maybeController = controller as {
-      listNodePartyFingerprints?: (id: string, limit?: string, before?: string, after?: string) => Promise<{
+      listNodePartyFingerprints?: (
+        id: string,
+        limit?: string,
+        before?: string,
+        after?: string,
+      ) => Promise<{
         nodeId: string;
         label: string;
         mode: string;
@@ -1143,7 +1317,9 @@ describe('NodesController', () => {
   });
 
   it('falls back to PQS-backed party fingerprints when gRPC lookup fails', async () => {
-    grpcOperationsService.listKnownPartyFingerprints.mockRejectedValueOnce(new Error('grpc failed'));
+    grpcOperationsService.listKnownPartyFingerprints.mockRejectedValueOnce(
+      new Error('grpc failed'),
+    );
     pqsSummaryService.fetchActiveParties.mockResolvedValueOnce({
       nodes: [
         {
@@ -1156,7 +1332,12 @@ describe('NodesController', () => {
     });
 
     const maybeController = controller as {
-      listNodePartyFingerprints?: (id: string, limit?: string, before?: string, after?: string) => Promise<{
+      listNodePartyFingerprints?: (
+        id: string,
+        limit?: string,
+        before?: string,
+        after?: string,
+      ) => Promise<{
         nodeId: string;
         label: string;
         mode: string;
@@ -1288,10 +1469,7 @@ describe('NodesController', () => {
   it('returns party detail for a known party id', async () => {
     const response = await controller.getPartyDetail('Alice');
 
-    expect(pqsSummaryService.fetchPartyDetail).toHaveBeenCalledWith(
-      expect.any(Array),
-      'Alice',
-    );
+    expect(pqsSummaryService.fetchPartyDetail).toHaveBeenCalledWith(expect.any(Array), 'Alice');
     expect(response).toEqual(typedPartyDetailFixture);
   });
 
@@ -1358,18 +1536,14 @@ describe('NodesController', () => {
       'true',
     );
 
-    expect(pqsSummaryService.fetchPartyUpdates).toHaveBeenCalledWith(
-      expect.any(Array),
-      'Alice',
-      {
-        limit: 25,
-        before: 'cursor-before-0',
-        after: undefined,
-        templates: ['Main:Asset'],
-        partyMode: undefined,
-        hideSplice: true,
-      },
-    );
+    expect(pqsSummaryService.fetchPartyUpdates).toHaveBeenCalledWith(expect.any(Array), 'Alice', {
+      limit: 25,
+      before: 'cursor-before-0',
+      after: undefined,
+      templates: ['Main:Asset'],
+      partyMode: undefined,
+      hideSplice: true,
+    });
   });
 
   it('returns party-scoped contracts for a known party id', async () => {
@@ -1386,17 +1560,13 @@ describe('NodesController', () => {
       }
     ).listPartyContracts('Alice', '25', 'cursor-contract-0', undefined, 'Main:Asset', 'true');
 
-    expect(pqsSummaryService.fetchPartyContracts).toHaveBeenCalledWith(
-      expect.any(Array),
-      'Alice',
-      {
-        limit: 25,
-        before: 'cursor-contract-0',
-        after: undefined,
-        templates: ['Main:Asset'],
-        hideSplice: true,
-      },
-    );
+    expect(pqsSummaryService.fetchPartyContracts).toHaveBeenCalledWith(expect.any(Array), 'Alice', {
+      limit: 25,
+      before: 'cursor-contract-0',
+      after: undefined,
+      templates: ['Main:Asset'],
+      hideSplice: true,
+    });
   });
 
   it('returns 404 for an unknown party id', async () => {
@@ -1425,15 +1595,7 @@ describe('NodesController', () => {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 20, 0, 0, 0, 0),
     );
     const oldTimestamp = new Date(
-      Date.UTC(
-        oldDay.getUTCFullYear(),
-        oldDay.getUTCMonth(),
-        oldDay.getUTCDate(),
-        12,
-        0,
-        0,
-        0,
-      ),
+      Date.UTC(oldDay.getUTCFullYear(), oldDay.getUTCMonth(), oldDay.getUTCDate(), 12, 0, 0, 0),
     ).toISOString();
     const staleTimestamp = new Date(
       Date.UTC(
@@ -1528,6 +1690,7 @@ describe('NodesController', () => {
         {
           nodeId: 'participant-1',
           label: 'Participant 1',
+          mode: 'pqs_only',
           status: 'healthy',
           latestActiveContractCount: 12,
           samples: [
@@ -1736,11 +1899,7 @@ describe('NodesController', () => {
   it('passes token transfer pagination cursors through to the PQS summary service', async () => {
     await (
       controller as unknown as {
-        listTokenTransfers: (
-          limit?: string,
-          before?: string,
-          after?: string,
-        ) => Promise<unknown>;
+        listTokenTransfers: (limit?: string, before?: string, after?: string) => Promise<unknown>;
       }
     ).listTokenTransfers('25', 'token-cursor-before-1', 'token-cursor-after-1');
 
@@ -1799,7 +1958,16 @@ describe('NodesController', () => {
           amountLt?: string,
         ) => Promise<unknown>;
       }
-    ).listTokenTransfers('25', undefined, undefined, undefined, undefined, undefined, '10.5', '100.0');
+    ).listTokenTransfers(
+      '25',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '10.5',
+      '100.0',
+    );
 
     expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -1877,7 +2045,12 @@ describe('NodesController', () => {
           after?: string,
         ) => Promise<unknown>;
       }
-    ).listTransfersByToken('validator-license', '25', 'token-cursor-before-2', 'token-cursor-after-2');
+    ).listTransfersByToken(
+      'validator-license',
+      '25',
+      'token-cursor-before-2',
+      'token-cursor-after-2',
+    );
 
     expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -1906,7 +2079,10 @@ describe('NodesController', () => {
           toParty?: string | string[],
         ) => Promise<unknown>;
       }
-    ).listTransfersByToken('validator-license', '25', undefined, undefined, 'Issuer', ['Alice', 'Bob']);
+    ).listTransfersByToken('validator-license', '25', undefined, undefined, 'Issuer', [
+      'Alice',
+      'Bob',
+    ]);
 
     expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -1984,15 +2160,10 @@ describe('NodesController', () => {
           movementType?: string | string[],
         ) => Promise<unknown>;
       }
-    ).listTransfersByToken(
-      'validator-license',
-      '25',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      ['Transfer', 'Mint'],
-    );
+    ).listTransfersByToken('validator-license', '25', undefined, undefined, undefined, undefined, [
+      'Transfer',
+      'Mint',
+    ]);
 
     expect(pqsSummaryService.fetchTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -2034,14 +2205,19 @@ describe('NodesController', () => {
   it('returns token holders by token id', async () => {
     const response = await (
       controller as unknown as {
-        listTokenHolders: (tokenId: string, limit?: string, before?: string, after?: string) => Promise<unknown>;
+        listTokenHolders: (
+          tokenId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<unknown>;
       }
     ).listTokenHolders('validator-license');
 
     expect(pqsSummaryService.fetchTokenHolders).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: 'participant-1' }),
-      expect.objectContaining({ id: 'participant-2' }),
+        expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
       25,
@@ -2056,7 +2232,12 @@ describe('NodesController', () => {
   it('passes token holder cursors through to the PQS summary service', async () => {
     await (
       controller as unknown as {
-        listTokenHolders: (tokenId: string, limit?: string, before?: string, after?: string) => Promise<unknown>;
+        listTokenHolders: (
+          tokenId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<unknown>;
       }
     ).listTokenHolders('validator-license', '25', 'holders-before-1', 'holders-after-1');
 
@@ -2163,10 +2344,7 @@ describe('NodesController', () => {
       controller as unknown as {
         getNodeUpdateDetail: (id: string, updateId: string) => Promise<unknown>;
       }
-      ).getNodeUpdateDetail(
-      'participant-1',
-      '0000000000000001',
-    );
+    ).getNodeUpdateDetail('participant-1', '0000000000000001');
 
     expect(pqsSummaryService.fetchUpdateDetail).toHaveBeenCalledWith(
       expect.objectContaining({

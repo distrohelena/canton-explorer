@@ -5,6 +5,7 @@ const props = withDefaults(
   defineProps<{
     advancedFilterExpanded: boolean;
     advancedFilterControls?: string;
+    advancedFilterLabel?: string;
     newerDisabled: boolean;
     olderDisabled: boolean;
     pageSize: number;
@@ -14,6 +15,7 @@ const props = withDefaults(
   {
     pageSizeOptions: () => PAGE_SIZE_OPTIONS,
     pageSizeAriaLabel: 'Items per page',
+    advancedFilterLabel: 'Advanced Filter',
   },
 );
 
@@ -43,7 +45,7 @@ function handlePageSizeChange(event: Event) {
       :aria-controls="advancedFilterControls"
       @click="$emit('toggleAdvancedFilter')"
     >
-      Advanced Filter
+      {{ props.advancedFilterLabel }}
     </button>
     <label class="node-updates__page-size">
       <span class="node-updates__page-size-label">Show</span>

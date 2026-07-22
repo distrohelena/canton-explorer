@@ -1,4 +1,4 @@
-import type { NodeStatus } from './nodes';
+import type { NodeMode, NodeStatus } from './nodes';
 
 export interface ActivitySample {
   timestamp: string;
@@ -10,6 +10,7 @@ export interface ActivitySample {
 export interface ActivitySeries {
   nodeId: string;
   label: string;
+  mode?: NodeMode;
   status: NodeStatus;
   latestActiveContractCount: number;
   samples: ActivitySample[];

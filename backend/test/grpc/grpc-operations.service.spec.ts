@@ -60,6 +60,48 @@ describe('GrpcOperationsService', () => {
     expect(result.servingStatus).toBe('SERVING');
   });
 
+  it('reads traffic state for every connected synchronizer', async () => {
+    const trafficControlStateAsync = jest.fn().mockResolvedValue({
+      trafficState: {
+        extraTrafficPurchased: '1000000',
+        extraTrafficConsumed: '250000',
+        baseTrafficRemainder: '50000',
+        lastConsumedCost: '1200',
+        timestamp: '2026-07-21T12:00:00.000Z',
+        serial: 7,
+      },
+    });
+    const service = new GrpcOperationsService({
+      create: () => ({
+        participantStatusService: {
+          getParticipantStatusAsync: jest.fn().mockResolvedValue({
+            status: {
+              connectedSynchronizers: [
+                { physicalSynchronizerId: 'global-sync', health: 'healthy' },
+              ],
+            },
+          }),
+        },
+        trafficControlService: { trafficControlStateAsync },
+      }),
+    } as never);
+
+    await expect(service.fetchTrafficStates(grpcNode)).resolves.toEqual([
+      {
+        synchronizerId: 'global-sync',
+        extraTrafficPurchased: '1000000',
+        extraTrafficConsumed: '250000',
+        baseTrafficRemainder: '50000',
+        lastConsumedCost: '1200',
+        timestamp: '2026-07-21T12:00:00.000Z',
+        serial: 7,
+      },
+    ]);
+    expect(trafficControlStateAsync).toHaveBeenCalledWith({
+      synchronizerId: 'global-sync',
+    });
+  });
+
   it('lists local parties through the SDK and filters out non-local entries', async () => {
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
     const service = new GrpcOperationsService({
@@ -75,9 +117,7 @@ describe('GrpcOperationsService', () => {
               nextPageToken: 'next-page',
             })
             .mockResolvedValueOnce({
-              partyDetails: [
-                { party: 'Carol', isLocal: true },
-              ],
+              partyDetails: [{ party: 'Carol', isLocal: true }],
             }),
         },
         disposeAsync,
@@ -142,7 +182,10 @@ describe('GrpcOperationsService', () => {
                                           oneofKind: 'optional',
                                           optional: {
                                             value: {
-                                              sum: { oneofKind: 'party', party: 'Alice' },
+                                              sum: {
+                                                oneofKind: 'party',
+                                                party: 'Alice',
+                                              },
                                             },
                                           },
                                         },
@@ -163,13 +206,19 @@ describe('GrpcOperationsService', () => {
                                     {
                                       label: 'admin',
                                       value: {
-                                        sum: { oneofKind: 'party', party: 'RegistryAdmin' },
+                                        sum: {
+                                          oneofKind: 'party',
+                                          party: 'RegistryAdmin',
+                                        },
                                       },
                                     },
                                     {
                                       label: 'id',
                                       value: {
-                                        sum: { oneofKind: 'text', text: 'USDCx-SHARE' },
+                                        sum: {
+                                          oneofKind: 'text',
+                                          text: 'USDCx-SHARE',
+                                        },
                                       },
                                     },
                                   ],
@@ -179,7 +228,12 @@ describe('GrpcOperationsService', () => {
                           },
                           {
                             label: 'amount',
-                            value: { sum: { oneofKind: 'numeric', numeric: '55.0000000000' } },
+                            value: {
+                              sum: {
+                                oneofKind: 'numeric',
+                                numeric: '55.0000000000',
+                              },
+                            },
                           },
                           {
                             label: 'meta',
@@ -333,7 +387,9 @@ describe('GrpcOperationsService', () => {
                             fields: [
                               {
                                 label: 'owner',
-                                value: { sum: { oneofKind: 'party', party: 'Alice' } },
+                                value: {
+                                  sum: { oneofKind: 'party', party: 'Alice' },
+                                },
                               },
                             ],
                           },
@@ -349,11 +405,15 @@ describe('GrpcOperationsService', () => {
                             fields: [
                               {
                                 label: 'admin',
-                                value: { sum: { oneofKind: 'party', party: 'DSO' } },
+                                value: {
+                                  sum: { oneofKind: 'party', party: 'DSO' },
+                                },
                               },
                               {
                                 label: 'id',
-                                value: { sum: { oneofKind: 'text', text: 'Amulet' } },
+                                value: {
+                                  sum: { oneofKind: 'text', text: 'Amulet' },
+                                },
                               },
                             ],
                           },
@@ -362,7 +422,9 @@ describe('GrpcOperationsService', () => {
                     },
                     {
                       label: 'amount',
-                      value: { sum: { oneofKind: 'numeric', numeric: '42.0000000000' } },
+                      value: {
+                        sum: { oneofKind: 'numeric', numeric: '42.0000000000' },
+                      },
                     },
                   ],
                 },
@@ -440,7 +502,10 @@ describe('GrpcOperationsService', () => {
                                     oneofKind: 'optional',
                                     optional: {
                                       value: {
-                                        sum: { oneofKind: 'party', party: 'Alice' },
+                                        sum: {
+                                          oneofKind: 'party',
+                                          party: 'Alice',
+                                        },
                                       },
                                     },
                                   },
@@ -461,13 +526,19 @@ describe('GrpcOperationsService', () => {
                               {
                                 label: 'admin',
                                 value: {
-                                  sum: { oneofKind: 'party', party: 'RegistryAdmin' },
+                                  sum: {
+                                    oneofKind: 'party',
+                                    party: 'RegistryAdmin',
+                                  },
                                 },
                               },
                               {
                                 label: 'id',
                                 value: {
-                                  sum: { oneofKind: 'text', text: 'USDCx-SHARE' },
+                                  sum: {
+                                    oneofKind: 'text',
+                                    text: 'USDCx-SHARE',
+                                  },
                                 },
                               },
                             ],
@@ -586,7 +657,10 @@ describe('GrpcOperationsService', () => {
                                     oneofKind: 'optional',
                                     optional: {
                                       value: {
-                                        sum: { oneofKind: 'party', party: 'Alice' },
+                                        sum: {
+                                          oneofKind: 'party',
+                                          party: 'Alice',
+                                        },
                                       },
                                     },
                                   },
@@ -607,13 +681,19 @@ describe('GrpcOperationsService', () => {
                               {
                                 label: 'admin',
                                 value: {
-                                  sum: { oneofKind: 'party', party: 'RegistryAdmin' },
+                                  sum: {
+                                    oneofKind: 'party',
+                                    party: 'RegistryAdmin',
+                                  },
                                 },
                               },
                               {
                                 label: 'id',
                                 value: {
-                                  sum: { oneofKind: 'text', text: 'USDCx-SHARE' },
+                                  sum: {
+                                    oneofKind: 'text',
+                                    text: 'USDCx-SHARE',
+                                  },
                                 },
                               },
                             ],
@@ -770,10 +850,7 @@ describe('GrpcOperationsService', () => {
     } as never);
     const result = await (
       service as GrpcOperationsService & {
-        fetchPartyTopology: (
-          node: typeof grpcNode,
-          partyId: string,
-        ) => Promise<unknown>;
+        fetchPartyTopology: (node: typeof grpcNode, partyId: string) => Promise<unknown>;
       }
     ).fetchPartyTopology(grpcNode, 'Alice');
 
@@ -885,10 +962,12 @@ describe('GrpcOperationsService', () => {
       public readonly storeId?: FakeTopologyStoreId;
       public readonly headState?: boolean;
 
-      public constructor(init: {
-        storeId?: FakeTopologyStoreId;
-        headState?: boolean;
-      } = {}) {
+      public constructor(
+        init: {
+          storeId?: FakeTopologyStoreId;
+          headState?: boolean;
+        } = {},
+      ) {
         this.storeId = init.storeId;
         this.headState = init.headState;
       }
@@ -898,17 +977,21 @@ describe('GrpcOperationsService', () => {
       public readonly filterParty?: string;
       public readonly baseQuery?: FakeTopologyBaseQuery;
 
-      public constructor(init: {
-        filterParty?: string;
-        baseQuery?: FakeTopologyBaseQuery;
-      } = {}) {
+      public constructor(
+        init: {
+          filterParty?: string;
+          baseQuery?: FakeTopologyBaseQuery;
+        } = {},
+      ) {
         this.filterParty = init.filterParty;
         this.baseQuery = init.baseQuery;
       }
     }
 
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
-    const computePublicKeyFingerprint = jest.fn().mockReturnValue('computed-raw-signing-fingerprint');
+    const computePublicKeyFingerprint = jest
+      .fn()
+      .mockReturnValue('computed-raw-signing-fingerprint');
     const listPartiesAsync = jest.fn().mockResolvedValue({
       results: [],
     });
@@ -998,10 +1081,7 @@ describe('GrpcOperationsService', () => {
 
     const result = await (
       service as GrpcOperationsService & {
-        fetchPartyTopology: (
-          node: typeof grpcNode,
-          partyId: string,
-        ) => Promise<unknown>;
+        fetchPartyTopology: (node: typeof grpcNode, partyId: string) => Promise<unknown>;
       }
     ).fetchPartyTopology(grpcNode, 'Alice');
 
@@ -1060,10 +1140,7 @@ describe('GrpcOperationsService', () => {
 
     const result = await (
       service as GrpcOperationsService & {
-        fetchPartyTopology: (
-          node: typeof grpcNode,
-          partyId: string,
-        ) => Promise<unknown>;
+        fetchPartyTopology: (node: typeof grpcNode, partyId: string) => Promise<unknown>;
       }
     ).fetchPartyTopology(grpcNode, 'Alice');
 
@@ -1086,10 +1163,7 @@ describe('GrpcOperationsService', () => {
 
     const result = await (
       service as GrpcOperationsService & {
-        fetchPartyTopology: (
-          node: typeof pqsOnlyNode,
-          partyId: string,
-        ) => Promise<unknown>;
+        fetchPartyTopology: (node: typeof pqsOnlyNode, partyId: string) => Promise<unknown>;
       }
     ).fetchPartyTopology(pqsOnlyNode, 'Alice');
 
@@ -1104,7 +1178,6 @@ describe('GrpcOperationsService', () => {
     });
   });
 
-
   it('fetches participant status through the participant status service', async () => {
     const disposeAsync = jest.fn().mockResolvedValue(undefined);
     const service = new GrpcOperationsService({
@@ -1112,26 +1185,26 @@ describe('GrpcOperationsService', () => {
         participantStatusService: {
           getParticipantStatusAsync: jest.fn().mockResolvedValue({
             status: {
-                uid: 'participant-1::1220abc',
-                uptime: { seconds: '3600', nanos: 0 },
-                ports: {
-                  admin: 5012,
-                  ledger: 5011,
+              uid: 'participant-1::1220abc',
+              uptime: { seconds: '3600', nanos: 0 },
+              ports: {
+                admin: 5012,
+                ledger: 5011,
+              },
+              active: true,
+              topologyQueues: {
+                manager: 1,
+                dispatcher: 2,
+                clients: 3,
+              },
+              components: [
+                {
+                  name: 'sync-service',
+                  kind: 'ok',
+                  description: 'running',
                 },
-                active: true,
-                topologyQueues: {
-                  manager: 1,
-                  dispatcher: 2,
-                  clients: 3,
-                },
-                components: [
-                  {
-                    name: 'sync-service',
-                    kind: 'ok',
-                    description: 'running',
-                  },
-                ],
-                version: '3.4.0',
+              ],
+              version: '3.4.0',
               connectedSynchronizers: [
                 {
                   physicalSynchronizerId: 'physical::1220def',
@@ -1152,45 +1225,43 @@ describe('GrpcOperationsService', () => {
 
     const result = await service.fetchParticipantStatus(grpcNode);
 
-    expect(result).toEqual(
-      {
-        participantStatus: {
-          uid: 'participant-1::1220abc',
-          uptime: '3600s',
-          ports: {
-            admin: 5012,
-            ledger: 5011,
-          },
-          active: true,
-          commonStatusActive: true,
-          version: '3.4.0',
-          supportedProtocolVersions: [30, 31],
-          topologyQueues: {
-            manager: 1,
-            dispatcher: 2,
-            clients: 3,
-          },
-          components: [
-            {
-              name: 'sync-service',
-              severity: 'ok',
-              description: 'running',
-            },
-          ],
-          connectedSynchronizers: [
-            {
-              physicalSynchronizerId: 'physical::1220def',
-              health: 'healthy',
-            },
-            {
-              physicalSynchronizerId: null,
-              health: 'unhealthy',
-            },
-          ],
+    expect(result).toEqual({
+      participantStatus: {
+        uid: 'participant-1::1220abc',
+        uptime: '3600s',
+        ports: {
+          admin: 5012,
+          ledger: 5011,
         },
-        notInitialized: null,
+        active: true,
+        commonStatusActive: true,
+        version: '3.4.0',
+        supportedProtocolVersions: [30, 31],
+        topologyQueues: {
+          manager: 1,
+          dispatcher: 2,
+          clients: 3,
+        },
+        components: [
+          {
+            name: 'sync-service',
+            severity: 'ok',
+            description: 'running',
+          },
+        ],
+        connectedSynchronizers: [
+          {
+            physicalSynchronizerId: 'physical::1220def',
+            health: 'healthy',
+          },
+          {
+            physicalSynchronizerId: null,
+            health: 'unhealthy',
+          },
+        ],
       },
-    );
+      notInitialized: null,
+    });
     expect(disposeAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -1226,16 +1297,14 @@ describe('GrpcOperationsService', () => {
       },
     });
 
-    expect(result).toEqual(
-      {
-        participantStatus: null,
-        notInitialized: {
-          active: false,
-          waitingForExternalInput: 'node_topology',
-          version: '3.4.0',
-        },
+    expect(result).toEqual({
+      participantStatus: null,
+      notInitialized: {
+        active: false,
+        waitingForExternalInput: 'node_topology',
+        version: '3.4.0',
       },
-    );
+    });
     expect(disposeAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -1330,11 +1399,13 @@ describe('GrpcOperationsService', () => {
     const service = new GrpcOperationsService({
       create: () => ({
         participantPackageService: {
-          listPackagesAsync: jest.fn().mockRejectedValue(
-            new Error(
-              'Method not found: com.digitalasset.canton.admin.participant.v30.PackageService/ListPackages',
+          listPackagesAsync: jest
+            .fn()
+            .mockRejectedValue(
+              new Error(
+                'Method not found: com.digitalasset.canton.admin.participant.v30.PackageService/ListPackages',
+              ),
             ),
-          ),
         },
         packageService: {
           listPackagesAsync: jest.fn().mockResolvedValue({

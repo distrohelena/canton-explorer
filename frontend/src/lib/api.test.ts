@@ -9,6 +9,7 @@ import {
   fetchTokenTransfers,
   fetchTokenTransferDetail,
   fetchLatestTokenTransfers,
+  fetchLatestContracts,
   fetchNodeActiveParties,
   fetchNodeContracts,
   fetchNodeLocalParties,
@@ -1054,6 +1055,32 @@ describe('fetchNodes', () => {
     );
   });
 
+  it('loads global contracts with repeated node filters from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ limit: 10, nextBefore: null, nextAfter: null, contracts: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchLatestContracts(10, { nodeIds: ['participant-1', 'participant-2'] });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/contracts?node=participant-1&node=participant-2&limit=10',
+    );
+  });
+
+  it('loads no global contracts with an explicit empty node selection', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ limit: 10, nextBefore: null, nextAfter: null, contracts: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchLatestContracts(10, { nodeIds: [] });
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/contracts?node=&limit=10');
+  });
+
   it('loads recent updates for a node from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -1797,5 +1824,45 @@ describe('fetchNodes', () => {
         },
       },
     });
+  });
+
+  it('serializes global traffic purchase node selection and filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        limit: 10,
+        nextBefore: null,
+        nextAfter: null,
+        purchases: [],
+        current: [],
+        historyStatus: [],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchTrafficPurchases = (
+      api as {
+        fetchTrafficPurchases?: (options?: Record<string, unknown>) => Promise<unknown>;
+      }
+    ).fetchTrafficPurchases;
+
+    expect(fetchTrafficPurchases).toBeTypeOf('function');
+
+    await fetchTrafficPurchases?.({
+      limit: 10,
+      nodeIds: ['participant-1', 'participant-2'],
+      minDate: '2026-07-01',
+      maxDate: '2026-07-31',
+      purchasedMin: '100',
+      paidMax: '20',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/traffic-purchases?limit=10&node=participant-1&node=participant-2&minDate=2026-07-01&maxDate=2026-07-31&purchasedMin=100&paidMax=20',
+    );
+
+    fetchMock.mockClear();
+    await fetchTrafficPurchases?.({ nodeIds: [] });
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/traffic-purchases?node=');
   });
 });

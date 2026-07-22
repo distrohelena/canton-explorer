@@ -27,6 +27,12 @@ import type {
   NodeUpdateDetailResponse,
   NodeRecentUpdate,
   NodeRecentUpdatesResponse,
+  NodeTrafficPurchase,
+  NodeTrafficPurchasesResponse,
+  GlobalTrafficCurrentEntry,
+  GlobalTrafficHistoryStatus,
+  GlobalTrafficPurchase,
+  GlobalTrafficPurchasesResponse,
   PartyContractsResponse,
   SearchContractResult,
   SearchPackageIdResult,
@@ -82,6 +88,26 @@ interface UpdateDetailRow {
   record_time_iso?: string | null;
   meta?: Record<string, unknown> | null;
   [key: string]: unknown;
+}
+
+interface TrafficPurchaseRow {
+  update_id: string;
+  event_offset: string | number;
+  record_time: string | null;
+  package_id?: string | null;
+  template_id?: string | null;
+  choice?: string | null;
+  exercise_argument?: unknown;
+  exercise_result?: unknown;
+}
+
+interface TrafficPurchaseQueryFilters {
+  minDate?: string;
+  maxDate?: string;
+  purchasedMin?: string;
+  purchasedMax?: string;
+  paidMin?: string;
+  paidMax?: string;
 }
 
 interface UpdatePartiesRow {
@@ -157,6 +183,13 @@ interface GlobalContractCursor {
   recordTime: string | null;
   nodeId: string;
   contractId: string;
+}
+
+interface GlobalTrafficCursor {
+  recordTime: string | null;
+  nodeId: string;
+  eventOffset: string;
+  updateId: string;
 }
 
 interface GlobalMergedContract {
@@ -391,7 +424,9 @@ function decodeGlobalUpdateCursor(cursor?: string): GlobalUpdateCursor | null {
   }
 
   try {
-    const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Partial<GlobalUpdateCursor>;
+    const decoded = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as Partial<GlobalUpdateCursor>;
 
     if (
       (decoded.recordTime === null || typeof decoded.recordTime === 'string') &&
@@ -413,7 +448,10 @@ function decodeGlobalUpdateCursor(cursor?: string): GlobalUpdateCursor | null {
   return null;
 }
 
-function compareGlobalMergedContracts(left: GlobalContractCursor, right: GlobalContractCursor): number {
+function compareGlobalMergedContracts(
+  left: GlobalContractCursor,
+  right: GlobalContractCursor,
+): number {
   const leftRecordTimeMs = Date.parse(left.recordTime ?? '');
   const rightRecordTimeMs = Date.parse(right.recordTime ?? '');
   const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
@@ -444,7 +482,9 @@ function decodeGlobalContractCursor(cursor?: string): GlobalContractCursor | nul
   }
 
   try {
-    const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Partial<GlobalContractCursor>;
+    const decoded = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as Partial<GlobalContractCursor>;
 
     if (
       (decoded.recordTime === null || typeof decoded.recordTime === 'string') &&
@@ -455,6 +495,76 @@ function decodeGlobalContractCursor(cursor?: string): GlobalContractCursor | nul
         recordTime: decoded.recordTime ?? null,
         nodeId: decoded.nodeId,
         contractId: decoded.contractId,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function compareGlobalTrafficPurchases(
+  left: GlobalTrafficPurchase | GlobalTrafficCursor,
+  right: GlobalTrafficPurchase | GlobalTrafficCursor,
+): number {
+  const leftRecordTimeMs = Date.parse(left.recordTime ?? '');
+  const rightRecordTimeMs = Date.parse(right.recordTime ?? '');
+  const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
+  const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
+
+  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+    return rightRecordTimeMs - leftRecordTimeMs;
+  }
+
+  if (leftHasRecordTime !== rightHasRecordTime) {
+    return leftHasRecordTime ? -1 : 1;
+  }
+
+  if (left.nodeId !== right.nodeId) {
+    return left.nodeId.localeCompare(right.nodeId);
+  }
+
+  if (left.eventOffset !== right.eventOffset) {
+    return right.eventOffset.localeCompare(left.eventOffset);
+  }
+
+  return right.updateId.localeCompare(left.updateId);
+}
+
+function encodeGlobalTrafficCursor(purchase: GlobalTrafficPurchase): string {
+  return Buffer.from(
+    JSON.stringify({
+      recordTime: purchase.recordTime,
+      nodeId: purchase.nodeId,
+      eventOffset: purchase.eventOffset,
+      updateId: purchase.updateId,
+    }),
+    'utf8',
+  ).toString('base64url');
+}
+
+function decodeGlobalTrafficCursor(cursor?: string): GlobalTrafficCursor | null {
+  if (!cursor || !cursor.trim()) {
+    return null;
+  }
+
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    ) as Partial<GlobalTrafficCursor>;
+
+    if (
+      (decoded.recordTime === null || typeof decoded.recordTime === 'string') &&
+      typeof decoded.nodeId === 'string' &&
+      typeof decoded.eventOffset === 'string' &&
+      typeof decoded.updateId === 'string'
+    ) {
+      return {
+        recordTime: decoded.recordTime ?? null,
+        nodeId: decoded.nodeId,
+        eventOffset: decoded.eventOffset,
+        updateId: decoded.updateId,
       };
     }
   } catch {
@@ -686,7 +796,10 @@ function decodeGlobalTokenHolderCursor(cursor?: string): GlobalTokenHolderCursor
       Buffer.from(cursor, 'base64url').toString('utf8'),
     ) as Partial<GlobalTokenHolderCursor>;
 
-    if (typeof decoded.partyId === 'string' && (decoded.amount === null || typeof decoded.amount === 'string')) {
+    if (
+      typeof decoded.partyId === 'string' &&
+      (decoded.amount === null || typeof decoded.amount === 'string')
+    ) {
       return {
         partyId: decoded.partyId,
         amount: decoded.amount ?? null,
@@ -707,7 +820,10 @@ function compareSearchParties(left: SearchMatchedParty, right: SearchMatchedPart
   return left.partyId.localeCompare(right.partyId);
 }
 
-function compareSearchPackageIds(left: SearchMatchedPackageId, right: SearchMatchedPackageId): number {
+function compareSearchPackageIds(
+  left: SearchMatchedPackageId,
+  right: SearchMatchedPackageId,
+): number {
   if (left.exact !== right.exact) {
     return left.exact ? -1 : 1;
   }
@@ -744,11 +860,7 @@ function normalizePartyFilters(parties?: string[]): string[] {
   }
 
   return Array.from(
-    new Set(
-      parties
-        .map((party) => party.trim())
-        .filter((party) => party.length > 0),
-    ),
+    new Set(parties.map((party) => party.trim()).filter((party) => party.length > 0)),
   );
 }
 
@@ -780,11 +892,7 @@ function normalizeTokenTextFilters(values?: string[]): string[] {
   }
 
   return Array.from(
-    new Set(
-      values
-        .map((value) => value.trim().toLowerCase())
-        .filter((value) => value.length > 0),
-    ),
+    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0)),
   );
 }
 
@@ -794,11 +902,7 @@ function normalizeTokenIssuerFilters(values?: string[]): string[] {
   }
 
   return Array.from(
-    new Set(
-      values
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0),
-    ),
+    new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
   );
 }
 
@@ -834,9 +938,7 @@ function pqsActivityBucketsQuery(node: NodeConfig, days: number, bucketMinutes: 
   const normalizedBucketMinutes =
     Number.isFinite(bucketMinutes) && bucketMinutes > 0 ? Math.trunc(bucketMinutes) : 15;
   const bucketSeconds = normalizedBucketMinutes * 60;
-  const minEffectiveAt = new Date(
-    Date.now() - normalizedDays * 24 * 60 * 60 * 1000,
-  ).toISOString();
+  const minEffectiveAt = new Date(Date.now() - normalizedDays * 24 * 60 * 60 * 1000).toISOString();
 
   return `
     select
@@ -1352,6 +1454,137 @@ function singleUpdateQuery(node: NodeConfig, eventOffset: string): string {
   `;
 }
 
+function pqsTrafficPurchasesQuery(
+  node: NodeConfig,
+  limit: number,
+  before?: string,
+  after?: string,
+  filters: TrafficPurchaseQueryFilters = {},
+  fetchAllMatchingRows = false,
+): string {
+  const relations = pqsCoreRelations(node);
+  const normalizedBefore = normalizeEventOffsetCursor(before);
+  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const normalizedMinDate = normalizeTrafficDateFilter(filters.minDate);
+  const normalizedMaxDate = normalizeTrafficDateFilter(filters.maxDate);
+  const useAfterCursor = Boolean(normalizedAfter && !normalizedBefore);
+  const cursorClause = useAfterCursor
+    ? `and tx.offset > ${normalizedAfter}`
+    : normalizedBefore
+      ? `and tx.offset < ${normalizedBefore}`
+      : '';
+  const orderClause = useAfterCursor ? 'asc' : 'desc';
+  const filterClauses = [
+    normalizedMinDate ? `tx.effective_at >= '${normalizedMinDate}'::date` : null,
+    normalizedMaxDate
+      ? `tx.effective_at < ('${normalizedMaxDate}'::date + interval '1 day')`
+      : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => `and ${value}`)
+    .join('\n      ');
+
+  return `
+    select
+      tx.transaction_id::text as update_id,
+      tx.offset::text as event_offset,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
+      package_row.id::text as package_id,
+      ${contractTemplateIdentifierExpression('contract_tpe_row')} as template_id,
+      exercise_tpe_row.choice::text as choice,
+      exercise_row.argument as exercise_argument,
+      exercise_row.result as exercise_result
+    from ${relations.exercises} exercise_row
+    join ${relations.exerciseTpe} exercise_tpe_row
+      on exercise_tpe_row.pk = exercise_row.tpe_pk
+    join ${relations.contractTpe} contract_tpe_row
+      on contract_tpe_row.pk = exercise_row.contract_tpe_pk
+    join ${relations.transactions} tx
+      on tx.ix = exercise_row.exercised_at_ix
+    left join ${relations.packages} package_row
+      on package_row.pk = exercise_row.package_pk
+    where contract_tpe_row.module_name = 'Splice.AmuletRules'
+      and contract_tpe_row.entity_name = 'AmuletRules'
+      and exercise_tpe_row.choice::text like '%AmuletRules_BuyMemberTraffic'
+      ${cursorClause}
+    ${filterClauses}
+    order by tx.offset ${orderClause}
+    ${fetchAllMatchingRows ? '' : `limit ${limit + 1}`}
+  `;
+}
+
+function normalizeTrafficDateFilter(value?: string): string | null {
+  const normalized = value?.trim() ?? '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return null;
+  }
+
+  const parsed = new Date(`${normalized}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === normalized
+    ? normalized
+    : null;
+}
+
+function normalizeTrafficNumericFilter(value?: string): string | null {
+  const normalized = value?.trim() ?? '';
+  return /^\d+(?:\.\d+)?$/.test(normalized) ? normalized : null;
+}
+
+function compareNonNegativeDecimalValues(left: string, right: string): number {
+  const [leftInteger, leftFraction = ''] = left.split('.');
+  const [rightInteger, rightFraction = ''] = right.split('.');
+  const normalizedLeftInteger = leftInteger.replace(/^0+(?=\d)/, '');
+  const normalizedRightInteger = rightInteger.replace(/^0+(?=\d)/, '');
+
+  if (normalizedLeftInteger.length !== normalizedRightInteger.length) {
+    return normalizedLeftInteger.length > normalizedRightInteger.length ? 1 : -1;
+  }
+  if (normalizedLeftInteger !== normalizedRightInteger) {
+    return normalizedLeftInteger > normalizedRightInteger ? 1 : -1;
+  }
+
+  const fractionLength = Math.max(leftFraction.length, rightFraction.length);
+  const normalizedLeftFraction = leftFraction.padEnd(fractionLength, '0');
+  const normalizedRightFraction = rightFraction.padEnd(fractionLength, '0');
+  if (normalizedLeftFraction === normalizedRightFraction) {
+    return 0;
+  }
+
+  return normalizedLeftFraction > normalizedRightFraction ? 1 : -1;
+}
+
+function matchesTrafficPurchaseAmountFilters(
+  purchase: NodeTrafficPurchase,
+  filters: TrafficPurchaseQueryFilters,
+): boolean {
+  const purchasedMin = normalizeTrafficNumericFilter(filters.purchasedMin);
+  const purchasedMax = normalizeTrafficNumericFilter(filters.purchasedMax);
+  const paidMin = normalizeTrafficNumericFilter(filters.paidMin);
+  const paidMax = normalizeTrafficNumericFilter(filters.paidMax);
+
+  if ((purchasedMin || purchasedMax) && !purchase.purchasedTraffic) {
+    return false;
+  }
+  if ((paidMin || paidMax) && !purchase.amuletPaid) {
+    return false;
+  }
+
+  if (purchasedMin && compareNonNegativeDecimalValues(purchase.purchasedTraffic!, purchasedMin) < 0) {
+    return false;
+  }
+  if (purchasedMax && compareNonNegativeDecimalValues(purchase.purchasedTraffic!, purchasedMax) > 0) {
+    return false;
+  }
+  if (paidMin && compareNonNegativeDecimalValues(purchase.amuletPaid!, paidMin) < 0) {
+    return false;
+  }
+  if (paidMax && compareNonNegativeDecimalValues(purchase.amuletPaid!, paidMax) > 0) {
+    return false;
+  }
+
+  return true;
+}
+
 function updateEventsByUpdateIdsQuery(node: NodeConfig, updateIds: string[]): string {
   const relations = pqsCoreRelations(node);
   const quotedIds = updateIds.map((updateId) => `'${escapeSqlLiteral(updateId)}'`).join(', ');
@@ -1581,9 +1814,9 @@ function tokenRowsQuery(
 
 function nativeAmuletSupportQuery(node: NodeConfig): string {
   const relations = pqsCoreRelations(node);
-  const templateIds = NATIVE_AMULET_SUPPORT_TEMPLATE_IDS
-    .map((templateId) => `'${escapeSqlLiteral(templateId)}'`)
-    .join(',\n        ');
+  const templateIds = NATIVE_AMULET_SUPPORT_TEMPLATE_IDS.map(
+    (templateId) => `'${escapeSqlLiteral(templateId)}'`,
+  ).join(',\n        ');
   const templateId = contractTemplateIdentifierExpression('contract_tpe_row');
 
   return `
@@ -1685,7 +1918,8 @@ export class PqsSummaryService {
     private readonly clientFactory: PqsClientFactory,
     @Optional() private readonly damlValueDecoder?: DamlValueDecoderService,
     @Optional() private readonly packageCacheService?: PackageCacheService,
-    @Optional() private readonly packageRegistryService?: PackageRegistryService,
+    @Optional()
+    private readonly packageRegistryService?: PackageRegistryService,
     @Optional() private readonly nodeConfigService?: NodeConfigService,
     @Optional() private readonly grpcOperationsService?: GrpcOperationsService,
     @Optional() private readonly packageSyncService?: PackageSyncService,
@@ -1703,6 +1937,287 @@ export class PqsSummaryService {
       latestOffset: row.latest_offset ?? null,
       latestEventAt: row.latest_event_at ?? null,
       totalUpdateCount: Number(row.total_update_count ?? 0),
+    };
+  }
+
+  async fetchTrafficPurchases(
+    node: NodeConfig,
+    options: {
+      limit?: number;
+      before?: string;
+      after?: string;
+      minDate?: string;
+      maxDate?: string;
+      purchasedMin?: string;
+      purchasedMax?: string;
+      paidMin?: string;
+      paidMax?: string;
+    } = {},
+  ): Promise<NodeTrafficPurchasesResponse> {
+    const limit = Math.min(Math.max(options.limit ?? 25, 1), 100);
+    const client = this.clientFactory.getClient(node);
+    const useAfterCursor = Boolean(options.after && !options.before);
+    const normalizedFilters: TrafficPurchaseQueryFilters = {
+      minDate: normalizeTrafficDateFilter(options.minDate) ?? undefined,
+      maxDate: normalizeTrafficDateFilter(options.maxDate) ?? undefined,
+      purchasedMin: normalizeTrafficNumericFilter(options.purchasedMin) ?? undefined,
+      purchasedMax: normalizeTrafficNumericFilter(options.purchasedMax) ?? undefined,
+      paidMin: normalizeTrafficNumericFilter(options.paidMin) ?? undefined,
+      paidMax: normalizeTrafficNumericFilter(options.paidMax) ?? undefined,
+    };
+    const hasAmountFilters = Boolean(
+      normalizedFilters.purchasedMin ||
+        normalizedFilters.purchasedMax ||
+        normalizedFilters.paidMin ||
+        normalizedFilters.paidMax,
+    );
+    const result = await client.query(
+      pqsTrafficPurchasesQuery(
+        node,
+        limit,
+        options.before,
+        options.after,
+        normalizedFilters,
+        hasAmountFilters,
+      ),
+    );
+    const rows = (result.rows as TrafficPurchaseRow[]) ?? [];
+    const decodedPurchases = await Promise.all(
+      rows.map(async (row) => {
+        const decoded = await this.decodeExerciseData(node, {
+          packageId: this.normalizePackageIdentifier(row.package_id ?? null),
+          templateId: this.normalizeTemplateIdentifier(row.template_id ?? null),
+          rawChoice: row.choice ?? null,
+          exerciseArgument: row.exercise_argument ?? null,
+          exerciseResult: row.exercise_result ?? null,
+        });
+
+        return {
+          updateId: row.update_id,
+          eventOffset: String(row.event_offset),
+          recordTime: row.record_time ?? null,
+          purchasedTraffic: this.readTrafficPurchaseField(decoded, 'trafficAmount', 'argument'),
+          amuletPaid: this.readTrafficPurchaseField(decoded, 'amuletPaid'),
+        };
+      }),
+    );
+    const matchingPurchases = hasAmountFilters
+      ? decodedPurchases.filter((purchase) =>
+          matchesTrafficPurchaseAmountFilters(purchase, normalizedFilters),
+        )
+      : decodedPurchases;
+    const hasMoreInQuery = matchingPurchases.length > limit;
+    const pagePurchases = matchingPurchases.slice(0, limit);
+    const purchases = useAfterCursor ? [...pagePurchases].reverse() : pagePurchases;
+
+    return {
+      nodeId: node.id,
+      label: node.label,
+      limit,
+      nextBefore:
+        (useAfterCursor || hasMoreInQuery) && purchases.length > 0
+          ? (purchases[purchases.length - 1]?.eventOffset ?? null)
+          : null,
+      nextAfter: useAfterCursor
+        ? hasMoreInQuery
+          ? (purchases[0]?.eventOffset ?? null)
+          : null
+        : options.before && purchases.length > 0
+          ? (purchases[0]?.eventOffset ?? null)
+          : null,
+      purchases,
+    };
+  }
+
+  async fetchGlobalTrafficPurchases(
+    nodes: NodeConfig[],
+    limit = 25,
+    options: {
+      before?: string;
+      after?: string;
+      nodeIds?: string[];
+      minDate?: string;
+      maxDate?: string;
+      purchasedMin?: string;
+      purchasedMax?: string;
+      paidMin?: string;
+      paidMax?: string;
+    } = {},
+  ): Promise<GlobalTrafficPurchasesResponse> {
+    const normalizedLimit =
+      typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : 25;
+    const beforeCursor = decodeGlobalTrafficCursor(options.before);
+    const afterCursor = beforeCursor === null ? decodeGlobalTrafficCursor(options.after) : null;
+    const useAfterCursor = Boolean(afterCursor && !beforeCursor);
+    const selectedNodeIds = options.nodeIds;
+    const eligibleNodes =
+      selectedNodeIds === undefined
+        ? nodes
+        : nodes.filter((node) => selectedNodeIds.includes(node.id));
+    const emptyResponse = (): GlobalTrafficPurchasesResponse => ({
+      limit: normalizedLimit,
+      nextBefore: null,
+      nextAfter: null,
+      purchases: [],
+      current: [],
+      historyStatus: [],
+    });
+
+    if (eligibleNodes.length === 0) {
+      return emptyResponse();
+    }
+
+    const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
+    const nodeStates = eligibleNodes.map((node) => ({
+      node,
+      nextBefore: undefined as string | undefined,
+      exhausted: false,
+    }));
+    const historyStatus = new Map<string, GlobalTrafficHistoryStatus>();
+    const mergedPurchasesByKey = new Map<string, GlobalTrafficPurchase>();
+    const filterPurchases = (purchases: GlobalTrafficPurchase[]): GlobalTrafficPurchase[] =>
+      purchases.filter((purchase) => {
+        if (beforeCursor !== null && compareGlobalTrafficPurchases(purchase, beforeCursor) <= 0) {
+          return false;
+        }
+        if (afterCursor !== null && compareGlobalTrafficPurchases(purchase, afterCursor) >= 0) {
+          return false;
+        }
+        return true;
+      });
+
+    let filteredPurchases: GlobalTrafficPurchase[] = [];
+    let hasMoreInDirection = false;
+
+    while (true) {
+      const nodesToFetch = nodeStates.filter((state) => !state.exhausted);
+      if (nodesToFetch.length === 0) {
+        break;
+      }
+
+      const settled = await Promise.allSettled(
+        nodesToFetch.map((state) =>
+          this.fetchTrafficPurchases(state.node, {
+            limit: pageSize,
+            before: state.nextBefore,
+            minDate: options.minDate,
+            maxDate: options.maxDate,
+            purchasedMin: options.purchasedMin,
+            purchasedMax: options.purchasedMax,
+            paidMin: options.paidMin,
+            paidMax: options.paidMax,
+          }),
+        ),
+      );
+
+      settled.forEach((result, index) => {
+        const state = nodesToFetch[index];
+        if (!state) {
+          return;
+        }
+
+        if (result.status === 'rejected') {
+          state.exhausted = true;
+          historyStatus.set(state.node.id, {
+            nodeId: state.node.id,
+            label: state.node.label,
+            status: 'pqs_error',
+            error: result.reason instanceof Error ? result.reason.message : 'Unknown PQS error',
+          });
+          return;
+        }
+
+        historyStatus.set(state.node.id, {
+          nodeId: state.node.id,
+          label: state.node.label,
+          status: 'ok',
+          error: null,
+        });
+        for (const purchase of result.value.purchases) {
+          mergedPurchasesByKey.set(`${state.node.id}:${purchase.updateId}`, {
+            ...purchase,
+            nodeId: state.node.id,
+            label: state.node.label,
+          });
+        }
+        state.nextBefore = result.value.nextBefore ?? undefined;
+        state.exhausted = result.value.nextBefore === null;
+      });
+
+      const sortedPurchases = Array.from(mergedPurchasesByKey.values()).sort(
+        compareGlobalTrafficPurchases,
+      );
+      filteredPurchases = filterPurchases(sortedPurchases);
+      hasMoreInDirection = filteredPurchases.length > normalizedLimit;
+
+      if (hasMoreInDirection || nodeStates.every((state) => state.exhausted)) {
+        break;
+      }
+    }
+
+    const purchases = filteredPurchases.slice(0, normalizedLimit);
+    const current: GlobalTrafficCurrentEntry[] = await Promise.all(
+      eligibleNodes.map(async (node) => {
+        if (node.mode !== 'pqs_with_grpc' || !this.grpcOperationsService) {
+          return {
+            nodeId: node.id,
+            label: node.label,
+            mode: node.mode,
+            status: 'grpc_not_configured' as const,
+            states: [],
+            error: null,
+          };
+        }
+
+        try {
+          return {
+            nodeId: node.id,
+            label: node.label,
+            mode: node.mode,
+            status: 'ok' as const,
+            states: await this.grpcOperationsService.fetchTrafficStates(node),
+            error: null,
+          };
+        } catch (error) {
+          return {
+            nodeId: node.id,
+            label: node.label,
+            mode: node.mode,
+            status: 'grpc_error' as const,
+            states: [],
+            error: error instanceof Error ? error.message : 'Unknown gRPC error',
+          };
+        }
+      }),
+    );
+
+    return {
+      limit: normalizedLimit,
+      nextBefore:
+        purchases.length > 0 && (useAfterCursor || hasMoreInDirection)
+          ? encodeGlobalTrafficCursor(purchases[purchases.length - 1]!)
+          : null,
+      nextAfter:
+        purchases.length === 0
+          ? null
+          : useAfterCursor
+            ? hasMoreInDirection
+              ? encodeGlobalTrafficCursor(purchases[0]!)
+              : null
+            : beforeCursor
+              ? encodeGlobalTrafficCursor(purchases[0]!)
+              : null,
+      purchases,
+      current,
+      historyStatus: eligibleNodes.map(
+        (node) =>
+          historyStatus.get(node.id) ?? {
+            nodeId: node.id,
+            label: node.label,
+            status: 'pqs_error' as const,
+            error: 'No PQS response',
+          },
+      ),
     };
   }
 
@@ -1764,8 +2279,7 @@ export class PqsSummaryService {
     const after = typeof options === 'object' ? options.after : undefined;
     const parties = typeof options === 'object' ? options.parties : undefined;
     const templates = typeof options === 'object' ? options.templates : undefined;
-    const partyMode =
-      typeof options === 'object' ? (options.partyMode ?? options.mode) : undefined;
+    const partyMode = typeof options === 'object' ? (options.partyMode ?? options.mode) : undefined;
     const hideSplice = typeof options === 'object' ? options.hideSplice === true : false;
     const useAfterCursor = Boolean(after && !before);
     const query = client.query.bind(client);
@@ -1782,22 +2296,22 @@ export class PqsSummaryService {
     );
     const hasMoreInQuery = rawMetaRows.length > normalizedLimit;
     const trimmedMetaRows = rawMetaRows.slice(0, normalizedLimit);
-    const orderedUpdates = (useAfterCursor ? [...trimmedMetaRows].reverse() : trimmedMetaRows).flatMap(
-      (row) => {
-        if (typeof row.update_id !== 'string') {
-          return [];
-        }
+    const orderedUpdates = (
+      useAfterCursor ? [...trimmedMetaRows].reverse() : trimmedMetaRows
+    ).flatMap((row) => {
+      if (typeof row.update_id !== 'string') {
+        return [];
+      }
 
-        return [
-          {
-            eventOffset: this.extractEventOffset(row),
-            rawUpdateId: row.update_id,
-            updateId: this.normalizeUpdateId(row.update_id),
-            recordTime: row.record_time ?? null,
-          },
-        ];
-      },
-    );
+      return [
+        {
+          eventOffset: this.extractEventOffset(row),
+          rawUpdateId: row.update_id,
+          updateId: this.normalizeUpdateId(row.update_id),
+          recordTime: row.record_time ?? null,
+        },
+      ];
+    });
 
     if (orderedUpdates.length === 0) {
       return {
@@ -1822,16 +2336,15 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         useAfterCursor || hasMoreInQuery
-          ? orderedUpdates[orderedUpdates.length - 1]?.eventOffset ?? null
+          ? (orderedUpdates[orderedUpdates.length - 1]?.eventOffset ?? null)
           : null,
-      nextAfter:
-        useAfterCursor
-          ? hasMoreInQuery
-            ? orderedUpdates[0]?.eventOffset ?? null
-            : null
-          : before
-            ? orderedUpdates[0]?.eventOffset ?? null
-            : null,
+      nextAfter: useAfterCursor
+        ? hasMoreInQuery
+          ? (orderedUpdates[0]?.eventOffset ?? null)
+          : null
+        : before
+          ? (orderedUpdates[0]?.eventOffset ?? null)
+          : null,
       updates: orderedUpdates.map((update) => ({
         eventOffset: update.eventOffset,
         updateId: update.updateId,
@@ -1873,17 +2386,11 @@ export class PqsSummaryService {
 
     const filterUpdates = (updates: GlobalMergedUpdate[]): GlobalMergedUpdate[] => {
       if (beforeCursor !== null) {
-        return updates.filter(
-          (update) =>
-            compareGlobalMergedUpdates(update, beforeCursor) > 0,
-        );
+        return updates.filter((update) => compareGlobalMergedUpdates(update, beforeCursor) > 0);
       }
 
       if (afterCursor !== null) {
-        return updates.filter(
-          (update) =>
-            compareGlobalMergedUpdates(update, afterCursor) < 0,
-        );
+        return updates.filter((update) => compareGlobalMergedUpdates(update, afterCursor) < 0);
       }
 
       return updates;
@@ -1940,7 +2447,6 @@ export class PqsSummaryService {
       }
 
       successfulResponses.forEach(({ response, state }) => {
-
         for (const update of response.updates) {
           mergedUpdatesByKey.set(`${state.node.id}:${update.eventOffset}:${update.updateId}`, {
             nodeId: state.node.id,
@@ -1956,7 +2462,9 @@ export class PqsSummaryService {
         state.exhausted = response.nextBefore === null;
       });
 
-      const sortedUpdates = Array.from(mergedUpdatesByKey.values()).sort(compareGlobalMergedUpdates);
+      const sortedUpdates = Array.from(mergedUpdatesByKey.values()).sort(
+        compareGlobalMergedUpdates,
+      );
       filteredUpdates = filterUpdates(sortedUpdates);
       hasMoreInDirection = filteredUpdates.length > normalizedLimit;
 
@@ -2024,7 +2532,9 @@ export class PqsSummaryService {
   } {
     const warnings = settled.flatMap((result, index) =>
       result.status === 'rejected'
-        ? [`Failed to search ${subject} on ${nodes[index]?.label ?? nodes[index]?.id ?? 'unknown node'}`]
+        ? [
+            `Failed to search ${subject} on ${nodes[index]?.label ?? nodes[index]?.id ?? 'unknown node'}`,
+          ]
         : [],
     );
     const hasSuccess = settled.some((result) => result.status === 'fulfilled');
@@ -2088,7 +2598,12 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<SearchMatchedUpdate[]> {
     const client = this.clientFactory.getClient(node);
-    const rows = await this.querySearchUpdateMetaRows(node, client.query.bind(client), query, limit);
+    const rows = await this.querySearchUpdateMetaRows(
+      node,
+      client.query.bind(client),
+      query,
+      limit,
+    );
     const dedupedRows = new Map<string, UpdateMetaRow>();
 
     for (const row of rows) {
@@ -2219,7 +2734,9 @@ export class PqsSummaryService {
 
         const existing = merged.get(partyId);
         if (existing) {
-          existing.nodeIds = Array.from(new Set([...existing.nodeIds, result.value.node.id])).sort();
+          existing.nodeIds = Array.from(
+            new Set([...existing.nodeIds, result.value.node.id]),
+          ).sort();
           continue;
         }
 
@@ -2265,7 +2782,10 @@ export class PqsSummaryService {
 
       const existing = groupedNames.get(pkg.name);
       if (existing) {
-        existing.packages.push({ packageId: pkg.packageId, version: pkg.version });
+        existing.packages.push({
+          packageId: pkg.packageId,
+          version: pkg.version,
+        });
         continue;
       }
 
@@ -2384,17 +2904,17 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
-          ? orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null
+          ? (orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null)
           : null,
       nextAfter:
         orderedContracts.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInQuery
-              ? orderedContracts[0]?.createdEventOffset ?? null
+              ? (orderedContracts[0]?.createdEventOffset ?? null)
               : null
             : before
-              ? orderedContracts[0]?.createdEventOffset ?? null
+              ? (orderedContracts[0]?.createdEventOffset ?? null)
               : null,
       contracts: orderedContracts.map((contract) => ({
         contractId: contract.contractId,
@@ -2408,14 +2928,21 @@ export class PqsSummaryService {
     node: NodeConfig,
     days = 30,
     bucketMinutes = 15,
-  ): Promise<Array<{ timestamp: string; activityValue: number; latestOffset: string | null }>> {
+  ): Promise<
+    Array<{
+      timestamp: string;
+      activityValue: number;
+      latestOffset: string | null;
+    }>
+  > {
     const client = this.clientFactory.getClient(node);
     const result = await client.query(pqsActivityBucketsQuery(node, days, bucketMinutes));
     const rows = (result.rows as ActivityBucketRow[]) ?? [];
 
     return rows
-      .filter((row): row is ActivityBucketRow & { bucket_timestamp: string } =>
-        typeof row.bucket_timestamp === 'string',
+      .filter(
+        (row): row is ActivityBucketRow & { bucket_timestamp: string } =>
+          typeof row.bucket_timestamp === 'string',
       )
       .map((row) => ({
         timestamp: row.bucket_timestamp,
@@ -2498,7 +3025,12 @@ export class PqsSummaryService {
     const rows = this.packageCacheService?.listPackagesForNode(node.id) ?? [];
     const groupedPackages = new Map<
       string,
-      Array<{ packageId: string; version: string | null; uploadedAt: string | null; seenAt: string }>
+      Array<{
+        packageId: string;
+        version: string | null;
+        uploadedAt: string | null;
+        seenAt: string;
+      }>
     >();
 
     for (const row of rows) {
@@ -2530,7 +3062,9 @@ export class PqsSummaryService {
 
   async fetchNodeTemplates(node: NodeConfig): Promise<TemplateFilterResponse> {
     const packageIds = Array.from(
-      new Set((this.packageCacheService?.listPackagesForNode(node.id) ?? []).map((pkg) => pkg.packageId)),
+      new Set(
+        (this.packageCacheService?.listPackagesForNode(node.id) ?? []).map((pkg) => pkg.packageId),
+      ),
     );
     return this.buildTemplateFilterResponse(packageIds);
   }
@@ -2541,7 +3075,9 @@ export class PqsSummaryService {
     };
   }
 
-  private async buildActivePartiesEntry(node: NodeConfig): Promise<ActivePartiesResponse['nodes'][number]> {
+  private async buildActivePartiesEntry(
+    node: NodeConfig,
+  ): Promise<ActivePartiesResponse['nodes'][number]> {
     try {
       return {
         nodeId: node.id,
@@ -2574,8 +3110,14 @@ export class PqsSummaryService {
         })),
       )
     )
-      .filter((result): result is PromiseFulfilledResult<{ node: NodeConfig; parties: string[] }> =>
-        result.status === 'fulfilled')
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          parties: string[];
+        }> => result.status === 'fulfilled',
+      )
       .map((result) => result.value);
     const recentUpdatesByNode = (
       await Promise.allSettled(
@@ -2585,12 +3127,14 @@ export class PqsSummaryService {
         })),
       )
     )
-      .filter((
-        result,
-      ): result is PromiseFulfilledResult<{
-        node: NodeConfig;
-        updates: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentUpdatesForNode']>>;
-      }> => result.status === 'fulfilled')
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          updates: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentUpdatesForNode']>>;
+        }> => result.status === 'fulfilled',
+      )
       .map((result) => result.value);
     const recentContractsByNode = (
       await Promise.allSettled(
@@ -2600,12 +3144,14 @@ export class PqsSummaryService {
         })),
       )
     )
-      .filter((
-        result,
-      ): result is PromiseFulfilledResult<{
-        node: NodeConfig;
-        contracts: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentContractsForNode']>>;
-      }> => result.status === 'fulfilled')
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          contracts: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentContractsForNode']>>;
+        }> => result.status === 'fulfilled',
+      )
       .map((result) => result.value);
     const localPartiesByNode = grpcOperationsService
       ? await Promise.all(
@@ -2719,10 +3265,14 @@ export class PqsSummaryService {
                 return null;
               }
 
-              const topology = await grpcOperationsService.fetchPartyTopology(node, normalizedPartyId);
+              const topology = await grpcOperationsService.fetchPartyTopology(
+                node,
+                normalizedPartyId,
+              );
               return {
                 ...topology,
-                isLocalParty: localPartyPresenceByNodeId.get(node.id) ?? topology.isLocalParty ?? null,
+                isLocalParty:
+                  localPartyPresenceByNodeId.get(node.id) ?? topology.isLocalParty ?? null,
               };
             }),
           )
@@ -2759,8 +3309,14 @@ export class PqsSummaryService {
         })),
       )
     )
-      .filter((result): result is PromiseFulfilledResult<{ node: NodeConfig; parties: string[] }> =>
-        result.status === 'fulfilled')
+      .filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          node: NodeConfig;
+          parties: string[];
+        }> => result.status === 'fulfilled',
+      )
       .map((result) => result.value);
     const localPartiesByNode = grpcOperationsService
       ? await Promise.all(
@@ -2916,9 +3472,11 @@ export class PqsSummaryService {
       const localPartiesByNode = await Promise.all(
         nodes.map(async (node) => {
           try {
-            return (await this.grpcOperationsService?.listLocalParties(node))?.filter(
-              (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
-            ) ?? [];
+            return (
+              (await this.grpcOperationsService?.listLocalParties(node))?.filter(
+                (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+              ) ?? []
+            );
           } catch {
             return [] as string[];
           }
@@ -2932,7 +3490,9 @@ export class PqsSummaryService {
       }
     }
 
-    const orderedParties = Array.from(matchingParties).sort((left, right) => left.localeCompare(right));
+    const orderedParties = Array.from(matchingParties).sort((left, right) =>
+      left.localeCompare(right),
+    );
     if (orderedParties.length === 0) {
       throw new Error('Namespace not found');
     }
@@ -2992,17 +3552,21 @@ export class PqsSummaryService {
       templates?: string[];
       partyMode?: string;
       hideSplice?: boolean;
+      nodeIds?: string[];
     },
   ): Promise<GlobalContractsResponse> {
     const normalizedLimit =
-      typeof limit === 'number' && Number.isFinite(limit) && limit > 0
-        ? Math.trunc(limit)
-        : 25;
+      typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : 25;
     const beforeCursor = decodeGlobalContractCursor(options?.before);
     const afterCursor = beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
-    const nodeStates = nodes.map((node) => ({
+    const selectedNodeIds = options?.nodeIds;
+    const eligibleNodes =
+      selectedNodeIds === undefined
+        ? nodes
+        : nodes.filter((node) => selectedNodeIds.includes(node.id));
+    const nodeStates = eligibleNodes.map((node) => ({
       node,
       nextBefore: undefined as string | undefined,
       exhausted: false,
@@ -3091,7 +3655,6 @@ export class PqsSummaryService {
       }
 
       successfulResponses.forEach(({ response, state }) => {
-
         for (const contract of response.contracts) {
           mergedContractsByKey.set(`${state.node.id}:${contract.contractId}`, {
             nodeId: state.node.id,
@@ -3106,7 +3669,9 @@ export class PqsSummaryService {
         state.exhausted = response.nextBefore === null;
       });
 
-      const sortedContracts = Array.from(mergedContractsByKey.values()).sort(compareGlobalMergedContracts);
+      const sortedContracts = Array.from(mergedContractsByKey.values()).sort(
+        compareGlobalMergedContracts,
+      );
       filteredContracts = filterContracts(sortedContracts);
       hasMoreInDirection = filteredContracts.length > normalizedLimit;
 
@@ -3247,7 +3812,9 @@ export class PqsSummaryService {
         state.exhausted = response.nextBefore === null;
       });
 
-      const sortedContracts = Array.from(mergedContractsByKey.values()).sort(compareGlobalMergedContracts);
+      const sortedContracts = Array.from(mergedContractsByKey.values()).sort(
+        compareGlobalMergedContracts,
+      );
       filteredContracts = filterContracts(sortedContracts);
       hasMoreInDirection = filteredContracts.length > normalizedLimit;
 
@@ -3322,16 +3889,9 @@ export class PqsSummaryService {
       }
     }
 
-    const filteredTokens = this.filterTokens(
-      Array.from(dedupedTokens.values()),
-      options,
-    );
+    const filteredTokens = this.filterTokens(Array.from(dedupedTokens.values()), options);
 
-    return this.paginateTokens(
-      filteredTokens.sort(compareGlobalTokens),
-      limit,
-      options,
-    );
+    return this.paginateTokens(filteredTokens.sort(compareGlobalTokens), limit, options);
   }
 
   async fetchLatestTokenTransfers(
@@ -3375,7 +3935,9 @@ export class PqsSummaryService {
       await this.loadMergedTokenTransfers(nodes),
       options,
     );
-    const directTransfers = mergedTransfers.filter((transfer) => transfer.tokenId === normalizedTokenId);
+    const directTransfers = mergedTransfers.filter(
+      (transfer) => transfer.tokenId === normalizedTokenId,
+    );
 
     if (directTransfers.length > 0) {
       return this.paginateTokenTransfers(directTransfers, limit, options);
@@ -3470,7 +4032,8 @@ export class PqsSummaryService {
     const normalizedLimit =
       Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
     const beforeCursor = decodeGlobalTokenHolderCursor(options?.before);
-    const afterCursor = beforeCursor === null ? decodeGlobalTokenHolderCursor(options?.after) : null;
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalTokenHolderCursor(options?.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const filteredHolders = holders.filter((holder) => {
       if (beforeCursor !== null) {
@@ -3564,9 +4127,9 @@ export class PqsSummaryService {
     const activeIssuerFilters = normalizeTokenIssuerFilters(options?.issuers);
 
     if (
-      activeNameFilters.length === 0
-      && activeExcludedNameFilters.length === 0
-      && activeIssuerFilters.length === 0
+      activeNameFilters.length === 0 &&
+      activeExcludedNameFilters.length === 0 &&
+      activeIssuerFilters.length === 0
     ) {
       return tokens;
     }
@@ -3575,8 +4138,8 @@ export class PqsSummaryService {
       const tokenName = token.name.trim().toLowerCase();
       const tokenSymbol = token.symbol?.trim().toLowerCase() ?? '';
       const matchesNameFilter =
-        activeNameFilters.length === 0
-        || activeNameFilters.some(
+        activeNameFilters.length === 0 ||
+        activeNameFilters.some(
           (filterValue) => tokenName.includes(filterValue) || tokenSymbol.includes(filterValue),
         );
 
@@ -3747,19 +4310,17 @@ export class PqsSummaryService {
     const afterCursor =
       beforeCursor === null ? decodeGlobalTokenTransferCursor(options?.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
-    const filteredTransfers = transfers
-      .sort(compareGlobalTokenTransfers)
-      .filter((transfer) => {
-        if (beforeCursor !== null) {
-          return compareGlobalTokenTransfers(transfer, beforeCursor) > 0;
-        }
+    const filteredTransfers = transfers.sort(compareGlobalTokenTransfers).filter((transfer) => {
+      if (beforeCursor !== null) {
+        return compareGlobalTokenTransfers(transfer, beforeCursor) > 0;
+      }
 
-        if (afterCursor !== null) {
-          return compareGlobalTokenTransfers(transfer, afterCursor) < 0;
-        }
+      if (afterCursor !== null) {
+        return compareGlobalTokenTransfers(transfer, afterCursor) < 0;
+      }
 
-        return true;
-      });
+      return true;
+    });
 
     const hasMoreInDirection = filteredTransfers.length > normalizedLimit;
     const pagedTransfers = filteredTransfers.slice(0, normalizedLimit);
@@ -3796,7 +4357,9 @@ export class PqsSummaryService {
   ): TokenTransferSummary[] {
     const activeFromParties = normalizePartyFilters(options?.fromParties);
     const activeToParties = normalizePartyFilters(options?.toParties);
-    const activeMovementTypes = this.normalizeTokenTransferMovementTypeFilters(options?.movementTypes);
+    const activeMovementTypes = this.normalizeTokenTransferMovementTypeFilters(
+      options?.movementTypes,
+    );
     const amountGt = options?.amountGt?.trim() || null;
     const amountLt = options?.amountLt?.trim() || null;
 
@@ -3819,7 +4382,9 @@ export class PqsSummaryService {
         (transfer.receiver !== null && activeToParties.includes(transfer.receiver));
       const matchesMovementType =
         activeMovementTypes.length === 0 ||
-        activeMovementTypes.includes(this.effectiveTokenTransferMovementType(transfer).toLowerCase());
+        activeMovementTypes.includes(
+          this.effectiveTokenTransferMovementType(transfer).toLowerCase(),
+        );
       const matchesAmountGt =
         amountGt === null ||
         (transfer.amount !== null && this.compareNumericStrings(transfer.amount, amountGt) > 0);
@@ -3847,11 +4412,9 @@ export class PqsSummaryService {
     const rawUpdateId = this.extractRawUpdateId(detailRow);
     const matchedEventOffset = this.extractEventOffset(detailRow);
     const canonicalUpdateId = this.normalizeUpdateId(rawUpdateId);
-    const partiesByUpdateId = await this.fetchPartiesByUpdateId(
-      node,
-      client.query.bind(client),
-      [rawUpdateId],
-    );
+    const partiesByUpdateId = await this.fetchPartiesByUpdateId(node, client.query.bind(client), [
+      rawUpdateId,
+    ]);
     const events = await this.fetchEventsByUpdateId(node, client.query.bind(client), rawUpdateId);
     const exerciseData = this.shouldResolveRewardCoupon(events)
       ? await this.fetchRewardCouponDetails(node, client.query.bind(client), rawUpdateId)
@@ -3896,10 +4459,12 @@ export class PqsSummaryService {
       packageVersion: packageMetadata?.version ?? null,
       createdUpdateId: typeof row.created_update_id === 'string' ? row.created_update_id : null,
       createdEventOffset: this.normalizeOptionalScalar(row.created_event_offset),
-      createdRecordTime: typeof row.created_record_time === 'string' ? row.created_record_time : null,
+      createdRecordTime:
+        typeof row.created_record_time === 'string' ? row.created_record_time : null,
       archivedUpdateId: typeof row.archived_update_id === 'string' ? row.archived_update_id : null,
       archivedEventOffset: this.normalizeOptionalScalar(row.archived_event_offset),
-      archivedRecordTime: typeof row.archived_record_time === 'string' ? row.archived_record_time : null,
+      archivedRecordTime:
+        typeof row.archived_record_time === 'string' ? row.archived_record_time : null,
       contractData: await this.decodeContractData(
         node,
         packageId,
@@ -3951,7 +4516,9 @@ export class PqsSummaryService {
     partyId: string,
     limit: number,
   ): Promise<PartyDetailResponse['recentContracts']> {
-    const response = await this.fetchPartyContractsForNode(node, partyId, { limit });
+    const response = await this.fetchPartyContractsForNode(node, partyId, {
+      limit,
+    });
     return response.contracts;
   }
 
@@ -3984,11 +4551,16 @@ export class PqsSummaryService {
     const hasMoreInQuery = rows.length > normalizedLimit;
     const trimmedRows = rows.slice(0, normalizedLimit);
     const orderedContracts = (useAfterCursor ? [...trimmedRows].reverse() : trimmedRows)
-      .filter((row): row is PartyContractRow & { contract_id: string } => typeof row.contract_id === 'string')
+      .filter(
+        (row): row is PartyContractRow & { contract_id: string } =>
+          typeof row.contract_id === 'string',
+      )
       .map((row) => {
         const packageId = this.normalizePackageIdentifier(row.package_id ?? null);
         const packageMetadata =
-          packageId && this.packageCacheService ? this.packageCacheService.getPackage(packageId) : null;
+          packageId && this.packageCacheService
+            ? this.packageCacheService.getPackage(packageId)
+            : null;
 
         return {
           nodeId: node.id,
@@ -4006,17 +4578,17 @@ export class PqsSummaryService {
     return {
       nextBefore:
         orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
-          ? orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null
+          ? (orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null)
           : null,
       nextAfter:
         orderedContracts.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInQuery
-              ? orderedContracts[0]?.createdEventOffset ?? null
+              ? (orderedContracts[0]?.createdEventOffset ?? null)
               : null
             : before
-              ? orderedContracts[0]?.createdEventOffset ?? null
+              ? (orderedContracts[0]?.createdEventOffset ?? null)
               : null,
       contracts: orderedContracts.map(({ createdEventOffset: _, ...contract }) => contract),
     };
@@ -4098,7 +4670,9 @@ export class PqsSummaryService {
       return (
         typeof templateId === 'string' &&
         NATIVE_AMULET_SUPPORT_TEMPLATE_IDS.includes(
-          this.normalizeTemplateIdentifier(templateId) as (typeof NATIVE_AMULET_SUPPORT_TEMPLATE_IDS)[number],
+          this.normalizeTemplateIdentifier(
+            templateId,
+          ) as (typeof NATIVE_AMULET_SUPPORT_TEMPLATE_IDS)[number],
         )
       );
     });
@@ -4130,7 +4704,9 @@ export class PqsSummaryService {
         node,
         limit,
         includeCip112 ? TOKEN_DISCOVERY_TEMPLATE_IDS : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS,
-        includeCip112 ? TOKEN_DISCOVERY_TEMPLATE_PATTERNS : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS,
+        includeCip112
+          ? TOKEN_DISCOVERY_TEMPLATE_PATTERNS
+          : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS,
       ),
     );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
@@ -4144,7 +4720,8 @@ export class PqsSummaryService {
     }
 
     return Array.from(dedupedTokens.values()).sort(
-      (left, right) => left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
+      (left, right) =>
+        left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
     );
   }
 
@@ -4331,7 +4908,9 @@ export class PqsSummaryService {
     return null;
   }
 
-  private async loadCachedTokenTransfers(node: NodeConfig): Promise<NodeTokenTransferObservation[]> {
+  private async loadCachedTokenTransfers(
+    node: NodeConfig,
+  ): Promise<NodeTokenTransferObservation[]> {
     const cached = this.tokenTransfersByNode.get(node.id);
     if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
       return cached.transfers;
@@ -4405,7 +4984,9 @@ export class PqsSummaryService {
     const transfers: NodeTokenTransferObservation[] = [];
     const rawUpdateIds = rows
       .map((row) => (typeof row.update_id === 'string' ? row.update_id : null))
-      .filter((updateId): updateId is string => Boolean(updateId && this.isHexTokenMovementUpdateId(updateId)));
+      .filter((updateId): updateId is string =>
+        Boolean(updateId && this.isHexTokenMovementUpdateId(updateId)),
+      );
     const eventsByUpdateId = await this.fetchEventsByUpdateIds(
       node,
       client.query.bind(client),
@@ -4433,7 +5014,12 @@ export class PqsSummaryService {
       canonicalShareTokenId?: string | null;
     },
   ): NodeTokenTransferObservation[] {
-    const standardTransfers = this.extractStandardCip112TokenMovements(node, update, events, options);
+    const standardTransfers = this.extractStandardCip112TokenMovements(
+      node,
+      update,
+      events,
+      options,
+    );
     if (standardTransfers.length > 0) {
       return standardTransfers;
     }
@@ -4536,7 +5122,8 @@ export class PqsSummaryService {
           sender: this.readAccountParty(account),
           receiver: this.readAccountParty(otherSideAccount),
           eventOffset: this.normalizeOptionalScalar(update.event_offset) ?? '',
-          updateId: typeof update.update_id === 'string' ? this.normalizeUpdateId(update.update_id) : '',
+          updateId:
+            typeof update.update_id === 'string' ? this.normalizeUpdateId(update.update_id) : '',
           recordTime: typeof update.record_time === 'string' ? update.record_time : null,
         });
       }
@@ -4585,7 +5172,8 @@ export class PqsSummaryService {
       )
       .find((owner): owner is string => Boolean(owner));
     const shouldEmitCreateMovements =
-      transferExercises.length > 0 || (transferExercises.length === 0 && mintExercises.length === 0);
+      transferExercises.length > 0 ||
+      (transferExercises.length === 0 && mintExercises.length === 0);
 
     if (shouldEmitCreateMovements) {
       for (const event of createEvents) {
@@ -4669,9 +5257,7 @@ export class PqsSummaryService {
     };
   }
 
-  private mergeTokenTransfers(
-    transfers: NodeTokenTransferObservation[],
-  ): TokenTransferSummary[] {
+  private mergeTokenTransfers(transfers: NodeTokenTransferObservation[]): TokenTransferSummary[] {
     const deduped = new Map<string, TokenTransferSummary>();
 
     for (const transfer of transfers) {
@@ -4862,14 +5448,18 @@ export class PqsSummaryService {
       null,
     );
     const tokenId =
-      canonicalShareTokenId && fallbackToken.tokenId === this.normalizeShareLikeIntrinsicTokenId(instrumentId)
+      canonicalShareTokenId &&
+      fallbackToken.tokenId === this.normalizeShareLikeIntrinsicTokenId(instrumentId)
         ? canonicalShareTokenId
         : fallbackToken.tokenId;
 
-    return tokensById.get(tokenId) ?? tokensById.get(fallbackToken.tokenId) ?? {
-      ...fallbackToken,
-      tokenId,
-    };
+    return (
+      tokensById.get(tokenId) ??
+      tokensById.get(fallbackToken.tokenId) ?? {
+        ...fallbackToken,
+        tokenId,
+      }
+    );
   }
 
   private classifyEventLogMovementType(
@@ -4941,9 +5531,7 @@ export class PqsSummaryService {
       return `${negative ? '-' : ''}${whole.toString()}`;
     }
 
-    return `${negative ? '-' : ''}${whole.toString()}.${fractional
-      .toString()
-      .padStart(scale, '0')}`;
+    return `${negative ? '-' : ''}${whole.toString()}.${fractional.toString().padStart(scale, '0')}`;
   }
 
   private numericScale(value: string): number {
@@ -5088,18 +5676,18 @@ export class PqsSummaryService {
     }
 
     const issuer =
-      this.readNestedScalarField(decoded.value, ['instrumentId', 'admin'])
-      ?? this.readNestedScalarField(decoded.value, ['vaultIdentity', 'admin'])
-      ?? this.readScalarField(decoded.value, 'vaultParty')
-      ?? this.readScalarField(decoded.value, 'issuer');
+      this.readNestedScalarField(decoded.value, ['instrumentId', 'admin']) ??
+      this.readNestedScalarField(decoded.value, ['vaultIdentity', 'admin']) ??
+      this.readScalarField(decoded.value, 'vaultParty') ??
+      this.readScalarField(decoded.value, 'issuer');
     return this.buildObservedTokenSummary(
       intrinsicId,
       issuer,
-      this.readConfiguredDecodedTokenMetadata(decoded.value, 'name')
-        ?? this.readScalarField(decoded.value, 'name')
-        ?? instrumentIdText
-        ?? symbol
-        ?? intrinsicId,
+      this.readConfiguredDecodedTokenMetadata(decoded.value, 'name') ??
+        this.readScalarField(decoded.value, 'name') ??
+        instrumentIdText ??
+        symbol ??
+        intrinsicId,
       symbol,
     );
   }
@@ -5170,10 +5758,12 @@ export class PqsSummaryService {
   }
 
   private getTokenMetadataConfig(): TokenMetadataConfig {
-    return this.nodeConfigService?.getTokenMetadataConfig() ?? {
-      nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
-      symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
-    };
+    return (
+      this.nodeConfigService?.getTokenMetadataConfig() ?? {
+        nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
+        symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
+      }
+    );
   }
 
   private async fetchEventsByUpdateId(
@@ -5199,10 +5789,7 @@ export class PqsSummaryService {
     const onlyRequestedUpdateId = rawUpdateIds.length === 1 ? rawUpdateIds[0] : null;
     const normalizedRows = await Promise.all(
       rows.map(async (row) => ({
-        updateId:
-          typeof row.update_id === 'string'
-            ? row.update_id
-            : onlyRequestedUpdateId,
+        updateId: typeof row.update_id === 'string' ? row.update_id : onlyRequestedUpdateId,
         event: await this.normalizeEventRow(node, row),
       })),
     );
@@ -5276,7 +5863,10 @@ export class PqsSummaryService {
                     ...decoded.value.fields,
                     {
                       label: 'couponContractId',
-                      value: { kind: 'contract_id', value: row.coupon_contract_id },
+                      value: {
+                        kind: 'contract_id',
+                        value: row.coupon_contract_id,
+                      },
                     },
                   ]
                 : decoded.value.fields,
@@ -5357,7 +5947,12 @@ export class PqsSummaryService {
       witnesses: this.normalizeParties(row.witnesses),
       createData:
         row.event_kind === 'create'
-          ? await this.decodeContractData(node, packageId, templateId, row.contract_instance ?? null)
+          ? await this.decodeContractData(
+              node,
+              packageId,
+              templateId,
+              row.contract_instance ?? null,
+            )
           : null,
       exerciseData:
         row.event_kind === 'create'
@@ -5478,7 +6073,8 @@ export class PqsSummaryService {
       rawChoice: string | null;
       exerciseArgument: unknown;
       exerciseResult: unknown;
-  }): Promise<NodeExerciseDecodeState | null> {
+    },
+  ): Promise<NodeExerciseDecodeState | null> {
     if (!Buffer.isBuffer(input.exerciseArgument) && !Buffer.isBuffer(input.exerciseResult)) {
       const argument = this.decodePqsJsonData(input.exerciseArgument);
       const result = this.decodePqsJsonData(input.exerciseResult);
@@ -5496,10 +6092,12 @@ export class PqsSummaryService {
     }
 
     if (
-      (input.exerciseArgument !== null && input.exerciseArgument !== undefined
-        && !Buffer.isBuffer(input.exerciseArgument))
-      || (input.exerciseResult !== null && input.exerciseResult !== undefined
-        && !Buffer.isBuffer(input.exerciseResult))
+      (input.exerciseArgument !== null &&
+        input.exerciseArgument !== undefined &&
+        !Buffer.isBuffer(input.exerciseArgument)) ||
+      (input.exerciseResult !== null &&
+        input.exerciseResult !== undefined &&
+        !Buffer.isBuffer(input.exerciseResult))
     ) {
       return null;
     }
@@ -5526,11 +6124,13 @@ export class PqsSummaryService {
     }
 
     await this.refreshPackageForNode(node!, packageId!);
-    return this.damlValueDecoder?.decodeContractInstance({
-      packageId,
-      templateId,
-      contractInstance,
-    }) ?? initialDecode;
+    return (
+      this.damlValueDecoder?.decodeContractInstance({
+        packageId,
+        templateId,
+        contractInstance,
+      }) ?? initialDecode
+    );
   }
 
   private async retryExerciseDecodeAfterPackageRefresh(
@@ -5571,9 +6171,9 @@ export class PqsSummaryService {
   ): boolean {
     return Boolean(
       node &&
-        packageId &&
-        this.packageSyncService &&
-        (reason === 'missing_package' || reason === 'invalid_package'),
+      packageId &&
+      this.packageSyncService &&
+      (reason === 'missing_package' || reason === 'invalid_package'),
     );
   }
 
@@ -5608,7 +6208,9 @@ export class PqsSummaryService {
   private isRecordValue(
     value: NodeDecodedDamlValue,
   ): value is Extract<NodeDecodedDamlValue, { kind: 'record' }> {
-    return typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'record';
+    return (
+      typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'record'
+    );
   }
 
   private findRecordField(
@@ -5632,8 +6234,39 @@ export class PqsSummaryService {
       return String(field);
     }
 
-    if (typeof field === 'object' && field !== null && 'kind' in field && field.kind === 'contract_id') {
+    if (
+      typeof field === 'object' &&
+      field !== null &&
+      'kind' in field &&
+      field.kind === 'contract_id'
+    ) {
       return field.value;
+    }
+
+    return null;
+  }
+
+  private readTrafficPurchaseField(
+    decoded: NodeExerciseDecodeState | null,
+    label: string,
+    source: 'argument' | 'result' = 'result',
+  ): string | null {
+    const decodedValue = source === 'argument' ? decoded?.argument : decoded?.result;
+    if (
+      !decodedValue ||
+      decodedValue.status !== 'decoded' ||
+      !this.isRecordValue(decodedValue.value)
+    ) {
+      return null;
+    }
+
+    const normalizedLabel = label.replace(/[_-]/g, '').toLowerCase();
+    const field = decodedValue.value.fields.find(
+      (candidate) => candidate.label.replace(/[_-]/g, '').toLowerCase() === normalizedLabel,
+    )?.value;
+
+    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+      return String(field);
     }
 
     return null;
@@ -5658,15 +6291,16 @@ export class PqsSummaryService {
       }
 
       if (index === path.length - 1) {
-        if (
-          typeof field === 'string' ||
-          typeof field === 'number' ||
-          typeof field === 'boolean'
-        ) {
+        if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
           return String(field);
         }
 
-        if (typeof field === 'object' && field !== null && 'kind' in field && field.kind === 'contract_id') {
+        if (
+          typeof field === 'object' &&
+          field !== null &&
+          'kind' in field &&
+          field.kind === 'contract_id'
+        ) {
           return field.value;
         }
 
@@ -5769,7 +6403,10 @@ export class PqsSummaryService {
   private readAccountParty(
     value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
   ): string | null {
-    return this.readOptionalScalarField(value, 'owner') ?? this.readOptionalScalarField(value, 'provider');
+    return (
+      this.readOptionalScalarField(value, 'owner') ??
+      this.readOptionalScalarField(value, 'provider')
+    );
   }
 
   private readTextMapEntryField(
@@ -5797,15 +6434,20 @@ export class PqsSummaryService {
     if (current && this.isRecordValue(current)) {
       const recordEntry = current.fields.find((candidate) => candidate.label === key)?.value;
       if (
-        typeof recordEntry === 'string'
-        || typeof recordEntry === 'number'
-        || typeof recordEntry === 'boolean'
+        typeof recordEntry === 'string' ||
+        typeof recordEntry === 'number' ||
+        typeof recordEntry === 'boolean'
       ) {
         return String(recordEntry);
       }
     }
 
-    if (!current || typeof current !== 'object' || !('kind' in current) || current.kind !== 'text_map') {
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      !('kind' in current) ||
+      current.kind !== 'text_map'
+    ) {
       return null;
     }
 
@@ -5830,9 +6472,7 @@ export class PqsSummaryService {
     return null;
   }
 
-  private decodePqsJsonData(
-    value: unknown,
-  ): NodeDecodeState<NodeDecodedDamlValue> | null {
+  private decodePqsJsonData(value: unknown): NodeDecodeState<NodeDecodedDamlValue> | null {
     const decoded = this.decodePqsJsonValue(value);
     return decoded === null
       ? null
@@ -5870,9 +6510,9 @@ export class PqsSummaryService {
     }
 
     if (
-      entries.length === 1
-      && entries[0][0] === 'number'
-      && (typeof entries[0][1] === 'string' || typeof entries[0][1] === 'number')
+      entries.length === 1 &&
+      entries[0][0] === 'number' &&
+      (typeof entries[0][1] === 'string' || typeof entries[0][1] === 'number')
     ) {
       const numericValue = Number(entries[0][1]);
       return Number.isFinite(numericValue) ? numericValue : String(entries[0][1]);
@@ -5892,15 +6532,18 @@ export class PqsSummaryService {
   }
 
   private getFirstLengthDelimitedField(message: Buffer, fieldNumber: number): Buffer | null {
-    return this.parseProtobufFields(message).find(
-      (field) => field.fieldNumber === fieldNumber && field.buffer,
-    )?.buffer ?? null;
+    return (
+      this.parseProtobufFields(message).find(
+        (field) => field.fieldNumber === fieldNumber && field.buffer,
+      )?.buffer ?? null
+    );
   }
 
   private getAllLengthDelimitedFields(message: Buffer, fieldNumber: number): Buffer[] {
     return this.parseProtobufFields(message)
-      .filter((field): field is { fieldNumber: number; buffer: Buffer } =>
-        field.fieldNumber === fieldNumber && Boolean(field.buffer),
+      .filter(
+        (field): field is { fieldNumber: number; buffer: Buffer } =>
+          field.fieldNumber === fieldNumber && Boolean(field.buffer),
       )
       .map((field) => field.buffer);
   }
@@ -5930,7 +6573,11 @@ export class PqsSummaryService {
     buffer?: Buffer;
     value?: number;
   }> {
-    const fields: Array<{ fieldNumber: number; buffer?: Buffer; value?: number }> = [];
+    const fields: Array<{
+      fieldNumber: number;
+      buffer?: Buffer;
+      value?: number;
+    }> = [];
     let offset = 0;
 
     while (offset < message.length) {
@@ -6067,7 +6714,9 @@ export class PqsSummaryService {
           return this.mergeNamespaceNodeTopologies(
             node,
             await Promise.all(
-              nodeParties.map(async (partyId) => grpcOperationsService.fetchPartyTopology(node, partyId)),
+              nodeParties.map(async (partyId) =>
+                grpcOperationsService.fetchPartyTopology(node, partyId),
+              ),
             ),
           );
         }),
@@ -6121,7 +6770,10 @@ export class PqsSummaryService {
   private dedupePartyTopologyParticipants(
     participants: PartyDetailResponse['partyTopologyByNode'][number]['partyToParticipants'],
   ): PartyDetailResponse['partyTopologyByNode'][number]['partyToParticipants'] {
-    const deduped = new Map<string, PartyDetailResponse['partyTopologyByNode'][number]['partyToParticipants'][number]>();
+    const deduped = new Map<
+      string,
+      PartyDetailResponse['partyTopologyByNode'][number]['partyToParticipants'][number]
+    >();
 
     for (const participant of participants) {
       const key = [
@@ -6143,7 +6795,10 @@ export class PqsSummaryService {
   private dedupePartyTopologyKeys(
     keyMappings: PartyDetailResponse['partyTopologyByNode'][number]['partyToKeyMappings'],
   ): PartyDetailResponse['partyTopologyByNode'][number]['partyToKeyMappings'] {
-    const deduped = new Map<string, PartyDetailResponse['partyTopologyByNode'][number]['partyToKeyMappings'][number]>();
+    const deduped = new Map<
+      string,
+      PartyDetailResponse['partyTopologyByNode'][number]['partyToKeyMappings'][number]
+    >();
 
     for (const keyMapping of keyMappings) {
       const key = [
@@ -6200,8 +6855,10 @@ export class PqsSummaryService {
       return {
         items,
         nextBefore:
-          normalizedEndIndex < partyIds.length && items.length > 0 ? items[items.length - 1] ?? null : null,
-        nextAfter: startIndex > 0 && items.length > 0 ? items[0] ?? null : null,
+          normalizedEndIndex < partyIds.length && items.length > 0
+            ? (items[items.length - 1] ?? null)
+            : null,
+        nextAfter: startIndex > 0 && items.length > 0 ? (items[0] ?? null) : null,
       };
     }
 
@@ -6215,8 +6872,11 @@ export class PqsSummaryService {
 
     return {
       items,
-      nextBefore: startIndex + limit < partyIds.length && items.length > 0 ? items[items.length - 1] ?? null : null,
-      nextAfter: startIndex > 0 && items.length > 0 ? items[0] ?? null : null,
+      nextBefore:
+        startIndex + limit < partyIds.length && items.length > 0
+          ? (items[items.length - 1] ?? null)
+          : null,
+      nextAfter: startIndex > 0 && items.length > 0 ? (items[0] ?? null) : null,
     };
   }
 

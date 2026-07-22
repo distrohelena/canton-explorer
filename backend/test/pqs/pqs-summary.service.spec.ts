@@ -503,9 +503,9 @@ describe('PqsSummaryService', () => {
 
   it('returns empty successful search groups without querying nodes for a blank query', async () => {
     const query = jest.fn();
-    const list = jest.fn().mockReturnValue([
-      { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
-    ]);
+    const list = jest
+      .fn()
+      .mockReturnValue([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' }]);
     const packageCache = {
       listPackages: jest.fn(),
     };
@@ -608,9 +608,9 @@ describe('PqsSummaryService', () => {
       } as never,
       undefined,
       {
-        list: jest.fn().mockReturnValue([
-          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
-        ]),
+        list: jest
+          .fn()
+          .mockReturnValue([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' }]),
       } as never,
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
@@ -723,9 +723,9 @@ describe('PqsSummaryService', () => {
       } as never,
       undefined,
       {
-        list: jest.fn().mockReturnValue([
-          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
-        ]),
+        list: jest
+          .fn()
+          .mockReturnValue([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' }]),
       } as never,
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
@@ -961,7 +961,10 @@ describe('PqsSummaryService', () => {
     expect(typeof service.fetchNodePackages).toBe('function');
 
     await expect(
-      service.fetchNodePackages?.({ id: 'cnqs-sv', label: 'CNQS Super Validator' }),
+      service.fetchNodePackages?.({
+        id: 'cnqs-sv',
+        label: 'CNQS Super Validator',
+      }),
     ).resolves.toEqual(typedNodePackagesFixture);
   });
 
@@ -992,7 +995,11 @@ describe('PqsSummaryService', () => {
       undefined,
     ) as PqsSummaryService & {
       fetchActiveParties?: (
-        nodes: Array<{ id: string; label: string; mode: 'pqs_only' | 'pqs_with_grpc' }>,
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode: 'pqs_only' | 'pqs_with_grpc';
+        }>,
       ) => Promise<ActivePartiesResponse>;
     };
 
@@ -1039,7 +1046,11 @@ describe('PqsSummaryService', () => {
       undefined,
     ) as PqsSummaryService & {
       fetchActiveParties?: (
-        nodes: Array<{ id: string; label: string; mode: 'pqs_only' | 'pqs_with_grpc' }>,
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode: 'pqs_only' | 'pqs_with_grpc';
+        }>,
       ) => Promise<ActivePartiesResponse>;
     };
 
@@ -1202,8 +1213,12 @@ describe('PqsSummaryService', () => {
     const participantQuery = jest.fn(async (sql: string) => {
       if (
         sql.includes('from "public"."__transactions" tx') &&
-        sql.includes("'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
-        sql.includes("'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
+        sql.includes(
+          "'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'",
+        ) &&
+        sql.includes(
+          "'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'",
+        ) &&
         sql.includes('event_offset')
       ) {
         return {
@@ -1230,8 +1245,12 @@ describe('PqsSummaryService', () => {
 
       if (
         sql.includes('contract_row.contract_id::text as contract_id') &&
-        sql.includes("'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'") &&
-        sql.includes("'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'")
+        sql.includes(
+          "'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'",
+        ) &&
+        sql.includes(
+          "'p|DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'",
+        )
       ) {
         return {
           rows: [
@@ -1274,7 +1293,10 @@ describe('PqsSummaryService', () => {
     };
 
     await expect(
-      service.fetchPartyDetail?.([{ id: 'participant-1', label: 'Participant 1' }], strippedPartyId),
+      service.fetchPartyDetail?.(
+        [{ id: 'participant-1', label: 'Participant 1' }],
+        strippedPartyId,
+      ),
     ).resolves.toEqual({
       partyId: strippedPartyId,
       nodeCount: 1,
@@ -1350,7 +1372,10 @@ describe('PqsSummaryService', () => {
     };
 
     await expect(
-      service.fetchPartyDetail?.([{ id: 'participant-1', label: 'Participant 1' }], activeOnlyPartyId),
+      service.fetchPartyDetail?.(
+        [{ id: 'participant-1', label: 'Participant 1' }],
+        activeOnlyPartyId,
+      ),
     ).resolves.toEqual({
       partyId: activeOnlyPartyId,
       nodeCount: 1,
@@ -1411,14 +1436,24 @@ describe('PqsSummaryService', () => {
       } as never,
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
-        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode?: 'pqs_only' | 'pqs_with_grpc';
+        }>,
         partyId: string,
       ) => Promise<PartyDetailResponse>;
     };
 
     await expect(
       service.fetchPartyDetail?.(
-        [{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' }],
+        [
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            mode: 'pqs_with_grpc',
+          },
+        ],
         localOnlyPartyId,
       ),
     ).resolves.toEqual({
@@ -1539,7 +1574,11 @@ describe('PqsSummaryService', () => {
       } as never,
     ) as PqsSummaryService & {
       fetchNamespaceDetail?: (
-        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode?: 'pqs_only' | 'pqs_with_grpc';
+        }>,
         namespaceId: string,
       ) => Promise<NamespaceDetailResponse>;
     };
@@ -1564,7 +1603,11 @@ describe('PqsSummaryService', () => {
     await expect(
       service.fetchNamespaceDetail?.(
         [
-          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            mode: 'pqs_with_grpc',
+          },
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ],
         '1220abcd',
@@ -1591,40 +1634,42 @@ describe('PqsSummaryService', () => {
       undefined,
       undefined,
       {
-        fetchPartyTopology: jest
-          .fn()
-          .mockResolvedValueOnce({
-            nodeId: 'participant-1',
-            label: 'Participant 1',
-            status: 'ok',
-            errorMessage: null,
-            isLocalParty: true,
-            partyToParticipants: [
-              {
-                participantId: null,
-                participantUid: 'participant-1::1220aaa',
-                permission: 'confirmation',
-                threshold: 1,
-                synchronizerIds: ['global-domain::1220aa'],
-              },
-            ],
-            partyToKeyMappings: [
-              {
-                keyFingerprint: '1220abcd',
-                publicKey: null,
-                purpose: 'namespace',
-                keyType: 'ed25519',
-                keyFormat: 'derX509SubjectPublicKeyInfo',
-                keySpec: 'ecCurve25519',
-                threshold: 1,
-                synchronizerIds: ['global-domain::1220aa'],
-              },
-            ],
-          }),
+        fetchPartyTopology: jest.fn().mockResolvedValueOnce({
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'ok',
+          errorMessage: null,
+          isLocalParty: true,
+          partyToParticipants: [
+            {
+              participantId: null,
+              participantUid: 'participant-1::1220aaa',
+              permission: 'confirmation',
+              threshold: 1,
+              synchronizerIds: ['global-domain::1220aa'],
+            },
+          ],
+          partyToKeyMappings: [
+            {
+              keyFingerprint: '1220abcd',
+              publicKey: null,
+              purpose: 'namespace',
+              keyType: 'ed25519',
+              keyFormat: 'derX509SubjectPublicKeyInfo',
+              keySpec: 'ecCurve25519',
+              threshold: 1,
+              synchronizerIds: ['global-domain::1220aa'],
+            },
+          ],
+        }),
       } as never,
     ) as PqsSummaryService & {
       fetchNamespaceDetail?: (
-        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode?: 'pqs_only' | 'pqs_with_grpc';
+        }>,
         namespaceId: string,
       ) => Promise<NamespaceDetailResponse>;
     };
@@ -1666,7 +1711,11 @@ describe('PqsSummaryService', () => {
     await expect(
       service.fetchNamespaceDetail?.(
         [
-          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            mode: 'pqs_with_grpc',
+          },
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ],
         '1220abcd',
@@ -1756,7 +1805,11 @@ describe('PqsSummaryService', () => {
       } as never,
     ) as PqsSummaryService & {
       fetchNamespaceParties?: (
-        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode?: 'pqs_only' | 'pqs_with_grpc';
+        }>,
         namespaceId: string,
         options?: { limit?: number; before?: string; after?: string },
       ) => Promise<NamespacePartiesResponse>;
@@ -1770,7 +1823,11 @@ describe('PqsSummaryService', () => {
     await expect(
       service.fetchNamespaceParties?.(
         [
-          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            mode: 'pqs_with_grpc',
+          },
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ],
         '1220abcd',
@@ -1786,7 +1843,11 @@ describe('PqsSummaryService', () => {
       } as never,
     ) as PqsSummaryService & {
       fetchNamespaceParties?: (
-        nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>,
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode?: 'pqs_only' | 'pqs_with_grpc';
+        }>,
         namespaceId: string,
         options?: { limit?: number; before?: string; after?: string },
       ) => Promise<NamespacePartiesResponse>;
@@ -1800,7 +1861,11 @@ describe('PqsSummaryService', () => {
     await expect(
       service.fetchNamespaceParties?.(
         [
-          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            mode: 'pqs_with_grpc',
+          },
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ],
         '1220abcd',
@@ -1870,9 +1935,7 @@ describe('PqsSummaryService', () => {
       {
         getClient: (node: { id: string }) => ({
           query:
-            node.id === 'participant-1'
-              ? participant1Query
-              : jest.fn(async () => ({ rows: [] })),
+            node.id === 'participant-1' ? participant1Query : jest.fn(async () => ({ rows: [] })),
         }),
       } as never,
       undefined,
@@ -2351,14 +2414,18 @@ describe('PqsSummaryService', () => {
     const summary = await service.fetchSummary({
       id: 'participant-1',
       label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+      role: 'participant',
+      mode: 'pqs_only',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "public"."__contracts" contract_row'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "public"."__transactions" tx'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('from "public"."__contracts" contract_row'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('from "public"."__transactions" tx'),
+    );
     expect(summary.activeContractCount).toBe(12);
     expect(summary.totalUpdateCount).toBe(1442);
     expect(summary.ledgerLabel).toBe('Retail Ledger');
@@ -2384,14 +2451,18 @@ mode: 'pqs_only',
     const summary = await service.fetchSummary({
       id: 'participant-2',
       label: 'Participant 2',
-role: 'participant',
-mode: 'pqs_only',
+      role: 'participant',
+      mode: 'pqs_only',
       ledgerLabel: 'Quickstart App User',
       pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL', schema: 'scribe' },
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "scribe"."__contracts" contract_row'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "scribe"."__transactions" tx'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('from "scribe"."__contracts" contract_row'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('from "scribe"."__transactions" tx'),
+    );
     expect(summary).toEqual({
       ledgerLabel: 'Quickstart App User',
       pqsDatabase: 'participant-app-user',
@@ -2438,8 +2509,8 @@ mode: 'pqs_only',
     const updates = await service.fetchRecentUpdates({
       id: 'participant-1',
       label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+      role: 'participant',
+      mode: 'pqs_only',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     });
@@ -2448,10 +2519,7 @@ mode: 'pqs_only',
       1,
       expect.stringContaining('from "public"."__transactions" tx'),
     );
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('order by tx.offset desc'),
-    );
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('order by tx.offset desc'));
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 26'));
     expect(query).toHaveBeenNthCalledWith(
       2,
@@ -2517,8 +2585,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -2544,12 +2612,18 @@ mode: 'pqs_only',
       ],
     });
 
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('from "public"."__transactions" tx'));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('from "public"."__transactions" tx'),
+    );
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Alice'"));
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'p|Alice'"));
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('contract_row.witnesses'));
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('exercise_row.witnesses'));
-    expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('join "public"."__contracts" contract_row'));
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('join "public"."__contracts" contract_row'),
+    );
   });
 
   it('applies template filters when fetching recent updates from schema-qualified PQS tables', async () => {
@@ -2582,8 +2656,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -2604,7 +2678,9 @@ mode: 'pqs_only',
 
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining("where update_event_templates.template_id = 'Splice.DsoRules:DsoRules'"),
+      expect.stringContaining(
+        "where update_event_templates.template_id = 'Splice.DsoRules:DsoRules'",
+      ),
     );
   });
 
@@ -2653,8 +2729,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -2679,7 +2755,10 @@ mode: 'pqs_only',
       ],
     });
 
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('contract_tpe_row.module_name'));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('contract_tpe_row.module_name'),
+    );
     expect(query).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining("update_event_templates.template_id not like 'Splice.%'"),
@@ -2721,8 +2800,8 @@ mode: 'pqs_only',
       {
         id: 'participant-1',
         label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+        role: 'participant',
+        mode: 'pqs_only',
         ledgerLabel: 'Retail Ledger',
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
@@ -2732,10 +2811,7 @@ mode: 'pqs_only',
       },
     );
 
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('tx.offset < 110'),
-    );
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('tx.offset < 110'));
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 3'));
     expect(updates).toEqual({
       nodeId: 'participant-1',
@@ -2765,78 +2841,76 @@ mode: 'pqs_only',
       getClient: () => ({ query: jest.fn() }),
     } as never);
 
-    jest.spyOn(service, 'fetchRecentUpdates').mockImplementation(
-      async (node, options) => {
-        expect(options).toEqual(
-          expect.objectContaining({
-            limit: 4,
-            parties: ['Alice'],
-            partyMode: 'and',
-            hideSplice: true,
-          }),
-        );
-        expect(options).not.toHaveProperty('before', '202');
-        expect(options).not.toHaveProperty('after', '202');
+    jest.spyOn(service, 'fetchRecentUpdates').mockImplementation(async (node, options) => {
+      expect(options).toEqual(
+        expect.objectContaining({
+          limit: 4,
+          parties: ['Alice'],
+          partyMode: 'and',
+          hideSplice: true,
+        }),
+      );
+      expect(options).not.toHaveProperty('before', '202');
+      expect(options).not.toHaveProperty('after', '202');
 
-        if (node.id === 'participant-1') {
-          return {
-            nodeId: 'participant-1',
-            label: 'Participant 1',
-            limit: 4,
-            nextBefore: null,
-            nextAfter: null,
-            updates: [
-              {
-                eventOffset: '103',
-                updateId: '00000000000000000000000000000003',
-                recordTime: '2026-07-01T12:03:00.000Z',
-                parties: ['Alice'],
-              },
-              {
-                eventOffset: '101',
-                updateId: '00000000000000000000000000000001',
-                recordTime: '2026-07-01T12:01:00.000Z',
-                parties: ['Alice'],
-              },
-              {
-                eventOffset: '099',
-                updateId: '00000000000000000000000000000000',
-                recordTime: '2026-07-01T11:59:00.000Z',
-                parties: ['Alice'],
-              },
-            ],
-          };
-        }
-
+      if (node.id === 'participant-1') {
         return {
-          nodeId: 'participant-2',
-          label: 'Participant 2',
+          nodeId: 'participant-1',
+          label: 'Participant 1',
           limit: 4,
           nextBefore: null,
           nextAfter: null,
           updates: [
             {
-              eventOffset: '202',
-              updateId: '00000000000000000000000000000012',
-              recordTime: '2026-07-01T12:02:00.000Z',
+              eventOffset: '103',
+              updateId: '00000000000000000000000000000003',
+              recordTime: '2026-07-01T12:03:00.000Z',
               parties: ['Alice'],
             },
             {
-              eventOffset: '201',
-              updateId: '00000000000000000000000000000011',
+              eventOffset: '101',
+              updateId: '00000000000000000000000000000001',
               recordTime: '2026-07-01T12:01:00.000Z',
               parties: ['Alice'],
             },
             {
-              eventOffset: '198',
-              updateId: '00000000000000000000000000000010',
-              recordTime: '2026-07-01T11:58:00.000Z',
+              eventOffset: '099',
+              updateId: '00000000000000000000000000000000',
+              recordTime: '2026-07-01T11:59:00.000Z',
               parties: ['Alice'],
             },
           ],
         };
-      },
-    );
+      }
+
+      return {
+        nodeId: 'participant-2',
+        label: 'Participant 2',
+        limit: 4,
+        nextBefore: null,
+        nextAfter: null,
+        updates: [
+          {
+            eventOffset: '202',
+            updateId: '00000000000000000000000000000012',
+            recordTime: '2026-07-01T12:02:00.000Z',
+            parties: ['Alice'],
+          },
+          {
+            eventOffset: '201',
+            updateId: '00000000000000000000000000000011',
+            recordTime: '2026-07-01T12:01:00.000Z',
+            parties: ['Alice'],
+          },
+          {
+            eventOffset: '198',
+            updateId: '00000000000000000000000000000010',
+            recordTime: '2026-07-01T11:58:00.000Z',
+            parties: ['Alice'],
+          },
+        ],
+      };
+    });
 
     const nodes = [
       {
@@ -2894,29 +2968,27 @@ mode: 'pqs_only',
       fetchRecentUpdates: jest.Mock;
     };
 
-    serviceWithFetch.fetchRecentUpdates = jest.fn(
-      async (node: { id: string; label: string }) => {
-        if (node.id === 'participant-2') {
-          throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
-        }
+    serviceWithFetch.fetchRecentUpdates = jest.fn(async (node: { id: string; label: string }) => {
+      if (node.id === 'participant-2') {
+        throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+      }
 
-        return {
-          nodeId: node.id,
-          label: node.label,
-          limit: 25,
-          nextBefore: null,
-          nextAfter: null,
-          updates: [
-            {
-              eventOffset: '103',
-              updateId: 'update-103',
-              recordTime: '2026-07-01T12:03:00.000Z',
-              parties: ['Alice'],
-            },
-          ],
-        };
-      },
-    );
+      return {
+        nodeId: node.id,
+        label: node.label,
+        limit: 25,
+        nextBefore: null,
+        nextAfter: null,
+        updates: [
+          {
+            eventOffset: '103',
+            updateId: 'update-103',
+            recordTime: '2026-07-01T12:03:00.000Z',
+            parties: ['Alice'],
+          },
+        ],
+      };
+    });
 
     await expect(
       service.fetchGlobalRecentUpdates(
@@ -2997,28 +3069,26 @@ mode: 'pqs_only',
       fetchNodeContracts: jest.Mock;
     };
 
-    serviceWithFetch.fetchNodeContracts = jest.fn(
-      async (node: { id: string; label: string }) => {
-        if (node.id === 'participant-2') {
-          throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
-        }
+    serviceWithFetch.fetchNodeContracts = jest.fn(async (node: { id: string; label: string }) => {
+      if (node.id === 'participant-2') {
+        throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+      }
 
-        return {
-          nodeId: node.id,
-          label: node.label,
-          limit: 25,
-          nextBefore: null,
-          nextAfter: null,
-          contracts: [
-            {
-              contractId: '00abc',
-              templateId: 'Main:Vault',
-              createdRecordTime: '2026-07-01T12:03:00.000Z',
-            },
-          ],
-        };
-      },
-    );
+      return {
+        nodeId: node.id,
+        label: node.label,
+        limit: 25,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: [
+          {
+            contractId: '00abc',
+            templateId: 'Main:Vault',
+            createdRecordTime: '2026-07-01T12:03:00.000Z',
+          },
+        ],
+      };
+    });
 
     await expect(
       service.fetchGlobalContracts(
@@ -3042,6 +3112,75 @@ mode: 'pqs_only',
         },
       ],
     });
+  });
+
+  it('queries only the selected nodes for global contracts', async () => {
+    const service = new PqsSummaryService({
+      getClient: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchNodeContracts: jest.Mock;
+    };
+
+    serviceWithFetch.fetchNodeContracts = jest.fn(async (node: { id: string; label: string }) => ({
+      nodeId: node.id,
+      label: node.label,
+      limit: 25,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          contractId: `contract-${node.id}`,
+          templateId: 'Main:Vault',
+          createdRecordTime: '2026-07-01T12:03:00.000Z',
+        },
+      ],
+    }));
+
+    await expect(
+      service.fetchGlobalContracts(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ] as never,
+        10,
+        { nodeIds: ['participant-2'] } as never,
+      ),
+    ).resolves.toMatchObject({
+      contracts: [expect.objectContaining({ nodeId: 'participant-2' })],
+    });
+
+    expect(serviceWithFetch.fetchNodeContracts).toHaveBeenCalledTimes(1);
+    expect(serviceWithFetch.fetchNodeContracts).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+      expect.anything(),
+    );
+  });
+
+  it('returns no global contracts without querying when no nodes are selected', async () => {
+    const service = new PqsSummaryService({
+      getClient: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchNodeContracts: jest.Mock;
+    };
+
+    serviceWithFetch.fetchNodeContracts = jest.fn();
+
+    await expect(
+      service.fetchGlobalContracts(
+        [{ id: 'participant-1', label: 'Participant 1' }] as never,
+        10,
+        { nodeIds: [] } as never,
+      ),
+    ).resolves.toEqual({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    expect(serviceWithFetch.fetchNodeContracts).not.toHaveBeenCalled();
   });
 
   it('returns party contracts from healthy nodes when another node PQS is unavailable', async () => {
@@ -3200,12 +3339,8 @@ mode: 'pqs_only',
       { limit: 25, templates: ['Main:Asset'], hideSplice: true },
     );
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("end = 'Main:Asset'"),
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("end not like 'Splice.%'"),
-    );
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("end = 'Main:Asset'"));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("end not like 'Splice.%'"));
   });
 
   it('joins ACS party filters with OR by default', async () => {
@@ -3274,7 +3409,9 @@ mode: 'pqs_only',
     );
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("array['Alice', 'p|Alice']::text[] && contract_row.witnesses::text[]"),
+      expect.stringContaining(
+        "array['Alice', 'p|Alice']::text[] && contract_row.witnesses::text[]",
+      ),
     );
   });
 
@@ -3322,8 +3459,8 @@ mode: 'pqs_only',
       {
         id: 'participant-1',
         label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+        role: 'participant',
+        mode: 'pqs_only',
         ledgerLabel: 'Retail Ledger',
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
@@ -3394,8 +3531,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -3415,7 +3552,9 @@ mode: 'pqs_only',
       },
     ]);
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "public"."__transactions" tx'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('from "public"."__transactions" tx'),
+    );
   });
 
   it('returns a single update detail for canonical, raw, and display-normalized ids', async () => {
@@ -3424,8 +3563,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3434,8 +3572,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3446,8 +3583,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3456,8 +3592,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3468,8 +3603,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3478,8 +3612,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3500,18 +3633,14 @@ mode: 'pqs_only',
     const node = {
       id: 'participant-1',
       label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+      role: 'participant',
+      mode: 'pqs_only',
       ledgerLabel: 'Retail Ledger',
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     };
 
     await expect(
-      serviceWithDetail.fetchUpdateDetail?.call(
-        service,
-        node,
-        '0000000000000001',
-      ),
+      serviceWithDetail.fetchUpdateDetail?.call(service, node, '0000000000000001'),
     ).resolves.toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -3528,11 +3657,7 @@ mode: 'pqs_only',
     });
 
     await expect(
-      serviceWithDetail.fetchUpdateDetail?.call(
-        service,
-        node,
-        '0000000000000001',
-      ),
+      serviceWithDetail.fetchUpdateDetail?.call(service, node, '0000000000000001'),
     ).resolves.toEqual(
       expect.objectContaining({
         eventOffset: '0000000000000001',
@@ -3541,11 +3666,7 @@ mode: 'pqs_only',
     );
 
     await expect(
-      serviceWithDetail.fetchUpdateDetail?.call(
-        service,
-        node,
-        '0000000000000001',
-      ),
+      serviceWithDetail.fetchUpdateDetail?.call(service, node, '0000000000000001'),
     ).resolves.toEqual(
       expect.objectContaining({
         eventOffset: '0000000000000001',
@@ -3588,8 +3709,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -3604,8 +3725,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3631,8 +3751,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -3653,8 +3773,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3663,8 +3782,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3679,8 +3797,7 @@ mode: 'pqs_only',
             choice: null,
             witnesses: ['Alice', 'Bob'],
             raw: {
-              update_id:
-                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3695,8 +3812,7 @@ mode: 'pqs_only',
             choice: 'Archive',
             witnesses: ['Alice'],
             raw: {
-              update_id:
-                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:1',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3716,8 +3832,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -3738,8 +3854,7 @@ mode: 'pqs_only',
             createData: null,
             exerciseData: null,
             raw: {
-              update_id:
-                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3757,8 +3872,7 @@ mode: 'pqs_only',
             createData: null,
             exerciseData: null,
             raw: {
-              update_id:
-                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:1',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3789,7 +3903,7 @@ mode: 'pqs_only',
     expect(query).toHaveBeenNthCalledWith(
       3,
       expect.stringContaining(
-        "\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1",
+        '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       ),
     );
     expect(query).toHaveBeenNthCalledWith(
@@ -3804,12 +3918,10 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
+            update_id: '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
             record_time_iso: '2026-07-02T10:55:21.000Z',
             meta: {
-              update_id:
-                '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
+              update_id: '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
               event_offset: '39',
               record_time: 1782989721000000,
             },
@@ -3877,8 +3989,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -3924,7 +4036,9 @@ mode: 'pqs_only',
     );
     expect(query).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining("tx.transaction_id in ('\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3')"),
+      expect.stringContaining(
+        "tx.transaction_id in ('\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3')",
+      ),
     );
   });
 
@@ -3934,8 +4048,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3944,8 +4057,7 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id:
-              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice'],
           },
         ],
@@ -3960,8 +4072,7 @@ mode: 'pqs_only',
             choice: null,
             witnesses: ['Alice'],
             raw: {
-              update_id:
-                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               tree_event_witnesses: ['Alice'],
@@ -3979,8 +4090,8 @@ mode: 'pqs_only',
         {
           id: 'participant-1',
           label: 'Participant 1',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
@@ -3994,8 +4105,7 @@ mode: 'pqs_only',
             eventKind: 'create',
             templateId: null,
             raw: {
-              update_id:
-                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               tree_event_witnesses: ['Alice'],
@@ -4056,7 +4166,8 @@ mode: 'pqs_only',
       .mockResolvedValueOnce({
         rows: [
           {
-            coupon_contract_id: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+            coupon_contract_id:
+              '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
             contract_instance: buildRewardCouponInstance(258, 20000),
           },
         ],
@@ -4071,8 +4182,8 @@ mode: 'pqs_only',
         {
           id: 'cnqs-sv',
           label: 'CNQS Super Validator',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Quickstart Super Validator',
           pqs: { connectionUriEnv: 'CNQS_PQS_SV_URL' },
         },
@@ -4183,8 +4294,8 @@ mode: 'pqs_only',
         {
           id: 'cnqs-sv',
           label: 'CNQS Super Validator',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Quickstart Super Validator',
           pqs: { connectionUriEnv: 'CNQS_PQS_SV_URL' },
         },
@@ -4292,8 +4403,8 @@ mode: 'pqs_only',
         {
           id: 'cnqs-sv',
           label: 'CNQS Super Validator',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Quickstart Super Validator',
           pqs: { connectionUriEnv: 'CNQS_PQS_SV_URL' },
         },
@@ -4325,8 +4436,12 @@ mode: 'pqs_only',
       },
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('from "public"."__contracts" contract_row'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('join "public"."__transactions" created_tx'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('from "public"."__contracts" contract_row'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('join "public"."__transactions" created_tx'),
+    );
   });
 
   it('decodes WalletAppInstall contract detail from a stored contract instance payload', async () => {
@@ -4377,8 +4492,8 @@ mode: 'pqs_only',
         {
           id: 'cnqs-app-user',
           label: 'CNQS App User',
-role: 'participant',
-mode: 'pqs_only',
+          role: 'participant',
+          mode: 'pqs_only',
           ledgerLabel: 'Quickstart App User',
           pqs: { connectionUriEnv: 'CNQS_PQS_APP_USER_URL' },
         },
@@ -4569,7 +4684,8 @@ mode: 'pqs_only',
                 fields: [
                   {
                     label: 'admin',
-                    value: 'DSO::122077e9d7a8f163db646a4b07f89b504a6597cf393ad3e3f23ce0e0e26b95d91588',
+                    value:
+                      'DSO::122077e9d7a8f163db646a4b07f89b504a6597cf393ad3e3f23ce0e0e26b95d91588',
                   },
                   { label: 'id', value: 'Amulet' },
                 ],
@@ -4770,11 +4886,17 @@ mode: 'pqs_only',
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string; mode?: 'pqs_only' | 'pqs_with_grpc' }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{
+            id: string;
+            label: string;
+            mode?: 'pqs_only' | 'pqs_with_grpc';
+          }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([node]);
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining(".CIP112:"));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
     expect(packageSyncService.syncPackagesById).toHaveBeenCalledWith(node, ['vault-base-package']);
     expect(packageRegistry.invalidatePackage).toHaveBeenCalledWith('vault-base-package');
     expect(response).toEqual({
@@ -4830,8 +4952,9 @@ mode: 'pqs_only',
       ],
     });
     const decoder = {
-      decodeContractInstance: jest.fn().mockImplementation(
-        ({ contractInstance }: { contractInstance: Buffer }) => {
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
           switch (contractInstance.toString()) {
             case 'cip112-underlying-1':
               return {
@@ -4910,8 +5033,7 @@ mode: 'pqs_only',
                 },
               };
           }
-        },
-      ),
+        }),
     };
     const grpcOperationsService = {
       fetchHoldingV2Tokens: jest.fn().mockResolvedValue([
@@ -5514,15 +5636,16 @@ mode: 'pqs_only',
         value: {
           kind: 'record',
           fields: [
-            { label: 'dso', value: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df' },
+            {
+              label: 'dso',
+              value: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
+            },
             { label: 'owner', value: 'RewardReceiver' },
             {
               label: 'amount',
               value: {
                 kind: 'record',
-                fields: [
-                  { label: 'initialAmount', value: '20000' },
-                ],
+                fields: [{ label: 'initialAmount', value: '20000' }],
               },
             },
           ],
@@ -5726,8 +5849,16 @@ mode: 'pqs_only',
               value: {
                 kind: 'record',
                 fields: [
-                  { label: 'sender', value: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df' },
-                  { label: 'receiver', value: 'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf' },
+                  {
+                    label: 'sender',
+                    value:
+                      'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
+                  },
+                  {
+                    label: 'receiver',
+                    value:
+                      'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf',
+                  },
                   { label: 'amount', value: '455660.1600000000' },
                 ],
               },
@@ -5767,7 +5898,8 @@ mode: 'pqs_only',
         tokenName: 'Canton Coin',
         amount: '455660.1600000000',
         sender: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
-        receiver: 'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf',
+        receiver:
+          'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf',
         updateId: 'shared-update-1',
         recordTime: '2026-07-07T12:54:23.000Z',
         nodes: [
@@ -6580,12 +6712,15 @@ mode: 'pqs_only',
       }
     ).fetchLatestTokenTransfers(nodes, 25);
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('join "public"."__contracts" contract_row'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('join "public"."__exercises" exercise_row'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('join "public"."__contracts" contract_row'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('join "public"."__exercises" exercise_row'),
+    );
     expect(response.transfers).toEqual([
       {
-        rowId:
-          '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId: '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'VaultAdmin::vault-1:share',
@@ -6604,8 +6739,7 @@ mode: 'pqs_only',
         ],
       },
       {
-        rowId:
-          '1220aa11:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
+        rowId: '1220aa11:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'Issuer::USDCx',
@@ -6761,8 +6895,7 @@ mode: 'pqs_only',
 
     expect(response.transfers).toEqual([
       {
-        rowId:
-          '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId: '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'VaultAdmin::vault-1:share',
@@ -6781,8 +6914,7 @@ mode: 'pqs_only',
         ],
       },
       {
-        rowId:
-          '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
+        rowId: '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'Issuer::USDCx',
@@ -6903,8 +7035,9 @@ mode: 'pqs_only',
             },
           };
         }),
-      decodeExerciseValue: jest.fn().mockImplementation(
-        ({ exerciseArgument }: { exerciseArgument: Buffer | null }) => {
+      decodeExerciseValue: jest
+        .fn()
+        .mockImplementation(({ exerciseArgument }: { exerciseArgument: Buffer | null }) => {
           const argumentName = exerciseArgument?.toString();
           if (argumentName === 'sender-eventlog-argument') {
             return {
@@ -6919,8 +7052,14 @@ mode: 'pqs_only',
                       value: {
                         kind: 'record',
                         fields: [
-                          { label: 'owner', value: { kind: 'optional', value: 'Alice' } },
-                          { label: 'provider', value: { kind: 'optional', value: null } },
+                          {
+                            label: 'owner',
+                            value: { kind: 'optional', value: 'Alice' },
+                          },
+                          {
+                            label: 'provider',
+                            value: { kind: 'optional', value: null },
+                          },
                           { label: 'id', value: '' },
                         ],
                       },
@@ -6934,14 +7073,32 @@ mode: 'pqs_only',
                             kind: 'record',
                             fields: [
                               { label: 'transferLegId', value: 'transfer-1' },
-                              { label: 'side', value: { kind: 'enum', constructor: 'SenderSide' } },
+                              {
+                                label: 'side',
+                                value: {
+                                  kind: 'enum',
+                                  constructor: 'SenderSide',
+                                },
+                              },
                               {
                                 label: 'otherside',
                                 value: {
                                   kind: 'record',
                                   fields: [
-                                    { label: 'owner', value: { kind: 'optional', value: 'Bob' } },
-                                    { label: 'provider', value: { kind: 'optional', value: null } },
+                                    {
+                                      label: 'owner',
+                                      value: {
+                                        kind: 'optional',
+                                        value: 'Bob',
+                                      },
+                                    },
+                                    {
+                                      label: 'provider',
+                                      value: {
+                                        kind: 'optional',
+                                        value: null,
+                                      },
+                                    },
                                     { label: 'id', value: '' },
                                   ],
                                 },
@@ -6972,8 +7129,14 @@ mode: 'pqs_only',
                     value: {
                       kind: 'record',
                       fields: [
-                        { label: 'owner', value: { kind: 'optional', value: 'Bob' } },
-                        { label: 'provider', value: { kind: 'optional', value: null } },
+                        {
+                          label: 'owner',
+                          value: { kind: 'optional', value: 'Bob' },
+                        },
+                        {
+                          label: 'provider',
+                          value: { kind: 'optional', value: null },
+                        },
                         { label: 'id', value: '' },
                       ],
                     },
@@ -6987,14 +7150,29 @@ mode: 'pqs_only',
                           kind: 'record',
                           fields: [
                             { label: 'transferLegId', value: 'transfer-1' },
-                            { label: 'side', value: { kind: 'enum', constructor: 'ReceiverSide' } },
+                            {
+                              label: 'side',
+                              value: {
+                                kind: 'enum',
+                                constructor: 'ReceiverSide',
+                              },
+                            },
                             {
                               label: 'otherside',
                               value: {
                                 kind: 'record',
                                 fields: [
-                                  { label: 'owner', value: { kind: 'optional', value: 'Alice' } },
-                                  { label: 'provider', value: { kind: 'optional', value: null } },
+                                  {
+                                    label: 'owner',
+                                    value: {
+                                      kind: 'optional',
+                                      value: 'Alice',
+                                    },
+                                  },
+                                  {
+                                    label: 'provider',
+                                    value: { kind: 'optional', value: null },
+                                  },
                                   { label: 'id', value: '' },
                                 ],
                               },
@@ -7011,8 +7189,7 @@ mode: 'pqs_only',
             },
             result: { status: 'decoded', value: { kind: 'unit' } },
           };
-        },
-      ),
+        }),
     };
     const service = new PqsSummaryService(
       {
@@ -7173,7 +7350,10 @@ mode: 'pqs_only',
       {
         getClient: () => ({ query }),
       } as never,
-      { decodeContractInstance: jest.fn(), decodeExerciseValue: jest.fn() } as never,
+      {
+        decodeContractInstance: jest.fn(),
+        decodeExerciseValue: jest.fn(),
+      } as never,
     );
     const nodes = [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }] as const;
 
@@ -7347,8 +7527,7 @@ mode: 'pqs_only',
 
     expect(response.transfers).toEqual([
       {
-        rowId:
-          '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId: '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'VaultAdmin::vault-1:share',
@@ -7367,8 +7546,7 @@ mode: 'pqs_only',
         ],
       },
       {
-        rowId:
-          '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
+        rowId: '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'Issuer::USDCx',
@@ -7447,31 +7625,33 @@ mode: 'pqs_only',
       return Promise.resolve({ rows: [] });
     });
     const decoder = {
-      decodeContractInstance: jest.fn().mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-        if (contractInstance.toString() !== 'minted-underlying-contract-instance') {
-          return { status: 'not_available' };
-        }
+      decodeContractInstance: jest
+        .fn()
+        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
+          if (contractInstance.toString() !== 'minted-underlying-contract-instance') {
+            return { status: 'not_available' };
+          }
 
-        return {
-          status: 'decoded',
-          value: {
-            kind: 'record',
-            fields: [
-              { label: 'issuer', value: 'Issuer' },
-              { label: 'instrumentIdText', value: 'USDCx' },
-              {
-                label: 'transferPolicy',
-                value: {
-                  kind: 'enum',
-                  constructor: 'StrictVaultTransfers',
+          return {
+            status: 'decoded',
+            value: {
+              kind: 'record',
+              fields: [
+                { label: 'issuer', value: 'Issuer' },
+                { label: 'instrumentIdText', value: 'USDCx' },
+                {
+                  label: 'transferPolicy',
+                  value: {
+                    kind: 'enum',
+                    constructor: 'StrictVaultTransfers',
+                  },
                 },
-              },
-              { label: 'account', value: { kind: 'unit' } },
-              { label: 'amount', value: '25.0000000000' },
-            ],
-          },
-        };
-      }),
+                { label: 'account', value: { kind: 'unit' } },
+                { label: 'amount', value: '25.0000000000' },
+              ],
+            },
+          };
+        }),
       decodeExerciseValue: jest.fn().mockImplementation(() => ({
         argument: { status: 'decoded', value: { kind: 'unit' } },
         result: { status: 'decoded', value: { kind: 'unit' } },
@@ -7496,11 +7676,14 @@ mode: 'pqs_only',
       '1220bb22:#0:1:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Mint',
     );
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('join "public"."__contracts" contract_row'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('join "public"."__exercises" exercise_row'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('join "public"."__contracts" contract_row'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('join "public"."__exercises" exercise_row'),
+    );
     expect(response).toEqual({
-      rowId:
-        '1220bb22:#0:1:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Mint',
+      rowId: '1220bb22:#0:1:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Mint',
       movementType: 'Mint',
       source: 'pqs_inferred_holding_v2',
       tokenId: 'Issuer::USDCx',
@@ -8579,8 +8762,7 @@ mode: 'pqs_only',
 
     expect(response.transfers).toEqual([
       {
-        rowId:
-          '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId: '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'RegistryAdmin::USDCx-SHARE',
@@ -8829,9 +9011,13 @@ mode: 'pqs_only',
       'VaultAdmin::vault-1:share',
     );
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining(".CIP112:"));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('join "public"."__contracts" contract_row'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('join "public"."__contract_tpe" contract_tpe_row'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('join "public"."__contracts" contract_row'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('join "public"."__contract_tpe" contract_tpe_row'),
+    );
     expect(response).toEqual({
       tokenId: 'VaultAdmin::vault-1:share',
       limit: 25,
@@ -9376,5 +9562,204 @@ mode: 'pqs_only',
         }
       ).fetchTokenDetail([{ id: 'participant-1', label: 'Participant 1' }], 'missing-token'),
     ).rejects.toThrow('Token not found');
+  });
+
+  it('returns historical traffic purchases from BuyMemberTraffic exercises', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'update-traffic-1',
+          event_offset: '42',
+          record_time: '2026-07-21T12:00:00.000Z',
+          exercise_argument: {
+            trafficAmount: '1000000',
+          },
+          exercise_result: {
+            purchasedTraffic: 'member-traffic-contract-id',
+            amuletPaid: '12.5000000000',
+          },
+        },
+      ],
+    });
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchTrafficPurchases(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        { limit: 10 },
+      ),
+    ).resolves.toEqual({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      purchases: [
+        {
+          updateId: 'update-traffic-1',
+          eventOffset: '42',
+          recordTime: '2026-07-21T12:00:00.000Z',
+          purchasedTraffic: '1000000',
+          amuletPaid: '12.5000000000',
+        },
+      ],
+    });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("module_name = 'Splice.AmuletRules'"));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('exercise_row.argument as exercise_argument'));
+  });
+
+  it('supports newer traffic purchase pages using an after cursor', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'update-traffic-3',
+          event_offset: '43',
+          record_time: '2026-07-21T12:03:00.000Z',
+          exercise_argument: { trafficAmount: '3000000' },
+          exercise_result: { amuletPaid: '30.0000000000' },
+        },
+        {
+          update_id: 'update-traffic-4',
+          event_offset: '44',
+          record_time: '2026-07-21T12:04:00.000Z',
+          exercise_argument: { trafficAmount: '4000000' },
+          exercise_result: { amuletPaid: '40.0000000000' },
+        },
+        {
+          update_id: 'update-traffic-5',
+          event_offset: '45',
+          record_time: '2026-07-21T12:05:00.000Z',
+          exercise_argument: { trafficAmount: '5000000' },
+          exercise_result: { amuletPaid: '50.0000000000' },
+        },
+      ],
+    });
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchTrafficPurchases(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        { limit: 2, after: '42' },
+      ),
+    ).resolves.toMatchObject({
+      limit: 2,
+      nextBefore: '43',
+      nextAfter: '44',
+      purchases: [
+        { updateId: 'update-traffic-4', eventOffset: '44' },
+        { updateId: 'update-traffic-3', eventOffset: '43' },
+      ],
+    });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('tx.offset > 42'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by tx.offset asc'));
+  });
+
+  it('applies date, purchased traffic, and paid amount filters', async () => {
+    const query = jest.fn().mockResolvedValue({ rows: [] });
+    const service = new PqsSummaryService({
+      getClient: () => ({ query }),
+    } as never);
+
+    await service.fetchTrafficPurchases(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      {
+        limit: 10,
+        minDate: '2026-07-01',
+        maxDate: '2026-07-31',
+        purchasedMin: '500000',
+        purchasedMax: '2000000',
+        paidMin: '10',
+        paidMax: '20.5',
+      },
+    );
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("tx.effective_at >= '2026-07-01'::date"));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("tx.effective_at < ('2026-07-31'::date + interval '1 day')"));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("exercise_tpe_row.choice::text like '%AmuletRules_BuyMemberTraffic'"));
+    expect(query).toHaveBeenCalledWith(expect.not.stringContaining("exercise_row.argument->>'trafficAmount'"));
+  });
+
+  it('merges selected node traffic purchases into one globally paginated result', async () => {
+    const service = new PqsSummaryService({
+      getClient: () => ({ query: jest.fn() }),
+    } as never);
+    const fetchTrafficPurchases = jest
+      .spyOn(service, 'fetchTrafficPurchases')
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        limit: 3,
+        nextBefore: null,
+        nextAfter: null,
+        purchases: [
+          {
+            updateId: 'update-1',
+            eventOffset: '10',
+            recordTime: '2026-07-21T12:00:00.000Z',
+            purchasedTraffic: '100',
+            amuletPaid: '1',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        nodeId: 'participant-2',
+        label: 'Participant 2',
+        limit: 3,
+        nextBefore: null,
+        nextAfter: null,
+        purchases: [
+          {
+            updateId: 'update-2',
+            eventOffset: '20',
+            recordTime: '2026-07-21T12:01:00.000Z',
+            purchasedTraffic: '200',
+            amuletPaid: '2',
+          },
+        ],
+      });
+
+    await expect(
+      (service as PqsSummaryService & { fetchGlobalTrafficPurchases: Function }).fetchGlobalTrafficPurchases(
+        [
+          { id: 'participant-1', label: 'Participant 1', role: 'participant', mode: 'pqs_only' },
+          { id: 'participant-2', label: 'Participant 2', role: 'participant', mode: 'pqs_only' },
+        ] as never,
+        10,
+        { nodeIds: ['participant-1', 'participant-2'] },
+      ),
+    ).resolves.toMatchObject({
+      limit: 10,
+      purchases: [
+        { nodeId: 'participant-2', label: 'Participant 2', updateId: 'update-2' },
+        { nodeId: 'participant-1', label: 'Participant 1', updateId: 'update-1' },
+      ],
+    });
+    expect(fetchTrafficPurchases).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 'participant-1' }),
+      expect.objectContaining({ limit: expect.any(Number) }),
+    );
   });
 });

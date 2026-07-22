@@ -186,6 +186,18 @@ type SdkCantonClient = {
       };
     }>;
   };
+  trafficControlService: {
+    trafficControlStateAsync(input: { synchronizerId: string }): Promise<{
+      trafficState?: {
+        extraTrafficPurchased: string;
+        extraTrafficConsumed: string;
+        baseTrafficRemainder: string;
+        lastConsumedCost: string;
+        timestamp: string;
+        serial?: number;
+      };
+    }>;
+  };
   packageService: {
     listPackagesAsync(input: Record<string, never>): Promise<{ packageIds?: string[] }>;
     getPackageAsync(input: { packageId: string }): Promise<LedgerPackageResponse>;
@@ -223,9 +235,7 @@ type SdkCantonClient = {
         item?: TopologyPartyToParticipantItem;
       }>;
     }>;
-    listPartyToKeyMappingAsync(input: {
-      filterParty?: string;
-    }): Promise<{
+    listPartyToKeyMappingAsync(input: { filterParty?: string }): Promise<{
       results?: Array<{
         context?: TopologyMappingContext;
         item?: TopologyPartyToKeyMappingItem;

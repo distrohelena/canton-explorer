@@ -66,6 +66,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -80,7 +81,39 @@ describe('ContractsView', () => {
     expect(screen.getByText('Loading contracts...')).toBeInTheDocument();
   });
 
-  it('shows an All Nodes selector first and switches to the global contracts browser', async () => {
+  it('defaults to all nodes and exposes checked node filters inside Advanced Filter', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      { id: 'participant-1', label: 'Participant 1' },
+      { id: 'participant-2', label: 'Participant 2' },
+    ] as never);
+    vi.mocked(fetchLatestContracts).mockResolvedValue({
+      limit: 10,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    await renderAt('/contracts');
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Advanced Filter' })).toBeInTheDocument());
+    expect(screen.queryByRole('tablist', { name: 'Node selectors' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+
+    const participantOne = screen.getByRole('checkbox', { name: 'Participant 1' });
+    const participantTwo = screen.getByRole('checkbox', { name: 'Participant 2' });
+    expect(participantOne).toBeChecked();
+    expect(participantTwo).toBeChecked();
+
+    await fireEvent.click(participantOne);
+    await waitFor(() =>
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, { nodeIds: ['participant-2'] }),
+    );
+
+    await fireEvent.click(participantTwo);
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, { nodeIds: [] }));
+  });
+
+  it('renders the global contracts browser across all nodes by default', async () => {
     vi.mocked(fetchNodes).mockResolvedValue([
       {
         id: 'participant-1',
@@ -105,6 +138,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -134,6 +168,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -141,17 +176,17 @@ describe('ContractsView', () => {
         },
       },
     ]);
-    vi.mocked(fetchNodeContracts).mockResolvedValue({
-      nodeId: 'participant-1',
-      label: 'Participant 1',
+    vi.mocked(fetchLatestContracts).mockResolvedValue({
       limit: 25,
       nextBefore: null,
       nextAfter: null,
       contracts: [
         {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
           contractId: '00abc',
           templateId: 'Main:Asset',
-          createdRecordTime: '2026-07-01T12:00:00.000Z',
+          recordTime: '2026-07-01T12:00:00.000Z',
         },
       ],
     });
@@ -170,19 +205,13 @@ describe('ContractsView', () => {
       ],
     });
 
-    await renderAt('/contracts');
-
-    await screen.findByRole('button', { name: 'Participant 1' });
-
-    const nodeSelector = screen.getByRole('tablist', { name: 'Node selectors' });
-    const buttons = within(nodeSelector).getAllByRole('button');
-    expect(buttons[0]).toHaveTextContent('All Nodes');
-
-    await fireEvent.click(screen.getByRole('button', { name: 'All Nodes' }));
+    const { container } = await renderAt('/contracts');
 
     await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledWith(10, {}));
-    expect(screen.getByRole('button', { name: 'All Nodes' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('heading', { name: 'All Nodes' })).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Node selectors' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Contracts', level: 2 })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Contracts', level: 3 })).toBeInTheDocument();
+    expect(container.querySelector('.parties-page__results')).toBeNull();
     const contractsTable = await screen.findByRole('table', { name: 'All node contracts' });
     expect(within(contractsTable).getByText('Participant 2')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '00def' })).toHaveAttribute(
@@ -216,6 +245,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -245,6 +275,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -345,9 +376,22 @@ describe('ContractsView', () => {
       };
     });
 
-    const formatMock = vi
-      .fn()
-      .mockReturnValue('Jul 1, 2026, 12:00:00 PM');
+    vi.mocked(fetchLatestContracts).mockResolvedValue({
+      limit: 10,
+      nextBefore: '199',
+      nextAfter: null,
+      contracts: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          contractId: '00def',
+          templateId: 'Main:Asset',
+          recordTime: '2026-07-01T12:05:00.000Z',
+        },
+      ],
+    });
+
+    const formatMock = vi.fn().mockReturnValue('Jul 1, 2026, 12:00:00 PM');
     vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
       function MockDateTimeFormat() {
         return {
@@ -359,7 +403,7 @@ describe('ContractsView', () => {
     const { container } = await renderAt('/contracts');
 
     expect(await screen.findByRole('heading', { name: 'Contracts' })).toBeInTheDocument();
-    expect(fetchNodeContracts).toHaveBeenNthCalledWith(1, 'participant-1', { limit: 10 });
+    expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 10, {});
     expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
@@ -373,11 +417,10 @@ describe('ContractsView', () => {
     await fireEvent.update(screen.getByRole('combobox', { name: 'Template ID' }), 'Main:Asset');
     await fireEvent.click(screen.getByRole('button', { name: 'Add template filter' }));
     await fireEvent.click(screen.getByRole('button', { name: 'AND' }));
-    await fireEvent.click(screen.getByRole('checkbox'));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Hide Splice Templates' }));
 
     await waitFor(() =>
-      expect(fetchNodeContracts).toHaveBeenLastCalledWith('participant-1', {
-        limit: 10,
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, {
         parties: ['Alice'],
         templates: ['Main:Asset'],
         partyMode: 'and',
@@ -387,13 +430,13 @@ describe('ContractsView', () => {
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getAllByText('Main:Asset').length).toBeGreaterThan(0);
-    expect(container.querySelector('a[href="/nodes/participant-1/contracts/00abc"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/nodes/participant-2/contracts/00def"]')).not.toBeNull();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Participant 2' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
 
     await waitFor(() =>
-      expect(fetchNodeContracts).toHaveBeenLastCalledWith('participant-2', {
-        limit: 10,
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, {
+        nodeIds: ['participant-2'],
         parties: ['Alice'],
         templates: ['Main:Asset'],
         partyMode: 'and',
@@ -410,9 +453,9 @@ describe('ContractsView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
-      expect(fetchNodeContracts).toHaveBeenLastCalledWith('participant-2', {
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, {
         before: '199',
-        limit: 10,
+        nodeIds: ['participant-2'],
         parties: ['Alice'],
         templates: ['Main:Asset'],
         partyMode: 'and',
@@ -420,9 +463,9 @@ describe('ContractsView', () => {
       }),
     );
 
-    expect(await screen.findByRole('link', { name: '00ghi' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '00def' })).toHaveAttribute(
       'href',
-      '/nodes/participant-2/contracts/00ghi',
+      '/nodes/participant-2/contracts/00def',
     );
   });
 
@@ -451,6 +494,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -480,6 +524,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -533,8 +578,6 @@ describe('ContractsView', () => {
 
     const { router } = await renderAt('/contracts');
 
-    await screen.findByRole('button', { name: 'Participant 1' });
-    await fireEvent.click(screen.getByRole('button', { name: 'All Nodes' }));
     await waitFor(() => expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 10, {}));
 
     await fireEvent.update(screen.getByRole('combobox', { name: 'Items per page' }), '50');
@@ -572,6 +615,7 @@ describe('ContractsView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -600,8 +644,7 @@ describe('ContractsView', () => {
     await renderAt('/contracts?party=Alice&hideSplice=true');
 
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
-    expect(fetchNodeContracts).toHaveBeenCalledWith('participant-1', {
-      limit: 10,
+    expect(fetchLatestContracts).toHaveBeenCalledWith(10, {
       parties: ['Alice'],
       partyMode: 'or',
       hideSplice: true,

@@ -70,6 +70,6 @@ describe('NodesView', () => {
     expect(
       screen.queryByPlaceholderText('Search'),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Network Activity' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Nodes' })).not.toBeInTheDocument();
   });
 });

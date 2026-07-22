@@ -12,6 +12,7 @@ type ResolvedTheme = 'light' | 'dark';
 
 const themePreference = ref<ThemePreference>('system');
 const systemPrefersDark = ref(false);
+const exploreMenuOpen = ref(false);
 let systemThemeQuery: MediaQueryList | null = null;
 let removeSystemThemeListener: (() => void) | null = null;
 
@@ -23,6 +24,29 @@ const resolvedTheme = computed<ResolvedTheme>(() =>
     : themePreference.value,
 );
 const isDebuggerRoute = computed(() => route.path === '/debugger');
+const exploreLabel = computed(() => {
+  if (route.path === '/' || route.path.startsWith('/contracts')) {
+    return 'Ledger';
+  }
+
+  if (route.path.startsWith('/nodes') || route.path.startsWith('/parties')) {
+    return 'Network';
+  }
+
+  if (route.path.startsWith('/tokens')) {
+    return 'Assets';
+  }
+
+  if (route.path.startsWith('/traffic')) {
+    return 'Traffic';
+  }
+
+  if (route.path === '/debugger' || route.path === '/settings') {
+    return 'Tools';
+  }
+
+  return 'Explore';
+});
 const themeToggleLabel = computed(() =>
   resolvedTheme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
 );
@@ -58,6 +82,23 @@ function toggleTheme() {
   themePreference.value = resolvedTheme.value === 'dark' ? 'light' : 'dark';
 }
 
+function toggleExploreMenu() {
+  exploreMenuOpen.value = !exploreMenuOpen.value;
+}
+
+function closeExploreMenu() {
+  exploreMenuOpen.value = false;
+}
+
+function handleDocumentClick(event: MouseEvent) {
+  const target = event.target;
+  if (target instanceof Element && target.closest('.app-explore')) {
+    return;
+  }
+
+  closeExploreMenu();
+}
+
 watch(themePreference, (preference) => {
   if (preference === 'system') {
     window.localStorage.removeItem(THEME_STORAGE_KEY);
@@ -81,6 +122,13 @@ watch(
 );
 
 watch(
+  () => route.path,
+  () => {
+    closeExploreMenu();
+  },
+);
+
+watch(
   resolvedTheme,
   (theme) => {
     applyTheme(theme);
@@ -89,6 +137,7 @@ watch(
 );
 
 onMounted(() => {
+  document.addEventListener('click', handleDocumentClick);
   themePreference.value = readStoredThemePreference();
   systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
   syncSystemThemePreference();
@@ -117,6 +166,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick);
   removeSystemThemeListener?.();
 });
 </script>
@@ -131,13 +181,80 @@ onBeforeUnmount(() => {
             <h1 class="app-brand__title">Canton Explorer</h1>
           </RouterLink>
           <div class="app-toolbar">
-            <nav class="app-nav" aria-label="Primary">
-              <RouterLink class="nav-button" to="/">Updates</RouterLink>
-              <RouterLink class="nav-button" to="/nodes">Nodes</RouterLink>
-              <RouterLink class="nav-button" to="/parties">Parties</RouterLink>
-              <RouterLink class="nav-button" to="/contracts">Contracts</RouterLink>
-              <RouterLink class="nav-button" to="/tokens">Tokens</RouterLink>
-            </nav>
+            <div class="app-explore">
+              <button
+                id="explore-menu-button"
+                type="button"
+                class="app-explore__button"
+                aria-controls="explore-menu"
+                :aria-expanded="exploreMenuOpen"
+                title="Explore"
+                @click="toggleExploreMenu"
+              >
+                {{ exploreLabel }}
+                <svg
+                  class="app-explore__arrow"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M4 6l4 4 4-4"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                  />
+                </svg>
+              </button>
+              <nav
+                v-if="exploreMenuOpen"
+                id="explore-menu"
+                class="app-explore__menu"
+                aria-label="Explore"
+              >
+                <div class="app-explore__group" aria-labelledby="ledger-menu-label">
+                  <span id="ledger-menu-label" class="app-explore__group-label">Ledger</span>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/" @click="closeExploreMenu">
+                    Updates
+                  </RouterLink>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/contracts" @click="closeExploreMenu">
+                    Contracts
+                  </RouterLink>
+                </div>
+                <div class="app-explore__group" aria-labelledby="network-menu-label">
+                  <span id="network-menu-label" class="app-explore__group-label">Network</span>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/nodes" @click="closeExploreMenu">
+                    Nodes
+                  </RouterLink>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/parties" @click="closeExploreMenu">
+                    Parties
+                  </RouterLink>
+                </div>
+                <div class="app-explore__group" aria-labelledby="assets-menu-label">
+                  <span id="assets-menu-label" class="app-explore__group-label">Assets</span>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/tokens" @click="closeExploreMenu">
+                    Tokens
+                  </RouterLink>
+                </div>
+                <div class="app-explore__group" aria-labelledby="traffic-menu-label">
+                  <span id="traffic-menu-label" class="app-explore__group-label">Traffic</span>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/traffic" @click="closeExploreMenu">
+                    Traffic Purchases
+                  </RouterLink>
+                </div>
+                <div class="app-explore__group" aria-labelledby="tools-menu-label">
+                  <span id="tools-menu-label" class="app-explore__group-label">Tools</span>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/debugger" @click="closeExploreMenu">
+                    Debugger
+                  </RouterLink>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/settings" @click="closeExploreMenu">
+                    Settings
+                  </RouterLink>
+                </div>
+              </nav>
+            </div>
             <form class="app-search-form" @submit.prevent="submitSearch">
               <input
                 v-model="searchTerm"

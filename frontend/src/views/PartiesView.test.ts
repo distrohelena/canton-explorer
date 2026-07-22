@@ -48,6 +48,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -107,6 +108,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -136,6 +138,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -267,6 +270,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -296,6 +300,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -414,6 +419,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -520,6 +526,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -592,6 +599,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -684,6 +692,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -770,6 +779,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
@@ -844,6 +854,7 @@ describe('PartiesView', () => {
           activeContractCount: 1,
           latestOffset: null,
           latestEventAt: null,
+          totalUpdateCount: 0,
         },
         sourceStatus: {
           pqs: { ok: false, checkedAt: '', latencyMs: 1, message: 'connect ECONNREFUSED' },

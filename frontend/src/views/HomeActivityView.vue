@@ -1,27 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import ContractsBrowser from '../components/ContractsBrowser.vue';
-import UpdatesBrowser from '../components/UpdatesBrowser.vue';
+import { computed } from 'vue';
 import { useActivityHistory } from '../composables/useActivityHistory';
 import type { ActivitySample, ActivitySeries } from '../types/activity';
 
-const { history, loading, error, refresh, selectedDays, selectDays } = useActivityHistory();
+const { history, loading, error, selectedDays, selectDays } = useActivityHistory();
 const windowOptions = [1, 7, 30] as const;
-const updatesBrowser = ref<{ reload: () => Promise<void> } | null>(null);
-const contractsBrowser = ref<{ reload: () => Promise<void> } | null>(null);
 
 const nodes = computed(() => history.value?.nodes ?? []);
 const windowMinutesLabel = computed(() => history.value?.windowMinutes ?? 0);
 const chartWidth = 320;
 const chartHeight = 96;
-
-async function refreshPage() {
-  await Promise.all([
-    refresh(),
-    updatesBrowser.value?.reload() ?? Promise.resolve(),
-    contractsBrowser.value?.reload() ?? Promise.resolve(),
-  ]);
-}
 
 interface ChartDomain {
   startMs: number;
@@ -204,11 +192,11 @@ function linePoints(
     .join(' ');
 }
 
-function guidePositions(days: 1 | 7 | 30): number[] {
+function guidePositions(days: 1 | 7 | 30): string[] {
   const count: number = days === 1 ? 24 : days;
 
   return Array.from({ length: count }, (_, index) =>
-    (index / Math.max(count - 1, 1)) * chartWidth,
+    `${(index / Math.max(count - 1, 1)) * 100}%`,
   );
 }
 
@@ -233,6 +221,10 @@ function latestOffset(series: ActivitySeries): string {
 
 function statusLabel(status: ActivitySeries['status']): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function connectionLabel(mode: NonNullable<ActivitySeries['mode']>): string {
+  return mode === 'pqs_only' ? 'PQS only' : 'PQS + gRPC';
 }
 
 function peakActivity(
@@ -269,7 +261,7 @@ function verticalScaleLabels(
     <div class="activity-home__hero">
       <div class="activity-home__copy">
         <p class="activity-home__eyebrow">Overview</p>
-        <h2>Network Activity</h2>
+        <h2>Nodes</h2>
       </div>
       <div class="activity-home__controls">
         <div class="activity-home__selector" aria-label="Activity window selector">
@@ -285,7 +277,6 @@ function verticalScaleLabels(
             {{ days }}
           </button>
         </div>
-        <button type="button" class="dashboard__refresh" @click="refreshPage">Refresh</button>
       </div>
     </div>
 
@@ -312,9 +303,18 @@ function verticalScaleLabels(
                   {{ series.latestActiveContractCount }} active contracts
                 </p>
               </div>
-              <span class="activity-panel__status" :data-status="series.status">
-                {{ statusLabel(series.status) }}
-              </span>
+              <div class="activity-panel__status-group">
+                <span
+                  v-if="series.mode"
+                  class="activity-panel__connection"
+                  :data-mode="series.mode"
+                >
+                  {{ connectionLabel(series.mode) }}
+                </span>
+                <span class="activity-panel__status" :data-status="series.status">
+                  {{ statusLabel(series.status) }}
+                </span>
+              </div>
             </div>
 
             <div class="activity-panel__chart-layout">
@@ -333,35 +333,36 @@ function verticalScaleLabels(
                 </span>
               </div>
 
-              <svg
-                class="activity-panel__chart"
-                viewBox="0 0 320 96"
-                role="img"
-                :aria-label="`${series.label} activity history`"
-              >
-                <line
-                  v-for="position in guidePositions(selectedDays)"
-                  :key="`${series.nodeId}-${selectedDays}-${position}`"
-                  class="activity-panel__guide"
-                  :x1="position"
-                  y1="0"
-                  :x2="position"
-                  y2="96"
-                />
-                <polyline
-                  class="activity-panel__line"
-                  fill="none"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="3"
-                  :points="linePoints(
-                    series,
-                    windowMinutesLabel,
-                    history?.generatedAt ?? null,
-                    selectedDays,
-                  )"
-                />
-              </svg>
+              <div class="activity-panel__chart-shell">
+                <div class="activity-panel__guides" aria-hidden="true">
+                  <span
+                    v-for="position in guidePositions(selectedDays)"
+                    :key="`${series.nodeId}-${selectedDays}-${position}`"
+                    class="activity-panel__guide"
+                    :style="{ left: position }"
+                  />
+                </div>
+                <svg
+                  class="activity-panel__chart"
+                  viewBox="0 0 320 96"
+                  role="img"
+                  :aria-label="`${series.label} activity history`"
+                >
+                  <polyline
+                    class="activity-panel__line"
+                    fill="none"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="3"
+                    :points="linePoints(
+                      series,
+                      windowMinutesLabel,
+                      history?.generatedAt ?? null,
+                      selectedDays,
+                    )"
+                  />
+                </svg>
+              </div>
             </div>
 
             <div
@@ -383,41 +384,6 @@ function verticalScaleLabels(
           </article>
         </RouterLink>
       </div>
-
-      <section class="activity-home__updates-section">
-        <UpdatesBrowser
-          ref="updatesBrowser"
-          scope="global"
-          path="/"
-          title="Latest Updates"
-          eyebrow="Updates"
-          show-node-column
-          source-tag="updates"
-          advanced-filter-id="home-updates-advanced-filter"
-          loading-message="Loading latest updates..."
-          empty-message="No updates available yet."
-          table-aria-label="Latest updates across all nodes"
-          spinner-label="Updating latest updates"
-          row-class="activity-home__updates-row"
-        />
-      </section>
-
-      <section class="activity-home__updates-section">
-        <ContractsBrowser
-          ref="contractsBrowser"
-          scope="global"
-          path="/"
-          title="Latest Contracts"
-          eyebrow="Contracts"
-          query-prefix="contracts"
-          show-node-column
-          advanced-filter-id="home-contracts-advanced-filter"
-          loading-message="Loading latest contracts..."
-          empty-message="No contracts available yet."
-          table-aria-label="Latest contracts across all nodes"
-          spinner-label="Updating latest contracts"
-        />
-      </section>
 
     </template>
 

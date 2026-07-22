@@ -35,6 +35,7 @@ export interface NodeActivitySample {
 export interface NodeActivitySeries {
   nodeId: string;
   label: string;
+  mode?: NodeMode;
   status: NodeStatus;
   latestActiveContractCount: number;
   samples: NodeActivitySample[];
@@ -244,13 +245,25 @@ export type NodeDecodedDamlValue =
   | number
   | boolean
   | { kind: 'contract_id'; value: string }
-  | { kind: 'record'; fields: Array<{ label: string; value: NodeDecodedDamlValue }> }
+  | {
+      kind: 'record';
+      fields: Array<{ label: string; value: NodeDecodedDamlValue }>;
+    }
   | { kind: 'variant'; constructor: string; value: NodeDecodedDamlValue | null }
   | { kind: 'enum'; constructor: string }
   | { kind: 'list'; items: NodeDecodedDamlValue[] }
   | { kind: 'optional'; value: NodeDecodedDamlValue | null }
-  | { kind: 'text_map'; entries: Array<{ key: string; value: NodeDecodedDamlValue }> }
-  | { kind: 'gen_map'; entries: Array<{ key: NodeDecodedDamlValue; value: NodeDecodedDamlValue }> }
+  | {
+      kind: 'text_map';
+      entries: Array<{ key: string; value: NodeDecodedDamlValue }>;
+    }
+  | {
+      kind: 'gen_map';
+      entries: Array<{
+        key: NodeDecodedDamlValue;
+        value: NodeDecodedDamlValue;
+      }>;
+    }
   | { kind: 'unit' };
 
 export type NodeDecodeState<T> =
@@ -427,18 +440,12 @@ export interface NodeInstalledPackageGroup {
 }
 
 export type NodeParticipantStatusState =
-  | 'ok'
-  | 'not_initialized'
-  | 'grpc_not_configured'
-  | 'grpc_error';
+  'ok' | 'not_initialized' | 'grpc_not_configured' | 'grpc_error';
 
 export type NodeParticipantStatusComponentSeverity = 'ok' | 'degraded' | 'failed' | 'fatal';
 export type NodeParticipantSynchronizerHealth = 'unspecified' | 'healthy' | 'unhealthy';
 export type NodeParticipantWaitingForExternalInput =
-  | 'unspecified'
-  | 'id'
-  | 'node_topology'
-  | 'initialization';
+  'unspecified' | 'id' | 'node_topology' | 'initialization';
 
 export interface NodeParticipantStatusComponent {
   name: string;
@@ -487,6 +494,64 @@ export interface NodeParticipantStatusResponse {
   participantStatusErrorCode: string | null;
   participantStatusErrorDetails: string | null;
   participantStatusErrorTid: string | null;
+}
+
+export interface NodeTrafficState {
+  synchronizerId: string;
+  extraTrafficPurchased: string;
+  extraTrafficConsumed: string;
+  baseTrafficRemainder: string;
+  lastConsumedCost: string;
+  /** Microseconds since Unix epoch, as returned by the participant gRPC API. */
+  timestamp: string;
+  serial: number | null;
+}
+
+export interface NodeTrafficPurchase {
+  updateId: string;
+  eventOffset: string;
+  recordTime: string | null;
+  purchasedTraffic: string | null;
+  amuletPaid: string | null;
+}
+
+export interface NodeTrafficPurchasesResponse {
+  nodeId: string;
+  label: string;
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  purchases: NodeTrafficPurchase[];
+}
+
+export interface GlobalTrafficPurchase extends NodeTrafficPurchase {
+  nodeId: string;
+  label: string;
+}
+
+export interface GlobalTrafficCurrentEntry {
+  nodeId: string;
+  label: string;
+  mode: NodeMode;
+  status: 'ok' | 'grpc_not_configured' | 'grpc_error';
+  states: NodeTrafficState[];
+  error: string | null;
+}
+
+export interface GlobalTrafficHistoryStatus {
+  nodeId: string;
+  label: string;
+  status: 'ok' | 'pqs_error';
+  error: string | null;
+}
+
+export interface GlobalTrafficPurchasesResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  purchases: GlobalTrafficPurchase[];
+  current: GlobalTrafficCurrentEntry[];
+  historyStatus: GlobalTrafficHistoryStatus[];
 }
 
 export interface NodePackagesResponse {

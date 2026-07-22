@@ -3,6 +3,32 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('styles.css', () => {
+  it('highlights the search input with only a bottom line when focused', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];
+    const searchHoverStyles = styles.match(/\.app-search:hover \{([\s\S]*?)\n\}/)?.[1];
+    const searchFocusStyles = styles.match(/\.app-search:focus \{([\s\S]*?)\n\}/)?.[1];
+    const searchFocusVisibleStyles = styles.match(/\.app-search:focus-visible \{([\s\S]*?)\n\}/)?.[1];
+
+    expect(searchStyles).toContain('background: transparent;');
+    expect(searchStyles).toContain('border-bottom: 2px solid transparent;');
+    expect(searchHoverStyles).toContain('border-bottom-color: var(--line-soft);');
+    expect(searchFocusStyles).toContain('background: transparent;');
+    expect(searchFocusStyles).toContain('border-bottom-color: var(--accent-600);');
+    expect(searchFocusStyles).not.toContain('background: color-mix');
+    expect(searchFocusVisibleStyles).toContain('outline: none;');
+  });
+
+  it('centers the Explore arrow within its own icon box', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const arrowStyles = styles.match(/\.app-explore__arrow \{([\s\S]*?)\n\}/)?.[1];
+
+    expect(arrowStyles).toContain('display: block;');
+    expect(arrowStyles).toContain('width: 1rem;');
+    expect(arrowStyles).toContain('height: 1rem;');
+    expect(arrowStyles).toContain('transform-origin: center;');
+  });
+
   it('themes the advanced filter checkbox to match the form surfaces', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
 

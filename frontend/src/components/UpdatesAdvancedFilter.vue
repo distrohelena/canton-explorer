@@ -3,6 +3,11 @@ import SearchableCombobox from './SearchableCombobox.vue';
 
 type FilterMode = 'or' | 'and';
 
+type NodeFilterOption = {
+  id: string;
+  label: string;
+};
+
 const props = defineProps<{
   id: string;
   partyDraft: string;
@@ -12,6 +17,8 @@ const props = defineProps<{
   templateOptions: string[];
   filterMode: FilterMode;
   hideSplice: boolean;
+  nodeOptions?: NodeFilterOption[];
+  activeNodes?: string[];
   showPartyFilters?: boolean;
   hideSpliceLabel?: string;
 }>();
@@ -25,6 +32,7 @@ const emit = defineEmits<{
   removeTemplateFilter: [templateId: string];
   setFilterMode: [mode: FilterMode];
   setHideSplice: [hidden: boolean];
+  setNodeFilters: [nodeIds: string[]];
 }>();
 
 function handlePartyDraftInput(event: Event) {
@@ -40,6 +48,22 @@ function handleHideSpliceChange(event: Event) {
 function handleTemplateDraftSelect(value: string) {
   emit('update:templateDraft', value);
 }
+
+function handleNodeChange(nodeId: string, event: Event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+
+  const activeNodes = new Set(props.activeNodes ?? []);
+  if (target.checked) {
+    activeNodes.add(nodeId);
+  } else {
+    activeNodes.delete(nodeId);
+  }
+
+  emit('setNodeFilters', Array.from(activeNodes));
+}
 </script>
 
 <template>
@@ -50,6 +74,29 @@ function handleTemplateDraftSelect(value: string) {
   >
     <h3 class="node-updates__advanced-filter-title">Advanced Filter Parameters</h3>
     <div class="node-updates__advanced-filter-grid">
+      <div
+        v-if="nodeOptions && nodeOptions.length > 0"
+        class="node-updates__advanced-filter-field node-updates__advanced-filter-field--nodes"
+      >
+        <span>Nodes</span>
+        <div class="node-updates__advanced-filter-node-list">
+          <label
+            v-for="node in nodeOptions"
+            :key="node.id"
+            class="node-updates__advanced-filter-node-toggle"
+          >
+            <input
+              class="node-updates__advanced-filter-checkbox"
+              :checked="(activeNodes ?? []).includes(node.id)"
+              type="checkbox"
+              :aria-label="node.label"
+              @change="handleNodeChange(node.id, $event)"
+            />
+            <span>{{ node.label }}</span>
+          </label>
+        </div>
+      </div>
+
       <div
         v-if="showPartyFilters !== false"
         class="node-updates__advanced-filter-field node-updates__advanced-filter-field--party"

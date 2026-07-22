@@ -24,6 +24,7 @@ const props = withDefaults(
     emptyMessage?: string;
     tableAriaLabel?: string;
     spinnerLabel?: string;
+    bare?: boolean;
   }>(),
   {
     eyebrow: 'Transfers',
@@ -33,6 +34,7 @@ const props = withDefaults(
     emptyMessage: 'No token transfers available yet.',
     tableAriaLabel: 'Latest token transfers',
     spinnerLabel: 'Updating latest token transfers',
+    bare: false,
   },
 );
 
@@ -489,7 +491,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
 </script>
 
 <template>
-  <section class="node-detail__section tokens-page__section">
+  <section :class="bare ? 'tokens-page__table-section' : 'node-detail__section tokens-page__section'">
     <header class="node-detail__hero">
       <div>
         <p class="activity-home__eyebrow">{{ eyebrow }}</p>
@@ -544,7 +546,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
 
     <section
       v-else-if="tokenTransfersResponse"
-      class="node-updates__section"
+      :class="bare ? 'tokens-page__table-shell' : 'node-updates__section'"
       :aria-busy="loadingTransfers ? 'true' : 'false'"
     >
       <div

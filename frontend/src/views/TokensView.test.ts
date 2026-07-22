@@ -115,8 +115,13 @@ describe('TokensView', () => {
     await renderAt('/tokens');
 
     expect(await screen.findByRole('heading', { name: 'Known Tokens' })).toBeInTheDocument();
+    const knownTokensTable = await screen.findByRole('table', { name: 'Known tokens' });
+    expect(knownTokensTable.closest('.node-detail__section')).toBeNull();
+    expect(within(knownTokensTable).getByRole('columnheader', { name: 'Token' })).toBeInTheDocument();
+    expect(within(knownTokensTable).getByRole('columnheader', { name: 'Issuer' })).toBeInTheDocument();
+    expect(within(knownTokensTable).getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
     expect(screen.getAllByText('Validator License').length).toBeGreaterThan(0);
-    expect(screen.getByText('Issuer')).toBeInTheDocument();
+    expect(within(knownTokensTable).getByRole('cell', { name: 'Issuer' })).toBeInTheDocument();
     expect(screen.getAllByText('PQS').length).toBeGreaterThan(0);
     expect(screen.queryByText('Issuer::validator-license')).not.toBeInTheDocument();
 
@@ -129,6 +134,7 @@ describe('TokensView', () => {
     expect(within(transfersTable).getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
     expect(within(transfersTable).getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
+    expect(transfersBrowserSection.closest('.node-detail__section')).toBeNull();
     expect(within(transfersBrowserSection).getByRole('button', { name: 'Older' })).not.toBeDisabled();
     expect(within(transfersBrowserSection).getByRole('button', { name: 'Newer' })).toBeDisabled();
     expect(fetchLatestTokenTransfers).toHaveBeenCalledWith(10, {});

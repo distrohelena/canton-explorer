@@ -1,14 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { defineComponent } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.vue';
 
 const HomeStub = defineComponent({
   template: '<div>Home Activity View</div>',
 });
 
-const NodesStub = defineComponent({
+const ActivityStub = defineComponent({
   template: '<div>Nodes View</div>',
 });
 
@@ -22,6 +22,14 @@ const ContractsStub = defineComponent({
 
 const TokensStub = defineComponent({
   template: '<div>Tokens View</div>',
+});
+
+const SettingsStub = defineComponent({
+  template: '<div>Settings View</div>',
+});
+
+const TrafficStub = defineComponent({
+  template: '<div>Traffic Purchases View</div>',
 });
 
 const DebuggerStub = defineComponent({
@@ -61,10 +69,12 @@ async function renderAt(path: string) {
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: HomeStub },
-      { path: '/nodes', component: NodesStub },
+      { path: '/nodes', component: ActivityStub },
       { path: '/parties', component: PartiesStub },
       { path: '/contracts', component: ContractsStub },
       { path: '/tokens', component: TokensStub },
+      { path: '/settings', component: SettingsStub },
+      { path: '/traffic', component: TrafficStub },
       { path: '/debugger', component: DebuggerStub },
       { path: '/tokens/transfers/:updateId', component: TokenTransferDetailStub, props: true },
       { path: '/search', component: SearchResultsStub },
@@ -78,14 +88,21 @@ async function renderAt(path: string) {
   router.push(path);
   await router.isReady();
 
-  return render(App, {
+  return {
+    router,
+    ...render(App, {
     global: {
       plugins: [router],
     },
-  });
+    }),
+  };
 }
 
 describe('App', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     document.body.innerHTML = '';
     window.localStorage.clear();
@@ -107,17 +124,35 @@ describe('App', () => {
     });
   });
 
-  it('renders home and nodes navigation on the home route', async () => {
+  it('renders home and the available navigation on the home route', async () => {
     const { container } = await renderAt('/');
 
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(container.querySelector('img[src="/cantonexplorer.png"]')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Updates' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Nodes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Parties' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Contracts' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Tokens' })).not.toBeInTheDocument();
+    const exploreButton = screen.getByRole('button', { name: 'Ledger' });
+    expect(exploreButton).toHaveAttribute('aria-expanded', 'false');
+    expect(container.querySelector('svg.app-explore__arrow')).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Traffic Purchases' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Traffic', { selector: '.app-explore__group-label' })).not.toBeInTheDocument();
+    await fireEvent.click(exploreButton);
+    expect(exploreButton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Updates' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Nodes' })).toHaveAttribute('href', '/nodes');
+    expect(screen.getByText('Traffic', { selector: '.app-explore__group-label' })).toBeInTheDocument();
+    expect(screen.getByText('Ledger', { selector: '.app-explore__group-label' })).toBeInTheDocument();
+    expect(screen.getByText('Network', { selector: '.app-explore__group-label' })).toBeInTheDocument();
+    expect(screen.getByText('Assets', { selector: '.app-explore__group-label' })).toBeInTheDocument();
+    expect(screen.getByText('Tools', { selector: '.app-explore__group-label' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Traffic Purchases' })).toHaveAttribute('href', '/traffic');
+    expect(screen.getByRole('link', { name: 'Debugger' })).toHaveAttribute('href', '/debugger');
     expect(
       screen.getByPlaceholderText('Search'),
     ).toBeInTheDocument();
@@ -137,26 +172,47 @@ describe('App', () => {
     ).toHaveAttribute('href', 'https://www.npmjs.com/package/@distrohelena/canton-typescript-sdk');
   });
 
+  it('closes the Explore menu when clicking outside it', async () => {
+    await renderAt('/');
+
+    const exploreButton = screen.getByRole('button', { name: 'Ledger' });
+    await fireEvent.click(exploreButton);
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+
+    await fireEvent.click(document.body);
+
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(exploreButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('updates the Explore label to the selected high-level section', async () => {
+    const { router } = await renderAt('/');
+
+    await router.push('/nodes/participant-1');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
+    });
+
+    await router.push('/nodes');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
+      expect(screen.getByText('Nodes View')).toBeInTheDocument();
+    });
+  });
+
   it('keeps the shared shell on the nodes route', async () => {
     await renderAt('/nodes');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.getByText('Nodes View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on the parties route', async () => {
     await renderAt('/parties');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Parties View')).toBeInTheDocument();
   });
@@ -164,11 +220,7 @@ describe('App', () => {
   it('keeps the shared shell on the contracts route', async () => {
     await renderAt('/contracts');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Contracts View')).toBeInTheDocument();
   });
@@ -176,40 +228,47 @@ describe('App', () => {
   it('keeps the shared shell on the tokens route', async () => {
     await renderAt('/tokens');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Parties' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assets' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Tokens View')).toBeInTheDocument();
+  });
+
+  it('renders the Traffic menu and keeps the shared shell on traffic purchases', async () => {
+    const { container, router } = await renderAt('/traffic');
+
+    const exploreButton = screen.getByRole('button', { name: 'Traffic' });
+    expect(container.querySelector('.app-explore__group-label')).not.toBeInTheDocument();
+    await fireEvent.click(exploreButton);
+    expect(screen.getByText('Traffic', { selector: '.app-explore__group-label' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Traffic' })).toBe(exploreButton);
+    expect(screen.getByRole('link', { name: 'Traffic Purchases' })).toHaveAttribute('href', '/traffic');
+    expect(screen.getByText('Traffic Purchases View')).toBeInTheDocument();
+    expect(router.currentRoute.value.path).toBe('/traffic');
   });
 
   it('keeps the shared shell on the debugger route', async () => {
     const { container } = await renderAt('/debugger');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tools' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Debugger View')).toBeInTheDocument();
     expect(container.querySelector('.app-shell--debugger')).not.toBeNull();
     expect(container.querySelector('.app-frame--debugger')).not.toBeNull();
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tools' })).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a token transfer detail route', async () => {
     await renderAt('/tokens/transfers/token-update-2');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assets' })).toBeInTheDocument();
     expect(screen.getByText('Token Transfer Detail View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a node detail route', async () => {
     await renderAt('/nodes/participant-1');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(screen.queryByText('Current Node')).not.toBeInTheDocument();
   });
@@ -219,16 +278,14 @@ describe('App', () => {
       '/nodes/participant-1/updates/1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
     );
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.getByText('Update Detail View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a contract detail route', async () => {
     await renderAt('/nodes/participant-1/contracts/00abc');
 
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.getByText('Contract Detail View')).toBeInTheDocument();
   });
 

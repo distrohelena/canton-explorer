@@ -24,10 +24,21 @@ export class NodesController {
   @Get('/nodes/activity-history')
   listActivityHistory(@Query('days') days?: string) {
     const parsedDays = days ? Number.parseInt(days, 10) : undefined;
+    const configuredModes = new Map(
+      this.configService.list().map((node) => [node.id, node.mode]),
+    );
 
-    return this.cacheService.listActivityHistory(
+    const history = this.cacheService.listActivityHistory(
       parsedDays && Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : undefined,
     );
+
+    return {
+      ...history,
+      nodes: history.nodes.map((node) => ({
+        ...node,
+        mode: configuredModes.get(node.nodeId),
+      })),
+    };
   }
 
   @Get('/updates')
@@ -62,6 +73,7 @@ export class NodesController {
     @Query('limit') limit?: string,
     @Query('before') before?: string,
     @Query('after') after?: string,
+    @Query('node') node?: string | string[],
     @Query('party') party?: string | string[],
     @Query('template') template?: string | string[],
     @Query('partyMode') partyMode?: string,
@@ -76,10 +88,43 @@ export class NodesController {
       {
         before,
         after,
+        nodeIds: node === undefined ? undefined : Array.isArray(node) ? node : [node],
         parties: Array.isArray(party) ? party : party ? [party] : undefined,
         templates: Array.isArray(template) ? template : template ? [template] : undefined,
         partyMode: partyMode ?? mode,
         hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      },
+    );
+  }
+
+  @Get('/traffic-purchases')
+  listGlobalTrafficPurchases(
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('node') node?: string | string[],
+    @Query('minDate') minDate?: string,
+    @Query('maxDate') maxDate?: string,
+    @Query('purchasedMin') purchasedMin?: string,
+    @Query('purchasedMax') purchasedMax?: string,
+    @Query('paidMin') paidMin?: string,
+    @Query('paidMax') paidMax?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+
+    return this.pqsSummaryService.fetchGlobalTrafficPurchases(
+      this.configService.list(),
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      {
+        before,
+        after,
+        nodeIds: node === undefined ? undefined : Array.isArray(node) ? node : [node],
+        minDate,
+        maxDate,
+        purchasedMin,
+        purchasedMax,
+        paidMin,
+        paidMax,
       },
     );
   }
@@ -349,6 +394,91 @@ export class NodesController {
     return this.buildParticipantStatusEntry(node);
   }
 
+  @Get('/nodes/:id/traffic-purchases')
+  async getNodeTrafficPurchases(
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('minDate') minDate?: string,
+    @Query('maxDate') maxDate?: string,
+    @Query('purchasedMin') purchasedMin?: string,
+    @Query('purchasedMax') purchasedMax?: string,
+    @Query('paidMin') paidMin?: string,
+    @Query('paidMax') paidMax?: string,
+  ) {
+    const node = this.getNodeConfig(id);
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const historyLimit =
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 25;
+
+    const [currentResult, historyResult] = await Promise.allSettled([
+      node.mode === 'pqs_with_grpc'
+        ? this.grpcOperationsService.fetchTrafficStates(node)
+        : Promise.resolve([]),
+      this.pqsSummaryService.fetchTrafficPurchases(node, {
+        limit: historyLimit,
+        before,
+        after,
+        minDate,
+        maxDate,
+        purchasedMin,
+        purchasedMax,
+        paidMin,
+        paidMax,
+      }),
+    ]);
+
+    const current =
+      node.mode !== 'pqs_with_grpc'
+        ? {
+            status: 'grpc_not_configured' as const,
+            states: [],
+            error: null,
+          }
+        : currentResult.status === 'fulfilled'
+          ? {
+              status: 'ok' as const,
+              states: currentResult.value,
+              error: null,
+            }
+          : {
+              status: 'grpc_error' as const,
+              states: [],
+              error: describeGrpcError(currentResult.reason).message,
+            };
+
+    const history =
+      historyResult.status === 'fulfilled'
+        ? {
+            status: 'ok' as const,
+            limit: historyResult.value.limit,
+            nextBefore: historyResult.value.nextBefore,
+            nextAfter: historyResult.value.nextAfter,
+            purchases: historyResult.value.purchases,
+            error: null,
+          }
+        : {
+            status: 'pqs_error' as const,
+            limit: historyLimit,
+            nextBefore: null,
+            nextAfter: null,
+            purchases: [],
+            error:
+              historyResult.reason instanceof Error
+                ? historyResult.reason.message
+                : 'Unknown PQS error',
+          };
+
+    return {
+      nodeId: node.id,
+      label: node.label,
+      mode: node.mode,
+      current,
+      history,
+    };
+  }
+
   @Get('/nodes/:id/contracts')
   async listNodeContracts(
     @Param('id') id: string,
@@ -428,25 +558,19 @@ export class NodesController {
 
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
 
-    return this.pqsSummaryService.fetchRecentUpdates(
-      node,
-      {
-        limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
-        before,
-        after,
-        parties: Array.isArray(party) ? party : party ? [party] : undefined,
-        templates: Array.isArray(template) ? template : template ? [template] : undefined,
-        partyMode: partyMode ?? mode,
-        hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
-      },
-    );
+    return this.pqsSummaryService.fetchRecentUpdates(node, {
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      before,
+      after,
+      parties: Array.isArray(party) ? party : party ? [party] : undefined,
+      templates: Array.isArray(template) ? template : template ? [template] : undefined,
+      partyMode: partyMode ?? mode,
+      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+    });
   }
 
   @Get('/nodes/:id/updates/:updateId')
-  async getNodeUpdateDetail(
-    @Param('id') id: string,
-    @Param('updateId') updateId: string,
-  ) {
+  async getNodeUpdateDetail(@Param('id') id: string, @Param('updateId') updateId: string) {
     const node = this.getNodeConfig(id);
 
     try {
@@ -461,10 +585,7 @@ export class NodesController {
   }
 
   @Get('/nodes/:id/contracts/:contractId')
-  async getNodeContractDetail(
-    @Param('id') id: string,
-    @Param('contractId') contractId: string,
-  ) {
+  async getNodeContractDetail(@Param('id') id: string, @Param('contractId') contractId: string) {
     const node = this.getNodeConfig(id);
 
     try {
@@ -558,11 +679,15 @@ export class NodesController {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
 
     try {
-      return await this.pqsSummaryService.fetchNamespaceParties(this.configService.list(), namespaceId, {
-        limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
-        before,
-        after,
-      });
+      return await this.pqsSummaryService.fetchNamespaceParties(
+        this.configService.list(),
+        namespaceId,
+        {
+          limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+          before,
+          after,
+        },
+      );
     } catch (error) {
       if (error instanceof Error && error.message === 'Namespace not found') {
         throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
@@ -722,7 +847,9 @@ export class NodesController {
         nodeId: node.id,
         label: node.label,
         mode: node.mode,
-        participantStatusStatus: result.participantStatus ? ('ok' as const) : ('not_initialized' as const),
+        participantStatusStatus: result.participantStatus
+          ? ('ok' as const)
+          : ('not_initialized' as const),
         participantStatus: result.participantStatus,
         notInitialized: result.notInitialized,
         participantStatusError: null,
@@ -770,7 +897,10 @@ export class NodesController {
           label: node.label,
           mode: node.mode,
           source: 'grpc' as const,
-          ...this.paginateFingerprints(this.filterFingerprints(fingerprints, exactFingerprint), options),
+          ...this.paginateFingerprints(
+            this.filterFingerprints(fingerprints, exactFingerprint),
+            options,
+          ),
         };
       } catch {
         // Fall through to PQS-derived suffixes when gRPC is unavailable.
@@ -822,7 +952,10 @@ export class NodesController {
 
         return {
           source: 'grpc' as const,
-          ...this.paginateFingerprints(this.filterFingerprints(fingerprints, exactFingerprint), options),
+          ...this.paginateFingerprints(
+            this.filterFingerprints(fingerprints, exactFingerprint),
+            options,
+          ),
         };
       } catch {
         // Fall through to PQS so the global result uses one consistent source.
@@ -836,7 +969,10 @@ export class NodesController {
 
     return {
       source: 'pqs' as const,
-      ...this.paginateFingerprints(this.filterFingerprints(fingerprints, exactFingerprint), options),
+      ...this.paginateFingerprints(
+        this.filterFingerprints(fingerprints, exactFingerprint),
+        options,
+      ),
     };
   }
 

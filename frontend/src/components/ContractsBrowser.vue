@@ -19,6 +19,10 @@ import UpdatesToolbar from './UpdatesToolbar.vue';
 
 type FilterMode = 'or' | 'and';
 type ContractScope = 'global' | 'node' | 'party';
+type NodeFilterOption = {
+  id: string;
+  label: string;
+};
 
 const props = withDefaults(
   defineProps<{
@@ -28,6 +32,7 @@ const props = withDefaults(
     eyebrow?: string;
     nodeId?: string;
     partyId?: string;
+    nodeOptions?: NodeFilterOption[];
     queryPrefix?: string;
     showNodeColumn?: boolean;
     showPartyFilters?: boolean;
@@ -39,6 +44,7 @@ const props = withDefaults(
   }>(),
   {
     queryPrefix: '',
+    nodeOptions: () => [],
     showNodeColumn: false,
     showPartyFilters: true,
     eyebrow: 'Contracts',
@@ -61,10 +67,13 @@ const templateOptions = ref<string[]>([]);
 const templatesLoaded = ref(false);
 const activePartyFilters = ref<string[]>([]);
 const activeTemplateFilters = ref<string[]>([]);
+const activeNodeFilters = ref<string[]>([]);
 const activeFilterMode = ref<FilterMode>('or');
 const activeHideSplice = ref(false);
 
-function queryKey(base: 'before' | 'after' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit'): string {
+function queryKey(
+  base: 'before' | 'after' | 'node' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit',
+): string {
   if (!props.queryPrefix) {
     return base;
   }
@@ -94,6 +103,19 @@ function readQueryList(value: unknown): string[] {
   return typeof value === 'string' && value.trim().length > 0 ? [value] : [];
 }
 
+function readNodeFilters(): string[] {
+  const availableNodeIds = props.nodeOptions.map((node) => node.id);
+  const nodeQueryKey = queryKey('node');
+
+  if (!Object.prototype.hasOwnProperty.call(route.query, nodeQueryKey)) {
+    return availableNodeIds;
+  }
+
+  return uniqueValues(readQueryList(route.query[nodeQueryKey])).filter((nodeId) =>
+    availableNodeIds.includes(nodeId),
+  );
+}
+
 function readFilterMode(value: unknown): FilterMode {
   return value === 'and' ? 'and' : 'or';
 }
@@ -107,6 +129,7 @@ function readHideSplice(value: unknown): boolean {
 }
 
 function syncFiltersFromRoute() {
+  activeNodeFilters.value = props.scope === 'global' ? readNodeFilters() : [];
   activePartyFilters.value = props.showPartyFilters
     ? uniqueValues(readQueryList(route.query[queryKey('party')]))
     : [];
@@ -145,6 +168,7 @@ const activePageSize = computed(() => normalizePageSize(route.query[queryKey('li
 
 function hasAdvancedFilterQuery(): boolean {
   return (
+    (props.scope === 'global' && Object.prototype.hasOwnProperty.call(route.query, queryKey('node'))) ||
     activePartyFilters.value.length > 0 ||
     activeTemplateFilters.value.length > 0 ||
     (activePartyFilters.value.length > 0 && activeFilterMode.value !== 'or') ||
@@ -155,6 +179,7 @@ function hasAdvancedFilterQuery(): boolean {
 function clearManagedKeys(query: LocationQueryRaw) {
   delete query[queryKey('before')];
   delete query[queryKey('after')];
+  delete query[queryKey('node')];
   delete query[queryKey('party')];
   delete query[queryKey('template')];
   delete query[queryKey('partyMode')];
@@ -173,6 +198,7 @@ function buildQuery(
     templates?: string[];
     mode?: FilterMode;
     hideSplice?: boolean;
+    nodeIds?: string[];
     limit?: number;
   },
 ): LocationQueryRaw {
@@ -184,6 +210,15 @@ function buildQuery(
   }
   if (options?.after) {
     nextQuery[queryKey('after')] = options.after;
+  }
+  const nodeIds = options?.nodeIds ?? activeNodeFilters.value;
+  const availableNodeIds = props.nodeOptions.map((node) => node.id);
+  const allNodesSelected =
+    availableNodeIds.length > 0 &&
+    availableNodeIds.every((nodeId) => nodeIds.includes(nodeId)) &&
+    nodeIds.length === availableNodeIds.length;
+  if (props.scope === 'global' && availableNodeIds.length > 0 && !allNodesSelected) {
+    nextQuery[queryKey('node')] = nodeIds.length > 0 ? nodeIds : '';
   }
   const parties = options?.parties;
   if (props.showPartyFilters && (parties?.length ?? 0) > 0) {
@@ -261,6 +296,16 @@ async function loadContracts() {
 
     if (props.scope === 'global') {
       const options: Parameters<typeof fetchLatestContracts>[1] = {};
+
+      const availableNodeIds = props.nodeOptions.map((node) => node.id);
+      const allNodesSelected =
+        availableNodeIds.length > 0 &&
+        availableNodeIds.every((nodeId) => activeNodeFilters.value.includes(nodeId)) &&
+        activeNodeFilters.value.length === availableNodeIds.length;
+
+      if (availableNodeIds.length > 0 && !allNodesSelected) {
+        options.nodeIds = activeNodeFilters.value;
+      }
 
       if (before) {
         options.before = before;
@@ -514,6 +559,22 @@ async function setHideSplice(hidden: boolean) {
     }),
   );
 }
+
+async function setNodeFilters(nodeIds: string[]) {
+  activeNodeFilters.value = uniqueValues(nodeIds).filter((nodeId) =>
+    props.nodeOptions.some((node) => node.id === nodeId),
+  );
+
+  await pushQuery(
+    buildQuery({
+      parties: activePartyFilters.value,
+      templates: activeTemplateFilters.value,
+      mode: activeFilterMode.value,
+      hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
+    }),
+  );
+}
 </script>
 
 <template>
@@ -539,15 +600,21 @@ async function setHideSplice(hidden: boolean) {
       </div>
     </header>
 
-    <Transition name="node-updates-filter">
+    <div
+      class="node-updates-filter-shell"
+      :class="{ 'node-updates-filter-shell--open': showAdvancedFilter }"
+      :aria-hidden="!showAdvancedFilter"
+      :inert="!showAdvancedFilter"
+    >
       <UpdatesAdvancedFilter
-        v-if="showAdvancedFilter"
         :id="advancedFilterId"
         v-model:party-draft="partyFilterDraft"
         v-model:template-draft="templateFilterDraft"
         :active-parties="activePartyFilters"
         :active-templates="activeTemplateFilters"
         :template-options="templateOptions"
+        :node-options="nodeOptions"
+        :active-nodes="activeNodeFilters"
         :filter-mode="activeFilterMode"
         :hide-splice="activeHideSplice"
         :show-party-filters="showPartyFilters"
@@ -558,8 +625,9 @@ async function setHideSplice(hidden: boolean) {
         @remove-template-filter="removeTemplateFilter"
         @set-filter-mode="setFilterMode"
         @set-hide-splice="setHideSplice"
+        @set-node-filters="setNodeFilters"
       />
-    </Transition>
+    </div>
 
     <p v-if="!contractsResponse && loading" class="dashboard__message">{{ loadingMessage }}</p>
     <p v-else-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>

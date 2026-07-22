@@ -11,6 +11,7 @@ import type {
   NodeParticipantStatusSummary,
   NodeParticipantSynchronizerHealth,
   NodeParticipantWaitingForExternalInput,
+  NodeTrafficState,
   ServiceInfo,
   TokenSummary,
 } from '../domain/node.types';
@@ -140,10 +141,7 @@ type TopologySdkModule = {
       headState?: boolean;
     };
   };
-  TopologyBaseQuery: new (init: {
-    storeId?: TopologyStoreShape;
-    headState?: boolean;
-  }) => {
+  TopologyBaseQuery: new (init: { storeId?: TopologyStoreShape; headState?: boolean }) => {
     storeId?: TopologyStoreShape;
     headState?: boolean;
   };
@@ -163,9 +161,7 @@ type TopologySdkModule = {
     id?: string;
     physicalId?: string;
   }) => TopologyStoreShape['synchronizer'];
-  TopologyStoreTemporary: new (init: {
-    name: string;
-  }) => TopologyStoreShape['temporary'];
+  TopologyStoreTemporary: new (init: { name: string }) => TopologyStoreShape['temporary'];
 };
 
 @Injectable()
@@ -281,7 +277,8 @@ export class GrpcOperationsService {
           }
 
           const dedupeKey =
-            holder.contractId ?? `${holder.tokenId}\u0000${holder.partyId}\u0000${holder.amount ?? ''}`;
+            holder.contractId ??
+            `${holder.tokenId}\u0000${holder.partyId}\u0000${holder.amount ?? ''}`;
           if (!deduped.has(dedupeKey)) {
             deduped.set(dedupeKey, holder);
           }
@@ -298,10 +295,7 @@ export class GrpcOperationsService {
     }
   }
 
-  async fetchPartyTopology(
-    node: NodeConfig,
-    partyId: string,
-  ): Promise<GrpcPartyTopologyNodeEntry> {
+  async fetchPartyTopology(node: NodeConfig, partyId: string): Promise<GrpcPartyTopologyNodeEntry> {
     if (node.mode !== 'pqs_with_grpc') {
       return {
         nodeId: node.id,
@@ -316,17 +310,18 @@ export class GrpcOperationsService {
 
     try {
       return await this.withClient(node, async (client) => {
-        const [partyTopologyResponse, keyOwnerResponse, rawPartyToParticipantResponse] = await Promise.all([
-          client.topologyAggregationService.listPartiesAsync({
-            filterParty: partyId,
-            synchronizerIds: [],
-          }),
-          client.topologyAggregationService.listKeyOwnersAsync({
-            filterKeyOwnerUid: partyId,
-            synchronizerIds: [],
-          }),
-          this.tryListRawPartyToParticipant(client, partyId),
-        ]);
+        const [partyTopologyResponse, keyOwnerResponse, rawPartyToParticipantResponse] =
+          await Promise.all([
+            client.topologyAggregationService.listPartiesAsync({
+              filterParty: partyId,
+              synchronizerIds: [],
+            }),
+            client.topologyAggregationService.listKeyOwnersAsync({
+              filterKeyOwnerUid: partyId,
+              synchronizerIds: [],
+            }),
+            this.tryListRawPartyToParticipant(client, partyId),
+          ]);
 
         const aggregatedParticipantMappings = (partyTopologyResponse.results ?? [])
           .filter((result) => result.party === partyId)
@@ -370,8 +365,8 @@ export class GrpcOperationsService {
           .flatMap((result) => [
             ...(result.signingKeys ?? []).map((signingKey) => ({
               keyFingerprint:
-                this.nullIfEmptyString(signingKey.fingerprint)
-                ?? this.computePublicKeyFingerprint(client, signingKey.publicKey, signingKey.format),
+                this.nullIfEmptyString(signingKey.fingerprint) ??
+                this.computePublicKeyFingerprint(client, signingKey.publicKey, signingKey.format),
               publicKey: this.bytesToHex(signingKey.publicKey),
               purpose: this.joinDistinctValues(signingKey.usage ?? []),
               keyType: this.nullIfEmptyString(signingKey.scheme),
@@ -384,8 +379,8 @@ export class GrpcOperationsService {
             })),
             ...(result.encryptionKeys ?? []).map((encryptionKey) => ({
               keyFingerprint:
-                this.nullIfEmptyString(encryptionKey.fingerprint)
-                ?? this.computePublicKeyFingerprint(
+                this.nullIfEmptyString(encryptionKey.fingerprint) ??
+                this.computePublicKeyFingerprint(
                   client,
                   encryptionKey.publicKey,
                   encryptionKey.format,
@@ -414,8 +409,8 @@ export class GrpcOperationsService {
             keyFormat: this.nullIfEmptyString(signingKey.format),
             keySpec: this.nullIfEmptyString(signingKey.keySpec),
             threshold:
-              typeof item.partySigningKeys?.threshold === 'number'
-              && Number.isFinite(item.partySigningKeys.threshold)
+              typeof item.partySigningKeys?.threshold === 'number' &&
+              Number.isFinite(item.partySigningKeys.threshold)
                 ? item.partySigningKeys.threshold
                 : null,
             synchronizerIds: rawTopologySynchronizerId ? [rawTopologySynchronizerId] : [],
@@ -451,11 +446,12 @@ export class GrpcOperationsService {
     }
   }
 
-  async fetchParticipantStatus(
-    node: NodeConfig,
-  ): Promise<
+  async fetchParticipantStatus(node: NodeConfig): Promise<
     | { participantStatus: NodeParticipantStatusSummary; notInitialized: null }
-    | { participantStatus: null; notInitialized: NodeParticipantNotInitializedSummary }
+    | {
+        participantStatus: null;
+        notInitialized: NodeParticipantNotInitializedSummary;
+      }
   > {
     if (node.mode !== 'pqs_with_grpc') {
       throw new Error(`Node ${node.id} does not define grpc settings`);
@@ -466,15 +462,13 @@ export class GrpcOperationsService {
       const status = response.status;
 
       if (status) {
-
         return {
           participantStatus: {
             uid: this.nullIfEmptyString(status.uid),
             uptime: this.formatDuration(status.uptime),
             ports: status.ports ?? {},
             active: status.active,
-            commonStatusActive:
-              typeof status.active === 'boolean' ? status.active : null,
+            commonStatusActive: typeof status.active === 'boolean' ? status.active : null,
             version: this.nullIfEmptyString(status.version),
             supportedProtocolVersions: status.supportedProtocolVersions ?? [],
             topologyQueues: status.topologyQueues
@@ -487,14 +481,10 @@ export class GrpcOperationsService {
             components: (status.components ?? []).map((component) =>
               this.mapComponentStatus(component),
             ),
-            connectedSynchronizers: (status.connectedSynchronizers ?? []).map(
-              (synchronizer) => ({
-                physicalSynchronizerId: this.nullIfEmptyString(
-                  synchronizer.physicalSynchronizerId,
-                ),
-                health: this.mapSynchronizerHealth(synchronizer.health),
-              }),
-            ),
+            connectedSynchronizers: (status.connectedSynchronizers ?? []).map((synchronizer) => ({
+              physicalSynchronizerId: this.nullIfEmptyString(synchronizer.physicalSynchronizerId),
+              health: this.mapSynchronizerHealth(synchronizer.health),
+            })),
           },
           notInitialized: null,
         };
@@ -521,6 +511,36 @@ export class GrpcOperationsService {
           version: null,
         },
       };
+    });
+  }
+
+  async fetchTrafficStates(node: NodeConfig): Promise<NodeTrafficState[]> {
+    if (node.mode !== 'pqs_with_grpc') {
+      return [];
+    }
+
+    return this.withClient(node, async (client) => {
+      const response = await client.participantStatusService.getParticipantStatusAsync({});
+      const synchronizers = response.status?.connectedSynchronizers ?? [];
+
+      return Promise.all(
+        synchronizers.map(async (synchronizer) => {
+          const stateResponse = await client.trafficControlService.trafficControlStateAsync({
+            synchronizerId: synchronizer.physicalSynchronizerId,
+          });
+          const state = stateResponse.trafficState;
+
+          return {
+            synchronizerId: synchronizer.physicalSynchronizerId,
+            extraTrafficPurchased: state?.extraTrafficPurchased ?? '0',
+            extraTrafficConsumed: state?.extraTrafficConsumed ?? '0',
+            baseTrafficRemainder: state?.baseTrafficRemainder ?? '0',
+            lastConsumedCost: state?.lastConsumedCost ?? '0',
+            timestamp: state?.timestamp ?? '0',
+            serial: state?.serial ?? null,
+          };
+        }),
+      );
     });
   }
 
@@ -552,7 +572,9 @@ export class GrpcOperationsService {
       const fallbackResponse = await client.packageService.listPackagesAsync({});
       const packageRefs = await Promise.all(
         (fallbackResponse.packageIds ?? []).map(async (packageId) => {
-          const packageResponse = await client.packageService.getPackageAsync({ packageId });
+          const packageResponse = await client.packageService.getPackageAsync({
+            packageId,
+          });
           const archiveBytes = this.buildPackageArchive(packageId, packageResponse.archivePayload);
           const metadata = await this.decodePackageArchiveMetadata(archiveBytes);
 
@@ -619,7 +641,10 @@ export class GrpcOperationsService {
       return false;
     }
 
-    return error.message.includes('Method not found:') && error.message.includes('PackageService/ListPackages');
+    return (
+      error.message.includes('Method not found:') &&
+      error.message.includes('PackageService/ListPackages')
+    );
   }
 
   private loadTopologySdk(): Promise<TopologySdkModule> {
@@ -694,9 +719,7 @@ export class GrpcOperationsService {
     return contracts;
   }
 
-  private extractHoldingV2TokenSummary(
-    contract: LedgerHoldingActiveContract,
-  ): TokenSummary | null {
+  private extractHoldingV2TokenSummary(contract: LedgerHoldingActiveContract): TokenSummary | null {
     const view = this.findHoldingV2View(contract);
     if (!view) {
       return null;
@@ -767,13 +790,11 @@ export class GrpcOperationsService {
     };
   }
 
-  private findHoldingV2View(
-    contract: LedgerHoldingActiveContract,
-  ): LedgerViewRecord | null {
+  private findHoldingV2View(contract: LedgerHoldingActiveContract): LedgerViewRecord | null {
     for (const interfaceView of contract.createdEvent?.interfaceViews ?? []) {
       if (
-        interfaceView.interfaceId?.moduleName !== HOLDING_V2_INTERFACE_MODULE
-        || interfaceView.interfaceId?.entityName !== HOLDING_V2_INTERFACE_ENTITY
+        interfaceView.interfaceId?.moduleName !== HOLDING_V2_INTERFACE_MODULE ||
+        interfaceView.interfaceId?.entityName !== HOLDING_V2_INTERFACE_ENTITY
       ) {
         continue;
       }
@@ -788,10 +809,7 @@ export class GrpcOperationsService {
     return null;
   }
 
-  private findLedgerField(
-    record: LedgerViewRecord | null | undefined,
-    label: string,
-  ): unknown {
+  private findLedgerField(record: LedgerViewRecord | null | undefined, label: string): unknown {
     return record?.fields?.find((field) => field.label === label)?.value;
   }
 
@@ -802,11 +820,11 @@ export class GrpcOperationsService {
     };
   } {
     return (
-      typeof value === 'object'
-      && value !== null
-      && 'sum' in value
-      && typeof (value as { sum?: { oneofKind?: string } }).sum === 'object'
-      && (value as { sum?: { oneofKind?: string } }).sum?.oneofKind === 'record'
+      typeof value === 'object' &&
+      value !== null &&
+      'sum' in value &&
+      typeof (value as { sum?: { oneofKind?: string } }).sum === 'object' &&
+      (value as { sum?: { oneofKind?: string } }).sum?.oneofKind === 'record'
     );
   }
 
@@ -815,20 +833,22 @@ export class GrpcOperationsService {
       return null;
     }
 
-    const sum = (value as {
-      sum?: {
-        oneofKind?: string;
-        party?: string;
-        text?: string;
-        numeric?: string;
-        int64?: string;
-        contractId?: string;
-        bool?: boolean;
-        optional?: { value?: unknown };
-        enum?: { constructor?: string };
-        variant?: { constructor?: string };
-      };
-    }).sum;
+    const sum = (
+      value as {
+        sum?: {
+          oneofKind?: string;
+          party?: string;
+          text?: string;
+          numeric?: string;
+          int64?: string;
+          contractId?: string;
+          bool?: boolean;
+          optional?: { value?: unknown };
+          enum?: { constructor?: string };
+          variant?: { constructor?: string };
+        };
+      }
+    ).sum;
 
     switch (sum?.oneofKind) {
       case 'party':
@@ -878,12 +898,14 @@ export class GrpcOperationsService {
       return null;
     }
 
-    const textMapEntries = (targetValue as {
-      sum?: {
-        oneofKind?: string;
-        textMap?: { entries?: Array<{ key?: string; value?: unknown }> };
-      };
-    }).sum;
+    const textMapEntries = (
+      targetValue as {
+        sum?: {
+          oneofKind?: string;
+          textMap?: { entries?: Array<{ key?: string; value?: unknown }> };
+        };
+      }
+    ).sum;
 
     if (textMapEntries?.oneofKind !== 'textMap') {
       return null;
@@ -910,10 +932,12 @@ export class GrpcOperationsService {
   }
 
   private getTokenMetadataConfig(): TokenMetadataConfig {
-    return this.nodeConfigService?.getTokenMetadataConfig() ?? {
-      nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
-      symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
-    };
+    return (
+      this.nodeConfigService?.getTokenMetadataConfig() ?? {
+        nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
+        symbolKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.symbolKeys],
+      }
+    );
   }
   private getLedgerFieldValueAtPath(
     record: LedgerViewRecord | null | undefined,
@@ -948,41 +972,38 @@ export class GrpcOperationsService {
   private async tryListRawPartyToParticipant(
     client: Awaited<ReturnType<GrpcClientFactory['create']>>,
     partyId: string,
-  ): Promise<
-    | {
-        storeId?: {
-          kind?: 'authorized' | 'synchronizer' | 'temporary';
-          synchronizer?: {
-            id?: string;
-            physicalId?: string;
-          };
-        };
-        results?: Array<{
-          item?: {
-            party?: string;
-            threshold?: number;
-            participants?: Array<{
-              participantUid?: string;
-              permission?: unknown;
-            }>;
-            partySigningKeys?: {
-              threshold?: number;
-              keys?: Array<{
-                format?: string;
-                publicKey?: Uint8Array;
-                usage?: string[];
-                scheme?: string;
-                keySpec?: string;
-              }>;
-            };
-          };
+  ): Promise<{
+    storeId?: {
+      kind?: 'authorized' | 'synchronizer' | 'temporary';
+      synchronizer?: {
+        id?: string;
+        physicalId?: string;
+      };
+    };
+    results?: Array<{
+      item?: {
+        party?: string;
+        threshold?: number;
+        participants?: Array<{
+          participantUid?: string;
+          permission?: unknown;
         }>;
-      }
-    | null
-  > {
+        partySigningKeys?: {
+          threshold?: number;
+          keys?: Array<{
+            format?: string;
+            publicKey?: Uint8Array;
+            usage?: string[];
+            scheme?: string;
+            keySpec?: string;
+          }>;
+        };
+      };
+    }>;
+  } | null> {
     if (
-      !client.topologyManagerReadService?.listPartyToParticipantAsync
-      || !client.topologyManagerReadService.listAvailableStoresAsync
+      !client.topologyManagerReadService?.listPartyToParticipantAsync ||
+      !client.topologyManagerReadService.listAvailableStoresAsync
     ) {
       return null;
     }
@@ -1070,11 +1091,11 @@ export class GrpcOperationsService {
 
     return Array.from(merged.values()).filter(
       (mapping) =>
-        mapping.participantId !== null
-        || mapping.participantUid !== null
-        || mapping.permission !== null
-        || mapping.threshold !== null
-        || mapping.synchronizerIds.length > 0,
+        mapping.participantId !== null ||
+        mapping.participantUid !== null ||
+        mapping.permission !== null ||
+        mapping.threshold !== null ||
+        mapping.synchronizerIds.length > 0,
     );
   }
 
@@ -1116,14 +1137,14 @@ export class GrpcOperationsService {
 
     return Array.from(merged.values()).filter(
       (mapping) =>
-        mapping.keyFingerprint !== null
-        || mapping.publicKey !== null
-        || mapping.purpose !== null
-        || mapping.keyType !== null
-        || mapping.keyFormat !== null
-        || mapping.keySpec !== null
-        || mapping.threshold !== null
-        || mapping.synchronizerIds.length > 0,
+        mapping.keyFingerprint !== null ||
+        mapping.publicKey !== null ||
+        mapping.purpose !== null ||
+        mapping.keyType !== null ||
+        mapping.keyFormat !== null ||
+        mapping.keySpec !== null ||
+        mapping.threshold !== null ||
+        mapping.synchronizerIds.length > 0,
     );
   }
 
@@ -1136,7 +1157,11 @@ export class GrpcOperationsService {
   }
 
   private computePublicKeyFingerprint(
-    client: { hashing?: { computePublicKeyFingerprint(publicKey: Uint8Array, format?: string): string } },
+    client: {
+      hashing?: {
+        computePublicKeyFingerprint(publicKey: Uint8Array, format?: string): string;
+      };
+    },
     publicKey: Uint8Array | null | undefined,
     format?: string | null,
   ): string | null {
@@ -1169,10 +1194,10 @@ export class GrpcOperationsService {
 
   private async listLocalPartiesWithClient(client: {
     partyManagementService: {
-      listKnownPartiesAsync(input: {
-        pageSize: number;
-        pageToken?: string;
-      }): Promise<{ partyDetails?: Array<{ party: string; isLocal: boolean }>; nextPageToken?: string }>;
+      listKnownPartiesAsync(input: { pageSize: number; pageToken?: string }): Promise<{
+        partyDetails?: Array<{ party: string; isLocal: boolean }>;
+        nextPageToken?: string;
+      }>;
     };
   }): Promise<string[]> {
     const parties: string[] = [];
@@ -1308,9 +1333,7 @@ export class GrpcOperationsService {
     }
   }
 
-  private mapWaitingForExternalInput(
-    value: string,
-  ): NodeParticipantWaitingForExternalInput {
+  private mapWaitingForExternalInput(value: string): NodeParticipantWaitingForExternalInput {
     switch (value) {
       case 'id':
         return 'id';
@@ -1359,8 +1382,8 @@ export class GrpcOperationsService {
     }
 
     return (
-      error.message.includes('PACKAGE_NAMES_NOT_FOUND')
-      && error.message.includes('splice-api-token-holding-v2')
+      error.message.includes('PACKAGE_NAMES_NOT_FOUND') &&
+      error.message.includes('splice-api-token-holding-v2')
     );
   }
 

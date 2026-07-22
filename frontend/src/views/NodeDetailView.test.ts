@@ -27,6 +27,7 @@ vi.mock('../lib/api', () => ({
       activeContractCount: 12,
       latestOffset: '1',
       latestEventAt: '2026-07-01T11:59:00.000Z',
+      totalUpdateCount: 0,
     },
     sourceStatus: {
       pqs: {
@@ -174,9 +175,10 @@ describe('NodeDetailView', () => {
       ledgerSummary: {
         ledgerLabel: 'Retail Ledger 2',
         pqsDatabase: 'participant2_pqs',
-        activeContractCount: 20,
-        latestOffset: '2',
-        latestEventAt: '2026-07-01T11:59:30.000Z',
+      activeContractCount: 20,
+      latestOffset: '2',
+      latestEventAt: '2026-07-01T11:59:30.000Z',
+      totalUpdateCount: 0,
       },
       sourceStatus: {
         pqs: {

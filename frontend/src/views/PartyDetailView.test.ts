@@ -359,7 +359,7 @@ describe('PartyDetailView', () => {
     expect(contractsScope.getByRole('button', { name: 'Older' })).not.toBeDisabled();
 
     await fireEvent.click(contractsScope.getByRole('button', { name: 'Advanced Filter' }));
-    expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
+    expect(await contractsScope.findByText('Advanced Filter Parameters')).toBeInTheDocument();
 
     await fireEvent.update(contractsScope.getByRole('combobox', { name: 'Template ID' }), 'Main:Asset');
     await fireEvent.click(contractsScope.getByRole('button', { name: 'Add template filter' }));

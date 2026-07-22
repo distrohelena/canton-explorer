@@ -31,8 +31,76 @@ export interface NodeSnapshot {
     activeContractCount: number;
     latestOffset: string | null;
     latestEventAt: string | null;
+    totalUpdateCount: number;
   };
   sourceStatus: Record<'pqs' | 'grpc', SourceStatus>;
+}
+
+export interface NodeTrafficState {
+  synchronizerId: string;
+  extraTrafficPurchased: string;
+  extraTrafficConsumed: string;
+  baseTrafficRemainder: string;
+  lastConsumedCost: string;
+  timestamp: string;
+  serial: number | null;
+}
+
+export interface NodeTrafficPurchase {
+  updateId: string;
+  eventOffset: string;
+  recordTime: string | null;
+  purchasedTraffic: string | null;
+  amuletPaid: string | null;
+}
+
+export interface NodeTrafficPurchasesResponse {
+  nodeId: string;
+  label: string;
+  mode: NodeMode;
+  current: {
+    status: 'ok' | 'grpc_not_configured' | 'grpc_error';
+    states: NodeTrafficState[];
+    error: string | null;
+  };
+  history: {
+    status: 'ok' | 'pqs_error';
+    limit: number;
+    nextBefore: string | null;
+    nextAfter: string | null;
+    purchases: NodeTrafficPurchase[];
+    error: string | null;
+  };
+}
+
+export interface GlobalTrafficPurchase extends NodeTrafficPurchase {
+  nodeId: string;
+  label: string;
+}
+
+export interface GlobalTrafficCurrentEntry {
+  nodeId: string;
+  label: string;
+  mode: NodeMode;
+  status: 'ok' | 'grpc_not_configured' | 'grpc_error';
+  states: NodeTrafficState[];
+  error: string | null;
+}
+
+export interface GlobalTrafficHistoryStatus {
+  nodeId: string;
+  label: string;
+  status: 'ok' | 'pqs_error';
+  error: string | null;
+}
+
+export interface GlobalTrafficPurchasesResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  purchases: GlobalTrafficPurchase[];
+  current: GlobalTrafficCurrentEntry[];
+  historyStatus: GlobalTrafficHistoryStatus[];
 }
 
 export interface NodeInstalledPackageEntry {

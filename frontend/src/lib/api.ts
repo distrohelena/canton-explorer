@@ -14,6 +14,8 @@ import type {
   NodePackagesResponse,
   NodeParticipantStatusResponse,
   NodeSnapshot,
+  NodeTrafficPurchasesResponse,
+  GlobalTrafficPurchasesResponse,
 } from '../types/nodes';
 import type { NamespaceDetailResponse, NamespacePartiesResponse } from '../types/namespaces';
 import type { PartyDetailResponse } from '../types/parties';
@@ -237,6 +239,7 @@ export function fetchLatestContracts(
   options?: {
     before?: string;
     after?: string;
+    nodeIds?: string[];
     parties?: string[];
     templates?: string[];
     partyMode?: 'or' | 'and';
@@ -249,6 +252,17 @@ export function fetchLatestContracts(
   }
   if (options?.after) {
     params.set('after', options.after);
+  }
+  if (options?.nodeIds !== undefined) {
+    if (options.nodeIds.length === 0) {
+      params.append('node', '');
+    } else {
+      for (const nodeId of options.nodeIds) {
+        if (nodeId.trim()) {
+          params.append('node', nodeId);
+        }
+      }
+    }
   }
   for (const party of options?.parties ?? []) {
     if (party.trim()) {
@@ -285,6 +299,110 @@ export function fetchNodeTemplates(id: string): Promise<TemplateFilterResponse> 
 
 export function fetchNodeParticipantStatus(id: string): Promise<NodeParticipantStatusResponse> {
   return fetchJson<NodeParticipantStatusResponse>(`/nodes/${id}/participant-status`);
+}
+
+export interface NodeTrafficPurchasesQueryOptions {
+  limit?: number;
+  before?: string;
+  after?: string;
+  minDate?: string;
+  maxDate?: string;
+  purchasedMin?: string;
+  purchasedMax?: string;
+  paidMin?: string;
+  paidMax?: string;
+}
+
+export function fetchNodeTrafficPurchases(
+  id: string,
+  options?: NodeTrafficPurchasesQueryOptions,
+): Promise<NodeTrafficPurchasesResponse> {
+  const params = new URLSearchParams();
+  if (options?.limit) {
+    params.set('limit', String(options.limit));
+  }
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  if (options?.minDate) {
+    params.set('minDate', options.minDate);
+  }
+  if (options?.maxDate) {
+    params.set('maxDate', options.maxDate);
+  }
+  if (options?.purchasedMin) {
+    params.set('purchasedMin', options.purchasedMin);
+  }
+  if (options?.purchasedMax) {
+    params.set('purchasedMax', options.purchasedMax);
+  }
+  if (options?.paidMin) {
+    params.set('paidMin', options.paidMin);
+  }
+  if (options?.paidMax) {
+    params.set('paidMax', options.paidMax);
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return fetchJson<NodeTrafficPurchasesResponse>(`/nodes/${id}/traffic-purchases${suffix}`);
+}
+
+export function fetchTrafficPurchases(options?: {
+  limit?: number;
+  before?: string;
+  after?: string;
+  nodeIds?: string[];
+  minDate?: string;
+  maxDate?: string;
+  purchasedMin?: string;
+  purchasedMax?: string;
+  paidMin?: string;
+  paidMax?: string;
+}): Promise<GlobalTrafficPurchasesResponse> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set('limit', String(Math.trunc(options.limit)));
+  }
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  if (options?.nodeIds !== undefined) {
+    if (options.nodeIds.length === 0) {
+      params.append('node', '');
+    } else {
+      for (const nodeId of options.nodeIds) {
+        if (nodeId.trim()) {
+          params.append('node', nodeId);
+        }
+      }
+    }
+  }
+  if (options?.minDate) {
+    params.set('minDate', options.minDate);
+  }
+  if (options?.maxDate) {
+    params.set('maxDate', options.maxDate);
+  }
+  if (options?.purchasedMin) {
+    params.set('purchasedMin', options.purchasedMin);
+  }
+  if (options?.purchasedMax) {
+    params.set('purchasedMax', options.purchasedMax);
+  }
+  if (options?.paidMin) {
+    params.set('paidMin', options.paidMin);
+  }
+  if (options?.paidMax) {
+    params.set('paidMax', options.paidMax);
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return fetchJson<GlobalTrafficPurchasesResponse>(`/traffic-purchases${suffix}`);
 }
 
 export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse> {

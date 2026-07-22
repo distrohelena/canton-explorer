@@ -287,7 +287,7 @@ watch(
       </div>
     </header>
 
-    <section class="node-detail__section tokens-page__section">
+    <section class="tokens-page__table-section">
       <header class="node-detail__hero">
         <div>
           <p class="activity-home__eyebrow">Inventory</p>
@@ -335,18 +335,28 @@ watch(
         No tokens discovered yet.
       </p>
 
-      <div v-else-if="tokensResponse" class="tokens-page__known-list">
+      <div
+        v-else-if="tokensResponse"
+        class="tokens-page__table-shell"
+        role="table"
+        aria-label="Known tokens"
+      >
+        <div class="tokens-page__row tokens-page__row--head tokens-page__known-row" role="row">
+          <span role="columnheader">Token</span>
+          <span role="columnheader">Issuer</span>
+          <span role="columnheader">Source</span>
+        </div>
         <RouterLink
           v-for="token in tokensResponse.tokens"
           :key="token.tokenId"
-          class="tokens-page__known-card"
+          class="tokens-page__row tokens-page__known-row tokens-page__known-row--link"
           :to="tokenDetailLink(token.tokenId)"
         >
-          <div class="tokens-page__known-main">
-            <h4>{{ displayTokenTitle(token) }}</h4>
-            <p v-if="token.issuer" class="tokens-page__known-issuer">{{ token.issuer }}</p>
-          </div>
-          <QuerySourcePill :source="token.source" />
+          <span class="tokens-page__cell tokens-page__token" role="cell">
+            <strong>{{ displayTokenTitle(token) }}</strong>
+          </span>
+          <span class="tokens-page__cell" role="cell">{{ token.issuer ?? 'n/a' }}</span>
+          <span class="tokens-page__cell" role="cell"><QuerySourcePill :source="token.source" /></span>
         </RouterLink>
       </div>
     </section>
@@ -355,6 +365,7 @@ watch(
       scope="global"
       path="/tokens"
       title="Latest Transfers"
+      bare
       table-aria-label="Latest token transfers"
       spinner-label="Updating latest token transfers"
       loading-message="Loading latest token transfers..."

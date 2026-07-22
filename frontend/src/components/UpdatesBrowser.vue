@@ -19,6 +19,7 @@ const props = withDefaults(
     scope: UpdateScope;
     path: string;
     title: string;
+    showTitle?: boolean;
     eyebrow?: string;
     headingTag?: HeadingTag;
     nodeId?: string;
@@ -37,6 +38,7 @@ const props = withDefaults(
   }>(),
   {
     eyebrow: 'Updates',
+    showTitle: true,
     headingTag: 'h3',
     queryPrefix: '',
     showNodeColumn: false,
@@ -576,7 +578,7 @@ function partyLink(party: string): string {
 <template>
   <section class="node-updates">
     <header class="node-detail__hero">
-      <div>
+      <div v-if="showTitle">
         <p class="activity-home__eyebrow">{{ eyebrow }}</p>
         <component :is="headingTag">{{ headingText }}</component>
       </div>
@@ -593,9 +595,13 @@ function partyLink(party: string): string {
       />
     </header>
 
-    <Transition name="node-updates-filter">
+    <div
+      class="node-updates-filter-shell"
+      :class="{ 'node-updates-filter-shell--open': showAdvancedFilter }"
+      :aria-hidden="!showAdvancedFilter"
+      :inert="!showAdvancedFilter"
+    >
       <UpdatesAdvancedFilter
-        v-if="showAdvancedFilter"
         :id="advancedFilterId"
         v-model:party-draft="partyFilterDraft"
         v-model:template-draft="templateFilterDraft"
@@ -612,7 +618,7 @@ function partyLink(party: string): string {
         @set-filter-mode="setFilterMode"
         @set-hide-splice="setHideSplice"
       />
-    </Transition>
+    </div>
 
     <p v-if="!updatesResponse && loading" class="dashboard__message">{{ loadingMessage }}</p>
     <p v-else-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>

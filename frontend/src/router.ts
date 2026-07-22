@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeActivityView from './views/HomeActivityView.vue';
-import NodesView from './views/NodesView.vue';
+import HomeUpdatesView from './views/HomeUpdatesView.vue';
 import PartiesView from './views/PartiesView.vue';
 import ContractsView from './views/ContractsView.vue';
 import TokensView from './views/TokensView.vue';
@@ -15,15 +15,19 @@ import PartyDetailView from './views/PartyDetailView.vue';
 import NamespaceDetailView from './views/NamespaceDetailView.vue';
 import SearchResultsView from './views/SearchResultsView.vue';
 import LegacyTransactionRedirectView from './views/LegacyTransactionRedirectView.vue';
+import SettingsView from './views/SettingsView.vue';
+import TrafficPurchasesView from './views/TrafficPurchasesView.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: HomeActivityView },
-    { path: '/nodes', component: NodesView },
+    { path: '/', component: HomeUpdatesView },
+    { path: '/nodes', component: HomeActivityView },
     { path: '/parties', component: PartiesView },
     { path: '/contracts', component: ContractsView },
     { path: '/tokens', component: TokensView },
+    { path: '/settings', component: SettingsView },
+    { path: '/traffic', component: TrafficPurchasesView },
     { path: '/debugger', component: () => import('./views/DebuggerView.vue') },
     { path: '/tokens/transfers/:updateId', component: TokenTransferDetailView, props: true },
     { path: '/tokens/:tokenId', component: TokenDetailView, props: true },
