@@ -301,7 +301,7 @@ function verticalScaleLabels(
           v-for="series in nodes"
           :key="series.nodeId"
           class="activity-panel-link"
-          :to="`/nodes/${series.nodeId}/updates`"
+          :to="`/nodes/${series.nodeId}`"
           :aria-label="`${series.label} activity history`"
         >
           <article class="activity-panel">

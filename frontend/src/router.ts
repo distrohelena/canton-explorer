@@ -6,7 +6,6 @@ import ContractsView from './views/ContractsView.vue';
 import TokensView from './views/TokensView.vue';
 import TokenDetailView from './views/TokenDetailView.vue';
 import TokenTransferDetailView from './views/TokenTransferDetailView.vue';
-import NodeUpdatesView from './views/NodeUpdatesView.vue';
 import NodeDetailView from './views/NodeDetailView.vue';
 import UpdateDetailView from './views/UpdateDetailView.vue';
 import ContractDetailView from './views/ContractDetailView.vue';
@@ -30,7 +29,6 @@ export const router = createRouter({
     { path: '/tokens/:tokenId', component: TokenDetailView, props: true },
     { path: '/tx/:updateId', component: LegacyTransactionRedirectView, props: true },
     { path: '/search', component: SearchResultsView },
-    { path: '/nodes/:id/updates', component: NodeUpdatesView, props: true },
     { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailView, props: true },
     { path: '/nodes/:id/contracts/:contractId', component: ContractDetailView, props: true },
     { path: '/parties/:partyId', component: PartyDetailView, props: true },

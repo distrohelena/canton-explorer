@@ -32,10 +32,6 @@ const TokenTransferDetailStub = defineComponent({
   template: '<div>Token Transfer Detail View</div>',
 });
 
-const NodeUpdatesStub = defineComponent({
-  template: '<div>Node Updates View</div>',
-});
-
 const UpdateDetailStub = defineComponent({
   template: '<div>Update Detail View</div>',
 });
@@ -72,7 +68,6 @@ async function renderAt(path: string) {
       { path: '/debugger', component: DebuggerStub },
       { path: '/tokens/transfers/:updateId', component: TokenTransferDetailStub, props: true },
       { path: '/search', component: SearchResultsStub },
-      { path: '/nodes/:id/updates', component: NodeUpdatesStub, props: true },
       { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailStub, props: true },
       { path: '/nodes/:id/contracts/:contractId', component: ContractDetailStub, props: true },
       { path: '/parties/:partyId', component: PartyDetailStub, props: true },
@@ -217,14 +212,6 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(screen.queryByText('Current Node')).not.toBeInTheDocument();
-  });
-
-  it('keeps the shared shell on a node updates route', async () => {
-    await renderAt('/nodes/participant-1/updates');
-
-    expect(screen.getByRole('link', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
-    expect(screen.getByText('Node Updates View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on an update detail route', async () => {

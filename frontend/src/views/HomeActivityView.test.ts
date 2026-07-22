@@ -260,7 +260,7 @@ describe('HomeActivityView', () => {
     expect(screen.getByRole('button', { name: '30' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /participant 1 activity history/i })).toHaveAttribute(
       'href',
-      '/nodes/participant-1/updates',
+      '/nodes/participant-1',
     );
     expect(
       screen.queryByPlaceholderText('Search'),
