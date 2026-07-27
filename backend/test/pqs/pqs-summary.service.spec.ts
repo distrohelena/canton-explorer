@@ -511,7 +511,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       undefined,
       packageCache as never,
@@ -600,7 +600,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({ query: participantQuery }),
+        getRawExecutor: async () => ({ query: participantQuery }),
       } as never,
       undefined,
       {
@@ -658,7 +658,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -715,7 +715,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({ query: participantQuery }),
+        getRawExecutor: async () => ({ query: participantQuery }),
       } as never,
       undefined,
       {
@@ -759,7 +759,7 @@ describe('PqsSummaryService', () => {
 
   it('searches package ids and package names from the cache only', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getClient: () => ({ query: jest.fn() }) } as never,
+      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
       undefined,
       {
         listPackages: jest.fn().mockReturnValue([
@@ -859,7 +859,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -898,7 +898,7 @@ describe('PqsSummaryService', () => {
 
   it('returns all cached packages for a package name', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getClient: () => ({ query: jest.fn() }) } as never,
+      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
       undefined,
       {
         listPackagesByName: jest.fn().mockReturnValue(typedPackageFamilyFixture.packages),
@@ -917,7 +917,7 @@ describe('PqsSummaryService', () => {
 
   it('returns cached installed packages for a node grouped by package name', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getClient: () => ({ query: jest.fn() }) } as never,
+      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
       undefined,
       {
         listPackagesForNode: jest.fn().mockReturnValue([
@@ -986,7 +986,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -1037,7 +1037,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participant1Query,
         }),
       } as never,
@@ -1165,7 +1165,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -1269,7 +1269,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participantQuery,
         }),
       } as never,
@@ -1355,7 +1355,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participantQuery,
         }),
       } as never,
@@ -1414,7 +1414,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participantQuery,
         }),
       } as never,
@@ -1488,7 +1488,7 @@ describe('PqsSummaryService', () => {
   it('returns namespace detail aggregated across all matching parties by exact namespace suffix', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
       } as never,
       undefined,
       {
@@ -1618,7 +1618,7 @@ describe('PqsSummaryService', () => {
   it('keeps namespace detail available when PQS fails for one node', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
       } as never,
       undefined,
       {
@@ -1791,7 +1791,7 @@ describe('PqsSummaryService', () => {
   it('returns paginated namespace parties aggregated by exact namespace suffix', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
       } as never,
       undefined,
       undefined,
@@ -1839,7 +1839,7 @@ describe('PqsSummaryService', () => {
   it('returns namespace parties from healthy nodes when another node PQS is unavailable', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
       } as never,
     ) as PqsSummaryService & {
       fetchNamespaceParties?: (
@@ -1933,7 +1933,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query:
             node.id === 'participant-1' ? participant1Query : jest.fn(async () => ({ rows: [] })),
         }),
@@ -2087,7 +2087,7 @@ describe('PqsSummaryService', () => {
 
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -2180,7 +2180,7 @@ describe('PqsSummaryService', () => {
 
   it('returns decoded package detail with metadata, node presence, and decoded structure', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getClient: () => ({ query: jest.fn() }) } as never,
+      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue({
@@ -2270,7 +2270,7 @@ describe('PqsSummaryService', () => {
 
   it('returns invalid package detail with metadata but empty decoded lists', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getClient: () => ({ query: jest.fn() }) } as never,
+      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue({
@@ -2313,7 +2313,7 @@ describe('PqsSummaryService', () => {
 
   it('returns not-available package detail when metadata exists but package bytes do not', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getClient: () => ({ query: jest.fn() }) } as never,
+      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue({
@@ -2374,7 +2374,7 @@ describe('PqsSummaryService', () => {
 
   it('throws Package not found for unknown package ids', async () => {
     const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getClient: () => ({ query: jest.fn() }) } as never,
+      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue(null),
@@ -2407,9 +2407,8 @@ describe('PqsSummaryService', () => {
       ],
     });
 
-    const service = new PqsSummaryService({
-      getClient: () => ({ query }),
-    } as never);
+    const getRawExecutor = jest.fn().mockResolvedValue({ query });
+    const service = new PqsSummaryService({ getRawExecutor } as never);
 
     const summary = await service.fetchSummary({
       id: 'participant-1',
@@ -2425,6 +2424,9 @@ describe('PqsSummaryService', () => {
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('from "public"."__transactions" tx'),
+    );
+    expect(getRawExecutor).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-1' }),
     );
     expect(summary.activeContractCount).toBe(12);
     expect(summary.totalUpdateCount).toBe(1442);
@@ -2445,7 +2447,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     const summary = await service.fetchSummary({
@@ -2503,7 +2505,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     const updates = await service.fetchRecentUpdates({
@@ -2577,7 +2579,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -2648,7 +2650,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -2706,7 +2708,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
     const fetchEventsSpy = jest
       .spyOn(service as never, 'fetchEventsByUpdateId' as never)
@@ -2793,7 +2795,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     const updates = await service.fetchRecentUpdates(
@@ -2838,7 +2840,7 @@ describe('PqsSummaryService', () => {
 
   it('paginates merged global updates with opaque cross-node cursors', async () => {
     const service = new PqsSummaryService({
-      getClient: () => ({ query: jest.fn() }),
+      getRawExecutor: async () => ({ query: jest.fn() }),
     } as never);
 
     jest.spyOn(service, 'fetchRecentUpdates').mockImplementation(async (node, options) => {
@@ -2962,7 +2964,7 @@ describe('PqsSummaryService', () => {
 
   it('returns global recent updates from healthy nodes when another node PQS is unavailable', async () => {
     const service = new PqsSummaryService({
-      getClient: jest.fn(),
+      getRawExecutor: jest.fn(),
     } as never);
     const serviceWithFetch = service as PqsSummaryService & {
       fetchRecentUpdates: jest.Mock;
@@ -3040,7 +3042,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -3063,7 +3065,7 @@ describe('PqsSummaryService', () => {
 
   it('returns global contracts from healthy nodes when another node PQS is unavailable', async () => {
     const service = new PqsSummaryService({
-      getClient: jest.fn(),
+      getRawExecutor: jest.fn(),
     } as never);
     const serviceWithFetch = service as PqsSummaryService & {
       fetchNodeContracts: jest.Mock;
@@ -3116,7 +3118,7 @@ describe('PqsSummaryService', () => {
 
   it('queries only the selected nodes for global contracts', async () => {
     const service = new PqsSummaryService({
-      getClient: jest.fn(),
+      getRawExecutor: jest.fn(),
     } as never);
     const serviceWithFetch = service as PqsSummaryService & {
       fetchNodeContracts: jest.Mock;
@@ -3159,7 +3161,7 @@ describe('PqsSummaryService', () => {
 
   it('returns no global contracts without querying when no nodes are selected', async () => {
     const service = new PqsSummaryService({
-      getClient: jest.fn(),
+      getRawExecutor: jest.fn(),
     } as never);
     const serviceWithFetch = service as PqsSummaryService & {
       fetchNodeContracts: jest.Mock;
@@ -3185,7 +3187,7 @@ describe('PqsSummaryService', () => {
 
   it('returns party contracts from healthy nodes when another node PQS is unavailable', async () => {
     const service = new PqsSummaryService({
-      getClient: jest.fn(),
+      getRawExecutor: jest.fn(),
     } as never);
     const serviceWithFetch = service as PqsSummaryService & {
       fetchPartyContractsForNode: jest.Mock;
@@ -3272,7 +3274,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -3324,7 +3326,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await service.fetchNodeContracts(
@@ -3356,7 +3358,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await service.fetchNodeContracts(
@@ -3393,7 +3395,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await service.fetchNodeContracts(
@@ -3428,7 +3430,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await service.fetchNodeContracts(
@@ -3452,7 +3454,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     const updates = await service.fetchRecentUpdates(
@@ -3513,7 +3515,7 @@ describe('PqsSummaryService', () => {
     });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
     const serviceWithBuckets = service as unknown as {
       fetchActivityBuckets?: (
@@ -3622,7 +3624,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
     const serviceWithDetail = service as unknown as {
       fetchUpdateDetail?: (node: object, updateId: string) => Promise<unknown>;
@@ -3690,7 +3692,7 @@ describe('PqsSummaryService', () => {
 
   it('rejects when a single update detail is missing', async () => {
     const service = new PqsSummaryService({
-      getClient: () =>
+      getRawExecutor: async () =>
         ({
           query: jest.fn().mockResolvedValue({
             rows: [],
@@ -3737,7 +3739,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
     const serviceWithDetail = service as unknown as {
       fetchUpdateDetail?: (node: object, updateId: string) => Promise<unknown>;
@@ -3824,7 +3826,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -3981,7 +3983,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -4082,7 +4084,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -4174,7 +4176,7 @@ describe('PqsSummaryService', () => {
       });
 
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -4284,7 +4286,7 @@ describe('PqsSummaryService', () => {
 
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder,
     );
@@ -4383,7 +4385,7 @@ describe('PqsSummaryService', () => {
 
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       undefined,
       {
@@ -4472,7 +4474,7 @@ describe('PqsSummaryService', () => {
 
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder,
       {
@@ -4547,7 +4549,7 @@ describe('PqsSummaryService', () => {
       ],
     });
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     const response = await (
@@ -4630,7 +4632,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -4698,7 +4700,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -4733,7 +4735,7 @@ describe('PqsSummaryService', () => {
         rows: [{ template_id: 'Splice.AmuletRules:AmuletRules' }],
       });
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     const response = await (
@@ -4868,7 +4870,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
       undefined,
@@ -5055,7 +5057,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
       undefined,
@@ -5150,7 +5152,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -5225,7 +5227,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -5296,7 +5298,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -5429,7 +5431,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -5531,7 +5533,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -5654,7 +5656,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -5694,7 +5696,7 @@ describe('PqsSummaryService', () => {
     const failingQuery = jest.fn().mockRejectedValue(new Error('pqs unavailable'));
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-ok' ? emptyQuery : failingQuery,
         }),
       } as never,
@@ -5778,7 +5780,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -5869,7 +5871,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -5978,7 +5980,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -6087,7 +6089,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -6196,7 +6198,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -6307,7 +6309,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -6494,7 +6496,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -6697,7 +6699,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -6878,7 +6880,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -7193,7 +7195,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -7348,7 +7350,7 @@ describe('PqsSummaryService', () => {
     });
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       {
         decodeContractInstance: jest.fn(),
@@ -7507,7 +7509,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -7659,7 +7661,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -7863,7 +7865,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -8032,7 +8034,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -8227,7 +8229,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participant1Query,
         }),
       } as never,
@@ -8385,7 +8387,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participant1Query,
         }),
       } as never,
@@ -8543,7 +8545,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participant1Query,
         }),
       } as never,
@@ -8740,7 +8742,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
       undefined,
@@ -8899,7 +8901,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -8994,7 +8996,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
     );
@@ -9114,7 +9116,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
       undefined,
@@ -9211,7 +9213,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({ query }),
+        getRawExecutor: async () => ({ query }),
       } as never,
       decoder as never,
       undefined,
@@ -9347,7 +9349,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: (node: { id: string }) => ({
+        getRawExecutor: async (node: { id: string }) => ({
           query: node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
@@ -9476,7 +9478,7 @@ describe('PqsSummaryService', () => {
     };
     const service = new PqsSummaryService(
       {
-        getClient: () => ({
+        getRawExecutor: async () => ({
           query: participant1Query,
         }),
       } as never,
@@ -9549,7 +9551,7 @@ describe('PqsSummaryService', () => {
 
   it('throws when a token detail is requested for an unknown token id', async () => {
     const service = new PqsSummaryService({
-      getClient: () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+      getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
     } as never);
 
     await expect(
@@ -9582,7 +9584,7 @@ describe('PqsSummaryService', () => {
       ],
     });
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -9643,7 +9645,7 @@ describe('PqsSummaryService', () => {
       ],
     });
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await expect(
@@ -9673,7 +9675,7 @@ describe('PqsSummaryService', () => {
   it('applies date, purchased traffic, and paid amount filters', async () => {
     const query = jest.fn().mockResolvedValue({ rows: [] });
     const service = new PqsSummaryService({
-      getClient: () => ({ query }),
+      getRawExecutor: async () => ({ query }),
     } as never);
 
     await service.fetchTrafficPurchases(
@@ -9703,7 +9705,7 @@ describe('PqsSummaryService', () => {
 
   it('merges selected node traffic purchases into one globally paginated result', async () => {
     const service = new PqsSummaryService({
-      getClient: () => ({ query: jest.fn() }),
+      getRawExecutor: async () => ({ query: jest.fn() }),
     } as never);
     const fetchTrafficPurchases = jest
       .spyOn(service, 'fetchTrafficPurchases')

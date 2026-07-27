@@ -50,7 +50,7 @@ import type {
   TokenTransferSummary,
   TokenTransfersResponse,
 } from '../domain/node.types';
-import { PqsClientFactory } from './pqs-client.factory';
+import { PqsManagerFactory } from './pqs-manager.factory';
 import { DamlValueDecoderService } from '../packages/daml-value-decoder.service';
 import { PackageCacheService } from '../packages/package-cache.service';
 import { PackageRegistryService } from '../packages/package-registry.service';
@@ -1915,7 +1915,7 @@ export class PqsSummaryService {
   private readonly tokenTransfersByNode = new Map<string, CachedNodeTokenTransfers>();
 
   constructor(
-    private readonly clientFactory: PqsClientFactory,
+    private readonly managerFactory: PqsManagerFactory,
     @Optional() private readonly damlValueDecoder?: DamlValueDecoderService,
     @Optional() private readonly packageCacheService?: PackageCacheService,
     @Optional()
@@ -1926,8 +1926,8 @@ export class PqsSummaryService {
   ) {}
 
   async fetchSummary(node: NodeConfig): Promise<LedgerSummary> {
-    const client = this.clientFactory.getClient(node);
-    const result = await client.query(summaryQuery(node));
+    const client = await this.managerFactory.getRawExecutor(node);
+    const result = await client.query<SummaryRow>(summaryQuery(node));
     const row = result.rows[0] ?? this.defaultRow();
 
     return {
@@ -1955,7 +1955,7 @@ export class PqsSummaryService {
     } = {},
   ): Promise<NodeTrafficPurchasesResponse> {
     const limit = Math.min(Math.max(options.limit ?? 25, 1), 100);
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const useAfterCursor = Boolean(options.after && !options.before);
     const normalizedFilters: TrafficPurchaseQueryFilters = {
       minDate: normalizeTrafficDateFilter(options.minDate) ?? undefined,
@@ -2266,7 +2266,7 @@ export class PqsSummaryService {
           hideSplice?: boolean;
         } = 25,
   ): Promise<NodeRecentUpdatesResponse> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const normalizedLimit =
       typeof options === 'number'
         ? Number.isFinite(options) && options > 0
@@ -2597,7 +2597,7 @@ export class PqsSummaryService {
     query: string,
     limit: number,
   ): Promise<SearchMatchedUpdate[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const rows = await this.querySearchUpdateMetaRows(
       node,
       client.query.bind(client),
@@ -2689,7 +2689,7 @@ export class PqsSummaryService {
     query: string,
     limit: number,
   ): Promise<SearchMatchedContract[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(pqsSearchContractsQuery(node, query, limit));
     const rows = (result.rows as ActiveContractRow[]) ?? [];
 
@@ -2862,7 +2862,7 @@ export class PqsSummaryService {
       hideSplice?: boolean;
     },
   ): Promise<NodeContractsResponse> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const normalizedLimit =
       typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
         ? Math.trunc(options.limit)
@@ -2935,7 +2935,7 @@ export class PqsSummaryService {
       latestOffset: string | null;
     }>
   > {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(pqsActivityBucketsQuery(node, days, bucketMinutes));
     const rows = (result.rows as ActivityBucketRow[]) ?? [];
 
@@ -4252,7 +4252,7 @@ export class PqsSummaryService {
         continue;
       }
 
-      const client = this.clientFactory.getClient(node);
+      const client = await this.managerFactory.getRawExecutor(node);
       const contractRows = await this.fetchContractDetailsByIds(
         node,
         client.query.bind(client),
@@ -4400,7 +4400,7 @@ export class PqsSummaryService {
     node: NodeConfig,
     eventOffset: string,
   ): Promise<NodeUpdateDetailResponse> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const detailResult = await client.query(singleUpdateQuery(node, eventOffset));
     const detailRows = (detailResult.rows as UpdateDetailRow[]) ?? [];
     const detailRow = detailRows[0];
@@ -4436,7 +4436,7 @@ export class PqsSummaryService {
     node: NodeConfig,
     contractId: string,
   ): Promise<NodeContractDetailResponse> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(contractDetailQuery(node, contractId));
     const row = (result.rows as ContractDetailRow[])[0];
 
@@ -4479,7 +4479,7 @@ export class PqsSummaryService {
     partyId: string,
     limit: number,
   ): Promise<PartyDetailResponse['recentUpdates']> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(pqsPartyRecentUpdatesQuery(node, partyId, limit));
     const rows = (result.rows as UpdateMetaRow[]) ?? [];
 
@@ -4535,7 +4535,7 @@ export class PqsSummaryService {
     nextAfter: string | null;
     contracts: GlobalMergedContract[];
   }> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const normalizedLimit =
       typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
         ? Math.trunc(options.limit)
@@ -4595,7 +4595,7 @@ export class PqsSummaryService {
   }
 
   private async fetchActivePartiesForNode(node: NodeConfig): Promise<string[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(pqsActivePartiesQuery(node));
     const row = (result.rows as ActivePartiesRow[])[0];
     return this.normalizeParties(row?.parties ?? null);
@@ -4657,7 +4657,7 @@ export class PqsSummaryService {
   }
 
   private async fetchBuiltinTokensForNode(node: NodeConfig): Promise<TokenSummary[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(nativeAmuletSupportQuery(node));
     const rows = Array.isArray(result.rows) ? result.rows : [];
 
@@ -4697,7 +4697,7 @@ export class PqsSummaryService {
     limit: number,
     options?: { includeCip112?: boolean },
   ): Promise<TokenSummary[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const includeCip112 = options?.includeCip112 ?? true;
     const result = await client.query(
       tokenRowsQuery(
@@ -4833,7 +4833,7 @@ export class PqsSummaryService {
     limit: number,
     options?: { includeCip112?: boolean },
   ): Promise<NodeTokenHolderObservation[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const includeCip112 = options?.includeCip112 ?? true;
     const result = await client.query(
       tokenRowsQuery(
@@ -4928,7 +4928,7 @@ export class PqsSummaryService {
     node: NodeConfig,
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(tokenRowsQuery(node, limit, TOKEN_TRANSFER_TEMPLATE_IDS));
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];
@@ -4978,7 +4978,7 @@ export class PqsSummaryService {
     node: NodeConfig,
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
-    const client = this.clientFactory.getClient(node);
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(recentCip112MovementUpdateIdsQuery(node, limit));
     const rows = (result.rows as Cip112MovementUpdateRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];

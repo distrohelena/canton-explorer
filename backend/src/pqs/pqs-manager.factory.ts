@@ -8,7 +8,7 @@ import type { NodeConfig } from '../config/node-config.schema';
 
 type PqsManager = Pick<CantonManager, 'query' | 'disposeAsync'>;
 export interface PqsRawExecutor {
-  query<TRow>(sql: string, values?: readonly unknown[]): Promise<{ rows: readonly TRow[] }>;
+  query<TRow>(sql: string, values?: readonly unknown[]): Promise<{ rows: TRow[] }>;
 }
 type SdkModule = Pick<
   typeof import('@distrohelena/canton-typescript-sdk'),
@@ -32,7 +32,7 @@ export class PqsManagerFactory implements OnModuleDestroy {
     const query = await this.getPqsQuery(node);
     return {
       query: async <TRow>(sql: string, values: readonly unknown[] = []) => ({
-        rows: await query.$queryRaw<TRow>(sql, values),
+        rows: [...(await query.$queryRaw<TRow>(sql, values))],
       }),
     };
   }
