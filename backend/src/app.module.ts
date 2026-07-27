@@ -8,6 +8,7 @@ import { GrpcClientFactory } from './grpc/grpc-client.factory';
 import { GrpcOperationsService } from './grpc/grpc-operations.service';
 import { NodePollerService } from './orchestrator/node-poller.service';
 import { PqsClientFactory } from './pqs/pqs-client.factory';
+import { PqsManagerFactory } from './pqs/pqs-manager.factory';
 import { PqsSummaryService } from './pqs/pqs-summary.service';
 import { PackageCacheService } from './packages/package-cache.service';
 import { DamlValueDecoderService } from './packages/daml-value-decoder.service';
@@ -21,6 +22,7 @@ import { NamespaceFingerprintService } from './namespaces/namespace-fingerprint.
   providers: [
     NodeConfigService,
     PqsClientFactory,
+    PqsManagerFactory,
     PqsSummaryService,
     PqsPackageService,
     GrpcClientFactory,
