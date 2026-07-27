@@ -214,6 +214,10 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
   };
 }
 
+function formatEstimatedTrafficUsd(value: string | null | undefined): string {
+  return value ? `$${value}` : '—';
+}
+
 function resolveNodeId(update: UpdatesEntry): string | null {
   if ('nodeId' in update && typeof update.nodeId === 'string') {
     return update.nodeId;
@@ -651,6 +655,7 @@ function partyLink(party: string): string {
           <span role="columnheader">Event Offset</span>
           <span role="columnheader">Record Time</span>
           <span role="columnheader">Parties</span>
+          <span role="columnheader">Est. USD</span>
         </div>
 
         <div
@@ -698,6 +703,9 @@ function partyLink(party: string): string {
               </RouterLink>
             </template>
             <template v-else>No parties</template>
+          </span>
+          <span class="node-updates__estimate" role="cell">
+            {{ formatEstimatedTrafficUsd(update.estimatedTrafficUsd) }}
           </span>
         </div>
       </div>

@@ -52,6 +52,7 @@ export interface NodeRecentUpdate {
   updateId: string;
   recordTime: string | null;
   parties: string[];
+  estimatedTrafficUsd: string | null;
 }
 
 export interface NodeRecentUpdatesResponse {
@@ -296,6 +297,7 @@ export interface NodeUpdateDetailResponse {
   updateId: string;
   recordTime: string | null;
   parties: string[];
+  estimatedTrafficUsd: string | null;
   meta: NodeUpdateDetailMeta;
   events: NodeUpdateDetailEvent[];
 }
@@ -611,6 +613,7 @@ export interface PartyRecentUpdate {
   updateId: string;
   recordTime: string | null;
   parties: string[];
+  estimatedTrafficUsd: string | null;
 }
 
 export interface PartyRecentContract {

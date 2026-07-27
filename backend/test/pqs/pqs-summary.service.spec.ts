@@ -303,6 +303,7 @@ const typedPartyDetailFixture = {
       updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
+      estimatedTrafficUsd: null,
     },
     {
       nodeId: 'participant-2',
@@ -311,6 +312,7 @@ const typedPartyDetailFixture = {
       updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
       recordTime: '2026-07-01T11:00:00.000Z',
       parties: ['Alice'],
+      estimatedTrafficUsd: null,
     },
   ],
   recentContracts: [
@@ -1318,6 +1320,8 @@ describe('PqsSummaryService', () => {
           updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-02T12:00:00.000Z',
           parties: [strippedPartyId],
+          estimatedTrafficUsd: null,
+          estimatedTrafficUsd: null,
         },
       ],
       recentContracts: [
@@ -2007,6 +2011,7 @@ describe('PqsSummaryService', () => {
           updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-01T12:00:00.000Z',
           parties: ['Alice'],
+          estimatedTrafficUsd: null,
         },
       ],
       recentContracts: [
@@ -2150,6 +2155,7 @@ describe('PqsSummaryService', () => {
           updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-01T12:00:00.000Z',
           parties: ['Alice'],
+          estimatedTrafficUsd: null,
         },
       ],
       recentContracts: [
@@ -2542,6 +2548,7 @@ describe('PqsSummaryService', () => {
           eventOffset: '000000000000000101',
           updateId: '00000000000000000000000000000001',
           recordTime: '2026-07-01T12:00:00.000Z',
+          estimatedTrafficUsd: null,
           parties: [
             'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
             'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf',
@@ -2551,6 +2558,7 @@ describe('PqsSummaryService', () => {
           eventOffset: '000000000000000100',
           updateId: '00000000000000000000000000000000',
           recordTime: '2026-07-01T11:59:00.000Z',
+          estimatedTrafficUsd: null,
           parties: [],
         },
       ],
@@ -2609,6 +2617,7 @@ describe('PqsSummaryService', () => {
           eventOffset: '9130',
           updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-03T12:00:00.000Z',
+          estimatedTrafficUsd: null,
           parties: ['Alice'],
         },
       ],
@@ -2752,6 +2761,7 @@ describe('PqsSummaryService', () => {
           eventOffset: '9130',
           updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-03T12:00:00.000Z',
+          estimatedTrafficUsd: null,
           parties: ['Alice'],
         },
       ],
@@ -2826,12 +2836,14 @@ describe('PqsSummaryService', () => {
           eventOffset: '109',
           updateId: '00000000000000000000000000000009',
           recordTime: '2026-07-01T12:09:00.000Z',
+          estimatedTrafficUsd: null,
           parties: [],
         },
         {
           eventOffset: '108',
           updateId: '00000000000000000000000000000008',
           recordTime: '2026-07-01T12:08:00.000Z',
+          estimatedTrafficUsd: null,
           parties: [],
         },
       ],
@@ -3012,6 +3024,7 @@ describe('PqsSummaryService', () => {
           updateId: 'update-103',
           recordTime: '2026-07-01T12:03:00.000Z',
           parties: ['Alice'],
+          estimatedTrafficUsd: null,
         },
       ],
     });
@@ -3650,6 +3663,7 @@ describe('PqsSummaryService', () => {
       updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
+      estimatedTrafficUsd: null,
       events: [],
       meta: {
         update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
@@ -9767,5 +9781,114 @@ describe('PqsSummaryService', () => {
       expect.objectContaining({ id: 'participant-1' }),
       expect.objectContaining({ limit: expect.any(Number) }),
     );
+  });
+
+  it('adds an estimated traffic USD value to recent updates', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            update_id: 'update-1',
+            event_offset: '10',
+            record_time: '2026-07-25T12:00:00.000Z',
+            paid_traffic_cost: '100',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ update_id: 'update-1', parties: ['Alice'] }] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+    const trafficCostEstimateService = {
+      estimate: jest.fn().mockResolvedValue('12.34'),
+    };
+    (service as PqsSummaryService & { trafficCostEstimateService: unknown })
+      .trafficCostEstimateService = trafficCostEstimateService;
+    jest.spyOn(service, 'fetchTrafficPurchases').mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 1,
+      nextBefore: null,
+      nextAfter: null,
+      purchases: [
+        {
+          updateId: 'purchase-1',
+          eventOffset: '9',
+          recordTime: '2026-07-24T12:00:00.000Z',
+          purchasedTraffic: '1000',
+          amuletPaid: '5',
+        },
+      ],
+    });
+
+    const response = await service.fetchRecentUpdates({
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    });
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('tx.paid_traffic_cost::text'));
+    expect(trafficCostEstimateService.estimate).toHaveBeenCalledWith(
+      '100',
+      expect.objectContaining({ purchasedTraffic: '1000', amuletPaid: '5' }),
+    );
+    expect(response.updates[0]).toMatchObject({ estimatedTrafficUsd: '12.34' });
+  });
+
+  it('adds the estimate to update detail without exposing the raw traffic cost field', async () => {
+    const query = jest.fn().mockResolvedValue({
+      rows: [
+        {
+          update_id: 'update-1',
+          event_offset: '10',
+          record_time_iso: '2026-07-25T12:00:00.000Z',
+          paid_traffic_cost: '100',
+        },
+      ],
+    });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+    (service as PqsSummaryService & { trafficCostEstimateService: unknown })
+      .trafficCostEstimateService = {
+        estimate: jest.fn().mockResolvedValue('12.34'),
+      };
+    jest.spyOn(service, 'fetchTrafficPurchases').mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 1,
+      nextBefore: null,
+      nextAfter: null,
+      purchases: [
+        {
+          updateId: 'purchase-1',
+          eventOffset: '9',
+          recordTime: '2026-07-24T12:00:00.000Z',
+          purchasedTraffic: '1000',
+          amuletPaid: '5',
+        },
+      ],
+    });
+    jest.spyOn(service as never, 'fetchPartiesByUpdateId' as never).mockResolvedValue(
+      new Map([['update-1', ['Alice']]]),
+    );
+    jest.spyOn(service as never, 'fetchEventsByUpdateId' as never).mockResolvedValue([]);
+
+    const response = await service.fetchUpdateDetail({
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    }, '10');
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('tx.paid_traffic_cost::text'));
+    expect(response.estimatedTrafficUsd).toBe('12.34');
+    expect(response).not.toHaveProperty('paidTrafficCost');
   });
 });

@@ -3,6 +3,7 @@ import HomeActivityView from './views/HomeActivityView.vue';
 import HomeUpdatesView from './views/HomeUpdatesView.vue';
 import PartiesView from './views/PartiesView.vue';
 import ContractsView from './views/ContractsView.vue';
+import CantonCoinView from './views/CantonCoinView.vue';
 import TokensView from './views/TokensView.vue';
 import TokenDetailView from './views/TokenDetailView.vue';
 import TokenTransferDetailView from './views/TokenTransferDetailView.vue';
@@ -26,6 +27,7 @@ export const router = createRouter({
     { path: '/parties', component: PartiesView },
     { path: '/contracts', component: ContractsView },
     { path: '/tokens', component: TokensView },
+    { path: '/canton-coin', component: CantonCoinView },
     { path: '/settings', component: SettingsView },
     { path: '/traffic', component: TrafficPurchasesView },
     { path: '/debugger', component: () => import('./views/DebuggerView.vue') },

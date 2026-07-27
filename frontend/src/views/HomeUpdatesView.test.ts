@@ -15,6 +15,7 @@ vi.mock('../lib/api', () => ({
         updateId: 'update-1',
         recordTime: '2026-07-01T12:00:00.000Z',
         parties: ['Alice'],
+        estimatedTrafficUsd: '12.34',
       },
     ],
   }),
@@ -47,6 +48,7 @@ describe('HomeUpdatesView', () => {
     expect(screen.queryByRole('heading', { name: 'Latest Updates' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     expect(await screen.findByRole('table', { name: 'Latest updates across all nodes' })).toBeInTheDocument();
+    expect(screen.getByText('$12.34')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Latest Contracts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Nodes' })).not.toBeInTheDocument();
   });

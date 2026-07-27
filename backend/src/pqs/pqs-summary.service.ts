@@ -59,6 +59,7 @@ import {
   type GrpcTokenHolderObservation,
 } from '../grpc/grpc-operations.service';
 import { PackageSyncService } from '../packages/package-sync.service';
+import { TrafficCostEstimateService } from '../traffic/traffic-cost-estimate.service';
 import { qualifyPqsRelation } from './pqs-schema';
 
 interface SummaryRow {
@@ -73,6 +74,7 @@ interface UpdateMetaRow {
   update_id: string;
   event_offset?: string | number | null;
   record_time: string | null;
+  paid_traffic_cost?: string | null;
 }
 
 interface ActivityBucketRow {
@@ -86,6 +88,7 @@ interface UpdateDetailRow {
   event_offset?: string | number | null;
   record_time?: string | number | null;
   record_time_iso?: string | null;
+  paid_traffic_cost?: string | null;
   meta?: Record<string, unknown> | null;
   [key: string]: unknown;
 }
@@ -1123,7 +1126,8 @@ function pqsRecentUpdatesQuery(
       select
         tx.transaction_id::text as update_id,
         tx.offset::text as event_offset,
-        ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+        ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
+        tx.paid_traffic_cost::text as paid_traffic_cost
       from ${relations.transactions} tx
       ${whereClause}
       order by tx.offset asc
@@ -1137,7 +1141,8 @@ function pqsRecentUpdatesQuery(
     select
       tx.transaction_id::text as update_id,
       tx.offset::text as event_offset,
-      ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
+      tx.paid_traffic_cost::text as paid_traffic_cost
     from ${relations.transactions} tx
     ${whereClause}
     order by tx.offset desc
@@ -1230,7 +1235,8 @@ function pqsPartyRecentUpdatesQuery(node: NodeConfig, partyId: string, limit: nu
     select
       tx.transaction_id::text as update_id,
       tx.offset::text as event_offset,
-      ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
+      tx.paid_traffic_cost::text as paid_traffic_cost
     from ${relations.transactions} tx
     where exists (
       select 1
@@ -1442,6 +1448,7 @@ function singleUpdateQuery(node: NodeConfig, eventOffset: string): string {
       tx.transaction_id::text as update_id,
       tx.offset::text as event_offset,
       ${isoUtcTimestampExpression('tx.effective_at')} as record_time_iso,
+      tx.paid_traffic_cost::text as paid_traffic_cost,
       jsonb_build_object(
         'update_id', tx.transaction_id::text,
         'event_offset', tx.offset::text,
@@ -1839,10 +1846,10 @@ function recentCip112MovementUpdateIdsQuery(node: NodeConfig, limit: number): st
   return `
     /* cip112_movement_update_ids */
     with relevant_updates as (
-      select
-        tx.transaction_id::text as update_id,
-        tx.offset::text as event_offset,
-        ${isoUtcTimestampExpression('tx.effective_at')} as record_time
+    select
+      tx.transaction_id::text as update_id,
+      tx.offset::text as event_offset,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time
       from ${relations.transactions} tx
       join ${relations.contracts} contract_row
         on contract_row.created_at_ix = tx.ix
@@ -1923,6 +1930,7 @@ export class PqsSummaryService {
     @Optional() private readonly nodeConfigService?: NodeConfigService,
     @Optional() private readonly grpcOperationsService?: GrpcOperationsService,
     @Optional() private readonly packageSyncService?: PackageSyncService,
+    @Optional() private readonly trafficCostEstimateService?: TrafficCostEstimateService,
   ) {}
 
   async fetchSummary(node: NodeConfig): Promise<LedgerSummary> {
@@ -2251,6 +2259,34 @@ export class PqsSummaryService {
     };
   }
 
+  private async latestTrafficPurchase(node: NodeConfig): Promise<NodeTrafficPurchase | null> {
+    if (!this.trafficCostEstimateService) {
+      return null;
+    }
+
+    try {
+      const response = await this.fetchTrafficPurchases(node, { limit: 1 });
+      return response.purchases[0] ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async estimateTrafficUsd(
+    paidTrafficCost: string | null | undefined,
+    purchase: NodeTrafficPurchase | null,
+  ): Promise<string | null> {
+    if (!this.trafficCostEstimateService || !purchase) {
+      return null;
+    }
+
+    try {
+      return await this.trafficCostEstimateService.estimate(paidTrafficCost, purchase);
+    } catch {
+      return null;
+    }
+  }
+
   async fetchRecentUpdates(
     node: NodeConfig,
     options:
@@ -2309,6 +2345,7 @@ export class PqsSummaryService {
           rawUpdateId: row.update_id,
           updateId: this.normalizeUpdateId(row.update_id),
           recordTime: row.record_time ?? null,
+          paidTrafficCost: row.paid_traffic_cost ?? null,
         },
       ];
     });
@@ -2329,6 +2366,12 @@ export class PqsSummaryService {
       query,
       orderedUpdates.map((update) => update.rawUpdateId),
     );
+    const latestPurchase = await this.latestTrafficPurchase(node);
+    const estimatedTrafficUsd = await Promise.all(
+      orderedUpdates.map((update) =>
+        this.estimateTrafficUsd(update.paidTrafficCost, latestPurchase),
+      ),
+    );
 
     return {
       nodeId: node.id,
@@ -2345,11 +2388,12 @@ export class PqsSummaryService {
         : before
           ? (orderedUpdates[0]?.eventOffset ?? null)
           : null,
-      updates: orderedUpdates.map((update) => ({
+      updates: orderedUpdates.map((update, index) => ({
         eventOffset: update.eventOffset,
         updateId: update.updateId,
         recordTime: update.recordTime,
         parties: partiesByUpdateId.get(update.updateId) ?? [],
+        estimatedTrafficUsd: estimatedTrafficUsd[index] ?? null,
       })),
     };
   }
@@ -2455,6 +2499,7 @@ export class PqsSummaryService {
             updateId: update.updateId,
             recordTime: update.recordTime,
             parties: update.parties,
+            estimatedTrafficUsd: update.estimatedTrafficUsd ?? null,
           });
         }
 
@@ -4419,6 +4464,11 @@ export class PqsSummaryService {
     const exerciseData = this.shouldResolveRewardCoupon(events)
       ? await this.fetchRewardCouponDetails(node, client.query.bind(client), rawUpdateId)
       : null;
+    const latestPurchase = await this.latestTrafficPurchase(node);
+    const estimatedTrafficUsd = await this.estimateTrafficUsd(
+      detailRow.paid_traffic_cost,
+      latestPurchase,
+    );
 
     return {
       nodeId: node.id,
@@ -4427,6 +4477,7 @@ export class PqsSummaryService {
       updateId: canonicalUpdateId,
       recordTime: this.extractIsoRecordTime(detailRow),
       parties: partiesByUpdateId.get(canonicalUpdateId) ?? [],
+      estimatedTrafficUsd,
       meta: this.extractMeta(detailRow),
       events: this.attachRewardCouponDetails(events, exerciseData),
     };
@@ -4490,25 +4541,30 @@ export class PqsSummaryService {
       rawUpdateIds.length > 0
         ? await this.fetchPartiesByUpdateId(node, client.query.bind(client), rawUpdateIds)
         : new Map<string, string[]>();
+    const latestPurchase = await this.latestTrafficPurchase(node);
 
-    return rows.flatMap((row) => {
+    const updates = await Promise.all(rows.map(async (row) => {
       if (typeof row.update_id !== 'string') {
-        return [];
+        return null;
       }
 
       const updateId = this.normalizeUpdateId(row.update_id);
 
-      return [
-        {
-          nodeId: node.id,
-          label: node.label,
-          eventOffset: this.extractEventOffset(row),
-          updateId,
-          recordTime: typeof row.record_time === 'string' ? row.record_time : null,
-          parties: partiesByUpdateId.get(updateId) ?? [],
-        },
-      ];
-    });
+      return {
+        nodeId: node.id,
+        label: node.label,
+        eventOffset: this.extractEventOffset(row),
+        updateId,
+        recordTime: typeof row.record_time === 'string' ? row.record_time : null,
+        parties: partiesByUpdateId.get(updateId) ?? [],
+        estimatedTrafficUsd: await this.estimateTrafficUsd(
+          row.paid_traffic_cost,
+          latestPurchase,
+        ),
+      };
+    }));
+
+    return updates.filter((update): update is NonNullable<typeof update> => update !== null);
   }
 
   private async fetchPartyRecentContractsForNode(

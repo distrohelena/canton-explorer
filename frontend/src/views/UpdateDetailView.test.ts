@@ -57,6 +57,7 @@ describe('UpdateDetailView', () => {
       updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
+      estimatedTrafficUsd: '12.34',
       events: [
         {
           eventKind: 'create',
@@ -156,6 +157,8 @@ describe('UpdateDetailView', () => {
     expect(screen.getByText('Event Offset')).toBeInTheDocument();
     expect(screen.getByText('0000000000000001')).toBeInTheDocument();
     expect(screen.getByText('Canonical Update ID')).toBeInTheDocument();
+    expect(screen.getByText('Estimated traffic cost')).toBeInTheDocument();
+    expect(screen.getByText('$12.34')).toBeInTheDocument();
     expect(
       screen.getByText('1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1'),
     ).toBeInTheDocument();

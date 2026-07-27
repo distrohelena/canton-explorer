@@ -33,7 +33,7 @@ const exploreLabel = computed(() => {
     return 'Network';
   }
 
-  if (route.path.startsWith('/tokens')) {
+  if (route.path.startsWith('/tokens') || route.path === '/canton-coin') {
     return 'Assets';
   }
 
@@ -236,6 +236,9 @@ onBeforeUnmount(() => {
                   <span id="assets-menu-label" class="app-explore__group-label">Assets</span>
                   <RouterLink class="app-explore__link app-explore__group-link" to="/tokens" @click="closeExploreMenu">
                     Tokens
+                  </RouterLink>
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/canton-coin" @click="closeExploreMenu">
+                    Canton Coin
                   </RouterLink>
                 </div>
                 <div class="app-explore__group" aria-labelledby="traffic-menu-label">

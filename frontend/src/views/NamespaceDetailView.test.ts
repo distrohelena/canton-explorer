@@ -84,6 +84,7 @@ describe('NamespaceDetailView', () => {
           updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-09T12:00:00.000Z',
           parties: ['Alice::1220abcd', 'Bob::1220abcd'],
+          estimatedTrafficUsd: '12.34',
         },
       ],
       recentContracts: [
@@ -173,6 +174,7 @@ describe('NamespaceDetailView', () => {
     expect(screen.getByText('Namespace Topology')).toBeInTheDocument();
     expect(screen.getByText('participant-2::1220ffff')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent Updates' })).toBeInTheDocument();
+    expect(screen.getByText('$12.34')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent Contracts' })).toBeInTheDocument();
   });
 

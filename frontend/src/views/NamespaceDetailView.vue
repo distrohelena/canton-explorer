@@ -66,6 +66,10 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
   };
 }
 
+function formatEstimatedTrafficUsd(value: string | null | undefined): string {
+  return value ? `$${value}` : '—';
+}
+
 function formatPartyPurposeLabel(value: string): string {
   const trimmedValue = value.trim();
   if (!trimmedValue) {
@@ -496,6 +500,9 @@ watch(
                 </div>
                 <span v-if="update.recordTimeLines" class="party-detail__meta party-detail__row-text">
                   {{ update.recordTimeLines.date }} {{ update.recordTimeLines.time }}
+                </span>
+                <span class="party-detail__meta party-detail__row-text">
+                  {{ formatEstimatedTrafficUsd(update.estimatedTrafficUsd) }}
                 </span>
               </RouterLink>
               <p v-if="renderedUpdates.length === 0" class="update-detail__empty">

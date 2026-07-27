@@ -27,6 +27,7 @@ export interface NamespaceRecentUpdate {
   updateId: string;
   recordTime: string | null;
   parties: string[];
+  estimatedTrafficUsd?: string | null;
 }
 
 export interface NamespaceRecentContract {

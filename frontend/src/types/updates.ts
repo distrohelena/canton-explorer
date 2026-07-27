@@ -5,6 +5,7 @@ export interface NodeUpdateEntry {
   updateId: string;
   recordTime: string | null;
   parties: string[];
+  estimatedTrafficUsd?: string | null;
 }
 
 export interface NodeUpdatesResponse {
@@ -35,6 +36,7 @@ export interface NodeUpdateDetailResponse {
   updateId: string;
   recordTime: string | null;
   parties: string[];
+  estimatedTrafficUsd?: string | null;
   events: NodeUpdateDetailEvent[];
   meta: Record<string, unknown>;
 }

@@ -39,6 +39,10 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
   };
 }
 
+function formatEstimatedTrafficUsd(value: string | null | undefined): string {
+  return value ? `$${value}` : '—';
+}
+
 const recordTimeLines = computed(() =>
   updateDetail.value ? formatRecordTime(updateDetail.value.recordTime) : null,
 );
@@ -303,6 +307,10 @@ function getExerciseEntries(
               <div class="update-detail__summary-item">
                 <dt>Canonical Update ID</dt>
                 <dd class="update-detail__canonical">{{ updateDetail.updateId }}</dd>
+              </div>
+              <div class="update-detail__summary-item">
+                <dt>Estimated traffic cost</dt>
+                <dd>{{ formatEstimatedTrafficUsd(updateDetail.estimatedTrafficUsd) }}</dd>
               </div>
               <div class="update-detail__summary-item">
                 <dt>Record Time</dt>

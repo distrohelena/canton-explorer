@@ -4,6 +4,7 @@ import type {
   PartyFingerprintsResponse,
 } from '../types/active-parties';
 import type { ActivityHistoryResponse } from '../types/activity';
+import type { CantonCoinHistoryResponse } from '../types/market';
 import type {
   GlobalContractsResponse,
   NodeContractDetailResponse,
@@ -411,6 +412,12 @@ export function fetchTrafficPurchases(options?: {
 
 export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse> {
   return fetchJson<ActivityHistoryResponse>(`/nodes/activity-history?days=${days}`);
+}
+
+export function fetchCantonCoinHistory(interval = '1D'): Promise<CantonCoinHistoryResponse> {
+  return fetchJson<CantonCoinHistoryResponse>(
+    `/market/canton-coin/history?interval=${encodeURIComponent(interval)}`,
+  );
 }
 
 export function fetchSearchResults(query: string): Promise<SearchResultsResponse> {
