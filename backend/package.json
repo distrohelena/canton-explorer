@@ -1,6 +1,6 @@
 {
   "name": "@distrohelena/canton-explorer",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Read-only operations explorer for Canton participant nodes and PQS-backed ledgers.",
   "author": "",
   "license": "Apache-2.0",
@@ -29,7 +29,6 @@
     "dar:prepare-workspace": "node ./scripts/prepare-debug-dars-from-workspace.mjs",
     "dar:source-map": "node ./scripts/generate-daml-source-map.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "sdk:local": "node ./scripts/link-local-sdk.mjs",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -45,7 +44,7 @@
     "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@distrohelena/canton-typescript-sdk": "^0.1.3",
+    "@distrohelena/canton-typescript-sdk": "0.1.17",
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",
     "@nestjs/common": "^11.0.1",
