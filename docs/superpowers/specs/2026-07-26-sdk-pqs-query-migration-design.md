@@ -69,9 +69,14 @@ projection rather than a PQS relation result:
 - token balances, holders, and transfer classification.
 
 Every raw operation uses SQL positional placeholders and a separate values
-array. Relation identifiers are no longer interpolated by Explorer; the SDK's
-schema profile controls them. Raw SQL remains read-only and must work with the
-SDK's single-statement policy.
+array. SQL placeholders cannot represent relation identifiers, so raw-query
+builders may obtain names only from one shared Explorer helper that validates
+the configured schema with the SDK profile's identifier rules and quotes one
+of the fixed eight PQS relation names. It must not accept a caller-provided
+relation name or any user-controlled identifier. The SDK schema profile
+controls identifiers for typed delegates; the shared helper provides the same
+fixed mapping only for the retained raw analytics. Raw SQL remains read-only
+and must work with the SDK's single-statement policy.
 
 ## Compatibility and Errors
 
@@ -102,5 +107,6 @@ behavior.
 - Typed PQS reads use SDK delegates whenever their result maps directly to a
   profiled SDK relation or relation graph.
 - Remaining raw reads are read-only, parameterized, and limited to the four
-  analytical categories named above.
+  analytical categories named above; their only interpolated SQL fragments are
+  fixed relation names emitted by the validated schema-qualification helper.
 - Existing REST/UI behavior and `pqs_only` support are preserved.
