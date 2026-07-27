@@ -4436,40 +4436,40 @@ export class PqsSummaryService {
     node: NodeConfig,
     contractId: string,
   ): Promise<NodeContractDetailResponse> {
-    const client = await this.managerFactory.getRawExecutor(node);
-    const result = await client.query(contractDetailQuery(node, contractId));
-    const row = (result.rows as ContractDetailRow[])[0];
+    const query = await this.managerFactory.getPqsQuery(node);
+    const row = await query.contracts.findUnique({
+      where: { contractId },
+      include: { createdTransaction: true, archivedTransaction: true },
+    });
 
     if (!row) {
       throw new Error('Contract not found');
     }
 
-    const templateId = this.normalizeTemplateIdentifier(row.template_id);
-    const packageId = typeof row.package_id === 'string' ? row.package_id : null;
+    const templateId = `${row.templateId.moduleName}:${row.templateId.entityName}`;
+    const packageId = row.packageId ?? row.templateId.packageId;
     const packageMetadata =
       packageId && this.packageCacheService ? this.packageCacheService.getPackage(packageId) : null;
 
     return {
       nodeId: node.id,
       label: node.label,
-      contractId: row.contract_id,
+      contractId: row.contractId,
       templateId,
       packageId,
       packageName: packageMetadata?.name ?? null,
       packageVersion: packageMetadata?.version ?? null,
-      createdUpdateId: typeof row.created_update_id === 'string' ? row.created_update_id : null,
-      createdEventOffset: this.normalizeOptionalScalar(row.created_event_offset),
-      createdRecordTime:
-        typeof row.created_record_time === 'string' ? row.created_record_time : null,
-      archivedUpdateId: typeof row.archived_update_id === 'string' ? row.archived_update_id : null,
-      archivedEventOffset: this.normalizeOptionalScalar(row.archived_event_offset),
-      archivedRecordTime:
-        typeof row.archived_record_time === 'string' ? row.archived_record_time : null,
+      createdUpdateId: row.createdTransaction?.transactionId ?? null,
+      createdEventOffset: row.createdTransaction?.offset ?? row.createdEventOffset,
+      createdRecordTime: row.createdTransaction?.effectiveAt?.toISOString() ?? null,
+      archivedUpdateId: row.archivedTransaction?.transactionId ?? null,
+      archivedEventOffset: row.archivedTransaction?.offset ?? row.archivedEventOffset,
+      archivedRecordTime: row.archivedTransaction?.effectiveAt?.toISOString() ?? null,
       contractData: await this.decodeContractData(
         node,
         packageId,
         templateId,
-        row.contract_instance,
+        row.payload,
       ),
     };
   }

@@ -4366,26 +4366,28 @@ describe('PqsSummaryService', () => {
   });
 
   it('returns contract detail with created update metadata and decoded contract data', async () => {
-    const query = jest.fn().mockResolvedValue({
-      rows: [
-        {
-          contract_id: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
-          template_id: 'Splice.Amulet:SvRewardCoupon',
-          package_id: 'splice-amulet',
-          contract_instance: buildRewardCouponInstance(258, 20000),
-          created_update_id: '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
-          created_event_offset: '9130',
-          created_record_time: '2026-07-02T03:50:00.000Z',
-          archived_update_id: null,
-          archived_event_offset: null,
-          archived_record_time: null,
-        },
-      ],
+    const findUnique = jest.fn().mockResolvedValue({
+      contractId: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+      templateId: {
+        packageId: 'splice-amulet',
+        moduleName: 'Splice.Amulet',
+        entityName: 'SvRewardCoupon',
+      },
+      packageId: 'splice-amulet',
+      payload: buildRewardCouponInstance(258, 20000),
+      createdEventOffset: '9130',
+      archivedEventOffset: null,
+      createdTransaction: {
+        transactionId: '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
+        offset: '9130',
+        effectiveAt: new Date('2026-07-02T03:50:00.000Z'),
+      },
+      archivedTransaction: null,
     });
 
     const service = new PqsSummaryService(
       {
-        getRawExecutor: async () => ({ query }),
+        getPqsQuery: async () => ({ contracts: { findUnique } }),
       } as never,
       undefined,
       {
@@ -4438,12 +4440,12 @@ describe('PqsSummaryService', () => {
       },
     });
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('from "public"."__contracts" contract_row'),
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('join "public"."__transactions" created_tx'),
-    );
+    expect(findUnique).toHaveBeenCalledWith({
+      where: {
+        contractId: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+      },
+      include: { createdTransaction: true, archivedTransaction: true },
+    });
   });
 
   it('decodes WalletAppInstall contract detail from a stored contract instance payload', async () => {
@@ -4454,27 +4456,29 @@ describe('PqsSummaryService', () => {
     const decoder = new DamlValueDecoderService(
       new PackageRegistryService(new PackageCacheService()),
     );
-    const query = jest.fn().mockResolvedValue({
-      rows: [
-        {
-          contract_id:
-            '00e072d1af33d8e9eedf85cdafe3bb122cf74beaf77aed62d9dd3e9060278a7de7ca121220f2b77ff18dc0c6923a6acf5b7ed90c846e08e0a2c57edfd57e536564c2f740c7',
-          template_id: 'Splice.Wallet.Install:WalletAppInstall',
-          package_id: '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
-          contract_instance: WALLET_APP_INSTALL_INSTANCE,
-          created_update_id: '12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
-          created_event_offset: '39',
-          created_record_time: '2026-07-02T10:55:21.000Z',
-          archived_update_id: null,
-          archived_event_offset: null,
-          archived_record_time: null,
-        },
-      ],
+    const findUnique = jest.fn().mockResolvedValue({
+      contractId:
+        '00e072d1af33d8e9eedf85cdafe3bb122cf74beaf77aed62d9dd3e9060278a7de7ca121220f2b77ff18dc0c6923a6acf5b7ed90c846e08e0a2c57edfd57e536564c2f740c7',
+      templateId: {
+        packageId: '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
+        moduleName: 'Splice.Wallet.Install',
+        entityName: 'WalletAppInstall',
+      },
+      packageId: '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
+      payload: WALLET_APP_INSTALL_INSTANCE,
+      createdEventOffset: '39',
+      archivedEventOffset: null,
+      createdTransaction: {
+        transactionId: '12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
+        offset: '39',
+        effectiveAt: new Date('2026-07-02T10:55:21.000Z'),
+      },
+      archivedTransaction: null,
     });
 
     const service = new PqsSummaryService(
       {
-        getRawExecutor: async () => ({ query }),
+        getPqsQuery: async () => ({ contracts: { findUnique } }),
       } as never,
       decoder,
       {
