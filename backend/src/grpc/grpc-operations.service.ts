@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import type { ledgerApiV2 } from '@distrohelena/canton-typescript-sdk/protobuf';
 import {
   DEFAULT_TOKEN_METADATA_CONFIG,
   type TokenMetadataConfig,
@@ -59,7 +60,6 @@ export interface GrpcTokenHolderObservation {
   amount: string | null;
 }
 
-const HOLDING_V2_INTERFACE_ID = '#splice-api-token-holding-v2:Splice.Api.Token.HoldingV2:Holding';
 const HOLDING_V2_INTERFACE_MODULE = 'Splice.Api.Token.HoldingV2';
 const HOLDING_V2_INTERFACE_ENTITY = 'Holding';
 const HOLDING_V2_PAGE_SIZE = 500;
@@ -112,6 +112,47 @@ type LedgerHoldingActiveContract = {
     interfaceViews?: LedgerView[];
   };
 };
+
+function holdingV2EventFormat(partyId: string): ledgerApiV2.EventFormat {
+  return {
+    filtersByParty: {
+      [partyId]: {
+        cumulative: [
+          {
+            identifierFilter: {
+              oneofKind: 'interfaceFilter',
+              interfaceFilter: {
+                interfaceId: {
+                  packageId: '#splice-api-token-holding-v2',
+                  moduleName: HOLDING_V2_INTERFACE_MODULE,
+                  entityName: HOLDING_V2_INTERFACE_ENTITY,
+                },
+                includeInterfaceView: true,
+                includeCreatedEventBlob: false,
+              },
+            },
+          },
+        ],
+      },
+    },
+    verbose: true,
+  };
+}
+
+function holdingV2ContractsFromPage(
+  response: {
+    activeContracts?: ledgerApiV2.GetActiveContractsResponse[];
+    contracts?: LedgerHoldingActiveContract[];
+  },
+): LedgerHoldingActiveContract[] {
+  const activeContracts = (response.activeContracts ?? []).flatMap((entry) =>
+    entry.contractEntry?.oneofKind === 'activeContract'
+      ? [{ createdEvent: entry.contractEntry.activeContract.createdEvent }]
+      : [],
+  );
+
+  return activeContracts.length > 0 ? activeContracts : (response.contracts ?? []);
+}
 
 type TopologyStoreShape = {
   kind?: 'authorized' | 'synchronizer' | 'temporary';
@@ -698,17 +739,18 @@ export class GrpcOperationsService {
 
     for (const partyId of localParties) {
       let nextPageToken: Uint8Array | undefined;
+      let activeAtOffset: string | undefined;
 
       do {
         const response = await client.stateService.getActiveContractsPageAsync({
-          party: partyId,
-          interfaceId: HOLDING_V2_INTERFACE_ID,
-          includeInterfaceView: true,
+          eventFormat: holdingV2EventFormat(partyId),
+          activeAtOffset,
           maxPageSize: HOLDING_V2_PAGE_SIZE,
           pageToken: nextPageToken,
         });
 
-        contracts.push(...(response.contracts ?? []));
+        contracts.push(...holdingV2ContractsFromPage(response));
+        activeAtOffset ??= response.activeAtOffset;
         nextPageToken =
           response.nextPageToken && response.nextPageToken.length > 0
             ? response.nextPageToken

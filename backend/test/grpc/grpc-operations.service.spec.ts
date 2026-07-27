@@ -152,11 +152,14 @@ describe('GrpcOperationsService', () => {
       ],
     });
     const getActiveContractsPageAsync = jest.fn().mockImplementation(async (request) => ({
-      contracts:
-        request.party === 'Alice'
+      activeContracts:
+        request.party === 'Alice' || request.eventFormat?.filtersByParty?.Alice !== undefined
           ? [
               {
-                createdEvent: {
+                contractEntry: {
+                  oneofKind: 'activeContract',
+                  activeContract: {
+                    createdEvent: {
                   contractId: 'share-contract-1',
                   interfaceViews: [
                     {
@@ -281,6 +284,8 @@ describe('GrpcOperationsService', () => {
                       },
                     },
                   ],
+                    },
+                  },
                 },
               },
             ]
@@ -303,10 +308,32 @@ describe('GrpcOperationsService', () => {
 
     expect(getActiveContractsPageAsync).toHaveBeenCalledWith(
       expect.objectContaining({
-        party: 'Alice',
-        interfaceId: '#splice-api-token-holding-v2:Splice.Api.Token.HoldingV2:Holding',
-        includeInterfaceView: true,
+        eventFormat: expect.objectContaining({
+          filtersByParty: expect.objectContaining({
+            Alice: expect.objectContaining({
+              cumulative: [
+                expect.objectContaining({
+                  identifierFilter: expect.objectContaining({
+                    oneofKind: 'interfaceFilter',
+                    interfaceFilter: expect.objectContaining({
+                      interfaceId: {
+                        packageId: '#splice-api-token-holding-v2',
+                        moduleName: 'Splice.Api.Token.HoldingV2',
+                        entityName: 'Holding',
+                      },
+                      includeInterfaceView: true,
+                    }),
+                  }),
+                }),
+              ],
+            }),
+          }),
+          verbose: true,
+        }),
       }),
+    );
+    expect(getActiveContractsPageAsync).not.toHaveBeenCalledWith(
+      expect.objectContaining({ party: 'Alice' }),
     );
     expect(tokens).toEqual([
       {
@@ -328,6 +355,43 @@ describe('GrpcOperationsService', () => {
       },
     ]);
     expect(disposeAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses the active snapshot offset while paging HoldingV2 contracts', async () => {
+    const getActiveContractsPageAsync = jest
+      .fn()
+      .mockResolvedValueOnce({
+        activeContracts: [],
+        activeAtOffset: '42',
+        nextPageToken: Uint8Array.from([1]),
+      })
+      .mockResolvedValueOnce({
+        activeContracts: [],
+        activeAtOffset: '42',
+      });
+    const service = new GrpcOperationsService({
+      create: () => ({
+        partyManagementService: {
+          listKnownPartiesAsync: jest.fn().mockResolvedValue({
+            partyDetails: [{ party: 'Alice', isLocal: true }],
+          }),
+        },
+        stateService: {
+          getActiveContractsPageAsync,
+        },
+        disposeAsync: jest.fn().mockResolvedValue(undefined),
+      }),
+    } as never);
+
+    await expect(service.fetchHoldingV2Tokens(grpcNode)).resolves.toEqual([]);
+
+    expect(getActiveContractsPageAsync).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        activeAtOffset: '42',
+        pageToken: Uint8Array.from([1]),
+      }),
+    );
   });
 
   it('falls back cleanly when HoldingV2 packages are not available on the participant', async () => {

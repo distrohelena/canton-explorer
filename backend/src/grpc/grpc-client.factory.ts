@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ledgerApiV2 } from '@distrohelena/canton-typescript-sdk/protobuf';
 import type { NodeConfig } from '../config/node-config.schema';
 import { createSharedSecretJwt } from './shared-secret-jwt';
 import { createSelfSignedEs256Jwt } from './self-signed-es256-jwt';
@@ -137,6 +138,9 @@ type LedgerActiveContract = {
   createdEvent?: LedgerCreatedEvent;
   synchronizerId?: string;
 };
+type LedgerActiveContractsPageResponse = ledgerApiV2.GetActiveContractsPageResponse & {
+  contracts?: LedgerActiveContract[];
+};
 type SdkCantonClient = {
   hashing: {
     computePublicKeyFingerprint(publicKey: Uint8Array, format?: string): string;
@@ -203,20 +207,9 @@ type SdkCantonClient = {
     getPackageAsync(input: { packageId: string }): Promise<LedgerPackageResponse>;
   };
   stateService: {
-    getActiveContractsPageAsync(input: {
-      party: string;
-      templateId?: string;
-      interfaceId?: string;
-      includeInterfaceView?: boolean;
-      includeCreatedEventBlob?: boolean;
-      activeAtOffset?: string;
-      maxPageSize?: number;
-      pageToken?: Uint8Array;
-    }): Promise<{
-      contracts?: LedgerActiveContract[];
-      activeAtOffset?: string;
-      nextPageToken?: Uint8Array;
-    }>;
+    getActiveContractsPageAsync(
+      input: ledgerApiV2.GetActiveContractsPageRequest,
+    ): Promise<LedgerActiveContractsPageResponse>;
   };
   topologyManagerReadService?: {
     listAvailableStoresAsync(input: Record<string, never>): Promise<{
