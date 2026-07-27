@@ -2,7 +2,8 @@
 
 ## Goal
 
-Upgrade Canton Explorer to `@distrohelena/canton-typescript-sdk` 0.1.17 and
+Upgrade Canton Explorer to the published `@distrohelena/canton-typescript-sdk`
+version 0.1.17 and
 make the SDK's PQS query API the sole database-access boundary. Preserve the
 Explorer's REST and UI contracts.
 
@@ -10,7 +11,8 @@ Explorer's REST and UI contracts.
 
 This work will:
 
-- declare the Explorer dependency on SDK `^0.1.17` and refresh the lockfile;
+- declare the Explorer dependency exactly as SDK `0.1.17`, refresh the
+  lockfile, and remove the local SDK-link workflow;
 - create and dispose SDK `CantonManager` instances per configured node;
 - replace direct `pg` pool access with typed delegates, relation includes,
   filters, JSON projections, and groups wherever the SDK represents the query;
@@ -20,6 +22,12 @@ This work will:
 
 This work will not change the public Explorer endpoints, views, node
 configuration format, or add a general-purpose query console.
+
+The Explorer must compile against the published SDK declarations. Its local
+link script, link-oriented npm scripts, and ambient `any` module declarations
+for SDK root, debugger, and DAML-LF imports will be removed. If a real SDK
+type exposes an incompatibility, the Explorer adapts to that public type rather
+than restoring an ambient `any` shim.
 
 ## Manager Ownership
 
@@ -102,7 +110,8 @@ behavior.
 
 ## Acceptance Criteria
 
-- Explorer compiles against the SDK 0.1.17 compiled public API.
+- Explorer installs and compiles against the published SDK 0.1.17 compiled
+  public API, not a local symlink.
 - No Explorer service directly imports or constructs `pg.Pool`.
 - Typed PQS reads use SDK delegates whenever their result maps directly to a
   profiled SDK relation or relation graph.
