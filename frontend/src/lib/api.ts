@@ -23,7 +23,11 @@ import type { PartyContractsResponse } from '../types/parties';
 import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
 import type { SearchResultsResponse } from '../types/search';
 import type { TemplateFilterResponse } from '../types/templates';
-import type { DebuggerEventListResponse, DebuggerSessionResponse } from '../types/debugger';
+import type {
+  DebuggerEventListResponse,
+  DebuggerSessionResponse,
+  DebuggerSessionSummary,
+} from '../types/debugger';
 import type {
   TokenDetailResponse,
   TokenHoldersResponse,
@@ -418,6 +422,10 @@ export function createDebuggerSession(nodeId: string, offset: string): Promise<D
     nodeId,
     offset,
   });
+}
+
+export function fetchDebuggerSessions(): Promise<DebuggerSessionSummary[]> {
+  return fetchJson<DebuggerSessionSummary[]>('/debugger/sessions');
 }
 
 export function fetchDebuggerSession(sessionId: string): Promise<DebuggerSessionResponse> {

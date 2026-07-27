@@ -20,6 +20,11 @@ export class DebuggerController {
     return this.debuggerService.createSession(body.nodeId ?? '', body.offset ?? '');
   }
 
+  @Get('/sessions')
+  listSessions() {
+    return this.debuggerService.listSessions();
+  }
+
   @Get('/sessions/:sessionId')
   getSession(@Param('sessionId') sessionId: string) {
     return this.debuggerService.getSession(sessionId);

@@ -153,6 +153,7 @@ describe('DebuggerService', () => {
           nodeId: 'cnqs-extra-1',
           updateId: 'update-1',
           offset: '1685',
+          createdAt: '2026-07-22T12:00:00.000Z',
           sourceFilesByPath: new Map([['Main.daml', 'choice Archive = do\n  archive self']]),
           realEvents: [
             {
@@ -231,6 +232,23 @@ describe('DebuggerService', () => {
         }),
       }),
     );
+  });
+
+  it('lists the stored debugger sessions with current progress', () => {
+    const { service } = createService();
+
+    expect(service.listSessions()).toEqual([
+      {
+        sessionId: 'session-1',
+        nodeId: 'cnqs-extra-1',
+        updateId: 'update-1',
+        offset: '1685',
+        stepCount: 4,
+        currentStepIndex: 1,
+        isTerminal: false,
+        createdAt: '2026-07-22T12:00:00.000Z',
+      },
+    ]);
   });
 
   it('lists canonical ledger events separately from the current step response', () => {

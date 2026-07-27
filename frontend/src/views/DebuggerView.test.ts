@@ -5,6 +5,10 @@ import { defineComponent } from 'vue';
 import DebuggerView from './DebuggerView.vue';
 import {
   createDebuggerSession,
+  fetchDebuggerSessions,
+  fetchNodeContracts,
+  fetchNodeTemplates,
+  fetchNodes,
   fetchDebuggerEvents,
   fetchDebuggerSession,
   jumpDebuggerSessionToStep,
@@ -34,6 +38,10 @@ vi.mock('../components/MonacoCodeSurface.vue', () => ({
 
 vi.mock('../lib/api', () => ({
   createDebuggerSession: vi.fn(),
+  fetchDebuggerSessions: vi.fn(),
+  fetchNodeContracts: vi.fn(),
+  fetchNodeTemplates: vi.fn(),
+  fetchNodes: vi.fn(),
   fetchDebuggerSession: vi.fn(),
   fetchDebuggerEvents: vi.fn(),
   jumpDebuggerSessionToStep: vi.fn(),
@@ -75,6 +83,140 @@ describe('DebuggerView', () => {
       router,
     };
   }
+
+  it('opens a full-screen template search from the combobox', async () => {
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+      },
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant',
+        mode: 'pqs_only',
+      },
+    ] as never);
+    vi.mocked(fetchNodeTemplates).mockImplementation(async (nodeId) => ({
+      templates:
+        nodeId === 'participant-1'
+          ? [{ templateId: 'Main:Asset' }, { templateId: 'Main:Wallet' }]
+          : [{ templateId: 'Other:Holding' }],
+    }));
+
+    await renderAt('/debugger');
+
+    expect(await screen.findByRole('heading', { name: 'Debugger' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+    expect(screen.getByRole('heading', { name: 'Choose simulation' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Create / })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Exercise New/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Exercise Existing/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Select a node' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Choose a template' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('option', { name: /Exercise New/ }));
+    expect(screen.getByRole('heading', { name: 'Choose template to create' })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: /Participant 1.*PQS \+ gRPC/s })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: /Participant 2.*PQS only/s })).toBeInTheDocument();
+
+    await fireEvent.click(await screen.findByRole('option', { name: /Participant 1.*PQS \+ gRPC/s }));
+    expect(screen.getByRole('searchbox', { name: 'Search templates' })).toBeInTheDocument();
+    expect(screen.getByText('Main:Asset')).toBeInTheDocument();
+    expect(screen.getByText('Main:Wallet')).toBeInTheDocument();
+    expect(screen.queryByText('Other:Holding')).not.toBeInTheDocument();
+
+    const search = screen.getByRole('searchbox', { name: 'Search templates' });
+    await fireEvent.update(search, 'wallet');
+    expect(screen.getByText('Main:Wallet')).toBeInTheDocument();
+    expect(screen.queryByText('Main:Asset')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('option', { name: /Main:Wallet.*Participant 1/s }));
+
+    expect(screen.getByTestId('debugger-template-picker-selection')).toHaveTextContent('Exercise New');
+    expect(screen.getByTestId('debugger-template-picker-selection')).toHaveTextContent('Main:Wallet');
+
+    expect(fetchNodeTemplates).toHaveBeenCalledWith('participant-1');
+    expect(fetchNodeTemplates).toHaveBeenCalledWith('participant-2');
+    expect(createDebuggerSession).not.toHaveBeenCalled();
+  });
+
+  it('lists previously started sessions and opens a selected session', async () => {
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([
+      {
+        sessionId: 'session-1',
+        nodeId: 'participant-1',
+        updateId: 'update-1',
+        offset: '42',
+        stepCount: 12,
+        currentStepIndex: 3,
+        isTerminal: false,
+        createdAt: '2026-07-22T12:00:00Z',
+      },
+    ]);
+
+    const { router } = await renderAt('/debugger');
+
+    expect(await screen.findByRole('heading', { name: 'Debug Sessions' })).toBeInTheDocument();
+    expect(screen.getByText('session-1')).toBeInTheDocument();
+    expect(screen.getByText('participant-1')).toBeInTheDocument();
+    expect(screen.getByText('4 / 12')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Open session session-1' }));
+
+    await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('session-1'));
+    expect(router.currentRoute.value.query.eventOffset).toBe('42');
+  });
+
+  it('shows active contracts for Exercise Existing after the node is selected', async () => {
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+      },
+    ] as never);
+    vi.mocked(fetchNodeTemplates).mockResolvedValue({
+      templates: [{ templateId: 'Main:Asset' }],
+    });
+    vi.mocked(fetchNodeContracts).mockResolvedValue({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      limit: 100,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          contractId: '00active',
+          templateId: 'Main:Asset',
+          createdRecordTime: '2026-07-22T12:00:00Z',
+        },
+      ],
+    });
+
+    await renderAt('/debugger');
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+
+    await fireEvent.click(screen.getByRole('option', { name: /Exercise Existing/ }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Participant 1.*PQS \+ gRPC/s }));
+
+    expect(await screen.findByRole('heading', { name: 'Select active contract' })).toBeInTheDocument();
+    const contract = await screen.findByRole('option', { name: /00active.*Main:Asset/s });
+    expect(contract).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Search templates' })).not.toBeInTheDocument();
+
+    await fireEvent.click(contract);
+
+    expect(screen.getByTestId('debugger-template-picker-selection')).toHaveTextContent('Exercise Existing');
+    expect(screen.getByTestId('debugger-template-picker-selection')).toHaveTextContent('00active');
+    expect(fetchNodeContracts).toHaveBeenCalledWith('participant-1', { limit: 100 });
+  });
 
   it('renders the debugger shell with route-driven launch context', async () => {
     vi.mocked(createDebuggerSession).mockResolvedValue({

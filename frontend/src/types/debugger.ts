@@ -114,3 +114,14 @@ export interface DebuggerSessionResponse {
     endColumn: number | null;
   } | null;
 }
+
+export interface DebuggerSessionSummary {
+  sessionId: string;
+  nodeId: string;
+  updateId: string | null;
+  offset: string;
+  stepCount: number;
+  currentStepIndex: number;
+  isTerminal: boolean;
+  createdAt: string | null;
+}

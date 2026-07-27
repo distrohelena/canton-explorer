@@ -6,10 +6,20 @@ import type { LocationQueryRaw } from 'vue-router';
 import DebuggerControlPanel from '../components/DebuggerControlPanel.vue';
 import DebuggerEventList from '../components/DebuggerEventList.vue';
 import DebuggerScopePanel from '../components/DebuggerScopePanel.vue';
+import DebuggerTemplatePicker from '../components/DebuggerTemplatePicker.vue';
+import type {
+  DebuggerTemplateOption,
+  DebuggerSimulationKind,
+  DebuggerTemplateSelection,
+} from '../components/DebuggerTemplatePicker.vue';
 import MonacoCodeSurface from '../components/MonacoCodeSurface.vue';
 import type { MonacoDebuggerHoverVariable } from '../components/MonacoCodeSurface.vue';
 import {
   createDebuggerSession,
+  fetchDebuggerSessions,
+  fetchNodeContracts,
+  fetchNodeTemplates,
+  fetchNodes,
   fetchDebuggerEvents,
   fetchDebuggerSession,
   jumpDebuggerSessionToStep,
@@ -20,8 +30,11 @@ import { resolveDefaultControlPanelX } from '../lib/debugger-layout';
 import type {
   DebuggerReplayEventSummary,
   DebuggerSessionResponse,
+  DebuggerSessionSummary,
   DebuggerSourceLocation,
 } from '../types/debugger';
+import type { NodeSnapshot } from '../types/nodes';
+import type { NodeActiveContractSummary } from '../types/contracts';
 
 interface DebuggerSourceTab {
   readonly path: string;
@@ -35,6 +48,14 @@ interface DebuggerSourceTab {
   } | null;
 }
 
+interface DebuggerTemplateGroup {
+  nodeId: string;
+  label: string;
+  mode: NodeSnapshot['mode'];
+  templates: string[];
+  error: string | null;
+}
+
 const route = useRoute();
 const router = useRouter();
 const theme = ref<'light' | 'dark'>('dark');
@@ -46,6 +67,17 @@ const loading = ref(false);
 const actionLoading = ref(false);
 const eventLoading = ref(false);
 const error = ref<string | null>(null);
+const templateLoading = ref(false);
+const templateError = ref<string | null>(null);
+const templateGroups = ref<DebuggerTemplateGroup[]>([]);
+const selectedTemplate = ref<DebuggerTemplateSelection | null>(null);
+const debuggerSessions = ref<DebuggerSessionSummary[]>([]);
+const debuggerSessionsLoading = ref(false);
+const debuggerSessionsError = ref<string | null>(null);
+const showNewSimulation = ref(false);
+const activeContracts = ref<NodeActiveContractSummary[]>([]);
+const activeContractsLoading = ref(false);
+const activeContractsError = ref<string | null>(null);
 const workspace = ref<HTMLElement | null>(null);
 const controlPanel = ref<HTMLElement | null>(null);
 const editorWidth = ref<number | null>(null);
@@ -299,6 +331,82 @@ const routeReplayKey = computed(() => JSON.stringify({
   sessionId: routeSessionId.value,
   stepId: routeStepId.value,
 }));
+
+const hasReplayContext = computed(() => Boolean(nodeId.value && eventOffset.value));
+
+const templateOptions = computed<DebuggerTemplateOption[]>(() =>
+  templateGroups.value.flatMap((group) =>
+    group.error
+      ? []
+      : group.templates.map((templateId) => ({
+        templateId,
+        nodeId: group.nodeId,
+        nodeLabel: group.label,
+        mode: group.mode,
+      })),
+  ),
+);
+
+function selectTemplate(selection: DebuggerTemplateSelection) {
+  selectedTemplate.value = selection;
+}
+
+async function loadActiveContracts(nodeId: string, simulationKind: DebuggerSimulationKind) {
+  activeContracts.value = [];
+  activeContractsError.value = null;
+
+  if (simulationKind !== 'exercise_existing') {
+    activeContractsLoading.value = false;
+    return;
+  }
+
+  activeContractsLoading.value = true;
+
+  try {
+    const response = await fetchNodeContracts(nodeId, { limit: 100 });
+    activeContracts.value = response.contracts;
+  } catch (err) {
+    activeContractsError.value = err instanceof Error ? err.message : 'Unable to load active contracts.';
+  } finally {
+    activeContractsLoading.value = false;
+  }
+}
+
+async function loadDebuggerSessions() {
+  debuggerSessionsLoading.value = true;
+  debuggerSessionsError.value = null;
+
+  try {
+    debuggerSessions.value = await fetchDebuggerSessions();
+  } catch (err) {
+    debuggerSessions.value = [];
+    debuggerSessionsError.value = err instanceof Error ? err.message : 'Unable to load debugger sessions.';
+  } finally {
+    debuggerSessionsLoading.value = false;
+  }
+}
+
+function startNewSimulation() {
+  showNewSimulation.value = true;
+  void loadTemplateCatalog();
+}
+
+function returnToSessions() {
+  showNewSimulation.value = false;
+  void loadDebuggerSessions();
+}
+
+async function openDebuggerSession(debuggerSession: DebuggerSessionSummary) {
+  await router.push({
+    path: '/debugger',
+    query: {
+      nodeId: debuggerSession.nodeId,
+      ...(debuggerSession.updateId ? { updateId: debuggerSession.updateId } : {}),
+      eventOffset: debuggerSession.offset,
+      sessionId: debuggerSession.sessionId,
+    },
+  });
+}
 
 function resolveSourceLanguage(path: string | null | undefined): 'daml' | 'plaintext' {
   return path?.toLowerCase().endsWith('.daml') ? 'daml' : 'plaintext';
@@ -818,6 +926,52 @@ async function loadDebuggerSession() {
   }
 }
 
+async function loadTemplateCatalog() {
+  templateLoading.value = true;
+  templateError.value = null;
+  error.value = null;
+  selectedTemplate.value = null;
+  templateGroups.value = [];
+  activeContracts.value = [];
+  activeContractsError.value = null;
+  activeContractsLoading.value = false;
+  session.value = null;
+  replayEvents.value = [];
+  openSourceTabs.value = [];
+  activeSourcePath.value = null;
+
+  try {
+    const nodes = await fetchNodes();
+    templateGroups.value = await Promise.all(
+      nodes.map(async (node) => {
+        try {
+          const response = await fetchNodeTemplates(node.id);
+          return {
+            nodeId: node.id,
+            label: node.label,
+            mode: node.mode,
+            templates: [...new Set(response.templates.map((template) => template.templateId))],
+            error: null,
+          } satisfies DebuggerTemplateGroup;
+        } catch (err) {
+          return {
+            nodeId: node.id,
+            label: node.label,
+            mode: node.mode,
+            templates: [],
+            error: err instanceof Error ? err.message : 'Unable to load templates.',
+          } satisfies DebuggerTemplateGroup;
+        }
+      }),
+    );
+  } catch (err) {
+    templateGroups.value = [];
+    templateError.value = err instanceof Error ? err.message : 'Unable to load templates.';
+  } finally {
+    templateLoading.value = false;
+  }
+}
+
 async function runAction(
   action: 'step-back' | 'step-into' | 'step-over' | 'step-out' | 'continue',
 ) {
@@ -891,7 +1045,13 @@ watch(
     }
 
     controlPanelPosition.value = null;
-    void loadDebuggerSession();
+    if (hasReplayContext.value) {
+      void loadDebuggerSession();
+    } else if (showNewSimulation.value) {
+      void loadTemplateCatalog();
+    } else {
+      void loadDebuggerSessions();
+    }
   },
   {
     immediate: true,
@@ -936,6 +1096,85 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="debugger-view">
+    <section
+      v-if="!session && !hasReplayContext && !showNewSimulation"
+      class="debugger-view__session-catalog"
+      data-testid="debugger-session-catalog"
+    >
+      <header class="node-detail__hero debugger-view__template-catalog-header">
+        <div>
+          <p class="activity-home__eyebrow">TOOLS</p>
+          <h2 class="party-detail__title">Debugger</h2>
+        </div>
+        <button type="button" class="debugger-view__new-simulation" @click="startNewSimulation">
+          New Simulation
+        </button>
+      </header>
+
+      <p v-if="debuggerSessionsLoading" class="debugger-view__session-state">
+        Loading debug sessions...
+      </p>
+      <p v-else-if="debuggerSessionsError" class="debugger-view__session-state debugger-view__session-state--error">
+        {{ debuggerSessionsError }}
+      </p>
+      <template v-else-if="debuggerSessions.length > 0">
+        <div class="debugger-view__session-heading">
+          <h3>Debug Sessions</h3>
+          <span>{{ debuggerSessions.length }} sessions</span>
+        </div>
+        <div class="debugger-view__session-list">
+          <button
+            v-for="debuggerSession in debuggerSessions"
+            :key="debuggerSession.sessionId"
+            type="button"
+            class="debugger-view__session-card"
+            :aria-label="`Open session ${debuggerSession.sessionId}`"
+            @click="openDebuggerSession(debuggerSession)"
+          >
+            <span class="debugger-view__session-card-main">
+              <strong>{{ debuggerSession.sessionId }}</strong>
+              <span>{{ debuggerSession.nodeId }}</span>
+            </span>
+            <span class="debugger-view__session-card-meta">
+              <span>Offset {{ debuggerSession.offset }}</span>
+              <span>{{ debuggerSession.currentStepIndex + 1 }} / {{ debuggerSession.stepCount }}</span>
+              <span>{{ debuggerSession.isTerminal ? 'Complete' : 'In progress' }}</span>
+            </span>
+          </button>
+        </div>
+      </template>
+      <p v-else class="debugger-view__session-state">
+        No debug sessions started yet.
+      </p>
+    </section>
+
+    <section
+      v-if="!session && !hasReplayContext && showNewSimulation"
+      class="debugger-view__template-catalog"
+      data-testid="debugger-template-catalog"
+    >
+      <header class="node-detail__hero debugger-view__template-catalog-header">
+        <div>
+          <p class="activity-home__eyebrow">TOOLS</p>
+          <h2 class="party-detail__title">Debugger</h2>
+        </div>
+        <button type="button" class="debugger-view__back-to-sessions" @click="returnToSessions">
+          Back to Sessions
+        </button>
+      </header>
+
+      <DebuggerTemplatePicker
+        :model-value="selectedTemplate"
+        :options="templateOptions"
+        :active-contracts="activeContracts"
+        :active-contracts-loading="activeContractsLoading"
+        :active-contracts-error="activeContractsError"
+        :loading="templateLoading"
+        :error="templateError"
+        @select="selectTemplate"
+        @node-select="loadActiveContracts"
+      />
+    </section>
     <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
     <p v-else-if="loading && !session" class="node-detail__message">Loading debugger session...</p>
 

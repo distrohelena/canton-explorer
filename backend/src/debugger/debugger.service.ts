@@ -129,6 +129,7 @@ type DebuggerSessionArtifacts = {
   nodeId: string;
   updateId: string | null;
   offset: string;
+  createdAt?: string;
   sourceFilesByPath: Map<string, string>;
   realEvents: NodeUpdateDetailEvent[];
 };
@@ -155,6 +156,17 @@ export interface DebuggerSessionResponse {
     endLine: number | null;
     endColumn: number | null;
   } | null;
+}
+
+export interface DebuggerSessionSummary {
+  sessionId: string;
+  nodeId: string;
+  updateId: string | null;
+  offset: string;
+  stepCount: number;
+  currentStepIndex: number;
+  isTerminal: boolean;
+  createdAt: string | null;
 }
 
 export interface DebuggerTemplateIdResponse {
@@ -365,6 +377,7 @@ export class DebuggerService {
         nodeId: node.id,
         updateId: snapshot.updateId ?? null,
         offset: snapshot.offset,
+        createdAt: new Date().toISOString(),
         sourceFilesByPath: this.flattenSourceFiles(sourceBundles),
         realEvents: updateDetail.events ?? [],
       });
@@ -395,6 +408,38 @@ export class DebuggerService {
     } finally {
       await client.disposeAsync?.();
     }
+  }
+
+  listSessions(): DebuggerSessionSummary[] {
+    if (!this.sessionStore) {
+      return [];
+    }
+
+    const sessions = [...this.sessionArtifacts.entries()].flatMap(([sessionId, artifacts]) => {
+      try {
+        const metadata = this.sessionStore?.getSessionMetadataOrThrow(sessionId);
+        const currentStep = this.sessionStore?.getCurrentStepOrThrow(sessionId);
+        const stepCount = metadata?.stepCount ?? 0;
+        const currentStepIndex = currentStep?.stepIndex ?? 0;
+
+        return [{
+          sessionId,
+          nodeId: artifacts.nodeId,
+          updateId: artifacts.updateId,
+          offset: artifacts.offset,
+          stepCount,
+          currentStepIndex,
+          isTerminal: currentStepIndex >= Math.max(0, stepCount - 1),
+          createdAt: artifacts.createdAt ?? null,
+        }];
+      } catch {
+        return [];
+      }
+    });
+
+    return sessions.sort((left, right) =>
+      (right.createdAt ?? '').localeCompare(left.createdAt ?? ''),
+    );
   }
 
   getSession(sessionId: string): DebuggerSessionResponse {
