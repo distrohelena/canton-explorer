@@ -1,7 +1,18 @@
 import { describe, expect, it, jest } from '@jest/globals';
+import { Test } from '@nestjs/testing';
 import type { NodeConfig } from '../../src/config/node-config.schema';
 
 describe('PqsManagerFactory', () => {
+  it('can be constructed by the Nest container without a loader provider', async () => {
+    const { PqsManagerFactory } = await import('../../src/pqs/pqs-manager.factory');
+    const moduleRef = await Test.createTestingModule({
+      providers: [PqsManagerFactory],
+    }).compile();
+
+    expect(moduleRef.get(PqsManagerFactory)).toBeInstanceOf(PqsManagerFactory);
+    await moduleRef.close();
+  });
+
   it('caches the PQS manager and disposes it once on shutdown', async () => {
     const disposeAsync = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
     const createManager = jest.fn().mockReturnValue({

@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
 import type {
   CantonManager,
   CantonManagerOptions,
@@ -20,6 +20,7 @@ export class PqsManagerFactory implements OnModuleDestroy {
   private readonly managers = new Map<string, Promise<PqsManager>>();
 
   constructor(
+    @Optional()
     private readonly loadSdk: () => Promise<SdkModule> = () =>
       import('@distrohelena/canton-typescript-sdk') as Promise<SdkModule>,
   ) {}
