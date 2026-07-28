@@ -13,3 +13,4 @@ debug-dars/
 # Windows download metadata
 *:Zone.Identifier
 *:Zone.identifier
+debug-playground/.daml/

@@ -1,0 +1,97 @@
+module DebugPlayground where
+
+template Message
+  with
+    sender : Party
+    recipient : Party
+    text : Text
+  where
+    signatory sender
+    observer recipient
+
+    choice Echo : Text
+      controller sender
+      do
+        pure text
+
+    choice ReplaceText : ContractId Message
+      with
+        replacement : Text
+      controller sender
+      do
+        create this with text = replacement
+
+template Counter
+  with
+    owner : Party
+    value : Int
+  where
+    signatory owner
+
+    choice Read : Int
+      controller owner
+      do
+        pure value
+
+    choice Increment : ContractId Counter
+      with
+        delta : Int
+      controller owner
+      do
+        create this with value = value + delta
+
+template Profile
+  with
+    owner : Party
+    displayName : Text
+    nickname : Optional Text
+  where
+    signatory owner
+
+    choice SetNickname : ContractId Profile
+      with
+        nextNickname : Optional Text
+      controller owner
+      do
+        create this with nickname = nextNickname
+
+template TagList
+  with
+    owner : Party
+    tags : [Text]
+  where
+    signatory owner
+
+    choice AddTag : ContractId TagList
+      with
+        tag : Text
+      controller owner
+      do
+        create this with tags = tags ++ [tag]
+
+template ContractReference
+  with
+    owner : Party
+    target : ContractId Message
+    enabled : Bool
+  where
+    signatory owner
+
+    choice PingTarget : Text
+      controller owner
+      do
+        assertMsg "Contract reference is disabled" enabled
+        exercise target Echo
+
+template FailureSwitch
+  with
+    owner : Party
+    fail : Bool
+  where
+    signatory owner
+
+    choice Check : Text
+      controller owner
+      do
+        assertMsg "Debug playground requested a failure" (not fail)
+        pure "success"
