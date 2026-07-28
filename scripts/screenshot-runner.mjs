@@ -20,6 +20,14 @@ export { normalizeApiBaseUrl };
 const RETRY_DELAY_MS = 250;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_SETTLE_MS = 300;
+const ERROR_STATE_SELECTOR = [
+  '[role="alert"]',
+  '[data-error]',
+  '[data-error-state]',
+  '.node-detail__message--error',
+  '.dashboard__message--error',
+  '.search-results-view__error',
+].join(', ');
 
 export class ScreenshotRunnerError extends Error {
   constructor(message, options = {}) {
@@ -168,7 +176,7 @@ async function validatePage(page, route, expectedUrl, sessionIds) {
     throw new ScreenshotRunnerError(`Expected final path ${expectedPath}, got ${actualPath}`, { kind: 'validation' });
   }
 
-  if (await visibleCount(page.locator('[role="alert"], [data-error], [data-error-state]')) > 0) {
+  if (await visibleCount(page.locator(ERROR_STATE_SELECTOR)) > 0) {
     throw new ScreenshotRunnerError(`Route ${route.name} rendered an error state`, { kind: 'validation' });
   }
 
@@ -176,7 +184,9 @@ async function validatePage(page, route, expectedUrl, sessionIds) {
   if (validation.heading && validation.heading !== readinessValue(route, 'heading')) {
     await waitForLocator(page.getByRole('heading', { name: validation.heading, exact: true }), timeoutFor(route));
   }
-  for (const state of validation.states ?? []) {
+  const stateCandidates = validation.states ?? [];
+  let hasValidationState = stateCandidates.length === 0;
+  for (const state of stateCandidates) {
     let stateLocator = page.locator(state);
     if (await visibleCount(stateLocator) === 0) {
       stateLocator = page.locator(`[data-testid="${String(state).replaceAll('"', '\\"')}"]`);
@@ -184,9 +194,10 @@ async function validatePage(page, route, expectedUrl, sessionIds) {
     if (await visibleCount(stateLocator) === 0) {
       stateLocator = page.locator(`#${String(state).replaceAll('"', '\\"')}`);
     }
-    if (await visibleCount(stateLocator) === 0) {
-      throw new ScreenshotRunnerError(`Route ${route.name} is missing validation state ${state}`, { kind: 'validation' });
-    }
+    if (await visibleCount(stateLocator) > 0) hasValidationState = true;
+  }
+  if (!hasValidationState) {
+    throw new ScreenshotRunnerError(`Route ${route.name} is missing validation state alternatives`, { kind: 'validation' });
   }
   if (validation.sessionRequired && sessionIds.length === 0) {
     throw new ScreenshotRunnerError(`Route ${route.name} did not create a debugger session`, { kind: 'validation' });
@@ -238,6 +249,21 @@ function optionalActionSkip(error) {
 function routeUrl(baseUrl, route) {
   if (!route.url) return null;
   return new URL(route.url, baseUrl).href;
+}
+
+export function mergeRouteMetadata(route = {}, manifestRoute = {}) {
+  return {
+    ...route,
+    ...manifestRoute,
+    readiness: {
+      ...(route.readiness ?? {}),
+      ...(manifestRoute.readiness ?? {}),
+    },
+    validation: {
+      ...(route.validation ?? {}),
+      ...(manifestRoute.validation ?? {}),
+    },
+  };
 }
 
 function reportOutputPath(outputRoot, filePath) {
@@ -332,13 +358,51 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
   let context;
   let page;
   const sessionIds = [];
-  const responseTasks = [];
+  const responseTasks = new Set();
+  const pendingDebuggerRequests = new Map();
+  const captureRoute = mergeRouteMetadata(route, manifestRoute);
+  const isDebuggerSessionRequest = (request) => request.method() === 'POST' && apiPath(request.url()) === '/api/debugger/sessions';
+  const createPendingRequest = (request) => {
+    let resolve;
+    const promise = new Promise((done) => { resolve = done; });
+    const pending = { promise, resolve };
+    pendingDebuggerRequests.set(request, pending);
+    return pending;
+  };
+  const drainResponseTasks = async () => {
+    await delay(0);
+    while (pendingDebuggerRequests.size > 0 || responseTasks.size > 0) {
+      await Promise.allSettled([
+        ...[...pendingDebuggerRequests.values()].map((pending) => pending.promise),
+        ...responseTasks,
+      ]);
+      await delay(0);
+    }
+  };
+  const onRequest = (request) => {
+    if (isDebuggerSessionRequest(request)) createPendingRequest(request);
+  };
+  const onRequestFailed = (request) => {
+    const pending = pendingDebuggerRequests.get(request);
+    if (!pending) return;
+    pendingDebuggerRequests.delete(request);
+    pending.resolve();
+  };
   const onResponse = (response) => {
     if (!isDebuggerSessionResponse(response)) return;
-    const task = extractSessionId(response).then((sessionId) => {
-      if (sessionId !== null && sessionId !== undefined) sessionIds.push(String(sessionId));
-    });
-    responseTasks.push(task);
+    const request = response.request();
+    const pending = pendingDebuggerRequests.get(request) ?? createPendingRequest(request);
+    const task = (async () => {
+      try {
+        const sessionId = await extractSessionId(response);
+        if (sessionId !== null && sessionId !== undefined) sessionIds.push(String(sessionId));
+      } finally {
+        pendingDebuggerRequests.delete(request);
+        pending.resolve();
+      }
+    })();
+    responseTasks.add(task);
+    task.then(() => responseTasks.delete(task), () => responseTasks.delete(task));
   };
   let result;
   try {
@@ -349,6 +413,8 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
     });
     onContextCreated?.(context);
     page = pageFactory ? await pageFactory(context) : await context.newPage();
+    page.on('request', onRequest);
+    page.on('requestfailed', onRequestFailed);
     page.on('response', onResponse);
     await page.route('**/*', createApiRouteHandler(apiUrl));
 
@@ -356,15 +422,15 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       if (attempt > 0) await delay(RETRY_DELAY_MS);
       try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutFor({ ...route, ...manifestRoute }) });
-        await waitForReadiness(page, { ...route, ...manifestRoute }, expectedUrl, { settleMs: config.settleMs, sessionIds });
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutFor(captureRoute) });
+        await waitForReadiness(page, captureRoute, expectedUrl, { settleMs: config.settleMs, sessionIds });
         if (state.actions?.length) {
           await executeScreenshotActions(page, state.actions, {
             discoveryContext: manifest.context ?? {},
             metadata: { route: route.name, state: state.name, required },
             required,
           });
-          await waitForReadiness(page, { ...route, ...manifestRoute }, expectedUrl, { settleMs: config.settleMs, sessionIds });
+          await waitForReadiness(page, captureRoute, expectedUrl, { settleMs: config.settleMs, sessionIds });
         }
         await page.screenshot({ path: filePath, fullPage: true });
         result = {
@@ -408,7 +474,7 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
       required,
     };
   } finally {
-    await Promise.allSettled(responseTasks);
+    await drainResponseTasks();
     try {
       await context?.close();
     } catch (error) {

@@ -449,7 +449,13 @@ export async function discoverScreenshotManifest(options = {}) {
       expectedPath: '/nodes/:nodeId/updates/:eventOffset',
       skipReason: reason,
     });
-    skips.push({ name: 'debugger', source: '/updates?limit=1', reason: errors.updates ?? 'No discovered update ID for debugger query' });
+    addUnavailableRoute(routes, skips, {
+      name: 'debugger',
+      source: '/updates?limit=1',
+      expectedPath: '/debugger?updateId=:updateId',
+      validation: { landmark: 'Debugger', sessionRequired: true },
+      skipReason: reason,
+    });
   }
 
   const contractNodeId = firstString(contract?.nodeId, context.nodeId);
@@ -565,7 +571,10 @@ export async function discoverScreenshotManifest(options = {}) {
       url,
       source: party ? '/parties' : '/updates?limit=1',
       expectedPath: '/search',
-      validation: { heading: 'Search Results', states: ['result-group', 'no-results'] },
+      validation: {
+        heading: 'Search Results',
+        states: ['.search-results-group', '.search-results-view__empty'],
+      },
       metadata: { query: searchValue },
     }));
   } else {
@@ -573,7 +582,10 @@ export async function discoverScreenshotManifest(options = {}) {
       name: 'search-results',
       source: '/parties',
       expectedPath: '/search',
-      validation: { heading: 'Search Results', states: ['result-group', 'no-results'] },
+      validation: {
+        heading: 'Search Results',
+        states: ['.search-results-group', '.search-results-view__empty'],
+      },
       skipReason: 'No discovered party or update ID for search query',
     });
   }

@@ -165,6 +165,72 @@ test('captures with real Playwright, preserves API request details, waits for re
   await stat(path.join(output, report.entries[0].output));
 });
 
+test('accepts either a search result group or the explicit SearchResultsView empty state', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><section class="search-results-view"><h2>Search Results</h2><div class="search-results-view__empty">No matches found.</div></section></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [{
+      name: 'search-results',
+      path: '/search?q=party',
+      readiness: { heading: 'Search Results', timeoutMs: 100 },
+      validation: { heading: 'Search Results', states: ['.search-results-group', '.search-results-view__empty'] },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'captured');
+});
+
+test('treats current route-specific error classes as capture failures', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, `<!doctype html><html><body><main><h1>Fixture Ready</h1>
+      <p class="node-detail__message--error">node error</p>
+      <p class="dashboard__message--error">dashboard error</p>
+      <p class="search-results-view__error">search error</p>
+    </main></body></html>`);
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, { apiUrl: `${frontend.url}/api` });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'failed');
+  assert.match(report.entries[0].error, /error state/);
+});
+
+test('preserves configured readiness when discovery supplies only dynamic readiness metadata', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><h1>Configured Ready</h1></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [{
+      name: 'fixture',
+      path: '/fixture',
+      readiness: { heading: 'Configured Ready', timeoutMs: 80, settleMs: 0 },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const manifest = manifestFor(config);
+  manifest.routes[0].readiness = { landmark: 'main' };
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest, browser });
+
+  assert.equal(report.entries[0].status, 'captured');
+});
+
 test('uses a fresh browser context for every route/state/viewport and keeps state failures isolated', async (t) => {
   const output = await makeOutput();
   const contextObservations = [];
@@ -276,6 +342,56 @@ test('deletes every debugger session after navigation/readiness failure', async 
   assert.equal(report.cleanup.length, sessionIds.length);
 });
 
+test('waits for a late debugger POST response before deleting sessions', async (t) => {
+  const output = await makeOutput();
+  const sessionIds = [];
+  const deletedIds = [];
+  const api = await startServer(async (req, res) => {
+    await bodyOf(req);
+    if (req.method === 'POST' && req.url === '/api/debugger/sessions') {
+      const id = `late-session-${sessionIds.length + 1}`;
+      sessionIds.push(id);
+      setTimeout(() => json(res, 201, { sessionId: id }), 100);
+      return;
+    }
+    if (req.method === 'DELETE' && req.url?.startsWith('/api/debugger/sessions/')) {
+      deletedIds.push(req.url.split('/').pop());
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    json(res, 200, { ok: true });
+  });
+  const frontend = await startServer((req, res) => {
+    if (req.url?.startsWith('/debugger')) {
+      send(res, 200, `<!doctype html><html><body><div id="loading">Loading debugger</div><script>
+        fetch('/api/debugger/sessions', {method:'POST', body:'{"late":true}'});
+      </script></body></html>`);
+      return;
+    }
+    send(res, 404, 'not found');
+  });
+  t.after(async () => {
+    await frontend.close();
+    await api.close();
+  });
+  const config = configFor(frontend.url, output, {
+    apiUrl: api.url,
+    routes: [{
+      name: 'debugger', path: '/debugger?updateId=update-1', required: false,
+      readiness: { heading: 'Debugger', timeoutMs: 40, settleMs: 0 },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'failed');
+  assert.ok(sessionIds.length >= 2);
+  assert.deepEqual(deletedIds.sort(), sessionIds.sort());
+});
+
 test('persists manifest and report atomically after entries and cleanup', async (t) => {
   const output = await makeOutput();
   const frontend = await startServer((req, res) => {
@@ -317,4 +433,37 @@ test('resolves the required, optional, strict, invalid, and service exit matrix'
   assert.equal(resolveExitCode({ strict: true, entries: entries([['captured', true], ['skipped', false]]) }), 1);
   assert.equal(resolveExitCode({ error: { exitCode: 2 }, entries: [] }), 2);
   assert.equal(resolveExitCode({ error: new Error('service failed'), entries: [] }), 1);
+});
+
+test('records an unavailable debugger route so strict mode fails on its runner entry', async () => {
+  const output = await makeOutput();
+  const config = configFor('http://127.0.0.1:1', output, {
+    apiUrl: 'http://127.0.0.1:1/api',
+    strict: true,
+    routes: [{
+      name: 'debugger',
+      path: '/debugger',
+      required: false,
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const manifest = {
+    ...manifestFor(config),
+    routes: [{
+      name: 'debugger',
+      url: null,
+      required: false,
+      source: '/updates?limit=1',
+      skipReason: 'GET /updates?limit=1 returned an empty updates collection',
+    }],
+  };
+  const report = await captureScreenshotMatrix({
+    config,
+    manifest,
+    browser: { close() {} },
+  });
+
+  assert.equal(report.entries[0].route, 'debugger');
+  assert.equal(report.entries[0].status, 'skipped');
+  assert.equal(report.exitCode, 1);
 });

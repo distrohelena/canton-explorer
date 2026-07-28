@@ -241,7 +241,10 @@ test('discovers static and dynamic screenshot routes from every approved endpoin
   assert.equal(routes.get('update-detail').metadata.eventOffset, 'offset/1');
   assert.equal(routes.get('traffic').metadata.nodeIds[0], 'node/one');
   assert.equal(routes.get('search-results').validation.heading, 'Search Results');
-  assert.deepEqual(routes.get('search-results').validation.states, ['result-group', 'no-results']);
+  assert.deepEqual(routes.get('search-results').validation.states, [
+    '.search-results-group',
+    '.search-results-view__empty',
+  ]);
 
   for (const route of manifest.routes) {
     assert.ok(route.source, `${route.name} source`);
@@ -329,7 +332,9 @@ test('records empty collections and endpoint failures as precise optional skips'
   const routes = new Map(manifest.routes.map((route) => [route.name, route]));
   const skipReasons = new Map(manifest.skips.map((skip) => [skip.name, skip.reason]));
 
-  assert.equal(routes.has('debugger'), false);
+  assert.equal(routes.has('debugger'), true);
+  assert.equal(routes.get('debugger').url, null);
+  assert.equal(routes.get('debugger').skipReason, 'GET /updates?limit=1 returned an empty updates collection');
   assert.equal(routes.has('update-detail'), true);
   assert.equal(routes.get('update-detail').url, null);
   assert.equal(routes.get('update-detail').required, false);
@@ -341,7 +346,7 @@ test('records empty collections and endpoint failures as precise optional skips'
   assert.equal(routes.get('token-detail-transfers').skipReason, 'GET /tokens?limit=1 returned an empty tokens collection');
   assert.equal(routes.get('token-transfer-detail').skipReason, 'GET /tokens/transfers?limit=1 returned an empty transfers collection');
   assert.equal(routes.get('search-results').skipReason, 'No discovered party or update ID for search query');
-  assert.equal(skipReasons.get('debugger'), 'No discovered update ID for debugger query');
+  assert.equal(skipReasons.get('debugger'), 'GET /updates?limit=1 returned an empty updates collection');
   assert.ok(manifest.context.discoveryErrors.fingerprints);
 });
 
