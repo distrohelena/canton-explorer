@@ -2,6 +2,26 @@
 
 Read-only operations explorer for multiple Canton participant nodes and ledgers.
 
+## See it in action
+
+These captures come from the live Canton localnet and show both the explorer's
+ledger views and its deeper filtering and transfer workflows.
+
+<table>
+  <tr>
+    <td><img src="screenshots/readme/custom-1440x900/updates.png" alt="Canton Explorer updates overview" /></td>
+    <td><img src="screenshots/readme/custom-1440x900/update-detail.png" alt="Canton Explorer update detail with events and exercise data" /></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/readme/custom-1440x900/updates--filters.png" alt="Canton Explorer updates Advanced Filter" /></td>
+    <td><img src="screenshots/readme/custom-1440x900/contracts--filters.png" alt="Canton Explorer contracts Advanced Filter with node and template controls" /></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/readme/custom-1440x900/traffic--filters.png" alt="Canton Explorer Traffic Purchases Advanced Search" /></td>
+    <td><img src="screenshots/readme/custom-1440x900/token-detail-transfers.png" alt="Canton Explorer Canton Coin balances and latest transfers" /></td>
+  </tr>
+</table>
+
 ## Publishable Package
 
 The publishable runtime package is the backend workspace:
