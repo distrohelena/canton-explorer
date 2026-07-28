@@ -12,6 +12,7 @@ import {
   executeWaitForAction,
   resolveActionValue,
 } from './screenshot-actions.mjs';
+import { createDefaultConfig } from './screenshot-config.mjs';
 
 const discoveryContext = {
   party: 'Alice::party',
@@ -39,14 +40,37 @@ function panelFixture() {
       ${panel('home-updates-advanced-filter', 'Advanced Filter', `
         <input placeholder="Party ID">
         <input placeholder="Template ID">
-        <button type="button" data-panel="home-updates-advanced-filter">Add party filter</button>
-        <button type="button" data-panel="home-updates-advanced-filter">Add template filter</button>
+        <button type="button" data-panel="home-updates-advanced-filter" data-chip="party">Add party filter</button>
+        <button type="button" data-panel="home-updates-advanced-filter" data-chip="template">Add template filter</button>
+      `)}
+      ${panel('contracts-advanced-filter', 'Advanced Filter', `
+        <input placeholder="Party ID">
+        <input placeholder="Template ID">
+        <button type="button" data-panel="contracts-advanced-filter" data-chip="party">Add party filter</button>
+        <button type="button" data-panel="contracts-advanced-filter" data-chip="template">Add template filter</button>
+      `)}
+      ${panel('party-updates-advanced-filter', 'Advanced Filter', `
+        <input placeholder="Template ID">
+        <button type="button" data-panel="party-updates-advanced-filter" data-chip="template">Add template filter</button>
+      `)}
+      ${panel('party-contracts-advanced-filter', 'Advanced Filter', `
+        <input placeholder="Template ID">
+        <button type="button" data-panel="party-contracts-advanced-filter" data-chip="template">Add template filter</button>
       `)}
       ${panel('tokens-advanced-filter', 'Advanced Filter', `
         <input placeholder="Name">
         <input placeholder="Issuer">
-        <button type="button" data-panel="tokens-advanced-filter">Add name filter</button>
-        <button type="button" data-panel="tokens-advanced-filter">Add issuer filter</button>
+        <button type="button" data-panel="tokens-advanced-filter" data-chip="name">Add name filter</button>
+        <button type="button" data-panel="tokens-advanced-filter" data-chip="issuer">Add issuer filter</button>
+      `)}
+      ${panel('token-transfers-advanced-filter', 'Advanced Filter', `
+        <input placeholder="From Party ID">
+        <input placeholder="To Party ID">
+        <label for="movement-type">Movement Type</label>
+        <select id="movement-type"><option value="Transfer">Transfer</option><option value="Mint">Mint</option></select>
+        <button type="button" data-panel="token-transfers-advanced-filter" data-chip="from-party">Add from party filter</button>
+        <button type="button" data-panel="token-transfers-advanced-filter" data-chip="to-party">Add to party filter</button>
+        <button type="button" data-panel="token-transfers-advanced-filter" data-chip="movement-type">Add movement type filter</button>
       `)}
       ${panel('namespace-advanced-filter', 'Advanced Filter', `
         <label>Public Key <input></label>
@@ -61,6 +85,7 @@ function panelFixture() {
         <label>Minimum paid amount <input></label>
         <button type="button" data-panel="traffic-purchases-advanced-search">Apply filters</button>
       `)}
+      <output id="events"></output>
       <script>
         window.events = [];
         for (const element of document.querySelectorAll('button')) {
@@ -77,10 +102,17 @@ function panelFixture() {
               panel.dataset.opened = 'true';
               panel.hidden = false;
             }
+            if (element.dataset.chip) {
+              const chip = document.createElement('span');
+              chip.dataset.chip = element.dataset.chip;
+              chip.textContent = element.dataset.chip;
+              document.body.append(chip);
+            }
             window.events.push({
               text: element.textContent.trim(),
               panel: controls || element.dataset.panel || null,
             });
+            document.getElementById('events').textContent = JSON.stringify(window.events);
           });
         }
       </script>
@@ -506,6 +538,48 @@ test('missing optional wait targets produce structured skips', async () => {
         return true;
       },
     );
+  } finally {
+    await browser.close();
+  }
+});
+
+test('executes the remaining configured filter states through strict panel-local controls', async () => {
+  const filterCases = [
+    { route: 'contracts', panel: 'contracts-advanced-filter', chips: ['party', 'template'] },
+    { route: 'party-detail-updates', panel: 'party-updates-advanced-filter', chips: ['template'] },
+    { route: 'party-detail-contracts', panel: 'party-contracts-advanced-filter', chips: ['template'] },
+    { route: 'tokens-transfers', panel: 'token-transfers-advanced-filter', chips: ['from-party', 'to-party', 'movement-type'] },
+    { route: 'token-detail-transfers', panel: 'token-transfers-advanced-filter', chips: ['from-party', 'to-party', 'movement-type'] },
+  ];
+  const config = createDefaultConfig();
+  const { browser, page } = await newPage();
+  try {
+    for (const filterCase of filterCases) {
+      const route = config.routes.find((candidate) => candidate.name === filterCase.route);
+      const state = route.states.find((candidate) => candidate.name === 'filters');
+      await page.setContent(panelFixture());
+      assert.equal(await page.locator('section[data-opened="false"][hidden]').count(), 8);
+      assert.equal(await page.locator(`#${filterCase.panel}`).getAttribute('aria-expanded'), 'false');
+
+      await executeScreenshotActions(page, state.actions, {
+        discoveryContext,
+        required: route.required && state.required,
+        metadata: { route: route.name, state: state.name },
+      });
+
+      assert.equal(await page.locator(`#${filterCase.panel}`).getAttribute('aria-expanded'), 'true');
+      assert.deepEqual(
+        await page.locator('span[data-chip]').evaluateAll((chips) => chips.map((chip) => chip.dataset.chip)),
+        filterCase.chips,
+      );
+      assert.deepEqual(
+        await page.locator('#events').evaluate((events) => JSON.parse(events.textContent)),
+        state.actions.filter((action) => action.kind === 'click').map((action) => ({
+          text: action.name,
+          panel: filterCase.panel,
+        })),
+      );
+    }
   } finally {
     await browser.close();
   }
