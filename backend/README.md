@@ -101,6 +101,19 @@ The generated debug DAR must retain the same compiled `.dalf` payloads as the
 original DAR. See the repository's `docs/debug-dar.md` for source-copy rules
 and source-map options.
 
+For an existing DAR that already embeds its DAML sources, generate a companion
+debug DAR directly:
+
+```bash
+npm --prefix ./node_modules/@distrohelena/canton-explorer \
+  run dar:prepare -- \
+  --input /path/to/package.dar \
+  --output /path/to/debug-dars/package-debug.dar
+```
+
+This adds `debug/source-map.json` without rebuilding or changing the compiled
+package.
+
 ## Local Development
 
 From the repo root:

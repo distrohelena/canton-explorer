@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { findDebugDalfEntry } from './dar-archive-entries.mjs'
+import { findDamlSourceEntries } from './dar-source-entries.mjs'
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
@@ -23,19 +24,21 @@ async function main() {
     ? packageLoader.loadPackageOrThrow(debugDalfBytes)
     : undefined
 
-  const packageDirectory = resolvePackageDirectory(
-    options.workspaceRoot,
-    options.packageDir,
-    compiledPackage.packageName,
-  )
-  const damlYaml = parseDamlYaml(path.join(packageDirectory, 'daml.yaml'))
-  const sourceDirectory = path.resolve(packageDirectory, damlYaml.source)
-  const archiveSourcePrefix = normalizeArchivePath(options.sourcePrefix || damlYaml.source)
-  const sourceModules = collectSourceModules(
-    sourceDirectory,
-    archiveSourcePrefix,
-    options.workspaceRoot,
-  )
+  const packageDirectory = options.sourceFromDar
+    ? undefined
+    : resolvePackageDirectory(
+        options.workspaceRoot,
+        options.packageDir,
+        compiledPackage.packageName,
+      )
+  const sourceModules = options.sourceFromDar
+    ? collectSourceModulesFromDar(archive)
+    : (() => {
+        const damlYaml = parseDamlYaml(path.join(packageDirectory, 'daml.yaml'))
+        const sourceDirectory = path.resolve(packageDirectory, damlYaml.source)
+        const archiveSourcePrefix = normalizeArchivePath(options.sourcePrefix || damlYaml.source)
+        return collectSourceModules(sourceDirectory, archiveSourcePrefix, options.workspaceRoot)
+      })()
   const compiledModules = compiledPackage.modules.map((module) => {
     const sourceModule = sourceModules.get(module.name)
     const definitions = module.definitions.filter((definition) => definition.nodeKind === 'valueDefinition')
@@ -89,7 +92,7 @@ async function main() {
   const importedPackages = await collectImportedPackageIds(
     rawPackage.rawPackage,
     compiledPackage,
-    options.workspaceImportsOnly
+    options.workspaceImportsOnly && !options.sourceFromDar
       ? await collectWorkspacePackageIds(options.workspaceRoot, options.packageDir)
       : undefined,
   )
@@ -141,6 +144,7 @@ function parseArgs(argv) {
     packageDir: '',
     sourcePrefix: '',
     debugDalfPath: '',
+    sourceFromDar: false,
     workspaceImportsOnly: false,
   }
 
@@ -170,6 +174,9 @@ function parseArgs(argv) {
       case '--debug-dalf':
         options.debugDalfPath = requireValue(argv, ++index, '--debug-dalf')
         break
+      case '--source-from-dar':
+        options.sourceFromDar = true
+        break
       case '--workspace-imports-only':
         options.workspaceImportsOnly = true
         break
@@ -189,7 +196,7 @@ function validateOptions(options) {
   if (!options.inputDar) {
     throw new Error('--input is required')
   }
-  if (!options.workspaceRoot && !options.packageDir) {
+  if (!options.sourceFromDar && !options.workspaceRoot && !options.packageDir) {
     throw new Error('--workspace-root is required unless --package-dir is provided')
   }
   if (!statExists(options.inputDar, 'file')) {
@@ -1026,6 +1033,20 @@ function collectSourceModules(sourceDirectory, archiveSourcePrefix, workspaceRoo
   return modules
 }
 
+function collectSourceModulesFromDar(archive) {
+  const modules = new Map()
+
+  for (const entry of findDamlSourceEntries(archive)) {
+    const sourceModule = parseSourceModule(entry.content ?? new TextDecoder().decode(entry.bytes), entry.path)
+    if (sourceModule !== undefined) {
+      modules.set(sourceModule.moduleName, sourceModule)
+    }
+  }
+
+  resolveInterfaceChoiceImplementations(modules, undefined)
+  return modules
+}
+
 function collectWorkspaceInterfaces(workspaceRoot) {
   const interfaces = new Map()
 
@@ -1486,6 +1507,7 @@ function printHelp() {
     [--package-dir /path/to/specific/package] \\
     [--source-prefix daml] \\
     [--debug-dalf /path/to/location-preserving.dalf] \\
+    [--source-from-dar] \\
     [--workspace-imports-only] \\
     [--output /path/to/source-map.json]
 
@@ -1495,6 +1517,7 @@ Notes:
     script emits deterministic expressionLocations from compiler-authored LF
     source spans.
   - It resolves the matching DAML package directory from daml.yaml.
+  - --source-from-dar reads DAML sources embedded in the input DAR instead.
   - It emits debug/source-map-compatible metadata for the main package.
   - --workspace-imports-only limits importedPackages to package ids built from
     the same workspace, so replay does not recurse into stdlib/vendor DARs.

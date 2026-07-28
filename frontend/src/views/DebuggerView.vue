@@ -300,18 +300,8 @@ function handleResizeKeydown(event: KeyboardEvent) {
   }
 }
 
-const nodeId = computed(() => {
-  const value = route.query.nodeId;
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-});
-
 const updateId = computed(() => {
   const value = route.query.updateId;
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-});
-
-const eventOffset = computed(() => {
-  const value = route.query.eventOffset;
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 });
 
@@ -326,13 +316,12 @@ const routeStepId = computed(() => {
 });
 
 const routeReplayKey = computed(() => JSON.stringify({
-  nodeId: nodeId.value,
-  eventOffset: eventOffset.value,
+  updateId: updateId.value,
   sessionId: routeSessionId.value,
   stepId: routeStepId.value,
 }));
 
-const hasReplayContext = computed(() => Boolean(nodeId.value && eventOffset.value));
+const hasReplayContext = computed(() => Boolean(updateId.value));
 
 const templateOptions = computed<DebuggerTemplateOption[]>(() =>
   templateGroups.value.flatMap((group) =>
@@ -400,9 +389,7 @@ async function openDebuggerSession(debuggerSession: DebuggerSessionSummary) {
   await router.push({
     path: '/debugger',
     query: {
-      nodeId: debuggerSession.nodeId,
       ...(debuggerSession.updateId ? { updateId: debuggerSession.updateId } : {}),
-      eventOffset: debuggerSession.offset,
       sessionId: debuggerSession.sessionId,
     },
   });
@@ -806,23 +793,13 @@ async function syncEvents(sessionId: string) {
 
 function buildDebuggerQuery(nextSession: DebuggerSessionResponse | null): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
-
-  if (nodeId.value) {
-    nextQuery.nodeId = nodeId.value;
-  } else {
-    delete nextQuery.nodeId;
-  }
+  delete nextQuery.nodeId;
+  delete nextQuery.eventOffset;
 
   if (updateId.value) {
     nextQuery.updateId = updateId.value;
   } else {
     delete nextQuery.updateId;
-  }
-
-  if (eventOffset.value) {
-    nextQuery.eventOffset = eventOffset.value;
-  } else {
-    delete nextQuery.eventOffset;
   }
 
   if (nextSession?.sessionId) {
@@ -842,7 +819,7 @@ function buildDebuggerQuery(nextSession: DebuggerSessionResponse | null): Locati
 
 async function syncRouteToSession(nextSession: DebuggerSessionResponse | null) {
   const nextQuery = buildDebuggerQuery(nextSession);
-  const queryKeys = ['nodeId', 'updateId', 'eventOffset', 'sessionId', 'stepId'] as const;
+  const queryKeys = ['updateId', 'sessionId', 'stepId'] as const;
   const routeChanged = queryKeys.some((key) => {
     const currentValue = route.query[key];
     const nextValue = nextQuery[key];
@@ -865,7 +842,7 @@ async function syncRouteToSession(nextSession: DebuggerSessionResponse | null) {
 }
 
 async function loadDebuggerSession() {
-  if (!nodeId.value || !eventOffset.value) {
+  if (!updateId.value) {
     session.value = null;
     error.value = 'Open the debugger from an update detail page to launch a replay session.';
     return;
@@ -874,8 +851,7 @@ async function loadDebuggerSession() {
   try {
     if (
       session.value
-      && session.value.nodeId === nodeId.value
-      && session.value.offset === eventOffset.value
+      && session.value.updateId === updateId.value
       && (!routeSessionId.value || session.value.sessionId === routeSessionId.value)
       && (!routeStepId.value || session.value.currentStep.stepId === routeStepId.value)
     ) {
@@ -898,10 +874,10 @@ async function loadDebuggerSession() {
       try {
         nextSession = await fetchDebuggerSession(routeSessionId.value);
       } catch {
-        nextSession = await createDebuggerSession(nodeId.value, eventOffset.value);
+        nextSession = await createDebuggerSession(updateId.value);
       }
     } else {
-      nextSession = await createDebuggerSession(nodeId.value, eventOffset.value);
+      nextSession = await createDebuggerSession(updateId.value);
     }
 
     if (routeStepId.value && nextSession.currentStep.stepId !== routeStepId.value) {
@@ -1175,8 +1151,10 @@ onBeforeUnmount(() => {
         @node-select="loadActiveContracts"
       />
     </section>
-    <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="loading && !session" class="node-detail__message">Loading debugger session...</p>
+    <p v-if="error" class="debugger-view__error-state" role="alert">{{ error }}</p>
+    <p v-else-if="loading && !session" class="debugger-view__loading-state">
+      Loading debugger session...
+    </p>
 
     <div
       v-if="session"

@@ -169,7 +169,9 @@ describe('DebuggerView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Open session session-1' }));
 
     await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('session-1'));
-    expect(router.currentRoute.value.query.eventOffset).toBe('42');
+    expect(router.currentRoute.value.query.updateId).toBe('update-1');
+    expect(router.currentRoute.value.query.nodeId).toBeUndefined();
+    expect(router.currentRoute.value.query.eventOffset).toBeUndefined();
   });
 
   it('shows active contracts for Exercise Existing after the node is selected', async () => {
@@ -365,6 +367,36 @@ describe('DebuggerView', () => {
     expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
     await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('session-1'));
     await waitFor(() => expect(router.currentRoute.value.query.stepId).toBe('step-0'));
+    expect(router.currentRoute.value.query.nodeId).toBeUndefined();
+    expect(router.currentRoute.value.query.eventOffset).toBeUndefined();
+  });
+
+  it('centers debugger launch errors without the generic error border', async () => {
+    vi.mocked(createDebuggerSession).mockRejectedValue(
+      new Error('Debug offset is not fully visible in any connected gRPC node.'),
+    );
+
+    await renderAt('/debugger?updateId=update-64');
+
+    const error = await screen.findByText(
+      'Debug offset is not fully visible in any connected gRPC node.',
+    );
+
+    expect(error).toHaveClass('debugger-view__error-state');
+    expect(error).not.toHaveClass('node-detail__message--error');
+  });
+
+  it('centers the debugger loading state without the generic message border', async () => {
+    vi.mocked(createDebuggerSession).mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    await renderAt('/debugger?updateId=update-64');
+
+    const loading = await screen.findByText('Loading debugger session...');
+
+    expect(loading).toHaveClass('debugger-view__loading-state');
+    expect(loading).not.toHaveClass('node-detail__message');
   });
 
   it('opens stepped-into source files as persistent editor tabs', async () => {

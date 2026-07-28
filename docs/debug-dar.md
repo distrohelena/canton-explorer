@@ -22,6 +22,21 @@ npm run dar:source-map --workspace backend -- \
 
 This writes `<input>-source-map.json` by default.
 
+## Prepare A DAR With Embedded Sources
+
+Some deployed DARs, including Splice DARs, already contain their `.daml`
+sources but do not contain `debug/source-map.json`. Generate a companion debug
+DAR directly from such an archive:
+
+```bash
+npm run dar:prepare --workspace backend -- \
+  --input /path/to/package.dar \
+  --output /path/to/debug-dars/package-debug.dar
+```
+
+The command reads the embedded sources, generates the source map, and preserves
+the original compiled package entries byte-for-byte.
+
 For the local OZ DAML workspace under `~/env/daml-ops/oz-research`, a real
 example looks like this:
 

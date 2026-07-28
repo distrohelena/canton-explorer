@@ -27,13 +27,16 @@
         "README.md",
         "scripts/build-debug-dar.mjs",
         "scripts/dar-archive-entries.mjs",
+        "scripts/dar-source-entries.mjs",
         "scripts/generate-daml-source-map.mjs",
+        "scripts/prepare-debug-dar-from-dar.mjs",
         "scripts/prepare-debug-dars-from-workspace.mjs"
     ],
     "scripts": {
         "build": "nest build",
         "build:package": "node ./scripts/prepack.mjs",
         "dar:debug": "node ./scripts/build-debug-dar.mjs",
+        "dar:prepare": "node ./scripts/prepare-debug-dar-from-dar.mjs",
         "dar:prepare-workspace": "node ./scripts/prepare-debug-dars-from-workspace.mjs",
         "dar:source-map": "node ./scripts/generate-daml-source-map.mjs",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

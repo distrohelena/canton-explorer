@@ -1,4 +1,8 @@
-import type { DecodeState, DecodedDamlValue, ExerciseDecodeState } from './daml';
+import type {
+  DecodeState,
+  DecodedDamlValue,
+  ExerciseDecodeState,
+} from "./daml";
 
 export interface NodeUpdateEntry {
   eventOffset: string;
@@ -6,6 +10,7 @@ export interface NodeUpdateEntry {
   recordTime: string | null;
   parties: string[];
   estimatedTrafficUsd?: string | null;
+  estimatedTrafficUsdGapDays?: number | null;
 }
 
 export interface NodeUpdatesResponse {
@@ -37,12 +42,13 @@ export interface NodeUpdateDetailResponse {
   recordTime: string | null;
   parties: string[];
   estimatedTrafficUsd?: string | null;
+  estimatedTrafficUsdGapDays?: number | null;
   events: NodeUpdateDetailEvent[];
   meta: Record<string, unknown>;
 }
 
 export interface NodeUpdateDetailEvent {
-  eventKind: 'create' | 'consuming_exercise' | 'non_consuming_exercise';
+  eventKind: "create" | "consuming_exercise" | "non_consuming_exercise";
   eventId: string | null;
   contractId: string | null;
   packageId?: string | null;

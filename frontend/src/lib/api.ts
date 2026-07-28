@@ -424,10 +424,11 @@ export function fetchSearchResults(query: string): Promise<SearchResultsResponse
   return fetchJson<SearchResultsResponse>(`/search?q=${encodeURIComponent(query.trim())}`);
 }
 
-export function createDebuggerSession(nodeId: string, offset: string): Promise<DebuggerSessionResponse> {
+export function createDebuggerSession(
+  updateId: string,
+): Promise<DebuggerSessionResponse> {
   return postJson<DebuggerSessionResponse>('/debugger/sessions', {
-    nodeId,
-    offset,
+    updateId,
   });
 }
 

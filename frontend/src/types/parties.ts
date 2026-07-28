@@ -13,6 +13,7 @@ export interface PartyRecentUpdate {
   recordTime: string | null;
   parties: string[];
   estimatedTrafficUsd?: string | null;
+  estimatedTrafficUsdGapDays?: number | null;
 }
 
 export interface PartyRecentContract {
@@ -52,7 +53,8 @@ export interface PartyTopologyKeyMapping {
   synchronizerIds: string[];
 }
 
-export type PartyTopologyNodeStatus = 'ok' | 'grpc_not_configured' | 'grpc_error';
+export type PartyTopologyNodeStatus =
+  "ok" | "grpc_not_configured" | "grpc_error";
 
 export interface PartyTopologyNodeEntry {
   nodeId: string;

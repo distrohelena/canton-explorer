@@ -15,9 +15,9 @@ export class DebuggerController {
 
   @Post('/sessions')
   createSession(
-    @Body() body: { nodeId?: string; offset?: string },
+    @Body() body: { updateId?: string },
   ) {
-    return this.debuggerService.createSession(body.nodeId ?? '', body.offset ?? '');
+    return this.debuggerService.createSession(body.updateId ?? '');
   }
 
   @Get('/sessions')

@@ -267,11 +267,14 @@ describe('DebuggerService', () => {
   it('surfaces a high-level visibility error when replay cannot hydrate hidden contracts', async () => {
     const grpcClientFactory = {
       create: jest.fn().mockResolvedValue({
+        updateService: {
+          getUpdateByIdAsync: jest.fn().mockResolvedValue({ update: {} }),
+        },
         disposeAsync: jest.fn().mockResolvedValue(undefined),
       }),
     };
     const pqsSummaryService = {
-      fetchUpdateDetail: jest.fn().mockResolvedValue({
+      fetchUpdateDetailById: jest.fn().mockResolvedValue({
         parties: ['Alice'],
         events: [],
       }),
@@ -326,9 +329,98 @@ describe('DebuggerService', () => {
     (service as never as { createPackageReadService: () => Promise<unknown> }).createPackageReadService =
       async () => ({});
 
-    await expect(service.createSession('cnqs-app-provider', '249')).rejects.toThrow(
+    await expect(service.createSession('update-1')).rejects.toThrow(
       new BadRequestException('Debug offset is not fully visible in any connected gRPC node.'),
     );
+  });
+
+  it('uses the update id for grpc replay lookup when one is provided', async () => {
+    const service = new DebuggerService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const getUpdateByIdAsync = jest.fn().mockResolvedValue({ update: {} });
+    const replayService = (
+      service as never as {
+        createReplayUpdateService: (client: unknown, updateId?: string) => {
+          getUpdateByOffsetAsync(request: unknown): Promise<unknown>;
+        };
+      }
+    ).createReplayUpdateService(
+      { updateService: { getUpdateByIdAsync } },
+      'update-64',
+    );
+
+    await replayService.getUpdateByOffsetAsync({ updateFormat: { verbose: true } });
+
+    expect(getUpdateByIdAsync).toHaveBeenCalledWith({
+      updateId: 'update-64',
+      updateFormat: { verbose: true },
+    });
+  });
+
+  it('excludes contract archives that occur after the replay snapshot', () => {
+    const service = new DebuggerService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const filterHistory = (
+      service as never as {
+        filterReplayEventHistoryAtOffset: (response: unknown, offset: string) => unknown;
+      }
+    ).filterReplayEventHistoryAtOffset;
+    const response = {
+      created: { createdEvent: { offset: '105' } },
+      archived: { archivedEvent: { offset: '240' } },
+    };
+
+    expect(filterHistory(response, '122')).toEqual({
+      created: response.created,
+      archived: undefined,
+    });
+    expect(filterHistory(response, '300')).toEqual(response);
+  });
+
+  it('uses the update record time as the replay clock', () => {
+    const service = new DebuggerService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const withReplayRecordTime = (
+      service as never as {
+        withReplayRecordTime: <T extends { offset: string }>(environment: T, recordTime: string | null) => T;
+      }
+    ).withReplayRecordTime;
+
+    expect(withReplayRecordTime({ offset: '122', packageIds: [] }, '2026-07-28T00:14:29.731Z')).toEqual({
+      offset: '2026-07-28T00:14:29.731Z',
+      packageIds: [],
+    });
+    expect(withReplayRecordTime({ offset: '122' }, null)).toEqual({ offset: '122' });
+  });
+
+  it('preserves microseconds when converting replay timestamps', () => {
+    const service = new DebuggerService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const formatIsoToDamlTimestamp = (
+      service as never as { formatIsoToDamlTimestamp: (value: string) => string | null }
+    ).formatIsoToDamlTimestamp;
+
+    expect(formatIsoToDamlTimestamp('2026-07-28T00:14:29.731413Z')).toBe('1785197669731413');
   });
 
   it('uses the self-signed es256 subject when resolving debugger rights', async () => {
@@ -367,8 +459,82 @@ describe('DebuggerService', () => {
       { userManagementService: { listUserRightsAsync } },
     );
 
-    expect(listUserRightsAsync).toHaveBeenCalledWith({ userId: 'ledger-api-user' });
+    expect(listUserRightsAsync).toHaveBeenCalledWith({
+      userId: 'ledger-api-user',
+      identityProviderId: '',
+    });
     expect(result).toEqual({ parties: ['Alice'], canReadAsAnyParty: true });
+  });
+
+  it('recognizes raw protobuf rights returned by the grpc user-management client', async () => {
+    const service = new DebuggerService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const listUserRightsAsync = jest.fn().mockResolvedValue({
+      rights: [
+        {
+          kind: {
+            oneofKind: 'canReadAsAnyParty',
+            canReadAsAnyParty: {},
+          },
+        },
+      ],
+    });
+
+    const result = await (
+      service as never as {
+        fetchGrantedReplayAccess: (
+          node: unknown,
+          client: unknown,
+        ) => Promise<{ parties: string[]; canReadAsAnyParty: boolean }>;
+      }
+    ).fetchGrantedReplayAccess(
+      {
+        grpc: {
+          auth: {
+            kind: 'shared_secret_jwt',
+            user: 'ledger-api-user',
+            audience: 'https://canton.network.global',
+            secret: 'unsafe',
+          },
+        },
+      },
+      { userManagementService: { listUserRightsAsync } },
+    );
+
+    expect(result).toEqual({ parties: [], canReadAsAnyParty: true });
+
+    const replayAccess = await (
+      service as never as {
+        resolveReplayAccess: (
+          node: unknown,
+          client: unknown,
+          updateDetail: unknown,
+        ) => Promise<{ updateVisibleParties?: string[]; queryParties?: string[] }>;
+      }
+    ).resolveReplayAccess(
+      {
+        grpc: {
+          auth: {
+            kind: 'shared_secret_jwt',
+            user: 'ledger-api-user',
+            audience: 'https://canton.network.global',
+            secret: 'unsafe',
+          },
+        },
+      },
+      { userManagementService: { listUserRightsAsync } },
+      { parties: ['Alice'], events: [{ witnesses: ['Alice'] }] },
+    );
+
+    expect(replayAccess).toEqual({
+      updateVisibleParties: undefined,
+      queryParties: undefined,
+    });
   });
 
   it('does not resolve debugger rights for a static token', async () => {

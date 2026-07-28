@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
-import { fetchNodeUpdateDetail } from '../lib/api';
-import type { NodeUpdateDetailResponse } from '../types/updates';
-import type { DecodedDamlValue } from '../types/daml';
+import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
+import { fetchNodeUpdateDetail } from "../lib/api";
+import type { NodeUpdateDetailResponse } from "../types/updates";
+import type { DecodedDamlValue } from "../types/daml";
 
 const props = defineProps<{ id: string; eventOffset: string }>();
 const route = useRoute();
@@ -13,13 +13,18 @@ const error = ref<string | null>(null);
 
 onMounted(async () => {
   try {
-    updateDetail.value = await fetchNodeUpdateDetail(props.id, props.eventOffset);
+    updateDetail.value = await fetchNodeUpdateDetail(
+      props.id,
+      props.eventOffset,
+    );
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    error.value = err instanceof Error ? err.message : "Unknown error";
   }
 });
 
-function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
+function formatRecordTime(
+  recordTime: string | null,
+): { date: string; time: string } | null {
   if (!recordTime) {
     return null;
   }
@@ -31,16 +36,27 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
 
   return {
     date: new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
+      dateStyle: "medium",
     }).format(parsed),
     time: new Intl.DateTimeFormat(undefined, {
-      timeStyle: 'medium',
+      timeStyle: "medium",
     }).format(parsed),
   };
 }
 
-function formatEstimatedTrafficUsd(value: string | null | undefined): string {
-  return value ? `$${value}` : '—';
+function formatEstimatedTrafficUsd(
+  value: string | null | undefined,
+  gapDays: number | null | undefined,
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  if (!gapDays) {
+    return `$${value}`;
+  }
+
+  return `$${value} (${gapDays} day${gapDays === 1 ? "" : "s"})`;
 }
 
 const recordTimeLines = computed(() =>
@@ -49,44 +65,50 @@ const recordTimeLines = computed(() =>
 const renderedEvents = computed(() => updateDetail.value?.events ?? []);
 const debuggerTarget = computed(() => {
   if (!updateDetail.value) {
-    return '/debugger';
+    return "/debugger";
   }
 
-  const params = new URLSearchParams({
-    nodeId: props.id,
-    updateId: updateDetail.value.updateId,
-    eventOffset: updateDetail.value.eventOffset,
-  });
+  const params = new URLSearchParams({ updateId: updateDetail.value.updateId });
 
   return `/debugger?${params.toString()}`;
 });
 const backTarget = computed(() => {
-  const source = Array.isArray(route.query.from) ? route.query.from[0] : route.query.from;
-  const partyId = Array.isArray(route.query.partyId) ? route.query.partyId[0] : route.query.partyId;
+  const source = Array.isArray(route.query.from)
+    ? route.query.from[0]
+    : route.query.from;
+  const partyId = Array.isArray(route.query.partyId)
+    ? route.query.partyId[0]
+    : route.query.partyId;
 
-  if (source === 'updates') {
-    return '/';
+  if (source === "updates") {
+    return "/";
   }
 
-  if (source === 'tokens') {
-    return '/tokens';
+  if (source === "tokens") {
+    return "/tokens";
   }
 
-  if (source === 'party' && typeof partyId === 'string' && partyId.trim().length > 0) {
+  if (
+    source === "party" &&
+    typeof partyId === "string" &&
+    partyId.trim().length > 0
+  ) {
     return `/parties/${encodeURIComponent(partyId)}`;
   }
 
   return `/nodes/${props.id}/updates`;
 });
 
-function formatEventKind(eventKind: NodeUpdateDetailResponse['events'][number]['eventKind']): string {
+function formatEventKind(
+  eventKind: NodeUpdateDetailResponse["events"][number]["eventKind"],
+): string {
   switch (eventKind) {
-    case 'consuming_exercise':
-      return 'Consuming Exercise';
-    case 'non_consuming_exercise':
-      return 'Non-Consuming Exercise';
-    case 'create':
-      return 'Create';
+    case "consuming_exercise":
+      return "Consuming Exercise";
+    case "non_consuming_exercise":
+      return "Non-Consuming Exercise";
+    case "create":
+      return "Create";
   }
 }
 
@@ -96,13 +118,13 @@ function formatInteger(value: number): string {
 
 function formatEventDataLabel(key: string): string {
   return key
-    .split('.')
+    .split(".")
     .map((segment) =>
       segment
-        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
         .replace(/^./, (char) => char.toUpperCase()),
     )
-    .join(' / ');
+    .join(" / ");
 }
 
 function formatEventDataValue(
@@ -111,28 +133,28 @@ function formatEventDataValue(
     | number
     | boolean
     | null
-    | { kind: 'contract_id'; value: string }
-    | { kind: 'unit' },
+    | { kind: "contract_id"; value: string }
+    | { kind: "unit" },
 ): string {
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return formatInteger(value);
   }
 
-  if (typeof value === 'boolean') {
-    return value ? 'True' : 'False';
+  if (typeof value === "boolean") {
+    return value ? "True" : "False";
   }
 
-  if (value && typeof value === 'object') {
-    if (value.kind === 'contract_id') {
+  if (value && typeof value === "object") {
+    if (value.kind === "contract_id") {
       return value.value;
     }
 
-    if (value.kind === 'unit') {
-      return 'Unit';
+    if (value.kind === "unit") {
+      return "Unit";
     }
   }
 
-  return value ?? 'n/a';
+  return value ?? "n/a";
 }
 
 function isContractReference(
@@ -141,20 +163,57 @@ function isContractReference(
     | number
     | boolean
     | null
-    | { kind: 'contract_id'; value: string }
-    | { kind: 'unit' },
-): value is { kind: 'contract_id'; value: string } {
-  return typeof value === 'object' && value?.kind === 'contract_id';
+    | { kind: "contract_id"; value: string }
+    | { kind: "unit" },
+): value is { kind: "contract_id"; value: string } {
+  return typeof value === "object" && value?.kind === "contract_id";
 }
 
 function isPartyFieldLabel(label: string): boolean {
-  return label
-    .split('.')
-    .some((segment) => segment.replace(/\[\d+\]/g, '').toLowerCase().includes('party'));
+  return label.split(".").some((segment) =>
+    segment
+      .replace(/\[\d+\]/g, "")
+      .toLowerCase()
+      .includes("party"),
+  );
 }
 
-function isPartyReference(label: string, value: RenderableValue): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && isPartyFieldLabel(label);
+function isPartyReference(
+  label: string,
+  value: RenderableValue,
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    (isPartyFieldLabel(label) || value.includes("::"))
+  );
+}
+
+function isContractIdFieldLabel(label: string): boolean {
+  const fieldLabel = label
+    .split(".")
+    .at(-1)
+    ?.replace(/\[\d+\]/g, "")
+    .toLowerCase();
+  return Boolean(
+    fieldLabel &&
+    (fieldLabel.endsWith("cid") || fieldLabel.includes("contractid")),
+  );
+}
+
+function isContractIdStringReference(
+  label: string,
+  value: RenderableValue,
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    isContractIdFieldLabel(label)
+  );
+}
+
+function contractReferenceValue(value: RenderableValue): string {
+  return isContractReference(value) ? value.value : String(value);
 }
 
 type RenderableValue =
@@ -162,32 +221,40 @@ type RenderableValue =
   | number
   | boolean
   | null
-  | { kind: 'contract_id'; value: string }
-  | { kind: 'unit' };
+  | { kind: "contract_id"; value: string }
+  | { kind: "unit" };
 
 function formatDecodeFailureReason(reason: string): string {
-  return reason.replaceAll('_', ' ');
+  return reason.replaceAll("_", " ");
 }
 
 function flattenDecodedValue(
   label: string,
   value: DecodedDamlValue,
 ): Array<[string, RenderableValue]> {
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+  ) {
     return [[label, value]];
   }
 
-  if (value.kind === 'contract_id' || value.kind === 'unit') {
+  if (value.kind === "contract_id" || value.kind === "unit") {
     return [[label, value]];
   }
 
-  if (value.kind === 'record') {
+  if (value.kind === "record") {
     return value.fields.flatMap((field) =>
-      flattenDecodedValue(label ? `${label}.${field.label}` : field.label, field.value),
+      flattenDecodedValue(
+        label ? `${label}.${field.label}` : field.label,
+        field.value,
+      ),
     );
   }
 
-  if (value.kind === 'variant') {
+  if (value.kind === "variant") {
     return value.value === null
       ? [[label, value.constructor]]
       : [
@@ -196,15 +263,17 @@ function flattenDecodedValue(
         ];
   }
 
-  if (value.kind === 'enum') {
+  if (value.kind === "enum") {
     return [[label, value.constructor]];
   }
 
-  if (value.kind === 'optional') {
-    return value.value === null ? [[label, null]] : flattenDecodedValue(label, value.value);
+  if (value.kind === "optional") {
+    return value.value === null
+      ? [[label, null]]
+      : flattenDecodedValue(label, value.value);
   }
 
-  if (value.kind === 'list') {
+  if (value.kind === "list") {
     return value.items.length === 0
       ? [[label, null]]
       : value.items.flatMap((item, index) =>
@@ -212,7 +281,7 @@ function flattenDecodedValue(
         );
   }
 
-  if (value.kind === 'text_map') {
+  if (value.kind === "text_map") {
     return value.entries.flatMap((entry) =>
       flattenDecodedValue(`${label}.${entry.key}`, entry.value),
     );
@@ -225,38 +294,50 @@ function flattenDecodedValue(
 }
 
 function getRecordEntries(
-  state: NodeUpdateDetailResponse['events'][number]['createData'] | null | undefined,
+  state:
+    NodeUpdateDetailResponse["events"][number]["createData"] | null | undefined,
 ): Array<[string, RenderableValue]> {
   if (!state) {
     return [];
   }
 
-  if (state.status === 'invalid_data') {
-    return [['decodeStatus', `Invalid data (${formatDecodeFailureReason(state.reason)})`]];
+  if (state.status === "invalid_data") {
+    return [
+      [
+        "decodeStatus",
+        `Invalid data (${formatDecodeFailureReason(state.reason)})`,
+      ],
+    ];
   }
 
-  if (state.status !== 'decoded') {
+  if (state.status !== "decoded") {
     return [];
   }
 
-  return flattenDecodedValue('', state.value).map(([key, value]) => [
-    key || 'value',
+  return flattenDecodedValue("", state.value).map(([key, value]) => [
+    key || "value",
     value,
   ]);
 }
 
 function getExerciseEntries(
-  state: NodeUpdateDetailResponse['events'][number]['exerciseData'] | null | undefined,
+  state:
+    | NodeUpdateDetailResponse["events"][number]["exerciseData"]
+    | null
+    | undefined,
 ): Array<[string, RenderableValue]> {
   const entries: Array<[string, RenderableValue]> = [];
 
   for (const [label, branch] of [
-    ['argument', state?.argument],
-    ['result', state?.result],
+    ["argument", state?.argument],
+    ["result", state?.result],
   ] as const) {
-    if (!branch || branch.status !== 'decoded') {
-      if (branch?.status === 'invalid_data') {
-        entries.push([`${label}.decodeStatus`, `Invalid data (${formatDecodeFailureReason(branch.reason)})`]);
+    if (!branch || branch.status !== "decoded") {
+      if (branch?.status === "invalid_data") {
+        entries.push([
+          `${label}.decodeStatus`,
+          `Invalid data (${formatDecodeFailureReason(branch.reason)})`,
+        ]);
       }
       continue;
     }
@@ -269,8 +350,12 @@ function getExerciseEntries(
 </script>
 <template>
   <section class="update-detail">
-    <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="!updateDetail" class="node-detail__message">Loading update detail...</p>
+    <p v-if="error" class="node-detail__message node-detail__message--error">
+      {{ error }}
+    </p>
+    <p v-else-if="!updateDetail" class="node-detail__message">
+      Loading update detail...
+    </p>
     <div v-else class="node-page">
       <div class="node-page__rail">
         <RouterLink
@@ -302,25 +387,42 @@ function getExerciseEntries(
             <dl class="detail-grid update-detail__summary-grid">
               <div class="update-detail__summary-item">
                 <dt>Event Offset</dt>
-                <dd class="update-detail__id">{{ updateDetail.eventOffset }}</dd>
+                <dd class="update-detail__id">
+                  {{ updateDetail.eventOffset }}
+                </dd>
               </div>
               <div class="update-detail__summary-item">
                 <dt>Canonical Update ID</dt>
-                <dd class="update-detail__canonical">{{ updateDetail.updateId }}</dd>
+                <dd class="update-detail__canonical">
+                  {{ updateDetail.updateId }}
+                </dd>
               </div>
               <div class="update-detail__summary-item">
                 <dt>Estimated traffic cost</dt>
-                <dd>{{ formatEstimatedTrafficUsd(updateDetail.estimatedTrafficUsd) }}</dd>
+                <dd>
+                  {{
+                    formatEstimatedTrafficUsd(
+                      updateDetail.estimatedTrafficUsd,
+                      updateDetail.estimatedTrafficUsdGapDays,
+                    )
+                  }}
+                </dd>
               </div>
               <div class="update-detail__summary-item">
                 <dt>Record Time</dt>
                 <dd v-if="recordTimeLines" class="update-detail__time">
-                  <span class="update-detail__time-date">{{ recordTimeLines.date }}</span>
-                  <span class="update-detail__time-clock">{{ recordTimeLines.time }}</span>
+                  <span class="update-detail__time-date">{{
+                    recordTimeLines.date
+                  }}</span>
+                  <span class="update-detail__time-clock">{{
+                    recordTimeLines.time
+                  }}</span>
                 </dd>
                 <dd v-else>n/a</dd>
               </div>
-              <div class="update-detail__summary-item update-detail__summary-item--parties">
+              <div
+                class="update-detail__summary-item update-detail__summary-item--parties"
+              >
                 <dt>Parties</dt>
                 <dd class="update-detail__parties">
                   <template v-if="updateDetail.parties.length > 0">
@@ -353,21 +455,26 @@ function getExerciseEntries(
                 <dl class="detail-grid update-detail__event-grid">
                   <div class="update-detail__event-item">
                     <dt>Event ID</dt>
-                    <dd>{{ event.eventId ?? 'n/a' }}</dd>
+                    <dd>{{ event.eventId ?? "n/a" }}</dd>
                   </div>
                   <div class="update-detail__event-item">
                     <dt>Kind</dt>
                     <dd>{{ formatEventKind(event.eventKind) }}</dd>
                   </div>
-                  <div class="update-detail__event-item update-detail__event-item--template">
+                  <div
+                    class="update-detail__event-item update-detail__event-item--template"
+                  >
                     <dt>Template ID</dt>
-                    <dd>{{ event.templateId ?? 'n/a' }}</dd>
+                    <dd>{{ event.templateId ?? "n/a" }}</dd>
                   </div>
-                  <div class="update-detail__event-item">
+                  <div
+                    class="update-detail__event-item update-detail__event-item--package"
+                  >
                     <dt>Package ID</dt>
                     <dd v-if="event.packageId">
                       <RouterLink
-                        class="contract-detail__link"
+                        class="contract-detail__link update-detail__event-package-id"
+                        :title="event.packageId"
                         :to="`/packages/${event.packageId}`"
                       >
                         {{ event.packageId }}
@@ -375,15 +482,20 @@ function getExerciseEntries(
                     </dd>
                     <dd v-else>n/a</dd>
                   </div>
-                  <div class="update-detail__event-item update-detail__event-item--choice">
+                  <div
+                    class="update-detail__event-item update-detail__event-item--choice"
+                  >
                     <dt>Choice</dt>
-                    <dd>{{ event.choice ?? 'n/a' }}</dd>
+                    <dd>{{ event.choice ?? "n/a" }}</dd>
                   </div>
-                  <div class="update-detail__event-item update-detail__event-item--contract">
+                  <div
+                    class="update-detail__event-item update-detail__event-item--contract"
+                  >
                     <dt>Contract ID</dt>
                     <dd v-if="event.contractId">
                       <RouterLink
-                        class="contract-detail__link"
+                        class="contract-detail__link update-detail__event-contract-id"
+                        :title="event.contractId"
                         :to="`/nodes/${props.id}/contracts/${event.contractId}`"
                       >
                         {{ event.contractId }}
@@ -414,7 +526,9 @@ function getExerciseEntries(
                     <dt>Create Data</dt>
                     <dd class="update-detail__exercise-data">
                       <div
-                        v-for="[key, value] in getRecordEntries(event.createData)"
+                        v-for="[key, value] in getRecordEntries(
+                          event.createData,
+                        )"
                         :key="`${event.eventId ?? 'missing-event-id'}-create-${key}`"
                         class="update-detail__exercise-data-row"
                       >
@@ -423,11 +537,14 @@ function getExerciseEntries(
                         </span>
                         <span class="update-detail__exercise-data-value">
                           <RouterLink
-                            v-if="isContractReference(value)"
+                            v-if="
+                              isContractReference(value) ||
+                              isContractIdStringReference(key, value)
+                            "
                             class="contract-detail__link"
-                            :to="`/nodes/${props.id}/contracts/${value.value}`"
+                            :to="`/nodes/${props.id}/contracts/${contractReferenceValue(value)}`"
                           >
-                            {{ value.value }}
+                            {{ contractReferenceValue(value) }}
                           </RouterLink>
                           <RouterLink
                             v-else-if="isPartyReference(key, value)"
@@ -450,7 +567,9 @@ function getExerciseEntries(
                     <dt>Exercise Data</dt>
                     <dd class="update-detail__exercise-data">
                       <div
-                        v-for="[key, value] in getExerciseEntries(event.exerciseData)"
+                        v-for="[key, value] in getExerciseEntries(
+                          event.exerciseData,
+                        )"
                         :key="`${event.eventId ?? 'missing-event-id'}-${key}`"
                         class="update-detail__exercise-data-row"
                       >
@@ -459,11 +578,14 @@ function getExerciseEntries(
                         </span>
                         <span class="update-detail__exercise-data-value">
                           <RouterLink
-                            v-if="isContractReference(value)"
+                            v-if="
+                              isContractReference(value) ||
+                              isContractIdStringReference(key, value)
+                            "
                             class="contract-detail__link"
-                            :to="`/nodes/${props.id}/contracts/${value.value}`"
+                            :to="`/nodes/${props.id}/contracts/${contractReferenceValue(value)}`"
                           >
-                            {{ value.value }}
+                            {{ contractReferenceValue(value) }}
                           </RouterLink>
                           <RouterLink
                             v-else-if="isPartyReference(key, value)"

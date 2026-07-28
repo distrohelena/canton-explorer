@@ -157,6 +157,62 @@ describe('TrafficCostEstimateService', () => {
     );
   });
 
+  it('uses the closest available candle within fifteen days and reports the gap', async () => {
+    const priceService = {
+      fetchHistory: jest
+        .fn()
+        .mockResolvedValue(
+          history([
+            venue('okx', 'USDT', 0.1, '2026-07-27T00:00:00.000Z'),
+            venue('bybit', 'USDT', 0.1, '2026-07-27T00:00:00.000Z'),
+          ]),
+        ),
+    };
+    const service = new TrafficCostEstimateService(priceService as never);
+
+    await expect(
+      service.estimateDetails(
+        '100',
+        {
+          updateId: 'purchase-1',
+          eventOffset: '10',
+          recordTime: '2026-07-28T00:11:37.371Z',
+          purchasedTraffic: '1000',
+          amuletPaid: '5',
+        },
+        new Date('2026-07-28T00:16:00.000Z'),
+      ),
+    ).resolves.toEqual({ usd: '0.05', gapDays: 1 });
+  });
+
+  it('returns null when the closest available candle is fifteen or more days away', async () => {
+    const priceService = {
+      fetchHistory: jest
+        .fn()
+        .mockResolvedValue(
+          history([
+            venue('okx', 'USDT', 0.1, '2026-07-13T00:00:00.000Z'),
+            venue('bybit', 'USDT', 0.1, '2026-07-13T00:00:00.000Z'),
+          ]),
+        ),
+    };
+    const service = new TrafficCostEstimateService(priceService as never);
+
+    await expect(
+      service.estimateDetails(
+        '100',
+        {
+          updateId: 'purchase-1',
+          eventOffset: '10',
+          recordTime: '2026-07-28T00:11:37.371Z',
+          purchasedTraffic: '1000',
+          amuletPaid: '5',
+        },
+        new Date('2026-07-28T00:16:00.000Z'),
+      ),
+    ).resolves.toBeNull();
+  });
+
   it('returns null when the day lacks two eligible USDT closes', async () => {
     const priceService = {
       fetchHistory: jest

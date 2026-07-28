@@ -26,12 +26,18 @@ type RootSdkModule = typeof import('@distrohelena/canton-typescript-sdk');
 type DebuggerCapableClient = {
   updateService: {
     getUpdateByOffsetAsync(request: unknown): Promise<unknown>;
+    getUpdateByIdAsync(request: unknown): Promise<unknown>;
   };
   userManagementService: {
     listUserRightsAsync(request: unknown): Promise<{
       rights?: Array<{
         type?: string;
         party?: string;
+        kind?: {
+          oneofKind?: string;
+          canActAs?: { party?: string };
+          canReadAs?: { party?: string };
+        };
       }>;
     }>;
   };
@@ -281,48 +287,61 @@ export class DebuggerService {
     @Optional() private readonly nodeConfigService?: NodeConfigService,
   ) {}
 
-  async createSession(nodeId: string, offset: string): Promise<DebuggerSessionResponse> {
-    const normalizedNodeId = nodeId.trim();
-    const normalizedOffset = offset.trim();
+  async createSession(updateId: string): Promise<DebuggerSessionResponse> {
+    const normalizedUpdateId = updateId.trim();
 
-    if (!normalizedNodeId) {
-      throw new BadRequestException('nodeId is required');
-    }
-
-    if (!normalizedOffset) {
-      throw new BadRequestException('offset is required');
-    }
-
-    const node = this.getNodeConfig(normalizedNodeId);
-    if (node.mode !== 'pqs_with_grpc') {
-      throw new BadRequestException(`Node ${node.id} does not support debugger replay without gRPC`);
+    if (!normalizedUpdateId) {
+      throw new BadRequestException('updateId is required');
     }
 
     const { debuggerSdk, damlLfSdk } = await this.loadSdkModules();
     const sessionStore = await this.getSessionStore();
-    const client = (await this.grpcClientFactory.create(node)) as unknown as DebuggerCapableClient;
+    const replayTarget = await this.findReplayTarget(normalizedUpdateId, debuggerSdk);
+    const replayNode = replayTarget.node;
+    const client = replayTarget.client;
     const packageReadService = await this.createPackageReadService(client);
     let stage = 'bootstrap';
+    let grpcReplayRecordTime: string | null = null;
 
     try {
       stage = 'load-update-detail';
-      const updateDetail = await this.pqsSummaryService.fetchUpdateDetail(node, normalizedOffset);
+      const updateDetail = await this.pqsSummaryService.fetchUpdateDetailById(
+        replayNode,
+        normalizedUpdateId,
+      );
       stage = 'resolve-replay-parties';
-      const replayAccess = await this.resolveReplayAccess(node, client, updateDetail);
+      const replayAccess = await this.resolveReplayAccess(replayNode, client, updateDetail);
 
       stage = 'load-update';
       const updateLoader = new debuggerSdk.ReplayUpdateLoader({
-        updateService: client.updateService as never,
+        updateService: this.createReplayUpdateService(
+          client,
+          normalizedUpdateId,
+          (recordTime) => {
+            grpcReplayRecordTime = this.formatGrpcTimestamp(recordTime);
+          },
+        ) as never,
         visibleParties: replayAccess.updateVisibleParties,
       });
-      const snapshot = await updateLoader.loadOrThrowAsync(normalizedOffset);
+      const snapshot = await updateLoader.loadOrThrowAsync('0');
       stage = 'build-environment';
       const environmentBuilder = new debuggerSdk.LedgerReplayEnvironmentBuilder({
-        contractService: this.createReplayContractService(node, client) as never,
-        eventQueryService: this.createReplayEventQueryService(node, client) as never,
+          contractService: this.createReplayContractService(replayNode, client) as never,
+          eventQueryService: this.createReplayEventQueryService(
+            replayNode,
+            client,
+            snapshot.offset,
+          ) as never,
         queryingParties: replayAccess.queryParties,
       });
-      const environment = await environmentBuilder.buildOrThrowAsync(snapshot as never);
+      const environment = this.withReplayRecordTime(
+        await environmentBuilder.buildOrThrowAsync(snapshot as never),
+        this.findObservedReplayTime(updateDetail.events) ??
+          (updateDetail.recordTime
+            ? this.formatIsoToDamlTimestamp(updateDetail.recordTime)
+            : null) ??
+          grpcReplayRecordTime,
+      );
       stage = 'resolve-artifacts';
       const artifactResolver = new debuggerSdk.ReplayArtifactResolver({
         participantPackageService: packageReadService as never,
@@ -330,7 +349,7 @@ export class DebuggerService {
       const resolvedArtifacts = await artifactResolver.resolveAsync(environment.packageIds);
 
       stage = 'sync-packages';
-      await this.packageSyncService.syncPackagesById(node, [...resolvedArtifacts.packageIds]);
+      await this.packageSyncService.syncPackagesById(replayNode, [...resolvedArtifacts.packageIds]);
 
       stage = 'load-compilation';
       const compilation = this.loadCompilationOrThrow(damlLfSdk, resolvedArtifacts.packageIds);
@@ -365,7 +384,7 @@ export class DebuggerService {
       stage = 'create-session';
       const session = await debuggerClient.loadSessionAsync(
         new debuggerSdk.ReplaySessionRequest({
-          offset: normalizedOffset,
+          offset: snapshot.offset,
         }),
       );
 
@@ -374,7 +393,7 @@ export class DebuggerService {
       }
 
       this.sessionArtifacts.set(session.sessionId, {
-        nodeId: node.id,
+        nodeId: replayNode.id,
         updateId: snapshot.updateId ?? null,
         offset: snapshot.offset,
         createdAt: new Date().toISOString(),
@@ -386,6 +405,11 @@ export class DebuggerService {
     } catch (error) {
       console.error('[DebuggerService] createSession failed at stage:', stage, error);
       const message = error instanceof Error ? error.message : 'Debugger session bootstrap failed';
+      const thrownValue =
+        error && typeof error === 'object' && 'value' in error
+          ? (error as { value?: unknown }).value
+          : undefined;
+      const diagnostic = thrownValue === undefined ? '' : `: ${JSON.stringify(thrownValue)}`;
       if (message.includes('debug/source-map.json')) {
         throw new BadRequestException(
           'Debugger requires DAR source maps, but the relevant DAR does not contain debug/source-map.json.',
@@ -404,7 +428,7 @@ export class DebuggerService {
         );
       }
 
-      throw new InternalServerErrorException(message);
+      throw new InternalServerErrorException(`${message}${diagnostic}`);
     } finally {
       await client.disposeAsync?.();
     }
@@ -617,6 +641,140 @@ export class DebuggerService {
     return sourceBundles;
   }
 
+  private createReplayUpdateService(
+    client: DebuggerCapableClient,
+    updateId?: string,
+    onRecordTime?: (recordTime: unknown) => void,
+  ): DebuggerCapableClient['updateService'] {
+    if (!updateId) {
+      return client.updateService;
+    }
+
+    return {
+      getUpdateByOffsetAsync: async (request: unknown) => {
+        const updateFormat =
+          request && typeof request === 'object' && 'updateFormat' in request
+            ? (request as { updateFormat?: unknown }).updateFormat
+            : undefined;
+
+        const response = await client.updateService.getUpdateByIdAsync({
+          updateId,
+          updateFormat,
+        });
+        const transaction =
+          response && typeof response === 'object' && 'update' in response
+            ? (response as { update?: { transaction?: { recordTime?: unknown } } }).update?.transaction
+            : undefined;
+        if (transaction?.recordTime !== undefined) {
+          onRecordTime?.(transaction.recordTime);
+        }
+        return response;
+      },
+      getUpdateByIdAsync: client.updateService.getUpdateByIdAsync.bind(
+        client.updateService,
+      ),
+    };
+  }
+
+  private formatGrpcTimestamp(value: unknown): string | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const seconds = (value as { seconds?: unknown }).seconds;
+    const nanos = (value as { nanos?: unknown }).nanos;
+    if ((typeof seconds !== 'string' && typeof seconds !== 'number' && typeof seconds !== 'bigint') ||
+        typeof nanos !== 'number') {
+      return null;
+    }
+
+    try {
+      const micros = BigInt(seconds) * 1_000_000n + BigInt(Math.trunc(nanos / 1_000));
+      return micros.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private findObservedReplayTime(events: unknown): string | null {
+    if (Array.isArray(events)) {
+      for (const event of events) {
+        const found = this.findObservedReplayTime(event);
+        if (found) {
+          return found;
+        }
+      }
+      return null;
+    }
+
+    if (!events || typeof events !== 'object') {
+      return null;
+    }
+
+    const candidate = events as { label?: unknown; value?: unknown };
+    if (candidate.label === 'lastActiveAt') {
+      const value = candidate.value;
+      if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) {
+        return this.formatIsoToDamlTimestamp(value);
+      }
+    }
+
+    for (const value of Object.values(events)) {
+      const found = this.findObservedReplayTime(value);
+      if (found) {
+        return found;
+      }
+    }
+
+    return null;
+  }
+
+  private formatIsoToDamlTimestamp(value: string): string | null {
+    const match = value.match(/^(.*?)(?:\.(\d+))?Z$/);
+    if (!match) {
+      return null;
+    }
+
+    const milliseconds = Date.parse(`${match[1]}Z`);
+    if (Number.isNaN(milliseconds)) {
+      return null;
+    }
+
+    const fractional = (match[2] ?? '').padEnd(6, '0').slice(0, 6);
+    return (BigInt(milliseconds) * 1_000n + BigInt(fractional)).toString();
+  }
+
+  private async findReplayTarget(
+    updateId: string,
+    debuggerSdk: DebuggerSdkModule,
+  ): Promise<{
+    node: Extract<NodeConfig, { mode: 'pqs_with_grpc' }>;
+    client: DebuggerCapableClient;
+  }> {
+    const candidateNodes = (this.nodeConfigService?.list() ?? []).filter(
+      (candidate): candidate is Extract<NodeConfig, { mode: 'pqs_with_grpc' }> =>
+        candidate.mode === 'pqs_with_grpc',
+    );
+
+    for (const candidate of candidateNodes) {
+      const client = (await this.grpcClientFactory.create(
+        candidate,
+      )) as unknown as DebuggerCapableClient;
+
+      try {
+        const loader = new debuggerSdk.ReplayUpdateLoader({
+          updateService: this.createReplayUpdateService(client, updateId) as never,
+        });
+        await loader.loadOrThrowAsync('0');
+        return { node: candidate, client };
+      } catch {
+        await client.disposeAsync?.();
+      }
+    }
+
+    throw new NotFoundException(`Update ${updateId} was not found on any connected gRPC node.`);
+  }
+
   private flattenSourceFiles(
     sourceBundles: Array<{
       sourceFiles: ReadonlyArray<{
@@ -639,52 +797,124 @@ export class DebuggerService {
   }
 
   private createReplayContractService(
-    node: Extract<NodeConfig, { mode: 'pqs_with_grpc' }>,
-    client: DebuggerCapableClient,
+    _node: Extract<NodeConfig, { mode: 'pqs_with_grpc' }>,
+    _client: DebuggerCapableClient,
   ): DebuggerCapableClient['contractService'] {
     return {
-      getContractAsync: async (request: unknown) => {
+      // Event history carries the labeled Daml record fields needed by the
+      // evaluator. The contract endpoint can return positional fields.
+      getContractAsync: async () => undefined,
+    };
+  }
+
+  private createReplayEventQueryService(
+    _node: Extract<NodeConfig, { mode: 'pqs_with_grpc' }>,
+    client: DebuggerCapableClient,
+    snapshotOffset?: string,
+  ): DebuggerCapableClient['eventQueryService'] {
+    return {
+      getEventsByContractIdAsync: async (request: unknown) => {
         try {
-          return await client.contractService.getContractAsync(request);
-        } catch (error) {
-          const fallback = await this.buildPqsReplayCreatedEvent(node, request);
-
-          if (fallback) {
-            return {
-              createdEvent: fallback,
-            };
+          let response = await client.eventQueryService.getEventsByContractIdAsync(request);
+          if (!this.hasReplayCreatedEvent(response)) {
+            response = await client.eventQueryService.getEventsByContractIdAsync(
+              this.createReplayWildcardEventQueryRequest(request),
+            );
           }
-
+          return snapshotOffset
+            ? this.filterReplayEventHistoryAtOffset(response, snapshotOffset)
+            : response;
+        } catch (error) {
+          try {
+            const response = await client.eventQueryService.getEventsByContractIdAsync(
+              this.createReplayWildcardEventQueryRequest(request),
+            );
+            return snapshotOffset
+              ? this.filterReplayEventHistoryAtOffset(response, snapshotOffset)
+              : response;
+          } catch {
+            // Do not substitute PQS-decoded values here: its flattened record
+            // shape is not safe for Daml replay evaluation.
+          }
           throw error;
         }
       },
     };
   }
 
-  private createReplayEventQueryService(
-    node: Extract<NodeConfig, { mode: 'pqs_with_grpc' }>,
-    client: DebuggerCapableClient,
-  ): DebuggerCapableClient['eventQueryService'] {
+  private hasReplayCreatedEvent(response: unknown): boolean {
+    if (!response || typeof response !== 'object') {
+      return false;
+    }
+
+    const created = (response as { created?: unknown }).created;
+    const createdEvent =
+      created && typeof created === 'object' ? (created as { createdEvent?: unknown }).createdEvent : undefined;
+    return Boolean(
+      createdEvent &&
+        typeof createdEvent === 'object' &&
+        (createdEvent as { createArguments?: unknown }).createArguments,
+    );
+  }
+
+  private createReplayWildcardEventQueryRequest(request: unknown): unknown {
+    const contractId =
+      request && typeof request === 'object' ? (request as { contractId?: unknown }).contractId : undefined;
     return {
-      getEventsByContractIdAsync: async (request: unknown) => {
-        try {
-          return await client.eventQueryService.getEventsByContractIdAsync(request);
-        } catch (error) {
-          const fallback = await this.buildPqsReplayCreatedEvent(node, request);
-
-          if (fallback) {
-            return {
-              created: {
-                createdEvent: fallback,
-                synchronizerId: 'pqs-fallback',
+      contractId,
+      eventFormat: {
+        filtersForAnyParty: {
+          cumulative: [
+            {
+              identifierFilter: {
+                oneofKind: 'wildcardFilter',
+                wildcardFilter: { includeCreatedEventBlob: true },
               },
-            };
-          }
-
-          throw error;
-        }
+            },
+          ],
+        },
+        verbose: true,
       },
     };
+  }
+
+  private filterReplayEventHistoryAtOffset(response: unknown, snapshotOffset: string): unknown {
+    if (!response || typeof response !== 'object') {
+      return response;
+    }
+
+    const archived = (response as { archived?: unknown }).archived;
+    const archivedEvent =
+      archived && typeof archived === 'object'
+        ? (archived as { archivedEvent?: unknown }).archivedEvent
+        : undefined;
+    const archivedOffset =
+      archivedEvent && typeof archivedEvent === 'object'
+        ? (archivedEvent as { offset?: unknown }).offset
+        : undefined;
+
+    if (typeof archivedOffset !== 'string') {
+      return response;
+    }
+
+    try {
+      if (BigInt(archivedOffset) <= BigInt(snapshotOffset)) {
+        return response;
+      }
+    } catch {
+      return response;
+    }
+
+    return {
+      ...(response as Record<string, unknown>),
+      archived: undefined,
+    };
+  }
+
+  private withReplayRecordTime<T extends { offset: string }>(environment: T, recordTime: string | null): T {
+    return typeof recordTime === 'string' && recordTime.length > 0
+      ? { ...environment, offset: recordTime }
+      : environment;
   }
 
   private mapStep(step: ReplayStepLike): DebuggerStepResponse {
@@ -1022,7 +1252,7 @@ export class DebuggerService {
     if (grantedAccess.canReadAsAnyParty) {
       return {
         updateVisibleParties: undefined,
-        queryParties: detailParties.length > 0 ? detailParties : undefined,
+        queryParties: undefined,
       };
     }
 
@@ -1076,9 +1306,16 @@ export class DebuggerService {
 
     const response = await client.userManagementService.listUserRightsAsync({
       userId,
+      identityProviderId: '',
     });
 
-    const rights = response.rights ?? [];
+    const rights = (response.rights ?? []).map((right) => ({
+      type: right?.type ?? right?.kind?.oneofKind,
+      party:
+        right?.party
+        ?? right?.kind?.canActAs?.party
+        ?? right?.kind?.canReadAs?.party,
+    }));
 
     return {
       canReadAsAnyParty: rights.some((right) => right?.type === 'canReadAsAnyParty'),
@@ -1155,10 +1392,21 @@ export class DebuggerService {
         const archive = await archiveLoader.loadDarOrThrowAsync(payload);
         const mainPackage = packageLoader.loadPackageOrThrow(archive.mainPackageEntry.bytes);
 
-        entries.set(mainPackage.packageId, {
-          mainPackageId: mainPackage.packageId,
-          payload,
-        });
+        const packageIds = new Set([mainPackage.packageId]);
+        for (const packageEntry of archive.packageEntries) {
+          try {
+            packageIds.add(packageLoader.loadPackageOrThrow(packageEntry.bytes).packageId);
+          } catch {
+            // Ignore archive entries that are not standalone DAML packages.
+          }
+        }
+
+        for (const packageId of packageIds) {
+          entries.set(packageId, {
+            mainPackageId: mainPackage.packageId,
+            payload,
+          });
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[DebuggerService] Skipping local debug DAR ${filePath}: ${message}`);

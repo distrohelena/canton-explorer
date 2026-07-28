@@ -1,4 +1,4 @@
-import type { PartyTopologyNodeEntry } from './parties';
+import type { PartyTopologyNodeEntry } from "./parties";
 
 export interface NamespacePartySummary {
   partyId: string;
@@ -28,6 +28,7 @@ export interface NamespaceRecentUpdate {
   recordTime: string | null;
   parties: string[];
   estimatedTrafficUsd?: string | null;
+  estimatedTrafficUsdGapDays?: number | null;
 }
 
 export interface NamespaceRecentContract {

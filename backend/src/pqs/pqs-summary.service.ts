@@ -59,7 +59,10 @@ import {
   type GrpcTokenHolderObservation,
 } from '../grpc/grpc-operations.service';
 import { PackageSyncService } from '../packages/package-sync.service';
-import { TrafficCostEstimateService } from '../traffic/traffic-cost-estimate.service';
+import {
+  TrafficCostEstimateService,
+  type TrafficCostEstimate,
+} from '../traffic/traffic-cost-estimate.service';
 import { qualifyPqsRelation } from './pqs-schema';
 
 interface SummaryRow {
@@ -326,7 +329,8 @@ const NATIVE_AMULET_SUPPORT_TEMPLATE_IDS = [
 ] as const;
 const NATIVE_AMULET_INTRINSIC_ID = 'Amulet';
 const CIP56_HOLDING_TEMPLATE_ID = 'Splice.Api.Token.HoldingV1:Holding';
-const CIP56_TRANSFER_TEMPLATE_ID = 'Splice.Api.Token.TransferInstructionV1:Transfer';
+const CIP56_TRANSFER_TEMPLATE_ID =
+  'Splice.Api.Token.TransferInstructionV1:Transfer';
 const CIP112_TEMPLATE_ID_LIKE_PATTERN = '%.CIP112:%';
 const TOKEN_DISCOVERY_TEMPLATE_IDS = [
   CANTON_COIN_TRANSFER_TEMPLATE_ID,
@@ -334,7 +338,9 @@ const TOKEN_DISCOVERY_TEMPLATE_IDS = [
   CIP56_HOLDING_TEMPLATE_ID,
   CIP56_TRANSFER_TEMPLATE_ID,
 ] as const;
-const TOKEN_DISCOVERY_TEMPLATE_PATTERNS = [CIP112_TEMPLATE_ID_LIKE_PATTERN] as const;
+const TOKEN_DISCOVERY_TEMPLATE_PATTERNS = [
+  CIP112_TEMPLATE_ID_LIKE_PATTERN,
+] as const;
 const TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS = [
   CANTON_COIN_TRANSFER_TEMPLATE_ID,
   CANTON_COIN_AMULET_TEMPLATE_ID,
@@ -346,7 +352,9 @@ const TOKEN_HOLDER_TEMPLATE_IDS = [
   CANTON_COIN_AMULET_TEMPLATE_ID,
   CIP56_HOLDING_TEMPLATE_ID,
 ] as const;
-const TOKEN_HOLDER_TEMPLATE_PATTERNS = [CIP112_TEMPLATE_ID_LIKE_PATTERN] as const;
+const TOKEN_HOLDER_TEMPLATE_PATTERNS = [
+  CIP112_TEMPLATE_ID_LIKE_PATTERN,
+] as const;
 const TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS = [
   CANTON_COIN_AMULET_TEMPLATE_ID,
   CIP56_HOLDING_TEMPLATE_ID,
@@ -392,13 +400,20 @@ function contractTemplateIdentifierExpression(alias: string): string {
   end`;
 }
 
-function compareGlobalMergedUpdates(left: GlobalUpdateCursor, right: GlobalUpdateCursor): number {
+function compareGlobalMergedUpdates(
+  left: GlobalUpdateCursor,
+  right: GlobalUpdateCursor,
+): number {
   const leftRecordTimeMs = Date.parse(left.recordTime ?? '');
   const rightRecordTimeMs = Date.parse(right.recordTime ?? '');
   const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
   const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
 
-  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+  if (
+    leftHasRecordTime &&
+    rightHasRecordTime &&
+    leftRecordTimeMs !== rightRecordTimeMs
+  ) {
     return rightRecordTimeMs - leftRecordTimeMs;
   }
 
@@ -460,7 +475,11 @@ function compareGlobalMergedContracts(
   const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
   const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
 
-  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+  if (
+    leftHasRecordTime &&
+    rightHasRecordTime &&
+    leftRecordTimeMs !== rightRecordTimeMs
+  ) {
     return rightRecordTimeMs - leftRecordTimeMs;
   }
 
@@ -479,7 +498,9 @@ function encodeGlobalContractCursor(contract: GlobalContractCursor): string {
   return Buffer.from(JSON.stringify(contract), 'utf8').toString('base64url');
 }
 
-function decodeGlobalContractCursor(cursor?: string): GlobalContractCursor | null {
+function decodeGlobalContractCursor(
+  cursor?: string,
+): GlobalContractCursor | null {
   if (!cursor || !cursor.trim()) {
     return null;
   }
@@ -516,7 +537,11 @@ function compareGlobalTrafficPurchases(
   const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
   const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
 
-  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+  if (
+    leftHasRecordTime &&
+    rightHasRecordTime &&
+    leftRecordTimeMs !== rightRecordTimeMs
+  ) {
     return rightRecordTimeMs - leftRecordTimeMs;
   }
 
@@ -547,7 +572,9 @@ function encodeGlobalTrafficCursor(purchase: GlobalTrafficPurchase): string {
   ).toString('base64url');
 }
 
-function decodeGlobalTrafficCursor(cursor?: string): GlobalTrafficCursor | null {
+function decodeGlobalTrafficCursor(
+  cursor?: string,
+): GlobalTrafficCursor | null {
   if (!cursor || !cursor.trim()) {
     return null;
   }
@@ -577,7 +604,10 @@ function decodeGlobalTrafficCursor(cursor?: string): GlobalTrafficCursor | null 
   return null;
 }
 
-function compareSearchUpdates(left: SearchMatchedUpdate, right: SearchMatchedUpdate): number {
+function compareSearchUpdates(
+  left: SearchMatchedUpdate,
+  right: SearchMatchedUpdate,
+): number {
   if (left.exact !== right.exact) {
     return left.exact ? -1 : 1;
   }
@@ -587,7 +617,11 @@ function compareSearchUpdates(left: SearchMatchedUpdate, right: SearchMatchedUpd
   const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
   const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
 
-  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+  if (
+    leftHasRecordTime &&
+    rightHasRecordTime &&
+    leftRecordTimeMs !== rightRecordTimeMs
+  ) {
     return rightRecordTimeMs - leftRecordTimeMs;
   }
 
@@ -602,7 +636,10 @@ function compareSearchUpdates(left: SearchMatchedUpdate, right: SearchMatchedUpd
   return right.eventOffset.localeCompare(left.eventOffset);
 }
 
-function compareSearchContracts(left: SearchMatchedContract, right: SearchMatchedContract): number {
+function compareSearchContracts(
+  left: SearchMatchedContract,
+  right: SearchMatchedContract,
+): number {
   if (left.exact !== right.exact) {
     return left.exact ? -1 : 1;
   }
@@ -612,7 +649,11 @@ function compareSearchContracts(left: SearchMatchedContract, right: SearchMatche
   const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
   const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
 
-  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+  if (
+    leftHasRecordTime &&
+    rightHasRecordTime &&
+    leftRecordTimeMs !== rightRecordTimeMs
+  ) {
     return rightRecordTimeMs - leftRecordTimeMs;
   }
 
@@ -636,7 +677,11 @@ function compareGlobalTokenTransfers(
   const leftHasRecordTime = Number.isFinite(leftRecordTimeMs);
   const rightHasRecordTime = Number.isFinite(rightRecordTimeMs);
 
-  if (leftHasRecordTime && rightHasRecordTime && leftRecordTimeMs !== rightRecordTimeMs) {
+  if (
+    leftHasRecordTime &&
+    rightHasRecordTime &&
+    leftRecordTimeMs !== rightRecordTimeMs
+  ) {
     return rightRecordTimeMs - leftRecordTimeMs;
   }
 
@@ -667,7 +712,9 @@ function compareGlobalTokenTransfers(
   return (right.amount ?? '').localeCompare(left.amount ?? '');
 }
 
-function encodeGlobalTokenTransferCursor(transfer: GlobalTokenTransferCursor): string {
+function encodeGlobalTokenTransferCursor(
+  transfer: GlobalTokenTransferCursor,
+): string {
   return Buffer.from(
     JSON.stringify({
       rowId: transfer.rowId,
@@ -682,7 +729,9 @@ function encodeGlobalTokenTransferCursor(transfer: GlobalTokenTransferCursor): s
   ).toString('base64url');
 }
 
-function decodeGlobalTokenTransferCursor(cursor?: string): GlobalTokenTransferCursor | null {
+function decodeGlobalTokenTransferCursor(
+  cursor?: string,
+): GlobalTokenTransferCursor | null {
   if (!cursor || !cursor.trim()) {
     return null;
   }
@@ -722,8 +771,10 @@ function compareGlobalTokenHolders(
   left: GlobalTokenHolderCursor,
   right: GlobalTokenHolderCursor,
 ): number {
-  const leftValue = left.amount === null ? Number.NEGATIVE_INFINITY : Number(left.amount);
-  const rightValue = right.amount === null ? Number.NEGATIVE_INFINITY : Number(right.amount);
+  const leftValue =
+    left.amount === null ? Number.NEGATIVE_INFINITY : Number(left.amount);
+  const rightValue =
+    right.amount === null ? Number.NEGATIVE_INFINITY : Number(right.amount);
   const leftValid = Number.isFinite(leftValue);
   const rightValid = Number.isFinite(rightValue);
 
@@ -738,7 +789,10 @@ function compareGlobalTokenHolders(
   return left.partyId.localeCompare(right.partyId);
 }
 
-function compareGlobalTokens(left: GlobalTokenCursor, right: GlobalTokenCursor): number {
+function compareGlobalTokens(
+  left: GlobalTokenCursor,
+  right: GlobalTokenCursor,
+): number {
   if (left.name !== right.name) {
     return left.name.localeCompare(right.name);
   }
@@ -766,7 +820,10 @@ function decodeGlobalTokenCursor(cursor?: string): GlobalTokenCursor | null {
       Buffer.from(cursor, 'base64url').toString('utf8'),
     ) as Partial<GlobalTokenCursor>;
 
-    if (typeof decoded.tokenId === 'string' && typeof decoded.name === 'string') {
+    if (
+      typeof decoded.tokenId === 'string' &&
+      typeof decoded.name === 'string'
+    ) {
       return {
         tokenId: decoded.tokenId,
         name: decoded.name,
@@ -779,7 +836,9 @@ function decodeGlobalTokenCursor(cursor?: string): GlobalTokenCursor | null {
   return null;
 }
 
-function encodeGlobalTokenHolderCursor(holder: GlobalTokenHolderCursor): string {
+function encodeGlobalTokenHolderCursor(
+  holder: GlobalTokenHolderCursor,
+): string {
   return Buffer.from(
     JSON.stringify({
       partyId: holder.partyId,
@@ -789,7 +848,9 @@ function encodeGlobalTokenHolderCursor(holder: GlobalTokenHolderCursor): string 
   ).toString('base64url');
 }
 
-function decodeGlobalTokenHolderCursor(cursor?: string): GlobalTokenHolderCursor | null {
+function decodeGlobalTokenHolderCursor(
+  cursor?: string,
+): GlobalTokenHolderCursor | null {
   if (!cursor || !cursor.trim()) {
     return null;
   }
@@ -815,7 +876,10 @@ function decodeGlobalTokenHolderCursor(cursor?: string): GlobalTokenHolderCursor
   return null;
 }
 
-function compareSearchParties(left: SearchMatchedParty, right: SearchMatchedParty): number {
+function compareSearchParties(
+  left: SearchMatchedParty,
+  right: SearchMatchedParty,
+): number {
   if (left.exact !== right.exact) {
     return left.exact ? -1 : 1;
   }
@@ -863,7 +927,9 @@ function normalizePartyFilters(parties?: string[]): string[] {
   }
 
   return Array.from(
-    new Set(parties.map((party) => party.trim()).filter((party) => party.length > 0)),
+    new Set(
+      parties.map((party) => party.trim()).filter((party) => party.length > 0),
+    ),
   );
 }
 
@@ -895,7 +961,11 @@ function normalizeTokenTextFilters(values?: string[]): string[] {
   }
 
   return Array.from(
-    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0)),
+    new Set(
+      values
+        .map((value) => value.trim().toLowerCase())
+        .filter((value) => value.length > 0),
+    ),
   );
 }
 
@@ -905,7 +975,9 @@ function normalizeTokenIssuerFilters(values?: string[]): string[] {
   }
 
   return Array.from(
-    new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
+    new Set(
+      values.map((value) => value.trim()).filter((value) => value.length > 0),
+    ),
   );
 }
 
@@ -935,13 +1007,22 @@ function summaryQuery(node: NodeConfig): string {
   `;
 }
 
-function pqsActivityBucketsQuery(node: NodeConfig, days: number, bucketMinutes: number): string {
+function pqsActivityBucketsQuery(
+  node: NodeConfig,
+  days: number,
+  bucketMinutes: number,
+): string {
   const relations = pqsCoreRelations(node);
-  const normalizedDays = Number.isFinite(days) && days > 0 ? Math.trunc(days) : 30;
+  const normalizedDays =
+    Number.isFinite(days) && days > 0 ? Math.trunc(days) : 30;
   const normalizedBucketMinutes =
-    Number.isFinite(bucketMinutes) && bucketMinutes > 0 ? Math.trunc(bucketMinutes) : 15;
+    Number.isFinite(bucketMinutes) && bucketMinutes > 0
+      ? Math.trunc(bucketMinutes)
+      : 15;
   const bucketSeconds = normalizedBucketMinutes * 60;
-  const minEffectiveAt = new Date(Date.now() - normalizedDays * 24 * 60 * 60 * 1000).toISOString();
+  const minEffectiveAt = new Date(
+    Date.now() - normalizedDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
   return `
     select
@@ -958,10 +1039,19 @@ function pqsActivityBucketsQuery(node: NodeConfig, days: number, bucketMinutes: 
   `;
 }
 
-function buildPqsUpdatePartyExistsCondition(node: NodeConfig, partyId: string): string {
+function buildPqsUpdatePartyExistsCondition(
+  node: NodeConfig,
+  partyId: string,
+): string {
   const relations = pqsCoreRelations(node);
-  const contractMatch = partyWitnessArrayMatchCondition('contract_row.witnesses', partyId);
-  const exerciseMatch = partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId);
+  const contractMatch = partyWitnessArrayMatchCondition(
+    'contract_row.witnesses',
+    partyId,
+  );
+  const exerciseMatch = partyWitnessArrayMatchCondition(
+    'exercise_row.witnesses',
+    partyId,
+  );
 
   return `(
     exists (
@@ -979,12 +1069,18 @@ function buildPqsUpdatePartyExistsCondition(node: NodeConfig, partyId: string): 
   )`;
 }
 
-function buildPqsUpdateTemplateExistsCondition(node: NodeConfig, templateId: string): string {
+function buildPqsUpdateTemplateExistsCondition(
+  node: NodeConfig,
+  templateId: string,
+): string {
   const relations = pqsCoreRelations(node);
   const normalizedTemplateId = normalizeTemplateFilterValue(templateId);
   const quotedTemplateId = `'${escapeSqlLiteral(normalizedTemplateId)}'`;
-  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
-  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression(
+    'exercise_contract_tpe_row',
+  );
 
   return `(
     exists (
@@ -1026,14 +1122,16 @@ function buildPqsUpdatesFilterClause(
   const partyConditions = normalizePartyFilters(parties).map((party) =>
     buildPqsUpdatePartyExistsCondition(node, party),
   );
-  const templateConditions = normalizeTemplateFilters(templates).map((templateId) =>
-    buildPqsUpdateTemplateExistsCondition(node, templateId),
+  const templateConditions = normalizeTemplateFilters(templates).map(
+    (templateId) => buildPqsUpdateTemplateExistsCondition(node, templateId),
   );
   const groups: string[] = [];
 
   if (partyConditions.length > 0) {
     const partyJoiner =
-      normalizePartyFilterMode(partyMode) === 'and' ? '\n      and ' : '\n      or ';
+      normalizePartyFilterMode(partyMode) === 'and'
+        ? '\n      and '
+        : '\n      or ';
     groups.push(
       partyConditions.length === 1
         ? partyConditions[0]
@@ -1053,13 +1151,18 @@ function buildPqsUpdatesFilterClause(
     return null;
   }
 
-  return groups.length === 1 ? groups[0] : `(\n      ${groups.join('\n      and ')}\n    )`;
+  return groups.length === 1
+    ? groups[0]
+    : `(\n      ${groups.join('\n      and ')}\n    )`;
 }
 
 function buildPqsHideSpliceUpdatesClause(node: NodeConfig): string {
   const relations = pqsCoreRelations(node);
-  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
-  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression(
+    'exercise_contract_tpe_row',
+  );
 
   return `
     exists (
@@ -1106,8 +1209,15 @@ function pqsRecentUpdatesQuery(
   const relations = pqsCoreRelations(node);
   const normalizedBefore = normalizeEventOffsetCursor(before);
   const normalizedAfter = normalizeEventOffsetCursor(after);
-  const filterClause = buildPqsUpdatesFilterClause(node, parties, templates, partyMode);
-  const hideSpliceClause = hideSplice ? buildPqsHideSpliceUpdatesClause(node) : null;
+  const filterClause = buildPqsUpdatesFilterClause(
+    node,
+    parties,
+    templates,
+    partyMode,
+  );
+  const hideSpliceClause = hideSplice
+    ? buildPqsHideSpliceUpdatesClause(node)
+    : null;
   const queryLimit = limit + 1;
   const afterFilters = [
     normalizedAfter ? `tx.offset > ${normalizedAfter}` : null,
@@ -1121,7 +1231,10 @@ function pqsRecentUpdatesQuery(
   ].filter((value): value is string => Boolean(value));
 
   if (normalizedAfter && !normalizedBefore) {
-    const whereClause = afterFilters.length > 0 ? `where ${afterFilters.join('\n      and ')}` : '';
+    const whereClause =
+      afterFilters.length > 0
+        ? `where ${afterFilters.join('\n      and ')}`
+        : '';
     return `
       select
         tx.transaction_id::text as update_id,
@@ -1135,7 +1248,8 @@ function pqsRecentUpdatesQuery(
     `;
   }
 
-  const whereClause = olderFilters.length > 0 ? `where ${olderFilters.join('\n      and ')}` : '';
+  const whereClause =
+    olderFilters.length > 0 ? `where ${olderFilters.join('\n      and ')}` : '';
 
   return `
     select
@@ -1150,7 +1264,11 @@ function pqsRecentUpdatesQuery(
   `;
 }
 
-function pqsSearchUpdatesQuery(node: NodeConfig, searchQuery: string, limit: number): string {
+function pqsSearchUpdatesQuery(
+  node: NodeConfig,
+  searchQuery: string,
+  limit: number,
+): string {
   const relations = pqsCoreRelations(node);
   const quotedQuery = escapeSqlLiteral(searchQuery);
 
@@ -1167,9 +1285,14 @@ function pqsSearchUpdatesQuery(node: NodeConfig, searchQuery: string, limit: num
   `;
 }
 
-function pqsRecentUpdatePartiesQuery(node: NodeConfig, updateIds: string[]): string {
+function pqsRecentUpdatePartiesQuery(
+  node: NodeConfig,
+  updateIds: string[],
+): string {
   const relations = pqsCoreRelations(node);
-  const quotedIds = updateIds.map((updateId) => `'${escapeSqlLiteral(updateId)}'`).join(', ');
+  const quotedIds = updateIds
+    .map((updateId) => `'${escapeSqlLiteral(updateId)}'`)
+    .join(', ');
 
   return `
     select
@@ -1226,10 +1349,20 @@ function pqsActivePartiesQuery(node: NodeConfig): string {
   `;
 }
 
-function pqsPartyRecentUpdatesQuery(node: NodeConfig, partyId: string, limit: number): string {
+function pqsPartyRecentUpdatesQuery(
+  node: NodeConfig,
+  partyId: string,
+  limit: number,
+): string {
   const relations = pqsCoreRelations(node);
-  const contractMatch = partyWitnessArrayMatchCondition('contract_row.witnesses', partyId);
-  const exerciseMatch = partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId);
+  const contractMatch = partyWitnessArrayMatchCondition(
+    'contract_row.witnesses',
+    partyId,
+  );
+  const exerciseMatch = partyWitnessArrayMatchCondition(
+    'exercise_row.witnesses',
+    partyId,
+  );
 
   return `
     select
@@ -1264,16 +1397,21 @@ function buildPqsActiveContractsFilterClause(
   const partyConditions = normalizePartyFilters(parties).map((party) =>
     partyWitnessArrayMatchCondition('contract_row.witnesses', party),
   );
-  const templateExpression = contractTemplateIdentifierExpression('contract_tpe_row');
-  const templateConditions = normalizeTemplateFilters(templates).map((templateId) => {
-    const quotedTemplateId = `'${escapeSqlLiteral(templateId)}'`;
-    return `${templateExpression} = ${quotedTemplateId}`;
-  });
+  const templateExpression =
+    contractTemplateIdentifierExpression('contract_tpe_row');
+  const templateConditions = normalizeTemplateFilters(templates).map(
+    (templateId) => {
+      const quotedTemplateId = `'${escapeSqlLiteral(templateId)}'`;
+      return `${templateExpression} = ${quotedTemplateId}`;
+    },
+  );
   const groups: string[] = [];
 
   if (partyConditions.length > 0) {
     const partyJoiner =
-      normalizePartyFilterMode(partyMode) === 'and' ? '\n      and ' : '\n      or ';
+      normalizePartyFilterMode(partyMode) === 'and'
+        ? '\n      and '
+        : '\n      or ';
     groups.push(
       partyConditions.length === 1
         ? partyConditions[0]
@@ -1297,7 +1435,9 @@ function buildPqsActiveContractsFilterClause(
     return null;
   }
 
-  return groups.length === 1 ? groups[0] : `(\n      ${groups.join('\n      and ')}\n    )`;
+  return groups.length === 1
+    ? groups[0]
+    : `(\n      ${groups.join('\n      and ')}\n    )`;
 }
 
 function pqsActiveContractsQuery(
@@ -1333,7 +1473,9 @@ function pqsActiveContractsQuery(
     filterClause,
   ].filter((value): value is string => Boolean(value));
   const whereClause =
-    whereConditions.length > 0 ? `where ${whereConditions.join('\n      and ')}` : '';
+    whereConditions.length > 0
+      ? `where ${whereConditions.join('\n      and ')}`
+      : '';
 
   return `
     select
@@ -1352,7 +1494,11 @@ function pqsActiveContractsQuery(
   `;
 }
 
-function pqsSearchContractsQuery(node: NodeConfig, searchQuery: string, limit: number): string {
+function pqsSearchContractsQuery(
+  node: NodeConfig,
+  searchQuery: string,
+  limit: number,
+): string {
   const relations = pqsCoreRelations(node);
   const quotedQuery = escapeSqlLiteral(searchQuery);
 
@@ -1381,7 +1527,10 @@ function pqsPartyRecentContractsQuery(
   after?: string,
 ): string {
   const relations = pqsCoreRelations(node);
-  const witnessMatch = partyWitnessArrayMatchCondition('contract_row.witnesses', partyId);
+  const witnessMatch = partyWitnessArrayMatchCondition(
+    'contract_row.witnesses',
+    partyId,
+  );
   const normalizedBefore = normalizeEventOffsetCursor(before);
   const normalizedAfter = normalizeEventOffsetCursor(after);
   const queryLimit = limit + 1;
@@ -1426,10 +1575,15 @@ function buildQuotedPartyIdentifiers(partyId: string): string[] {
     identifiers.add(`p|${normalized}`);
   }
 
-  return Array.from(identifiers).map((identifier) => `'${escapeSqlLiteral(identifier)}'`);
+  return Array.from(identifiers).map(
+    (identifier) => `'${escapeSqlLiteral(identifier)}'`,
+  );
 }
 
-function partyWitnessArrayMatchCondition(arrayExpression: string, partyId: string): string {
+function partyWitnessArrayMatchCondition(
+  arrayExpression: string,
+  partyId: string,
+): string {
   const quotedIdentifiers = buildQuotedPartyIdentifiers(partyId);
 
   if (quotedIdentifiers.length === 0) {
@@ -1461,6 +1615,28 @@ function singleUpdateQuery(node: NodeConfig, eventOffset: string): string {
   `;
 }
 
+function singleUpdateByIdQuery(node: NodeConfig, updateId: string): string {
+  const relations = pqsCoreRelations(node);
+  const quotedUpdateId = `'${escapeSqlLiteral(updateId)}'`;
+
+  return `
+    select
+      tx.transaction_id::text as update_id,
+      tx.offset::text as event_offset,
+      ${isoUtcTimestampExpression('tx.effective_at')} as record_time_iso,
+      tx.paid_traffic_cost::text as paid_traffic_cost,
+      jsonb_build_object(
+        'update_id', tx.transaction_id::text,
+        'event_offset', tx.offset::text,
+        'record_time', ${isoUtcTimestampExpression('tx.effective_at')}
+      ) as meta
+    from ${relations.transactions} tx
+    where tx.transaction_id::text = ${quotedUpdateId}
+    order by tx.offset desc
+    limit 1
+  `;
+}
+
 function pqsTrafficPurchasesQuery(
   node: NodeConfig,
   limit: number,
@@ -1482,7 +1658,9 @@ function pqsTrafficPurchasesQuery(
       : '';
   const orderClause = useAfterCursor ? 'asc' : 'desc';
   const filterClauses = [
-    normalizedMinDate ? `tx.effective_at >= '${normalizedMinDate}'::date` : null,
+    normalizedMinDate
+      ? `tx.effective_at >= '${normalizedMinDate}'::date`
+      : null,
     normalizedMaxDate
       ? `tx.effective_at < ('${normalizedMaxDate}'::date + interval '1 day')`
       : null,
@@ -1527,7 +1705,8 @@ function normalizeTrafficDateFilter(value?: string): string | null {
   }
 
   const parsed = new Date(`${normalized}T00:00:00.000Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === normalized
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === normalized
     ? normalized
     : null;
 }
@@ -1544,7 +1723,9 @@ function compareNonNegativeDecimalValues(left: string, right: string): number {
   const normalizedRightInteger = rightInteger.replace(/^0+(?=\d)/, '');
 
   if (normalizedLeftInteger.length !== normalizedRightInteger.length) {
-    return normalizedLeftInteger.length > normalizedRightInteger.length ? 1 : -1;
+    return normalizedLeftInteger.length > normalizedRightInteger.length
+      ? 1
+      : -1;
   }
   if (normalizedLeftInteger !== normalizedRightInteger) {
     return normalizedLeftInteger > normalizedRightInteger ? 1 : -1;
@@ -1576,27 +1757,49 @@ function matchesTrafficPurchaseAmountFilters(
     return false;
   }
 
-  if (purchasedMin && compareNonNegativeDecimalValues(purchase.purchasedTraffic!, purchasedMin) < 0) {
+  if (
+    purchasedMin &&
+    compareNonNegativeDecimalValues(purchase.purchasedTraffic!, purchasedMin) <
+      0
+  ) {
     return false;
   }
-  if (purchasedMax && compareNonNegativeDecimalValues(purchase.purchasedTraffic!, purchasedMax) > 0) {
+  if (
+    purchasedMax &&
+    compareNonNegativeDecimalValues(purchase.purchasedTraffic!, purchasedMax) >
+      0
+  ) {
     return false;
   }
-  if (paidMin && compareNonNegativeDecimalValues(purchase.amuletPaid!, paidMin) < 0) {
+  if (
+    paidMin &&
+    compareNonNegativeDecimalValues(purchase.amuletPaid!, paidMin) < 0
+  ) {
     return false;
   }
-  if (paidMax && compareNonNegativeDecimalValues(purchase.amuletPaid!, paidMax) > 0) {
+  if (
+    paidMax &&
+    compareNonNegativeDecimalValues(purchase.amuletPaid!, paidMax) > 0
+  ) {
     return false;
   }
 
   return true;
 }
 
-function updateEventsByUpdateIdsQuery(node: NodeConfig, updateIds: string[]): string {
+function updateEventsByUpdateIdsQuery(
+  node: NodeConfig,
+  updateIds: string[],
+): string {
   const relations = pqsCoreRelations(node);
-  const quotedIds = updateIds.map((updateId) => `'${escapeSqlLiteral(updateId)}'`).join(', ');
-  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
-  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
+  const quotedIds = updateIds
+    .map((updateId) => `'${escapeSqlLiteral(updateId)}'`)
+    .join(', ');
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression(
+    'exercise_contract_tpe_row',
+  );
 
   return `
     select
@@ -1694,7 +1897,8 @@ function updateEventsQuery(node: NodeConfig, updateId: string): string {
 function rewardCouponInstanceQuery(node: NodeConfig, updateId: string): string {
   const relations = pqsCoreRelations(node);
   const quotedId = `'${escapeSqlLiteral(normalizeByteaHex(updateId))}'`;
-  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
 
   return `
     select
@@ -1723,7 +1927,8 @@ function contractDetailsQuery(node: NodeConfig, contractIds: string[]): string {
   const quotedIds = contractIds
     .map((contractId) => `'${escapeSqlLiteral(normalizeByteaHex(contractId))}'`)
     .join(', ');
-  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
 
   return `
     with selected_contract as (
@@ -1772,16 +1977,21 @@ function tokenRowsQuery(
 ): string {
   const relations = pqsCoreRelations(node);
   const normalizedLimit =
-    Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(limit) : TOKEN_TRANSFER_CACHE_LIMIT;
+    Number.isFinite(limit) && Number(limit) > 0
+      ? Math.trunc(limit)
+      : TOKEN_TRANSFER_CACHE_LIMIT;
   const quotedTemplateIds = templateIds
     .map((templateId) => `'${escapeSqlLiteral(templateId)}'`)
     .join(',\n        ');
-  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
   const patternClauses = templatePatterns.map(
     (pattern) => `${contractTemplateId} like '${escapeSqlLiteral(pattern)}'`,
   );
   const templateFilterClause = [
-    quotedTemplateIds ? `${contractTemplateId} in (\n        ${quotedTemplateIds}\n      )` : null,
+    quotedTemplateIds
+      ? `${contractTemplateId} in (\n        ${quotedTemplateIds}\n      )`
+      : null,
     ...patternClauses,
   ]
     .filter((clause): clause is string => clause !== null)
@@ -1836,12 +2046,20 @@ function nativeAmuletSupportQuery(node: NodeConfig): string {
   `;
 }
 
-function recentCip112MovementUpdateIdsQuery(node: NodeConfig, limit: number): string {
+function recentCip112MovementUpdateIdsQuery(
+  node: NodeConfig,
+  limit: number,
+): string {
   const relations = pqsCoreRelations(node);
   const normalizedLimit =
-    Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(limit) : TOKEN_TRANSFER_CACHE_LIMIT;
-  const contractTemplateId = contractTemplateIdentifierExpression('contract_tpe_row');
-  const exerciseTemplateId = contractTemplateIdentifierExpression('exercise_contract_tpe_row');
+    Number.isFinite(limit) && Number(limit) > 0
+      ? Math.trunc(limit)
+      : TOKEN_TRANSFER_CACHE_LIMIT;
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression(
+    'exercise_contract_tpe_row',
+  );
 
   return `
     /* cip112_movement_update_ids */
@@ -1917,9 +2135,18 @@ function normalizeByteaHex(value: string): string {
 
 @Injectable()
 export class PqsSummaryService {
-  private readonly observedTokensByNode = new Map<string, CachedNodeObservedTokens>();
-  private readonly tokenHoldersByNode = new Map<string, CachedNodeTokenHolders>();
-  private readonly tokenTransfersByNode = new Map<string, CachedNodeTokenTransfers>();
+  private readonly observedTokensByNode = new Map<
+    string,
+    CachedNodeObservedTokens
+  >();
+  private readonly tokenHoldersByNode = new Map<
+    string,
+    CachedNodeTokenHolders
+  >();
+  private readonly tokenTransfersByNode = new Map<
+    string,
+    CachedNodeTokenTransfers
+  >();
 
   constructor(
     private readonly managerFactory: PqsManagerFactory,
@@ -1930,7 +2157,8 @@ export class PqsSummaryService {
     @Optional() private readonly nodeConfigService?: NodeConfigService,
     @Optional() private readonly grpcOperationsService?: GrpcOperationsService,
     @Optional() private readonly packageSyncService?: PackageSyncService,
-    @Optional() private readonly trafficCostEstimateService?: TrafficCostEstimateService,
+    @Optional()
+    private readonly trafficCostEstimateService?: TrafficCostEstimateService,
   ) {}
 
   async fetchSummary(node: NodeConfig): Promise<LedgerSummary> {
@@ -1968,16 +2196,18 @@ export class PqsSummaryService {
     const normalizedFilters: TrafficPurchaseQueryFilters = {
       minDate: normalizeTrafficDateFilter(options.minDate) ?? undefined,
       maxDate: normalizeTrafficDateFilter(options.maxDate) ?? undefined,
-      purchasedMin: normalizeTrafficNumericFilter(options.purchasedMin) ?? undefined,
-      purchasedMax: normalizeTrafficNumericFilter(options.purchasedMax) ?? undefined,
+      purchasedMin:
+        normalizeTrafficNumericFilter(options.purchasedMin) ?? undefined,
+      purchasedMax:
+        normalizeTrafficNumericFilter(options.purchasedMax) ?? undefined,
       paidMin: normalizeTrafficNumericFilter(options.paidMin) ?? undefined,
       paidMax: normalizeTrafficNumericFilter(options.paidMax) ?? undefined,
     };
     const hasAmountFilters = Boolean(
       normalizedFilters.purchasedMin ||
-        normalizedFilters.purchasedMax ||
-        normalizedFilters.paidMin ||
-        normalizedFilters.paidMax,
+      normalizedFilters.purchasedMax ||
+      normalizedFilters.paidMin ||
+      normalizedFilters.paidMax,
     );
     const result = await client.query(
       pqsTrafficPurchasesQuery(
@@ -2004,7 +2234,11 @@ export class PqsSummaryService {
           updateId: row.update_id,
           eventOffset: String(row.event_offset),
           recordTime: row.record_time ?? null,
-          purchasedTraffic: this.readTrafficPurchaseField(decoded, 'trafficAmount', 'argument'),
+          purchasedTraffic: this.readTrafficPurchaseField(
+            decoded,
+            'trafficAmount',
+            'argument',
+          ),
           amuletPaid: this.readTrafficPurchaseField(decoded, 'amuletPaid'),
         };
       }),
@@ -2016,7 +2250,9 @@ export class PqsSummaryService {
       : decodedPurchases;
     const hasMoreInQuery = matchingPurchases.length > limit;
     const pagePurchases = matchingPurchases.slice(0, limit);
-    const purchases = useAfterCursor ? [...pagePurchases].reverse() : pagePurchases;
+    const purchases = useAfterCursor
+      ? [...pagePurchases].reverse()
+      : pagePurchases;
 
     return {
       nodeId: node.id,
@@ -2053,9 +2289,12 @@ export class PqsSummaryService {
     } = {},
   ): Promise<GlobalTrafficPurchasesResponse> {
     const normalizedLimit =
-      typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : 25;
+      typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+        ? Math.trunc(limit)
+        : 25;
     const beforeCursor = decodeGlobalTrafficCursor(options.before);
-    const afterCursor = beforeCursor === null ? decodeGlobalTrafficCursor(options.after) : null;
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalTrafficCursor(options.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const selectedNodeIds = options.nodeIds;
     const eligibleNodes =
@@ -2083,12 +2322,20 @@ export class PqsSummaryService {
     }));
     const historyStatus = new Map<string, GlobalTrafficHistoryStatus>();
     const mergedPurchasesByKey = new Map<string, GlobalTrafficPurchase>();
-    const filterPurchases = (purchases: GlobalTrafficPurchase[]): GlobalTrafficPurchase[] =>
+    const filterPurchases = (
+      purchases: GlobalTrafficPurchase[],
+    ): GlobalTrafficPurchase[] =>
       purchases.filter((purchase) => {
-        if (beforeCursor !== null && compareGlobalTrafficPurchases(purchase, beforeCursor) <= 0) {
+        if (
+          beforeCursor !== null &&
+          compareGlobalTrafficPurchases(purchase, beforeCursor) <= 0
+        ) {
           return false;
         }
-        if (afterCursor !== null && compareGlobalTrafficPurchases(purchase, afterCursor) >= 0) {
+        if (
+          afterCursor !== null &&
+          compareGlobalTrafficPurchases(purchase, afterCursor) >= 0
+        ) {
           return false;
         }
         return true;
@@ -2130,7 +2377,10 @@ export class PqsSummaryService {
             nodeId: state.node.id,
             label: state.node.label,
             status: 'pqs_error',
-            error: result.reason instanceof Error ? result.reason.message : 'Unknown PQS error',
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : 'Unknown PQS error',
           });
           return;
         }
@@ -2193,7 +2443,8 @@ export class PqsSummaryService {
             mode: node.mode,
             status: 'grpc_error' as const,
             states: [],
-            error: error instanceof Error ? error.message : 'Unknown gRPC error',
+            error:
+              error instanceof Error ? error.message : 'Unknown gRPC error',
           };
         }
       }),
@@ -2259,7 +2510,9 @@ export class PqsSummaryService {
     };
   }
 
-  private async latestTrafficPurchase(node: NodeConfig): Promise<NodeTrafficPurchase | null> {
+  private async latestTrafficPurchase(
+    node: NodeConfig,
+  ): Promise<NodeTrafficPurchase | null> {
     if (!this.trafficCostEstimateService) {
       return null;
     }
@@ -2272,16 +2525,29 @@ export class PqsSummaryService {
     }
   }
 
-  private async estimateTrafficUsd(
+  private async estimateTraffic(
     paidTrafficCost: string | null | undefined,
     purchase: NodeTrafficPurchase | null,
-  ): Promise<string | null> {
+  ): Promise<TrafficCostEstimate | null> {
     if (!this.trafficCostEstimateService || !purchase) {
       return null;
     }
 
     try {
-      return await this.trafficCostEstimateService.estimate(paidTrafficCost, purchase);
+      const estimateDetails = this.trafficCostEstimateService.estimateDetails;
+      if (typeof estimateDetails === 'function') {
+        return await estimateDetails.call(
+          this.trafficCostEstimateService,
+          paidTrafficCost,
+          purchase,
+        );
+      }
+
+      const usd = await this.trafficCostEstimateService.estimate(
+        paidTrafficCost,
+        purchase,
+      );
+      return usd ? { usd, gapDays: null } : null;
     } catch {
       return null;
     }
@@ -2314,9 +2580,14 @@ export class PqsSummaryService {
     const before = typeof options === 'object' ? options.before : undefined;
     const after = typeof options === 'object' ? options.after : undefined;
     const parties = typeof options === 'object' ? options.parties : undefined;
-    const templates = typeof options === 'object' ? options.templates : undefined;
-    const partyMode = typeof options === 'object' ? (options.partyMode ?? options.mode) : undefined;
-    const hideSplice = typeof options === 'object' ? options.hideSplice === true : false;
+    const templates =
+      typeof options === 'object' ? options.templates : undefined;
+    const partyMode =
+      typeof options === 'object'
+        ? (options.partyMode ?? options.mode)
+        : undefined;
+    const hideSplice =
+      typeof options === 'object' ? options.hideSplice === true : false;
     const useAfterCursor = Boolean(after && !before);
     const query = client.query.bind(client);
     const rawMetaRows = await this.queryRecentUpdateMetaRows(
@@ -2367,9 +2638,9 @@ export class PqsSummaryService {
       orderedUpdates.map((update) => update.rawUpdateId),
     );
     const latestPurchase = await this.latestTrafficPurchase(node);
-    const estimatedTrafficUsd = await Promise.all(
+    const trafficEstimates = await Promise.all(
       orderedUpdates.map((update) =>
-        this.estimateTrafficUsd(update.paidTrafficCost, latestPurchase),
+        this.estimateTraffic(update.paidTrafficCost, latestPurchase),
       ),
     );
 
@@ -2393,7 +2664,10 @@ export class PqsSummaryService {
         updateId: update.updateId,
         recordTime: update.recordTime,
         parties: partiesByUpdateId.get(update.updateId) ?? [],
-        estimatedTrafficUsd: estimatedTrafficUsd[index] ?? null,
+        estimatedTrafficUsd: trafficEstimates[index]?.usd ?? null,
+        ...(trafficEstimates[index]
+          ? { estimatedTrafficUsdGapDays: trafficEstimates[index].gapDays }
+          : {}),
       })),
     };
   }
@@ -2412,9 +2686,12 @@ export class PqsSummaryService {
     },
   ): Promise<GlobalRecentUpdatesResponse> {
     const normalizedLimit =
-      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+      Number.isFinite(limit) && Number(limit) > 0
+        ? Math.trunc(Number(limit))
+        : 25;
     const beforeCursor = decodeGlobalUpdateCursor(options?.before);
-    const afterCursor = beforeCursor === null ? decodeGlobalUpdateCursor(options?.after) : null;
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalUpdateCursor(options?.after) : null;
     const parties = options?.parties;
     const templates = options?.templates;
     const partyMode = options?.partyMode ?? options?.mode;
@@ -2428,13 +2705,19 @@ export class PqsSummaryService {
     }));
     const mergedUpdatesByKey = new Map<string, GlobalMergedUpdate>();
 
-    const filterUpdates = (updates: GlobalMergedUpdate[]): GlobalMergedUpdate[] => {
+    const filterUpdates = (
+      updates: GlobalMergedUpdate[],
+    ): GlobalMergedUpdate[] => {
       if (beforeCursor !== null) {
-        return updates.filter((update) => compareGlobalMergedUpdates(update, beforeCursor) > 0);
+        return updates.filter(
+          (update) => compareGlobalMergedUpdates(update, beforeCursor) > 0,
+        );
       }
 
       if (afterCursor !== null) {
-        return updates.filter((update) => compareGlobalMergedUpdates(update, afterCursor) < 0);
+        return updates.filter(
+          (update) => compareGlobalMergedUpdates(update, afterCursor) < 0,
+        );
       }
 
       return updates;
@@ -2492,15 +2775,24 @@ export class PqsSummaryService {
 
       successfulResponses.forEach(({ response, state }) => {
         for (const update of response.updates) {
-          mergedUpdatesByKey.set(`${state.node.id}:${update.eventOffset}:${update.updateId}`, {
-            nodeId: state.node.id,
-            label: state.node.label,
-            eventOffset: update.eventOffset,
-            updateId: update.updateId,
-            recordTime: update.recordTime,
-            parties: update.parties,
-            estimatedTrafficUsd: update.estimatedTrafficUsd ?? null,
-          });
+          mergedUpdatesByKey.set(
+            `${state.node.id}:${update.eventOffset}:${update.updateId}`,
+            {
+              nodeId: state.node.id,
+              label: state.node.label,
+              eventOffset: update.eventOffset,
+              updateId: update.updateId,
+              recordTime: update.recordTime,
+              parties: update.parties,
+              estimatedTrafficUsd: update.estimatedTrafficUsd ?? null,
+              ...(update.estimatedTrafficUsdGapDays !== undefined
+                ? {
+                    estimatedTrafficUsdGapDays:
+                      update.estimatedTrafficUsdGapDays,
+                  }
+                : {}),
+            },
+          );
         }
 
         state.nextBefore = response.nextBefore ?? undefined;
@@ -2591,12 +2883,20 @@ export class PqsSummaryService {
     };
   }
 
-  private isExactMatch(query: string, values: Array<string | null | undefined>): boolean {
+  private isExactMatch(
+    query: string,
+    values: Array<string | null | undefined>,
+  ): boolean {
     return values.some((value) => typeof value === 'string' && value === query);
   }
 
-  private hasPrefixMatch(query: string, values: Array<string | null | undefined>): boolean {
-    return values.some((value) => typeof value === 'string' && value.startsWith(query));
+  private hasPrefixMatch(
+    query: string,
+    values: Array<string | null | undefined>,
+  ): boolean {
+    return values.some(
+      (value) => typeof value === 'string' && value.startsWith(query),
+    );
   }
 
   private async searchUpdates(
@@ -2608,7 +2908,9 @@ export class PqsSummaryService {
     }
 
     const settled = await Promise.allSettled(
-      nodes.map((node) => this.searchUpdatesForNode(node, query, SEARCH_GROUP_LIMIT + 1)),
+      nodes.map((node) =>
+        this.searchUpdatesForNode(node, query, SEARCH_GROUP_LIMIT + 1),
+      ),
     );
     const deduped = new Map<string, SearchMatchedUpdate>();
 
@@ -2627,10 +2929,16 @@ export class PqsSummaryService {
     }
 
     const ordered = Array.from(deduped.values()).sort(compareSearchUpdates);
-    const { status, warnings } = this.resolveNodeSearchStatus(settled, 'updates', nodes);
+    const { status, warnings } = this.resolveNodeSearchStatus(
+      settled,
+      'updates',
+      nodes,
+    );
 
     return this.finalizeSearchGroup<SearchUpdateResult>({
-      items: ordered.slice(0, SEARCH_GROUP_LIMIT).map(({ exact: _exact, ...item }) => item),
+      items: ordered
+        .slice(0, SEARCH_GROUP_LIMIT)
+        .map(({ exact: _exact, ...item }) => item),
       totalCount: ordered.length,
       status,
       warnings,
@@ -2664,7 +2972,11 @@ export class PqsSummaryService {
       .filter((updateId): updateId is string => typeof updateId === 'string');
     const partiesByUpdateId =
       rawUpdateIds.length > 0
-        ? await this.fetchPartiesByUpdateId(node, client.query.bind(client), rawUpdateIds)
+        ? await this.fetchPartiesByUpdateId(
+            node,
+            client.query.bind(client),
+            rawUpdateIds,
+          )
         : new Map<string, string[]>();
 
     return rawRows
@@ -2675,8 +2987,13 @@ export class PqsSummaryService {
 
         const normalizedUpdateId = this.normalizeUpdateId(row.update_id);
         const eventOffset = this.extractEventOffset(row);
-        const exact = this.isExactMatch(query, [eventOffset, normalizedUpdateId]);
-        const matches = exact || this.hasPrefixMatch(query, [eventOffset, normalizedUpdateId]);
+        const exact = this.isExactMatch(query, [
+          eventOffset,
+          normalizedUpdateId,
+        ]);
+        const matches =
+          exact ||
+          this.hasPrefixMatch(query, [eventOffset, normalizedUpdateId]);
 
         if (!matches) {
           return null;
@@ -2704,7 +3021,9 @@ export class PqsSummaryService {
     }
 
     const settled = await Promise.allSettled(
-      nodes.map((node) => this.searchContractsForNode(node, query, SEARCH_GROUP_LIMIT + 1)),
+      nodes.map((node) =>
+        this.searchContractsForNode(node, query, SEARCH_GROUP_LIMIT + 1),
+      ),
     );
     const deduped = new Map<string, SearchMatchedContract>();
 
@@ -2719,10 +3038,16 @@ export class PqsSummaryService {
     }
 
     const ordered = Array.from(deduped.values()).sort(compareSearchContracts);
-    const { status, warnings } = this.resolveNodeSearchStatus(settled, 'contracts', nodes);
+    const { status, warnings } = this.resolveNodeSearchStatus(
+      settled,
+      'contracts',
+      nodes,
+    );
 
     return this.finalizeSearchGroup<SearchContractResult>({
-      items: ordered.slice(0, SEARCH_GROUP_LIMIT).map(({ exact: _exact, ...item }) => item),
+      items: ordered
+        .slice(0, SEARCH_GROUP_LIMIT)
+        .map(({ exact: _exact, ...item }) => item),
       totalCount: ordered.length,
       status,
       warnings,
@@ -2735,7 +3060,9 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<SearchMatchedContract[]> {
     const client = await this.managerFactory.getRawExecutor(node);
-    const result = await client.query(pqsSearchContractsQuery(node, query, limit));
+    const result = await client.query(
+      pqsSearchContractsQuery(node, query, limit),
+    );
     const rows = (result.rows as ActiveContractRow[]) ?? [];
 
     return rows
@@ -2794,10 +3121,16 @@ export class PqsSummaryService {
     }
 
     const ordered = Array.from(merged.values()).sort(compareSearchParties);
-    const { status, warnings } = this.resolveNodeSearchStatus(settled, 'parties', nodes);
+    const { status, warnings } = this.resolveNodeSearchStatus(
+      settled,
+      'parties',
+      nodes,
+    );
 
     return this.finalizeSearchGroup<SearchPartyResult>({
-      items: ordered.slice(0, SEARCH_GROUP_LIMIT).map(({ exact: _exact, ...item }) => item),
+      items: ordered
+        .slice(0, SEARCH_GROUP_LIMIT)
+        .map(({ exact: _exact, ...item }) => item),
       totalCount: ordered.length,
       status,
       warnings,
@@ -2874,7 +3207,9 @@ export class PqsSummaryService {
     searchQuery: string,
     limit: number,
   ): Promise<UpdateMetaRow[]> {
-    const result = await queryFn(pqsSearchUpdatesQuery(node, searchQuery, limit));
+    const result = await queryFn(
+      pqsSearchUpdatesQuery(node, searchQuery, limit),
+    );
     return (result.rows as UpdateMetaRow[]) ?? [];
   }
 
@@ -2890,7 +3225,16 @@ export class PqsSummaryService {
     hideSplice?: boolean,
   ): Promise<UpdateMetaRow[]> {
     const result = await query(
-      pqsRecentUpdatesQuery(node, limit, before, after, parties, templates, mode, hideSplice),
+      pqsRecentUpdatesQuery(
+        node,
+        limit,
+        before,
+        after,
+        parties,
+        templates,
+        mode,
+        hideSplice,
+      ),
     );
     return (result.rows as UpdateMetaRow[]) ?? [];
   }
@@ -2909,7 +3253,9 @@ export class PqsSummaryService {
   ): Promise<NodeContractsResponse> {
     const client = await this.managerFactory.getRawExecutor(node);
     const normalizedLimit =
-      typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+      typeof options?.limit === 'number' &&
+      Number.isFinite(options.limit) &&
+      options.limit > 0
         ? Math.trunc(options.limit)
         : 25;
     const before = options?.before;
@@ -2934,14 +3280,16 @@ export class PqsSummaryService {
     const rawRows = (result.rows as ActiveContractRow[]) ?? [];
     const hasMoreInQuery = rawRows.length > normalizedLimit;
     const trimmedRows = rawRows.slice(0, normalizedLimit);
-    const orderedContracts = (useAfterCursor ? [...trimmedRows].reverse() : trimmedRows).map(
-      (row) => ({
-        contractId: row.contract_id,
-        templateId: this.normalizeTemplateIdentifier(row.template_id),
-        createdRecordTime: row.created_record_time ?? null,
-        createdEventOffset: this.normalizeOptionalScalar(row.created_event_offset),
-      }),
-    );
+    const orderedContracts = (
+      useAfterCursor ? [...trimmedRows].reverse() : trimmedRows
+    ).map((row) => ({
+      contractId: row.contract_id,
+      templateId: this.normalizeTemplateIdentifier(row.template_id),
+      createdRecordTime: row.created_record_time ?? null,
+      createdEventOffset: this.normalizeOptionalScalar(
+        row.created_event_offset,
+      ),
+    }));
 
     return {
       nodeId: node.id,
@@ -2949,7 +3297,8 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
-          ? (orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null)
+          ? (orderedContracts[orderedContracts.length - 1]
+              ?.createdEventOffset ?? null)
           : null,
       nextAfter:
         orderedContracts.length === 0
@@ -2981,7 +3330,9 @@ export class PqsSummaryService {
     }>
   > {
     const client = await this.managerFactory.getRawExecutor(node);
-    const result = await client.query(pqsActivityBucketsQuery(node, days, bucketMinutes));
+    const result = await client.query(
+      pqsActivityBucketsQuery(node, days, bucketMinutes),
+    );
     const rows = (result.rows as ActivityBucketRow[]) ?? [];
 
     return rows
@@ -2997,19 +3348,20 @@ export class PqsSummaryService {
   }
 
   async fetchPackageDetail(packageId: string): Promise<PackageDetailResponse> {
-    const metadata = this.packageCacheService?.getPackageMetadata(packageId) ?? null;
+    const metadata =
+      this.packageCacheService?.getPackageMetadata(packageId) ?? null;
     if (!metadata) {
       throw new Error('Package not found');
     }
 
-    const seenOnNodes = (this.packageCacheService?.listNodesForPackage(packageId) ?? []).map(
-      (row) => ({
-        nodeId: row.nodeId,
-        packageName: row.packageName,
-        packageVersion: row.packageVersion,
-        seenAt: row.seenAt,
-      }),
-    );
+    const seenOnNodes = (
+      this.packageCacheService?.listNodesForPackage(packageId) ?? []
+    ).map((row) => ({
+      nodeId: row.nodeId,
+      packageName: row.packageName,
+      packageVersion: row.packageVersion,
+      seenAt: row.seenAt,
+    }));
 
     const inspection = this.packageRegistryService
       ? await this.packageRegistryService.inspectPackage(packageId)
@@ -3022,7 +3374,10 @@ export class PqsSummaryService {
         version: metadata.version,
         uploadedAt: metadata.uploadedAt,
         packageSize: metadata.packageSize,
-        status: inspection.reason === 'missing_package' ? 'not_available' : 'invalid_package',
+        status:
+          inspection.reason === 'missing_package'
+            ? 'not_available'
+            : 'invalid_package',
         seenOnNodes,
         moduleCount: 0,
         templateCount: 0,
@@ -3044,7 +3399,9 @@ export class PqsSummaryService {
       moduleCount: inspection.definition.moduleCount,
       templateCount: inspection.definition.templateCount,
       dataTypeCount: inspection.definition.dataTypeCount,
-      modules: [...inspection.definition.modules].sort((left, right) => left.localeCompare(right)),
+      modules: [...inspection.definition.modules].sort((left, right) =>
+        left.localeCompare(right),
+      ),
       templates: [...inspection.definition.templates].sort((left, right) =>
         left.templateId.localeCompare(right.templateId),
       ),
@@ -3054,8 +3411,11 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchPackagesByName(packageName: string): Promise<PackageFamilyResponse> {
-    const packages = this.packageCacheService?.listPackagesByName(packageName) ?? [];
+  async fetchPackagesByName(
+    packageName: string,
+  ): Promise<PackageFamilyResponse> {
+    const packages =
+      this.packageCacheService?.listPackagesByName(packageName) ?? [];
     if (packages.length === 0) {
       throw new Error('Package family not found');
     }
@@ -3093,30 +3453,40 @@ export class PqsSummaryService {
     return {
       nodeId: node.id,
       label: node.label,
-      packagesByName: Array.from(groupedPackages.entries()).map(([packageName, packages]) => ({
-        packageName,
-        packages,
-      })),
+      packagesByName: Array.from(groupedPackages.entries()).map(
+        ([packageName, packages]) => ({
+          packageName,
+          packages,
+        }),
+      ),
     };
   }
 
   async fetchTemplates(): Promise<TemplateFilterResponse> {
-    const packageIds = (this.packageCacheService?.listPackages() ?? []).map((pkg) => pkg.packageId);
+    const packageIds = (this.packageCacheService?.listPackages() ?? []).map(
+      (pkg) => pkg.packageId,
+    );
     return this.buildTemplateFilterResponse(packageIds);
   }
 
   async fetchNodeTemplates(node: NodeConfig): Promise<TemplateFilterResponse> {
     const packageIds = Array.from(
       new Set(
-        (this.packageCacheService?.listPackagesForNode(node.id) ?? []).map((pkg) => pkg.packageId),
+        (this.packageCacheService?.listPackagesForNode(node.id) ?? []).map(
+          (pkg) => pkg.packageId,
+        ),
       ),
     );
     return this.buildTemplateFilterResponse(packageIds);
   }
 
-  async fetchActiveParties(nodes: NodeConfig[]): Promise<ActivePartiesResponse> {
+  async fetchActiveParties(
+    nodes: NodeConfig[],
+  ): Promise<ActivePartiesResponse> {
     return {
-      nodes: await Promise.all(nodes.map(async (node) => this.buildActivePartiesEntry(node))),
+      nodes: await Promise.all(
+        nodes.map(async (node) => this.buildActivePartiesEntry(node)),
+      ),
     };
   }
 
@@ -3139,12 +3509,16 @@ export class PqsSummaryService {
         mode: node.mode,
         parties: [],
         activePartiesStatus: 'pqs_error',
-        activePartiesError: error instanceof Error ? error.message : 'Unknown error',
+        activePartiesError:
+          error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
-  async fetchPartyDetail(nodes: NodeConfig[], partyId: string): Promise<PartyDetailResponse> {
+  async fetchPartyDetail(
+    nodes: NodeConfig[],
+    partyId: string,
+  ): Promise<PartyDetailResponse> {
     const normalizedPartyId = this.normalizePartyIdentifier(partyId);
     const grpcOperationsService = this.grpcOperationsService;
     const activePartiesByNode = (
@@ -3168,7 +3542,11 @@ export class PqsSummaryService {
       await Promise.allSettled(
         nodes.map(async (node) => ({
           node,
-          updates: await this.fetchPartyRecentUpdatesForNode(node, normalizedPartyId, 10),
+          updates: await this.fetchPartyRecentUpdatesForNode(
+            node,
+            normalizedPartyId,
+            10,
+          ),
         })),
       )
     )
@@ -3177,7 +3555,9 @@ export class PqsSummaryService {
           result,
         ): result is PromiseFulfilledResult<{
           node: NodeConfig;
-          updates: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentUpdatesForNode']>>;
+          updates: Awaited<
+            ReturnType<PqsSummaryService['fetchPartyRecentUpdatesForNode']>
+          >;
         }> => result.status === 'fulfilled',
       )
       .map((result) => result.value);
@@ -3185,7 +3565,11 @@ export class PqsSummaryService {
       await Promise.allSettled(
         nodes.map(async (node) => ({
           node,
-          contracts: await this.fetchPartyRecentContractsForNode(node, normalizedPartyId, 10),
+          contracts: await this.fetchPartyRecentContractsForNode(
+            node,
+            normalizedPartyId,
+            10,
+          ),
         })),
       )
     )
@@ -3194,7 +3578,9 @@ export class PqsSummaryService {
           result,
         ): result is PromiseFulfilledResult<{
           node: NodeConfig;
-          contracts: Awaited<ReturnType<PqsSummaryService['fetchPartyRecentContractsForNode']>>;
+          contracts: Awaited<
+            ReturnType<PqsSummaryService['fetchPartyRecentContractsForNode']>
+          >;
         }> => result.status === 'fulfilled',
       )
       .map((result) => result.value);
@@ -3216,7 +3602,10 @@ export class PqsSummaryService {
         )
       : [];
     const localPartyPresenceByNodeId = new Map(
-      localPartiesByNode.map(({ node, parties }) => [node.id, parties.includes(normalizedPartyId)]),
+      localPartiesByNode.map(({ node, parties }) => [
+        node.id,
+        parties.includes(normalizedPartyId),
+      ]),
     );
 
     const nodesById = new Map<
@@ -3287,17 +3676,29 @@ export class PqsSummaryService {
 
     const recentUpdates = recentUpdatesByNode
       .flatMap(({ updates }) => updates)
-      .sort((left, right) => Date.parse(right.recordTime ?? '') - Date.parse(left.recordTime ?? ''))
+      .sort(
+        (left, right) =>
+          Date.parse(right.recordTime ?? '') -
+          Date.parse(left.recordTime ?? ''),
+      )
       .slice(0, 10);
     const recentContracts = recentContractsByNode
       .flatMap(({ contracts }) => contracts)
-      .sort((left, right) => Date.parse(right.recordTime ?? '') - Date.parse(left.recordTime ?? ''))
+      .sort(
+        (left, right) =>
+          Date.parse(right.recordTime ?? '') -
+          Date.parse(left.recordTime ?? ''),
+      )
       .slice(0, 10);
     const observedNodes = Array.from(nodesById.values()).sort((left, right) =>
       left.label.localeCompare(right.label),
     );
 
-    if (observedNodes.length === 0 && recentUpdates.length === 0 && recentContracts.length === 0) {
+    if (
+      observedNodes.length === 0 &&
+      recentUpdates.length === 0 &&
+      recentContracts.length === 0
+    ) {
       throw new Error('Party not found');
     }
 
@@ -3305,7 +3706,9 @@ export class PqsSummaryService {
       ? (
           await Promise.all(
             observedNodes.map(async (observedNode) => {
-              const node = nodes.find((candidate) => candidate.id === observedNode.nodeId);
+              const node = nodes.find(
+                (candidate) => candidate.id === observedNode.nodeId,
+              );
               if (!node) {
                 return null;
               }
@@ -3317,7 +3720,9 @@ export class PqsSummaryService {
               return {
                 ...topology,
                 isLocalParty:
-                  localPartyPresenceByNodeId.get(node.id) ?? topology.isLocalParty ?? null,
+                  localPartyPresenceByNodeId.get(node.id) ??
+                  topology.isLocalParty ??
+                  null,
               };
             }),
           )
@@ -3349,7 +3754,9 @@ export class PqsSummaryService {
         nodes.map(async (node) => ({
           node,
           parties: (await this.fetchActivePartiesForNode(node)).filter(
-            (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+            (partyId) =>
+              this.extractNamespaceIdentifier(partyId) ===
+              normalizedNamespaceId,
           ),
         })),
       )
@@ -3369,8 +3776,12 @@ export class PqsSummaryService {
             try {
               return {
                 node,
-                parties: (await grpcOperationsService.listLocalParties(node)).filter(
-                  (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+                parties: (
+                  await grpcOperationsService.listLocalParties(node)
+                ).filter(
+                  (partyId) =>
+                    this.extractNamespaceIdentifier(partyId) ===
+                    normalizedNamespaceId,
                 ),
               };
             } catch {
@@ -3393,7 +3804,10 @@ export class PqsSummaryService {
       }
     >();
 
-    for (const { node, parties } of [...activePartiesByNode, ...localPartiesByNode]) {
+    for (const { node, parties } of [
+      ...activePartiesByNode,
+      ...localPartiesByNode,
+    ]) {
       for (const partyId of parties) {
         const nodeIds = partiesById.get(partyId) ?? new Set<string>();
         nodeIds.add(node.id);
@@ -3417,10 +3831,14 @@ export class PqsSummaryService {
       throw new Error('Namespace not found');
     }
 
-    const recentUpdatesResponse = await this.fetchGlobalRecentUpdates(nodes, 10, {
-      parties: matchingParties,
-      partyMode: 'or',
-    });
+    const recentUpdatesResponse = await this.fetchGlobalRecentUpdates(
+      nodes,
+      10,
+      {
+        parties: matchingParties,
+        partyMode: 'or',
+      },
+    );
     const recentContractsResponse = await this.fetchGlobalContracts(nodes, 10, {
       parties: matchingParties,
       partyMode: 'or',
@@ -3436,7 +3854,8 @@ export class PqsSummaryService {
       });
 
       for (const partyId of update.parties.filter(
-        (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+        (partyId) =>
+          this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
       )) {
         const nodeIds = partiesById.get(partyId) ?? new Set<string>();
         nodeIds.add(update.nodeId);
@@ -3499,12 +3918,17 @@ export class PqsSummaryService {
       await Promise.allSettled(
         nodes.map(async (node) =>
           (await this.fetchActivePartiesForNode(node)).filter(
-            (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+            (partyId) =>
+              this.extractNamespaceIdentifier(partyId) ===
+              normalizedNamespaceId,
           ),
         ),
       )
     )
-      .filter((result): result is PromiseFulfilledResult<string[]> => result.status === 'fulfilled')
+      .filter(
+        (result): result is PromiseFulfilledResult<string[]> =>
+          result.status === 'fulfilled',
+      )
       .map((result) => result.value);
 
     for (const parties of activePartiesByNode) {
@@ -3518,8 +3942,12 @@ export class PqsSummaryService {
         nodes.map(async (node) => {
           try {
             return (
-              (await this.grpcOperationsService?.listLocalParties(node))?.filter(
-                (partyId) => this.extractNamespaceIdentifier(partyId) === normalizedNamespaceId,
+              (
+                await this.grpcOperationsService?.listLocalParties(node)
+              )?.filter(
+                (partyId) =>
+                  this.extractNamespaceIdentifier(partyId) ===
+                  normalizedNamespaceId,
               ) ?? []
             );
           } catch {
@@ -3543,7 +3971,9 @@ export class PqsSummaryService {
     }
 
     const normalizedLimit =
-      typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+      typeof options?.limit === 'number' &&
+      Number.isFinite(options.limit) &&
+      options.limit > 0
         ? Math.trunc(options.limit)
         : 25;
 
@@ -3601,9 +4031,12 @@ export class PqsSummaryService {
     },
   ): Promise<GlobalContractsResponse> {
     const normalizedLimit =
-      typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : 25;
+      typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+        ? Math.trunc(limit)
+        : 25;
     const beforeCursor = decodeGlobalContractCursor(options?.before);
-    const afterCursor = beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
     const selectedNodeIds = options?.nodeIds;
@@ -3616,7 +4049,10 @@ export class PqsSummaryService {
       nextBefore: undefined as string | undefined,
       exhausted: false,
     }));
-    const mergedContractsByKey = new Map<string, GlobalContractsResponse['contracts'][number]>();
+    const mergedContractsByKey = new Map<
+      string,
+      GlobalContractsResponse['contracts'][number]
+    >();
     const activePartyFilters = normalizePartyFilters(options?.parties);
     const activeTemplateFilters = normalizeTemplateFilters(options?.templates);
     const partyMode = normalizePartyFilterMode(options?.partyMode);
@@ -3626,18 +4062,27 @@ export class PqsSummaryService {
       contracts: GlobalContractsResponse['contracts'],
     ): GlobalContractsResponse['contracts'] =>
       contracts.filter((contract) => {
-        if (beforeCursor !== null && compareGlobalMergedContracts(contract, beforeCursor) <= 0) {
+        if (
+          beforeCursor !== null &&
+          compareGlobalMergedContracts(contract, beforeCursor) <= 0
+        ) {
           return false;
         }
 
-        if (afterCursor !== null && compareGlobalMergedContracts(contract, afterCursor) >= 0) {
+        if (
+          afterCursor !== null &&
+          compareGlobalMergedContracts(contract, afterCursor) >= 0
+        ) {
           return false;
         }
 
-        const normalizedTemplateId = this.normalizeTemplateIdentifier(contract.templateId);
+        const normalizedTemplateId = this.normalizeTemplateIdentifier(
+          contract.templateId,
+        );
         if (
           activeTemplateFilters.length > 0 &&
-          (!normalizedTemplateId || !activeTemplateFilters.includes(normalizedTemplateId))
+          (!normalizedTemplateId ||
+            !activeTemplateFilters.includes(normalizedTemplateId))
         ) {
           return false;
         }
@@ -3664,8 +4109,12 @@ export class PqsSummaryService {
           this.fetchNodeContracts(state.node, {
             limit: pageSize,
             before: state.nextBefore,
-            parties: activePartyFilters.length > 0 ? activePartyFilters : undefined,
-            templates: activeTemplateFilters.length > 0 ? activeTemplateFilters : undefined,
+            parties:
+              activePartyFilters.length > 0 ? activePartyFilters : undefined,
+            templates:
+              activeTemplateFilters.length > 0
+                ? activeTemplateFilters
+                : undefined,
             partyMode,
             hideSplice,
           }),
@@ -3760,11 +4209,14 @@ export class PqsSummaryService {
   ): Promise<PartyContractsResponse> {
     const normalizedPartyId = this.normalizePartyIdentifier(partyId);
     const normalizedLimit =
-      typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+      typeof options?.limit === 'number' &&
+      Number.isFinite(options.limit) &&
+      options.limit > 0
         ? Math.trunc(options.limit)
         : 25;
     const beforeCursor = decodeGlobalContractCursor(options?.before);
-    const afterCursor = beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
     const nodeStates = nodes.map((node) => ({
@@ -3776,20 +4228,31 @@ export class PqsSummaryService {
     const activeTemplateFilters = normalizeTemplateFilters(options?.templates);
     const hideSplice = options?.hideSplice === true;
 
-    const filterContracts = (contracts: GlobalMergedContract[]): GlobalMergedContract[] => {
+    const filterContracts = (
+      contracts: GlobalMergedContract[],
+    ): GlobalMergedContract[] => {
       return contracts.filter((contract) => {
-        if (beforeCursor !== null && compareGlobalMergedContracts(contract, beforeCursor) <= 0) {
+        if (
+          beforeCursor !== null &&
+          compareGlobalMergedContracts(contract, beforeCursor) <= 0
+        ) {
           return false;
         }
 
-        if (afterCursor !== null && compareGlobalMergedContracts(contract, afterCursor) >= 0) {
+        if (
+          afterCursor !== null &&
+          compareGlobalMergedContracts(contract, afterCursor) >= 0
+        ) {
           return false;
         }
 
-        const normalizedTemplateId = this.normalizeTemplateIdentifier(contract.templateId);
+        const normalizedTemplateId = this.normalizeTemplateIdentifier(
+          contract.templateId,
+        );
         if (
           activeTemplateFilters.length > 0 &&
-          (!normalizedTemplateId || !activeTemplateFilters.includes(normalizedTemplateId))
+          (!normalizedTemplateId ||
+            !activeTemplateFilters.includes(normalizedTemplateId))
         ) {
           return false;
         }
@@ -3823,7 +4286,9 @@ export class PqsSummaryService {
 
       const successfulResponses: Array<{
         state: (typeof nodeStates)[number];
-        response: Awaited<ReturnType<PqsSummaryService['fetchPartyContractsForNode']>>;
+        response: Awaited<
+          ReturnType<PqsSummaryService['fetchPartyContractsForNode']>
+        >;
       }> = [];
 
       settled.forEach((result, index) => {
@@ -3850,7 +4315,10 @@ export class PqsSummaryService {
 
       successfulResponses.forEach(({ response, state }) => {
         for (const contract of response.contracts) {
-          mergedContractsByKey.set(`${contract.nodeId}:${contract.contractId}`, contract);
+          mergedContractsByKey.set(
+            `${contract.nodeId}:${contract.contractId}`,
+            contract,
+          );
         }
 
         state.nextBefore = response.nextBefore ?? undefined;
@@ -3920,7 +4388,8 @@ export class PqsSummaryService {
 
     if (successfulTokens.length === 0) {
       const firstFailure = refreshResults.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
       );
       if (firstFailure) {
         throw firstFailure.reason;
@@ -3934,9 +4403,16 @@ export class PqsSummaryService {
       }
     }
 
-    const filteredTokens = this.filterTokens(Array.from(dedupedTokens.values()), options);
+    const filteredTokens = this.filterTokens(
+      Array.from(dedupedTokens.values()),
+      options,
+    );
 
-    return this.paginateTokens(filteredTokens.sort(compareGlobalTokens), limit, options);
+    return this.paginateTokens(
+      filteredTokens.sort(compareGlobalTokens),
+      limit,
+      options,
+    );
   }
 
   async fetchLatestTokenTransfers(
@@ -3989,7 +4465,10 @@ export class PqsSummaryService {
     }
 
     const recoveredTransfers = this.filterTokenTransfers(
-      await this.recoverTokenTransfersFromActiveHolders(nodes, normalizedTokenId),
+      await this.recoverTokenTransfersFromActiveHolders(
+        nodes,
+        normalizedTokenId,
+      ),
       options,
     );
 
@@ -4004,7 +4483,9 @@ export class PqsSummaryService {
     const transfer = (await this.loadMergedTokenTransfers(nodes))
       .sort(compareGlobalTokenTransfers)
       .find(
-        (entry) => entry.rowId === normalizedTransferId || entry.updateId === normalizedTransferId,
+        (entry) =>
+          entry.rowId === normalizedTransferId ||
+          entry.updateId === normalizedTransferId,
       );
 
     if (!transfer) {
@@ -4014,10 +4495,17 @@ export class PqsSummaryService {
     return transfer;
   }
 
-  async fetchTokenDetail(nodes: NodeConfig[], tokenId: string): Promise<TokenDetailResponse> {
+  async fetchTokenDetail(
+    nodes: NodeConfig[],
+    tokenId: string,
+  ): Promise<TokenDetailResponse> {
     const normalizedTokenId = this.normalizeTokenId(tokenId);
     const token = await this.findObservedToken(nodes, normalizedTokenId);
-    const transfersResponse = await this.fetchTokenTransfers(nodes, normalizedTokenId, 25);
+    const transfersResponse = await this.fetchTokenTransfers(
+      nodes,
+      normalizedTokenId,
+      25,
+    );
 
     return {
       token,
@@ -4053,7 +4541,8 @@ export class PqsSummaryService {
 
     if (successfulHolders.length === 0) {
       const firstFailure = refreshResults.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
       );
       if (firstFailure) {
         throw firstFailure.reason;
@@ -4075,10 +4564,14 @@ export class PqsSummaryService {
     options?: { before?: string; after?: string },
   ): TokenHoldersResponse {
     const normalizedLimit =
-      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+      Number.isFinite(limit) && Number(limit) > 0
+        ? Math.trunc(Number(limit))
+        : 25;
     const beforeCursor = decodeGlobalTokenHolderCursor(options?.before);
     const afterCursor =
-      beforeCursor === null ? decodeGlobalTokenHolderCursor(options?.after) : null;
+      beforeCursor === null
+        ? decodeGlobalTokenHolderCursor(options?.after)
+        : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const filteredHolders = holders.filter((holder) => {
       if (beforeCursor !== null) {
@@ -4099,7 +4592,9 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         pagedHolders.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalTokenHolderCursor(pagedHolders[pagedHolders.length - 1]!)
+          ? encodeGlobalTokenHolderCursor(
+              pagedHolders[pagedHolders.length - 1]!,
+            )
           : null,
       nextAfter:
         pagedHolders.length === 0
@@ -4121,9 +4616,12 @@ export class PqsSummaryService {
     options?: { before?: string; after?: string },
   ): TokensResponse {
     const normalizedLimit =
-      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+      Number.isFinite(limit) && Number(limit) > 0
+        ? Math.trunc(Number(limit))
+        : 25;
     const beforeCursor = decodeGlobalTokenCursor(options?.before);
-    const afterCursor = beforeCursor === null ? decodeGlobalTokenCursor(options?.after) : null;
+    const afterCursor =
+      beforeCursor === null ? decodeGlobalTokenCursor(options?.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const filteredTokens = tokens.filter((token) => {
       if (beforeCursor !== null) {
@@ -4168,7 +4666,9 @@ export class PqsSummaryService {
     },
   ): TokenSummary[] {
     const activeNameFilters = normalizeTokenTextFilters(options?.names);
-    const activeExcludedNameFilters = normalizeTokenTextFilters(options?.excludeNames);
+    const activeExcludedNameFilters = normalizeTokenTextFilters(
+      options?.excludeNames,
+    );
     const activeIssuerFilters = normalizeTokenIssuerFilters(options?.issuers);
 
     if (
@@ -4185,7 +4685,9 @@ export class PqsSummaryService {
       const matchesNameFilter =
         activeNameFilters.length === 0 ||
         activeNameFilters.some(
-          (filterValue) => tokenName.includes(filterValue) || tokenSymbol.includes(filterValue),
+          (filterValue) =>
+            tokenName.includes(filterValue) ||
+            tokenSymbol.includes(filterValue),
         );
 
       if (!matchesNameFilter) {
@@ -4193,7 +4695,8 @@ export class PqsSummaryService {
       }
 
       const matchesExcludedNameFilter = activeExcludedNameFilters.some(
-        (filterValue) => tokenName.includes(filterValue) || tokenSymbol.includes(filterValue),
+        (filterValue) =>
+          tokenName.includes(filterValue) || tokenSymbol.includes(filterValue),
       );
 
       if (matchesExcludedNameFilter) {
@@ -4204,11 +4707,15 @@ export class PqsSummaryService {
         return true;
       }
 
-      return token.issuer !== null && activeIssuerFilters.includes(token.issuer);
+      return (
+        token.issuer !== null && activeIssuerFilters.includes(token.issuer)
+      );
     });
   }
 
-  private async loadMergedTokenTransfers(nodes: NodeConfig[]): Promise<TokenTransferSummary[]> {
+  private async loadMergedTokenTransfers(
+    nodes: NodeConfig[],
+  ): Promise<TokenTransferSummary[]> {
     const refreshResults = await Promise.allSettled(
       nodes.map(async (node) => ({
         node,
@@ -4236,7 +4743,8 @@ export class PqsSummaryService {
 
     if (successfulRefreshes.length === 0) {
       const firstFailure = refreshResults.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
       );
       if (firstFailure) {
         throw firstFailure.reason;
@@ -4267,7 +4775,9 @@ export class PqsSummaryService {
         }> => result.status === 'fulfilled',
       )
       .flatMap((result) => result.value.holders)
-      .filter((holder) => holder.tokenId === tokenId && holder.contractId !== null);
+      .filter(
+        (holder) => holder.tokenId === tokenId && holder.contractId !== null,
+      );
 
     const recoveredTransfers: NodeTokenTransferObservation[] = [];
     const seenContracts = new Set<string>();
@@ -4308,7 +4818,9 @@ export class PqsSummaryService {
         client.query.bind(client),
         contractRows
           .map((contractRow) => contractRow.created_update_id)
-          .filter((updateId): updateId is string => typeof updateId === 'string'),
+          .filter(
+            (updateId): updateId is string => typeof updateId === 'string',
+          ),
       );
 
       for (const contractRow of contractRows) {
@@ -4316,7 +4828,8 @@ export class PqsSummaryService {
           continue;
         }
 
-        const events = eventsByUpdateId.get(contractRow.created_update_id) ?? [];
+        const events =
+          eventsByUpdateId.get(contractRow.created_update_id) ?? [];
         const inferredTransfers = this.extractCip112TokenMovements(
           node,
           {
@@ -4350,22 +4863,28 @@ export class PqsSummaryService {
     },
   ): TokenTransfersResponse {
     const normalizedLimit =
-      Number.isFinite(limit) && Number(limit) > 0 ? Math.trunc(Number(limit)) : 25;
+      Number.isFinite(limit) && Number(limit) > 0
+        ? Math.trunc(Number(limit))
+        : 25;
     const beforeCursor = decodeGlobalTokenTransferCursor(options?.before);
     const afterCursor =
-      beforeCursor === null ? decodeGlobalTokenTransferCursor(options?.after) : null;
+      beforeCursor === null
+        ? decodeGlobalTokenTransferCursor(options?.after)
+        : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
-    const filteredTransfers = transfers.sort(compareGlobalTokenTransfers).filter((transfer) => {
-      if (beforeCursor !== null) {
-        return compareGlobalTokenTransfers(transfer, beforeCursor) > 0;
-      }
+    const filteredTransfers = transfers
+      .sort(compareGlobalTokenTransfers)
+      .filter((transfer) => {
+        if (beforeCursor !== null) {
+          return compareGlobalTokenTransfers(transfer, beforeCursor) > 0;
+        }
 
-      if (afterCursor !== null) {
-        return compareGlobalTokenTransfers(transfer, afterCursor) < 0;
-      }
+        if (afterCursor !== null) {
+          return compareGlobalTokenTransfers(transfer, afterCursor) < 0;
+        }
 
-      return true;
-    });
+        return true;
+      });
 
     const hasMoreInDirection = filteredTransfers.length > normalizedLimit;
     const pagedTransfers = filteredTransfers.slice(0, normalizedLimit);
@@ -4374,7 +4893,9 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         pagedTransfers.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalTokenTransferCursor(pagedTransfers[pagedTransfers.length - 1]!)
+          ? encodeGlobalTokenTransferCursor(
+              pagedTransfers[pagedTransfers.length - 1]!,
+            )
           : null,
       nextAfter:
         pagedTransfers.length === 0
@@ -4421,10 +4942,12 @@ export class PqsSummaryService {
     return transfers.filter((transfer) => {
       const matchesFrom =
         activeFromParties.length === 0 ||
-        (transfer.sender !== null && activeFromParties.includes(transfer.sender));
+        (transfer.sender !== null &&
+          activeFromParties.includes(transfer.sender));
       const matchesTo =
         activeToParties.length === 0 ||
-        (transfer.receiver !== null && activeToParties.includes(transfer.receiver));
+        (transfer.receiver !== null &&
+          activeToParties.includes(transfer.receiver));
       const matchesMovementType =
         activeMovementTypes.length === 0 ||
         activeMovementTypes.includes(
@@ -4432,12 +4955,20 @@ export class PqsSummaryService {
         );
       const matchesAmountGt =
         amountGt === null ||
-        (transfer.amount !== null && this.compareNumericStrings(transfer.amount, amountGt) > 0);
+        (transfer.amount !== null &&
+          this.compareNumericStrings(transfer.amount, amountGt) > 0);
       const matchesAmountLt =
         amountLt === null ||
-        (transfer.amount !== null && this.compareNumericStrings(transfer.amount, amountLt) < 0);
+        (transfer.amount !== null &&
+          this.compareNumericStrings(transfer.amount, amountLt) < 0);
 
-      return matchesFrom && matchesTo && matchesMovementType && matchesAmountGt && matchesAmountLt;
+      return (
+        matchesFrom &&
+        matchesTo &&
+        matchesMovementType &&
+        matchesAmountGt &&
+        matchesAmountLt
+      );
     });
   }
 
@@ -4445,8 +4976,22 @@ export class PqsSummaryService {
     node: NodeConfig,
     eventOffset: string,
   ): Promise<NodeUpdateDetailResponse> {
+    return this.fetchUpdateDetailWithQuery(node, singleUpdateQuery(node, eventOffset));
+  }
+
+  async fetchUpdateDetailById(
+    node: NodeConfig,
+    updateId: string,
+  ): Promise<NodeUpdateDetailResponse> {
+    return this.fetchUpdateDetailWithQuery(node, singleUpdateByIdQuery(node, updateId));
+  }
+
+  private async fetchUpdateDetailWithQuery(
+    node: NodeConfig,
+    detailQuery: string,
+  ): Promise<NodeUpdateDetailResponse> {
     const client = await this.managerFactory.getRawExecutor(node);
-    const detailResult = await client.query(singleUpdateQuery(node, eventOffset));
+    const detailResult = await client.query(detailQuery);
     const detailRows = (detailResult.rows as UpdateDetailRow[]) ?? [];
     const detailRow = detailRows[0];
 
@@ -4457,15 +5002,25 @@ export class PqsSummaryService {
     const rawUpdateId = this.extractRawUpdateId(detailRow);
     const matchedEventOffset = this.extractEventOffset(detailRow);
     const canonicalUpdateId = this.normalizeUpdateId(rawUpdateId);
-    const partiesByUpdateId = await this.fetchPartiesByUpdateId(node, client.query.bind(client), [
+    const partiesByUpdateId = await this.fetchPartiesByUpdateId(
+      node,
+      client.query.bind(client),
+      [rawUpdateId],
+    );
+    const events = await this.fetchEventsByUpdateId(
+      node,
+      client.query.bind(client),
       rawUpdateId,
-    ]);
-    const events = await this.fetchEventsByUpdateId(node, client.query.bind(client), rawUpdateId);
+    );
     const exerciseData = this.shouldResolveRewardCoupon(events)
-      ? await this.fetchRewardCouponDetails(node, client.query.bind(client), rawUpdateId)
+      ? await this.fetchRewardCouponDetails(
+          node,
+          client.query.bind(client),
+          rawUpdateId,
+        )
       : null;
     const latestPurchase = await this.latestTrafficPurchase(node);
-    const estimatedTrafficUsd = await this.estimateTrafficUsd(
+    const trafficEstimate = await this.estimateTraffic(
       detailRow.paid_traffic_cost,
       latestPurchase,
     );
@@ -4477,7 +5032,10 @@ export class PqsSummaryService {
       updateId: canonicalUpdateId,
       recordTime: this.extractIsoRecordTime(detailRow),
       parties: partiesByUpdateId.get(canonicalUpdateId) ?? [],
-      estimatedTrafficUsd,
+      estimatedTrafficUsd: trafficEstimate?.usd ?? null,
+      ...(trafficEstimate
+        ? { estimatedTrafficUsdGapDays: trafficEstimate.gapDays }
+        : {}),
       meta: this.extractMeta(detailRow),
       events: this.attachRewardCouponDetails(events, exerciseData),
     };
@@ -4500,7 +5058,9 @@ export class PqsSummaryService {
     const templateId = `${row.templateId.moduleName}:${row.templateId.entityName}`;
     const packageId = row.packageId ?? row.templateId.packageId;
     const packageMetadata =
-      packageId && this.packageCacheService ? this.packageCacheService.getPackage(packageId) : null;
+      packageId && this.packageCacheService
+        ? this.packageCacheService.getPackage(packageId)
+        : null;
 
     return {
       nodeId: node.id,
@@ -4511,11 +5071,15 @@ export class PqsSummaryService {
       packageName: packageMetadata?.name ?? null,
       packageVersion: packageMetadata?.version ?? null,
       createdUpdateId: row.createdTransaction?.transactionId ?? null,
-      createdEventOffset: row.createdTransaction?.offset ?? row.createdEventOffset,
-      createdRecordTime: row.createdTransaction?.effectiveAt?.toISOString() ?? null,
+      createdEventOffset:
+        row.createdTransaction?.offset ?? row.createdEventOffset,
+      createdRecordTime:
+        row.createdTransaction?.effectiveAt?.toISOString() ?? null,
       archivedUpdateId: row.archivedTransaction?.transactionId ?? null,
-      archivedEventOffset: row.archivedTransaction?.offset ?? row.archivedEventOffset,
-      archivedRecordTime: row.archivedTransaction?.effectiveAt?.toISOString() ?? null,
+      archivedEventOffset:
+        row.archivedTransaction?.offset ?? row.archivedEventOffset,
+      archivedRecordTime:
+        row.archivedTransaction?.effectiveAt?.toISOString() ?? null,
       contractData: await this.decodeContractData(
         node,
         packageId,
@@ -4531,7 +5095,9 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<PartyDetailResponse['recentUpdates']> {
     const client = await this.managerFactory.getRawExecutor(node);
-    const result = await client.query(pqsPartyRecentUpdatesQuery(node, partyId, limit));
+    const result = await client.query(
+      pqsPartyRecentUpdatesQuery(node, partyId, limit),
+    );
     const rows = (result.rows as UpdateMetaRow[]) ?? [];
 
     const rawUpdateIds = rows
@@ -4539,32 +5105,45 @@ export class PqsSummaryService {
       .filter((updateId): updateId is string => typeof updateId === 'string');
     const partiesByUpdateId =
       rawUpdateIds.length > 0
-        ? await this.fetchPartiesByUpdateId(node, client.query.bind(client), rawUpdateIds)
+        ? await this.fetchPartiesByUpdateId(
+            node,
+            client.query.bind(client),
+            rawUpdateIds,
+          )
         : new Map<string, string[]>();
     const latestPurchase = await this.latestTrafficPurchase(node);
 
-    const updates = await Promise.all(rows.map(async (row) => {
-      if (typeof row.update_id !== 'string') {
-        return null;
-      }
+    const updates = await Promise.all(
+      rows.map(async (row) => {
+        if (typeof row.update_id !== 'string') {
+          return null;
+        }
 
-      const updateId = this.normalizeUpdateId(row.update_id);
-
-      return {
-        nodeId: node.id,
-        label: node.label,
-        eventOffset: this.extractEventOffset(row),
-        updateId,
-        recordTime: typeof row.record_time === 'string' ? row.record_time : null,
-        parties: partiesByUpdateId.get(updateId) ?? [],
-        estimatedTrafficUsd: await this.estimateTrafficUsd(
+        const updateId = this.normalizeUpdateId(row.update_id);
+        const trafficEstimate = await this.estimateTraffic(
           row.paid_traffic_cost,
           latestPurchase,
-        ),
-      };
-    }));
+        );
 
-    return updates.filter((update): update is NonNullable<typeof update> => update !== null);
+        return {
+          nodeId: node.id,
+          label: node.label,
+          eventOffset: this.extractEventOffset(row),
+          updateId,
+          recordTime:
+            typeof row.record_time === 'string' ? row.record_time : null,
+          parties: partiesByUpdateId.get(updateId) ?? [],
+          estimatedTrafficUsd: trafficEstimate?.usd ?? null,
+          ...(trafficEstimate
+            ? { estimatedTrafficUsdGapDays: trafficEstimate.gapDays }
+            : {}),
+        };
+      }),
+    );
+
+    return updates.filter(
+      (update): update is NonNullable<typeof update> => update !== null,
+    );
   }
 
   private async fetchPartyRecentContractsForNode(
@@ -4593,26 +5172,38 @@ export class PqsSummaryService {
   }> {
     const client = await this.managerFactory.getRawExecutor(node);
     const normalizedLimit =
-      typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+      typeof options?.limit === 'number' &&
+      Number.isFinite(options.limit) &&
+      options.limit > 0
         ? Math.trunc(options.limit)
         : 25;
     const before = options?.before;
     const after = options?.after;
     const useAfterCursor = Boolean(after && !before);
     const result = await client.query(
-      pqsPartyRecentContractsQuery(node, partyId, normalizedLimit, before, after),
+      pqsPartyRecentContractsQuery(
+        node,
+        partyId,
+        normalizedLimit,
+        before,
+        after,
+      ),
     );
     const rows = (result.rows as PartyContractRow[]) ?? [];
 
     const hasMoreInQuery = rows.length > normalizedLimit;
     const trimmedRows = rows.slice(0, normalizedLimit);
-    const orderedContracts = (useAfterCursor ? [...trimmedRows].reverse() : trimmedRows)
+    const orderedContracts = (
+      useAfterCursor ? [...trimmedRows].reverse() : trimmedRows
+    )
       .filter(
         (row): row is PartyContractRow & { contract_id: string } =>
           typeof row.contract_id === 'string',
       )
       .map((row) => {
-        const packageId = this.normalizePackageIdentifier(row.package_id ?? null);
+        const packageId = this.normalizePackageIdentifier(
+          row.package_id ?? null,
+        );
         const packageMetadata =
           packageId && this.packageCacheService
             ? this.packageCacheService.getPackage(packageId)
@@ -4626,15 +5217,19 @@ export class PqsSummaryService {
           packageId,
           packageName: packageMetadata?.name ?? null,
           packageVersion: packageMetadata?.version ?? null,
-          recordTime: typeof row.record_time === 'string' ? row.record_time : null,
-          createdEventOffset: this.normalizeOptionalScalar(row.created_event_offset),
+          recordTime:
+            typeof row.record_time === 'string' ? row.record_time : null,
+          createdEventOffset: this.normalizeOptionalScalar(
+            row.created_event_offset,
+          ),
         };
       });
 
     return {
       nextBefore:
         orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
-          ? (orderedContracts[orderedContracts.length - 1]?.createdEventOffset ?? null)
+          ? (orderedContracts[orderedContracts.length - 1]
+              ?.createdEventOffset ?? null)
           : null,
       nextAfter:
         orderedContracts.length === 0
@@ -4646,7 +5241,9 @@ export class PqsSummaryService {
             : before
               ? (orderedContracts[0]?.createdEventOffset ?? null)
               : null,
-      contracts: orderedContracts.map(({ createdEventOffset: _, ...contract }) => contract),
+      contracts: orderedContracts.map(
+        ({ createdEventOffset: _, ...contract }) => contract,
+      ),
     };
   }
 
@@ -4681,7 +5278,9 @@ export class PqsSummaryService {
     }
   }
 
-  private async loadCachedObservedTokens(node: NodeConfig): Promise<TokenSummary[]> {
+  private async loadCachedObservedTokens(
+    node: NodeConfig,
+  ): Promise<TokenSummary[]> {
     const cached = this.observedTokensByNode.get(node.id);
     if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
       return cached.tokens;
@@ -4712,7 +5311,9 @@ export class PqsSummaryService {
     return tokens;
   }
 
-  private async fetchBuiltinTokensForNode(node: NodeConfig): Promise<TokenSummary[]> {
+  private async fetchBuiltinTokensForNode(
+    node: NodeConfig,
+  ): Promise<TokenSummary[]> {
     const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(nativeAmuletSupportQuery(node));
     const rows = Array.isArray(result.rows) ? result.rows : [];
@@ -4759,7 +5360,9 @@ export class PqsSummaryService {
       tokenRowsQuery(
         node,
         limit,
-        includeCip112 ? TOKEN_DISCOVERY_TEMPLATE_IDS : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS,
+        includeCip112
+          ? TOKEN_DISCOVERY_TEMPLATE_IDS
+          : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS,
         includeCip112
           ? TOKEN_DISCOVERY_TEMPLATE_PATTERNS
           : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS,
@@ -4777,11 +5380,15 @@ export class PqsSummaryService {
 
     return Array.from(dedupedTokens.values()).sort(
       (left, right) =>
-        left.name.localeCompare(right.name) || left.tokenId.localeCompare(right.tokenId),
+        left.name.localeCompare(right.name) ||
+        left.tokenId.localeCompare(right.tokenId),
     );
   }
 
-  private async findObservedToken(nodes: NodeConfig[], tokenId: string): Promise<TokenSummary> {
+  private async findObservedToken(
+    nodes: NodeConfig[],
+    tokenId: string,
+  ): Promise<TokenSummary> {
     const refreshResults = await Promise.allSettled(
       nodes.map(async (node) => ({
         node,
@@ -4801,14 +5408,17 @@ export class PqsSummaryService {
 
     if (successfulTokens.length === 0) {
       const firstFailure = refreshResults.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
       );
       if (firstFailure) {
         throw firstFailure.reason;
       }
     }
 
-    const token = successfulTokens.find((candidate) => candidate.tokenId === tokenId);
+    const token = successfulTokens.find(
+      (candidate) => candidate.tokenId === tokenId,
+    );
 
     if (!token) {
       throw new Error('Token not found');
@@ -4850,7 +5460,9 @@ export class PqsSummaryService {
     return this.extractObservedTokenSummary(templateId, decoded);
   }
 
-  private async loadCachedTokenHolders(node: NodeConfig): Promise<NodeTokenHolderObservation[]> {
+  private async loadCachedTokenHolders(
+    node: NodeConfig,
+  ): Promise<NodeTokenHolderObservation[]> {
     const cached = this.tokenHoldersByNode.get(node.id);
     if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
       return cached.holders;
@@ -4895,8 +5507,12 @@ export class PqsSummaryService {
       tokenRowsQuery(
         node,
         limit,
-        includeCip112 ? TOKEN_HOLDER_TEMPLATE_IDS : TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS,
-        includeCip112 ? TOKEN_HOLDER_TEMPLATE_PATTERNS : TOKEN_HOLDER_NON_CIP112_TEMPLATE_PATTERNS,
+        includeCip112
+          ? TOKEN_HOLDER_TEMPLATE_IDS
+          : TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS,
+        includeCip112
+          ? TOKEN_HOLDER_TEMPLATE_PATTERNS
+          : TOKEN_HOLDER_NON_CIP112_TEMPLATE_PATTERNS,
       ),
     );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
@@ -4928,8 +5544,14 @@ export class PqsSummaryService {
       return null;
     }
 
-    if (templateId === CIP56_HOLDING_TEMPLATE_ID || this.isCip112TemplateId(templateId)) {
-      const tokenSummary = this.extractObservedTokenSummary(templateId, decoded);
+    if (
+      templateId === CIP56_HOLDING_TEMPLATE_ID ||
+      this.isCip112TemplateId(templateId)
+    ) {
+      const tokenSummary = this.extractObservedTokenSummary(
+        templateId,
+        decoded,
+      );
       const partyId = this.readScalarField(decoded.value, 'owner');
       if (!tokenSummary || !partyId) {
         return null;
@@ -4957,7 +5579,10 @@ export class PqsSummaryService {
         label: node.label,
         tokenId: CANTON_COIN_TOKEN_ID,
         partyId,
-        amount: this.readNestedScalarField(decoded.value, ['amount', 'initialAmount']),
+        amount: this.readNestedScalarField(decoded.value, [
+          'amount',
+          'initialAmount',
+        ]),
       };
     }
 
@@ -4972,7 +5597,10 @@ export class PqsSummaryService {
       return cached.transfers;
     }
 
-    const transfers = await this.fetchTokenTransfersForNode(node, TOKEN_TRANSFER_CACHE_LIMIT);
+    const transfers = await this.fetchTokenTransfersForNode(
+      node,
+      TOKEN_TRANSFER_CACHE_LIMIT,
+    );
     this.tokenTransfersByNode.set(node.id, {
       cachedAt: Date.now(),
       transfers,
@@ -4985,7 +5613,9 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
     const client = await this.managerFactory.getRawExecutor(node);
-    const result = await client.query(tokenRowsQuery(node, limit, TOKEN_TRANSFER_TEMPLATE_IDS));
+    const result = await client.query(
+      tokenRowsQuery(node, limit, TOKEN_TRANSFER_TEMPLATE_IDS),
+    );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];
 
@@ -4996,8 +5626,13 @@ export class PqsSummaryService {
       }
     }
 
-    const inferredTransfers = await this.fetchInferredCip112TransfersForNode(node, limit);
-    return [...transfers, ...inferredTransfers].sort(compareGlobalTokenTransfers);
+    const inferredTransfers = await this.fetchInferredCip112TransfersForNode(
+      node,
+      limit,
+    );
+    return [...transfers, ...inferredTransfers].sort(
+      compareGlobalTokenTransfers,
+    );
   }
 
   private async normalizeTokenTransferRow(
@@ -5035,7 +5670,9 @@ export class PqsSummaryService {
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
     const client = await this.managerFactory.getRawExecutor(node);
-    const result = await client.query(recentCip112MovementUpdateIdsQuery(node, limit));
+    const result = await client.query(
+      recentCip112MovementUpdateIdsQuery(node, limit),
+    );
     const rows = (result.rows as Cip112MovementUpdateRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];
     const rawUpdateIds = rows
@@ -5050,7 +5687,8 @@ export class PqsSummaryService {
     );
 
     for (const row of rows) {
-      const rawUpdateId = typeof row.update_id === 'string' ? row.update_id : null;
+      const rawUpdateId =
+        typeof row.update_id === 'string' ? row.update_id : null;
       if (!rawUpdateId || !this.isHexTokenMovementUpdateId(rawUpdateId)) {
         continue;
       }
@@ -5102,7 +5740,10 @@ export class PqsSummaryService {
         continue;
       }
 
-      const token = this.extractObservedTokenSummary(event.templateId, event.createData);
+      const token = this.extractObservedTokenSummary(
+        event.templateId,
+        event.createData,
+      );
       if (token) {
         createTokensById.set(token.tokenId, token);
       }
@@ -5112,19 +5753,27 @@ export class PqsSummaryService {
     const eventLogExercises = events.filter(
       (event) =>
         event.eventKind === 'non_consuming_exercise' &&
-        (event.choice === 'HoldingsChange' || event.choice === 'EventLog_HoldingsChange') &&
+        (event.choice === 'HoldingsChange' ||
+          event.choice === 'EventLog_HoldingsChange') &&
         event.exerciseData?.argument.status === 'decoded' &&
         this.isRecordValue(event.exerciseData.argument.value),
     );
 
     for (const event of eventLogExercises) {
       const argument = event.exerciseData?.argument;
-      if (!argument || argument.status !== 'decoded' || !this.isRecordValue(argument.value)) {
+      if (
+        !argument ||
+        argument.status !== 'decoded' ||
+        !this.isRecordValue(argument.value)
+      ) {
         continue;
       }
 
       const account = this.findRecordField(argument.value, 'account');
-      const transferLegs = this.readListField(argument.value, 'transferLegSides');
+      const transferLegs = this.readListField(
+        argument.value,
+        'transferLegSides',
+      );
       const admin = this.readScalarField(argument.value, 'admin');
       if (!account || !admin || transferLegs.length === 0) {
         continue;
@@ -5163,7 +5812,9 @@ export class PqsSummaryService {
 
         transfers.push({
           rowId: this.buildTokenTransferLegRowId(
-            typeof update.update_id === 'string' ? this.normalizeUpdateId(update.update_id) : '',
+            typeof update.update_id === 'string'
+              ? this.normalizeUpdateId(update.update_id)
+              : '',
             event.eventId,
             transferLegId,
             movementType,
@@ -5179,8 +5830,11 @@ export class PqsSummaryService {
           receiver: this.readAccountParty(otherSideAccount),
           eventOffset: this.normalizeOptionalScalar(update.event_offset) ?? '',
           updateId:
-            typeof update.update_id === 'string' ? this.normalizeUpdateId(update.update_id) : '',
-          recordTime: typeof update.record_time === 'string' ? update.record_time : null,
+            typeof update.update_id === 'string'
+              ? this.normalizeUpdateId(update.update_id)
+              : '',
+          recordTime:
+            typeof update.record_time === 'string' ? update.record_time : null,
         });
       }
     }
@@ -5222,7 +5876,8 @@ export class PqsSummaryService {
     const shareOwnerFallback = createEvents
       .filter((event) => this.isShareLikeCip112Template(event.templateId))
       .map((event) =>
-        event.createData?.status === 'decoded' && this.isRecordValue(event.createData.value)
+        event.createData?.status === 'decoded' &&
+        this.isRecordValue(event.createData.value)
           ? this.readScalarField(event.createData.value, 'owner')
           : null,
       )
@@ -5239,7 +5894,9 @@ export class PqsSummaryService {
           update,
           event,
           movementType,
-          !this.isShareLikeCip112Template(event.templateId) ? shareOwnerFallback : null,
+          !this.isShareLikeCip112Template(event.templateId)
+            ? shareOwnerFallback
+            : null,
           options?.canonicalShareTokenId,
         );
         if (transfer) {
@@ -5254,7 +5911,12 @@ export class PqsSummaryService {
           continue;
         }
 
-        const transfer = this.buildInferredCip112Movement(node, update, event, 'Mint');
+        const transfer = this.buildInferredCip112Movement(
+          node,
+          update,
+          event,
+          'Mint',
+        );
         if (transfer) {
           transfers.push(transfer);
         }
@@ -5281,7 +5943,10 @@ export class PqsSummaryService {
       return null;
     }
 
-    const token = this.extractObservedTokenSummary(event.templateId, event.createData);
+    const token = this.extractObservedTokenSummary(
+      event.templateId,
+      event.createData,
+    );
     if (!token) {
       return null;
     }
@@ -5292,7 +5957,9 @@ export class PqsSummaryService {
 
     return {
       rowId: this.buildTokenMovementRowId(
-        typeof update.update_id === 'string' ? update.update_id : this.normalizeUpdateId(''),
+        typeof update.update_id === 'string'
+          ? update.update_id
+          : this.normalizeUpdateId(''),
         event.eventId,
         event.templateId,
         movementType,
@@ -5304,16 +5971,22 @@ export class PqsSummaryService {
       tokenId,
       tokenName: token.name,
       amount: this.readScalarField(record, 'amount'),
-      sender: movementType === 'Mint' ? this.readScalarField(record, 'issuer') : null,
+      sender:
+        movementType === 'Mint' ? this.readScalarField(record, 'issuer') : null,
       receiver: this.readScalarField(record, 'owner') ?? receiverFallback,
       eventOffset: this.normalizeOptionalScalar(update.event_offset) ?? '',
       updateId:
-        typeof update.update_id === 'string' ? this.normalizeUpdateId(update.update_id) : '',
-      recordTime: typeof update.record_time === 'string' ? update.record_time : null,
+        typeof update.update_id === 'string'
+          ? this.normalizeUpdateId(update.update_id)
+          : '',
+      recordTime:
+        typeof update.record_time === 'string' ? update.record_time : null,
     };
   }
 
-  private mergeTokenTransfers(transfers: NodeTokenTransferObservation[]): TokenTransferSummary[] {
+  private mergeTokenTransfers(
+    transfers: NodeTokenTransferObservation[],
+  ): TokenTransferSummary[] {
     const deduped = new Map<string, TokenTransferSummary>();
 
     for (const transfer of transfers) {
@@ -5349,11 +6022,15 @@ export class PqsSummaryService {
 
     return Array.from(deduped.values()).map((transfer) => ({
       ...transfer,
-      nodes: [...transfer.nodes].sort((left, right) => left.label.localeCompare(right.label)),
+      nodes: [...transfer.nodes].sort((left, right) =>
+        left.label.localeCompare(right.label),
+      ),
     }));
   }
 
-  private mergeTokenHolders(holders: NodeTokenHolderObservation[]): TokenHolderSummary[] {
+  private mergeTokenHolders(
+    holders: NodeTokenHolderObservation[],
+  ): TokenHolderSummary[] {
     const merged = new Map<
       string,
       TokenHolderSummary & {
@@ -5370,7 +6047,12 @@ export class PqsSummaryService {
       };
       const dedupeContractId =
         holder.contractId ??
-        JSON.stringify([holder.tokenId, holder.partyId, holder.amount ?? '', holder.nodeId]);
+        JSON.stringify([
+          holder.tokenId,
+          holder.partyId,
+          holder.amount ?? '',
+          holder.nodeId,
+        ]);
 
       if (!existing) {
         merged.set(holderKey, {
@@ -5387,7 +6069,10 @@ export class PqsSummaryService {
       }
 
       if (!existing.observedContractIds.has(dedupeContractId)) {
-        existing.amount = this.addNumericStrings(existing.amount, holder.amount);
+        existing.amount = this.addNumericStrings(
+          existing.amount,
+          holder.amount,
+        );
         existing.observedContractIds.add(dedupeContractId);
       }
     }
@@ -5395,10 +6080,15 @@ export class PqsSummaryService {
     return Array.from(merged.values())
       .map(({ observedContractIds: _observedContractIds, ...holder }) => ({
         ...holder,
-        nodes: [...holder.nodes].sort((left, right) => left.label.localeCompare(right.label)),
+        nodes: [...holder.nodes].sort((left, right) =>
+          left.label.localeCompare(right.label),
+        ),
       }))
       .sort((left, right) => {
-        const amountComparison = this.compareNumericStrings(left.amount, right.amount);
+        const amountComparison = this.compareNumericStrings(
+          left.amount,
+          right.amount,
+        );
         if (amountComparison !== 0) {
           return -amountComparison;
         }
@@ -5446,7 +6136,9 @@ export class PqsSummaryService {
     );
   }
 
-  private effectiveTokenTransferMovementType(transfer: TokenTransferSummary): string {
+  private effectiveTokenTransferMovementType(
+    transfer: TokenTransferSummary,
+  ): string {
     const normalizedMovementType = transfer.movementType?.trim();
     return normalizedMovementType && normalizedMovementType.length > 0
       ? normalizedMovementType
@@ -5466,7 +6158,10 @@ export class PqsSummaryService {
   }
 
   private isShareLikeCip112Template(templateId: string | null): boolean {
-    return typeof templateId === 'string' && templateId.includes('.ShareToken.CIP112:');
+    return (
+      typeof templateId === 'string' &&
+      templateId.includes('.ShareToken.CIP112:')
+    );
   }
 
   private isHexTokenMovementUpdateId(updateId: string): boolean {
@@ -5500,12 +6195,15 @@ export class PqsSummaryService {
     const fallbackToken = this.buildObservedTokenSummary(
       instrumentId,
       admin,
-      this.isNativeAmuletIntrinsicId(instrumentId) ? CANTON_COIN_TOKEN_NAME : instrumentId,
+      this.isNativeAmuletIntrinsicId(instrumentId)
+        ? CANTON_COIN_TOKEN_NAME
+        : instrumentId,
       null,
     );
     const tokenId =
       canonicalShareTokenId &&
-      fallbackToken.tokenId === this.normalizeShareLikeIntrinsicTokenId(instrumentId)
+      fallbackToken.tokenId ===
+        this.normalizeShareLikeIntrinsicTokenId(instrumentId)
         ? canonicalShareTokenId
         : fallbackToken.tokenId;
 
@@ -5524,11 +6222,23 @@ export class PqsSummaryService {
     admin: string,
     instrumentId: string,
   ): 'Mint' | 'Burn' | 'Transfer' {
-    if (this.isSyntheticEventLogAccount(senderAccount, admin, `${instrumentId}:mint`)) {
+    if (
+      this.isSyntheticEventLogAccount(
+        senderAccount,
+        admin,
+        `${instrumentId}:mint`,
+      )
+    ) {
       return 'Mint';
     }
 
-    if (this.isSyntheticEventLogAccount(receiverAccount, admin, `${instrumentId}:burn`)) {
+    if (
+      this.isSyntheticEventLogAccount(
+        receiverAccount,
+        admin,
+        `${instrumentId}:burn`,
+      )
+    ) {
       return 'Burn';
     }
 
@@ -5547,9 +6257,13 @@ export class PqsSummaryService {
     );
   }
 
-  private compareNumericStrings(left: string | null, right: string | null): number {
+  private compareNumericStrings(
+    left: string | null,
+    right: string | null,
+  ): number {
     const leftValue = left === null ? Number.NEGATIVE_INFINITY : Number(left);
-    const rightValue = right === null ? Number.NEGATIVE_INFINITY : Number(right);
+    const rightValue =
+      right === null ? Number.NEGATIVE_INFINITY : Number(right);
     const leftValid = Number.isFinite(leftValue);
     const rightValid = Number.isFinite(rightValue);
 
@@ -5564,7 +6278,10 @@ export class PqsSummaryService {
     return (left ?? '').localeCompare(right ?? '');
   }
 
-  private addNumericStrings(left: string | null, right: string | null): string | null {
+  private addNumericStrings(
+    left: string | null,
+    right: string | null,
+  ): string | null {
     if (left === null) {
       return right;
     }
@@ -5601,7 +6318,10 @@ export class PqsSummaryService {
     const negative = normalized.startsWith('-');
     const unsigned = negative ? normalized.slice(1) : normalized;
     const [wholePart, fractionalPart = ''] = unsigned.split('.');
-    const paddedFractional = `${fractionalPart}${'0'.repeat(scale)}`.slice(0, scale);
+    const paddedFractional = `${fractionalPart}${'0'.repeat(scale)}`.slice(
+      0,
+      scale,
+    );
     const digits = `${wholePart || '0'}${paddedFractional}`;
     const parsed = BigInt(digits || '0');
 
@@ -5626,7 +6346,11 @@ export class PqsSummaryService {
     receiver: string | null;
     amount: string | null;
   } | null {
-    if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
+    if (
+      !decoded ||
+      decoded.status !== 'decoded' ||
+      !this.isRecordValue(decoded.value)
+    ) {
       return null;
     }
 
@@ -5651,7 +6375,10 @@ export class PqsSummaryService {
         tokenName: CANTON_COIN_TOKEN_NAME,
         sender: this.readScalarField(decoded.value, 'dso'),
         receiver: this.readScalarField(decoded.value, 'owner'),
-        amount: this.readNestedScalarField(decoded.value, ['amount', 'initialAmount']),
+        amount: this.readNestedScalarField(decoded.value, [
+          'amount',
+          'initialAmount',
+        ]),
       };
     }
 
@@ -5676,20 +6403,31 @@ export class PqsSummaryService {
   private extractCip56TokenSummary(
     decoded: NodeDecodeState<NodeDecodedDamlValue> | null,
   ): TokenSummary | null {
-    if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
+    if (
+      !decoded ||
+      decoded.status !== 'decoded' ||
+      !this.isRecordValue(decoded.value)
+    ) {
       return null;
     }
 
-    const intrinsicId = this.readNestedScalarField(decoded.value, ['instrumentId', 'id']);
+    const intrinsicId = this.readNestedScalarField(decoded.value, [
+      'instrumentId',
+      'id',
+    ]);
     if (!intrinsicId) {
       return null;
     }
 
-    const issuer = this.readNestedScalarField(decoded.value, ['instrumentId', 'admin']);
+    const issuer = this.readNestedScalarField(decoded.value, [
+      'instrumentId',
+      'admin',
+    ]);
     return this.buildObservedTokenSummary(
       intrinsicId,
       issuer,
-      this.readConfiguredDecodedTokenMetadata(decoded.value, 'name') ?? intrinsicId,
+      this.readConfiguredDecodedTokenMetadata(decoded.value, 'name') ??
+        intrinsicId,
       this.readConfiguredDecodedTokenMetadata(decoded.value, 'symbol'),
     );
   }
@@ -5713,20 +6451,40 @@ export class PqsSummaryService {
     templateId: string | null,
     decoded: NodeDecodeState<NodeDecodedDamlValue> | null,
   ): TokenSummary | null {
-    if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
+    if (
+      !decoded ||
+      decoded.status !== 'decoded' ||
+      !this.isRecordValue(decoded.value)
+    ) {
       return null;
     }
 
-    const configuredSymbol = this.readConfiguredDecodedTokenMetadata(decoded.value, 'symbol');
-    const symbol = configuredSymbol ?? this.readScalarField(decoded.value, 'symbol');
-    const instrumentIdText = this.readScalarField(decoded.value, 'instrumentIdText');
-    const instrumentId = this.readNestedScalarField(decoded.value, ['instrumentId', 'id']);
-    const vaultIdentityId = this.readNestedScalarField(decoded.value, ['vaultIdentity', 'id']);
+    const configuredSymbol = this.readConfiguredDecodedTokenMetadata(
+      decoded.value,
+      'symbol',
+    );
+    const symbol =
+      configuredSymbol ?? this.readScalarField(decoded.value, 'symbol');
+    const instrumentIdText = this.readScalarField(
+      decoded.value,
+      'instrumentIdText',
+    );
+    const instrumentId = this.readNestedScalarField(decoded.value, [
+      'instrumentId',
+      'id',
+    ]);
+    const vaultIdentityId = this.readNestedScalarField(decoded.value, [
+      'vaultIdentity',
+      'id',
+    ]);
     const shareLikeIntrinsicId =
-      templateId !== null && this.isShareLikeCip112Template(templateId) && vaultIdentityId
+      templateId !== null &&
+      this.isShareLikeCip112Template(templateId) &&
+      vaultIdentityId
         ? this.normalizeShareLikeIntrinsicTokenId(vaultIdentityId)
         : null;
-    const intrinsicId = instrumentId ?? shareLikeIntrinsicId ?? symbol ?? instrumentIdText;
+    const intrinsicId =
+      instrumentId ?? shareLikeIntrinsicId ?? symbol ?? instrumentIdText;
     if (!intrinsicId) {
       return null;
     }
@@ -5773,7 +6531,10 @@ export class PqsSummaryService {
     };
   }
 
-  private buildObservedTokenId(intrinsicId: string, issuer: string | null): string {
+  private buildObservedTokenId(
+    intrinsicId: string,
+    issuer: string | null,
+  ): string {
     const normalizedIntrinsicId = intrinsicId.trim();
     const normalizedIssuer = issuer?.trim() ?? '';
 
@@ -5801,10 +6562,17 @@ export class PqsSummaryService {
     value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
     field: 'name' | 'symbol',
   ): string | null {
-    const keys = this.getTokenMetadataConfig()[field === 'name' ? 'nameKeys' : 'symbolKeys'];
+    const keys =
+      this.getTokenMetadataConfig()[
+        field === 'name' ? 'nameKeys' : 'symbolKeys'
+      ];
 
     for (const key of keys) {
-      const metadataValue = this.readTextMapEntryField(value, ['meta', 'values'], key);
+      const metadataValue = this.readTextMapEntryField(
+        value,
+        ['meta', 'values'],
+        key,
+      );
       if (metadataValue) {
         return metadataValue;
       }
@@ -5827,7 +6595,9 @@ export class PqsSummaryService {
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     rawUpdateId: string,
   ): Promise<NodeUpdateDetailEvent[]> {
-    const eventsByUpdateId = await this.fetchEventsByUpdateIds(node, query, [rawUpdateId]);
+    const eventsByUpdateId = await this.fetchEventsByUpdateIds(node, query, [
+      rawUpdateId,
+    ]);
     return eventsByUpdateId.get(rawUpdateId) ?? [];
   }
 
@@ -5840,12 +6610,18 @@ export class PqsSummaryService {
       return new Map();
     }
 
-    const result = await query(updateEventsByUpdateIdsQuery(node, rawUpdateIds));
+    const result = await query(
+      updateEventsByUpdateIdsQuery(node, rawUpdateIds),
+    );
     const rows = (result.rows as UpdateEventRow[]) ?? [];
-    const onlyRequestedUpdateId = rawUpdateIds.length === 1 ? rawUpdateIds[0] : null;
+    const onlyRequestedUpdateId =
+      rawUpdateIds.length === 1 ? rawUpdateIds[0] : null;
     const normalizedRows = await Promise.all(
       rows.map(async (row) => ({
-        updateId: typeof row.update_id === 'string' ? row.update_id : onlyRequestedUpdateId,
+        updateId:
+          typeof row.update_id === 'string'
+            ? row.update_id
+            : onlyRequestedUpdateId,
         event: await this.normalizeEventRow(node, row),
       })),
     );
@@ -5903,7 +6679,11 @@ export class PqsSummaryService {
         'Splice.Amulet:SvRewardCoupon',
         row.contract_instance,
       );
-      if (!decoded || decoded.status !== 'decoded' || !this.isRecordValue(decoded.value)) {
+      if (
+        !decoded ||
+        decoded.status !== 'decoded' ||
+        !this.isRecordValue(decoded.value)
+      ) {
         return null;
       }
 
@@ -6020,7 +6800,10 @@ export class PqsSummaryService {
               exerciseArgument: row.exercise_argument ?? null,
               exerciseResult: row.exercise_result ?? null,
             }),
-      raw: row.raw && typeof row.raw === 'object' && !Array.isArray(row.raw) ? row.raw : {},
+      raw:
+        row.raw && typeof row.raw === 'object' && !Array.isArray(row.raw)
+          ? row.raw
+          : {},
     };
   }
 
@@ -6048,7 +6831,10 @@ export class PqsSummaryService {
   private decodeRewardCouponContractInstance(
     contractInstance: Buffer,
   ): NodeDecodeState<NodeDecodedDamlValue> | null {
-    const contractPayload = this.getFirstLengthDelimitedField(contractInstance, 2);
+    const contractPayload = this.getFirstLengthDelimitedField(
+      contractInstance,
+      2,
+    );
     const createArgument = contractPayload
       ? this.getFirstLengthDelimitedField(contractPayload, 4)
       : null;
@@ -6088,7 +6874,11 @@ export class PqsSummaryService {
     templateId: string | null,
     contractInstance: unknown,
   ): Promise<NodeDecodeState<NodeDecodedDamlValue> | null> {
-    if (!templateId || contractInstance === null || contractInstance === undefined) {
+    if (
+      !templateId ||
+      contractInstance === null ||
+      contractInstance === undefined
+    ) {
       return null;
     }
 
@@ -6099,7 +6889,10 @@ export class PqsSummaryService {
       }
     }
 
-    if (templateId === 'Splice.Amulet:SvRewardCoupon' && Buffer.isBuffer(contractInstance)) {
+    if (
+      templateId === 'Splice.Amulet:SvRewardCoupon' &&
+      Buffer.isBuffer(contractInstance)
+    ) {
       return this.decodeRewardCouponContractInstance(contractInstance);
     }
 
@@ -6131,7 +6924,10 @@ export class PqsSummaryService {
       exerciseResult: unknown;
     },
   ): Promise<NodeExerciseDecodeState | null> {
-    if (!Buffer.isBuffer(input.exerciseArgument) && !Buffer.isBuffer(input.exerciseResult)) {
+    if (
+      !Buffer.isBuffer(input.exerciseArgument) &&
+      !Buffer.isBuffer(input.exerciseResult)
+    ) {
       const argument = this.decodePqsJsonData(input.exerciseArgument);
       const result = this.decodePqsJsonData(input.exerciseResult);
 
@@ -6163,8 +6959,13 @@ export class PqsSummaryService {
       exerciseArgument: (input.exerciseArgument ?? null) as Buffer | null,
       exerciseResult: (input.exerciseResult ?? null) as Buffer | null,
     };
-    const initialDecode = await this.damlValueDecoder.decodeExerciseValue(decoderInput);
-    return this.retryExerciseDecodeAfterPackageRefresh(node, decoderInput, initialDecode);
+    const initialDecode =
+      await this.damlValueDecoder.decodeExerciseValue(decoderInput);
+    return this.retryExerciseDecodeAfterPackageRefresh(
+      node,
+      decoderInput,
+      initialDecode,
+    );
   }
 
   private async retryContractDecodeAfterPackageRefresh(
@@ -6174,7 +6975,8 @@ export class PqsSummaryService {
     contractInstance: Buffer | null,
     initialDecode: NodeDecodeState<NodeDecodedDamlValue> | null,
   ): Promise<NodeDecodeState<NodeDecodedDamlValue> | null> {
-    const reason = initialDecode?.status === 'invalid_data' ? initialDecode.reason : null;
+    const reason =
+      initialDecode?.status === 'invalid_data' ? initialDecode.reason : null;
     if (!this.shouldRetryPackageRefresh(node, packageId, reason)) {
       return initialDecode;
     }
@@ -6213,11 +7015,17 @@ export class PqsSummaryService {
     decoded: NodeExerciseDecodeState | null,
   ): NodeDecodeFailureReason | null {
     const reasons = [
-      decoded?.argument.status === 'invalid_data' ? decoded.argument.reason : null,
+      decoded?.argument.status === 'invalid_data'
+        ? decoded.argument.reason
+        : null,
       decoded?.result.status === 'invalid_data' ? decoded.result.reason : null,
     ];
 
-    return reasons.find((reason): reason is NodeDecodeFailureReason => reason !== null) ?? null;
+    return (
+      reasons.find(
+        (reason): reason is NodeDecodeFailureReason => reason !== null,
+      ) ?? null
+    );
   }
 
   private shouldRetryPackageRefresh(
@@ -6233,7 +7041,10 @@ export class PqsSummaryService {
     );
   }
 
-  private async refreshPackageForNode(node: NodeConfig, packageId: string): Promise<void> {
+  private async refreshPackageForNode(
+    node: NodeConfig,
+    packageId: string,
+  ): Promise<void> {
     await this.packageSyncService?.syncPackagesById(node, [packageId]);
     this.packageRegistryService?.invalidatePackage(packageId);
   }
@@ -6265,7 +7076,10 @@ export class PqsSummaryService {
     value: NodeDecodedDamlValue,
   ): value is Extract<NodeDecodedDamlValue, { kind: 'record' }> {
     return (
-      typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'record'
+      typeof value === 'object' &&
+      value !== null &&
+      'kind' in value &&
+      value.kind === 'record'
     );
   }
 
@@ -6273,7 +7087,9 @@ export class PqsSummaryService {
     value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
     label: string,
   ): Extract<NodeDecodedDamlValue, { kind: 'record' }> | null {
-    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    const field = value.fields.find(
+      (candidate) => candidate.label === label,
+    )?.value;
     return field && this.isRecordValue(field) ? field : null;
   }
 
@@ -6281,12 +7097,18 @@ export class PqsSummaryService {
     value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
     label: string,
   ): string | null {
-    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    const field = value.fields.find(
+      (candidate) => candidate.label === label,
+    )?.value;
     if (field === null || field === undefined) {
       return null;
     }
 
-    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+    if (
+      typeof field === 'string' ||
+      typeof field === 'number' ||
+      typeof field === 'boolean'
+    ) {
       return String(field);
     }
 
@@ -6307,7 +7129,8 @@ export class PqsSummaryService {
     label: string,
     source: 'argument' | 'result' = 'result',
   ): string | null {
-    const decodedValue = source === 'argument' ? decoded?.argument : decoded?.result;
+    const decodedValue =
+      source === 'argument' ? decoded?.argument : decoded?.result;
     if (
       !decodedValue ||
       decodedValue.status !== 'decoded' ||
@@ -6318,10 +7141,15 @@ export class PqsSummaryService {
 
     const normalizedLabel = label.replace(/[_-]/g, '').toLowerCase();
     const field = decodedValue.value.fields.find(
-      (candidate) => candidate.label.replace(/[_-]/g, '').toLowerCase() === normalizedLabel,
+      (candidate) =>
+        candidate.label.replace(/[_-]/g, '').toLowerCase() === normalizedLabel,
     )?.value;
 
-    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+    if (
+      typeof field === 'string' ||
+      typeof field === 'number' ||
+      typeof field === 'boolean'
+    ) {
       return String(field);
     }
 
@@ -6347,7 +7175,11 @@ export class PqsSummaryService {
       }
 
       if (index === path.length - 1) {
-        if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+        if (
+          typeof field === 'string' ||
+          typeof field === 'number' ||
+          typeof field === 'boolean'
+        ) {
           return String(field);
         }
 
@@ -6373,12 +7205,18 @@ export class PqsSummaryService {
     value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
     label: string,
   ): string | null {
-    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    const field = value.fields.find(
+      (candidate) => candidate.label === label,
+    )?.value;
     if (field === null || field === undefined) {
       return null;
     }
 
-    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+    if (
+      typeof field === 'string' ||
+      typeof field === 'number' ||
+      typeof field === 'boolean'
+    ) {
       return String(field);
     }
 
@@ -6391,7 +7229,11 @@ export class PqsSummaryService {
       return field.value;
     }
 
-    if (typeof field !== 'object' || !('kind' in field) || field.kind !== 'optional') {
+    if (
+      typeof field !== 'object' ||
+      !('kind' in field) ||
+      field.kind !== 'optional'
+    ) {
       return null;
     }
 
@@ -6420,12 +7262,18 @@ export class PqsSummaryService {
     value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
     label: string,
   ): string | null {
-    const field = value.fields.find((candidate) => candidate.label === label)?.value;
+    const field = value.fields.find(
+      (candidate) => candidate.label === label,
+    )?.value;
     if (field === null || field === undefined) {
       return null;
     }
 
-    if (typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean') {
+    if (
+      typeof field === 'string' ||
+      typeof field === 'number' ||
+      typeof field === 'boolean'
+    ) {
       return String(field);
     }
 
@@ -6448,8 +7296,15 @@ export class PqsSummaryService {
     value: Extract<NodeDecodedDamlValue, { kind: 'record' }>,
     label: string,
   ): NodeDecodedDamlValue[] {
-    const field = value.fields.find((candidate) => candidate.label === label)?.value;
-    if (!field || typeof field !== 'object' || !('kind' in field) || field.kind !== 'list') {
+    const field = value.fields.find(
+      (candidate) => candidate.label === label,
+    )?.value;
+    if (
+      !field ||
+      typeof field !== 'object' ||
+      !('kind' in field) ||
+      field.kind !== 'list'
+    ) {
       return [];
     }
 
@@ -6488,7 +7343,9 @@ export class PqsSummaryService {
     }
 
     if (current && this.isRecordValue(current)) {
-      const recordEntry = current.fields.find((candidate) => candidate.label === key)?.value;
+      const recordEntry = current.fields.find(
+        (candidate) => candidate.label === key,
+      )?.value;
       if (
         typeof recordEntry === 'string' ||
         typeof recordEntry === 'number' ||
@@ -6507,12 +7364,18 @@ export class PqsSummaryService {
       return null;
     }
 
-    const entry = current.entries.find((candidate) => candidate.key === key)?.value;
+    const entry = current.entries.find(
+      (candidate) => candidate.key === key,
+    )?.value;
     if (entry === null || entry === undefined) {
       return null;
     }
 
-    if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
+    if (
+      typeof entry === 'string' ||
+      typeof entry === 'number' ||
+      typeof entry === 'boolean'
+    ) {
       return String(entry);
     }
 
@@ -6528,7 +7391,9 @@ export class PqsSummaryService {
     return null;
   }
 
-  private decodePqsJsonData(value: unknown): NodeDecodeState<NodeDecodedDamlValue> | null {
+  private decodePqsJsonData(
+    value: unknown,
+  ): NodeDecodeState<NodeDecodedDamlValue> | null {
     const decoded = this.decodePqsJsonValue(value);
     return decoded === null
       ? null
@@ -6543,7 +7408,11 @@ export class PqsSummaryService {
       return null;
     }
 
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
       return value;
     }
 
@@ -6571,7 +7440,9 @@ export class PqsSummaryService {
       (typeof entries[0][1] === 'string' || typeof entries[0][1] === 'number')
     ) {
       const numericValue = Number(entries[0][1]);
-      return Number.isFinite(numericValue) ? numericValue : String(entries[0][1]);
+      return Number.isFinite(numericValue)
+        ? numericValue
+        : String(entries[0][1]);
     }
 
     return {
@@ -6587,7 +7458,10 @@ export class PqsSummaryService {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
-  private getFirstLengthDelimitedField(message: Buffer, fieldNumber: number): Buffer | null {
+  private getFirstLengthDelimitedField(
+    message: Buffer,
+    fieldNumber: number,
+  ): Buffer | null {
     return (
       this.parseProtobufFields(message).find(
         (field) => field.fieldNumber === fieldNumber && field.buffer,
@@ -6595,7 +7469,10 @@ export class PqsSummaryService {
     );
   }
 
-  private getAllLengthDelimitedFields(message: Buffer, fieldNumber: number): Buffer[] {
+  private getAllLengthDelimitedFields(
+    message: Buffer,
+    fieldNumber: number,
+  ): Buffer[] {
     return this.parseProtobufFields(message)
       .filter(
         (field): field is { fieldNumber: number; buffer: Buffer } =>
@@ -6679,7 +7556,10 @@ export class PqsSummaryService {
     return fields;
   }
 
-  private readVarint(buffer: Buffer, offset: number): { value: bigint; next: number } {
+  private readVarint(
+    buffer: Buffer,
+    offset: number,
+  ): { value: bigint; next: number } {
     let value = 0n;
     let shift = 0n;
     let next = offset;
@@ -6699,7 +7579,9 @@ export class PqsSummaryService {
     return { value, next };
   }
 
-  private async buildTemplateFilterResponse(packageIds: string[]): Promise<TemplateFilterResponse> {
+  private async buildTemplateFilterResponse(
+    packageIds: string[],
+  ): Promise<TemplateFilterResponse> {
     const templates = new Set<string>();
 
     for (const packageId of packageIds) {
@@ -6725,7 +7607,9 @@ export class PqsSummaryService {
     };
   }
 
-  private normalizeOptionalScalar(value: string | number | null | undefined): string | null {
+  private normalizeOptionalScalar(
+    value: string | number | null | undefined,
+  ): string | null {
     if (typeof value === 'string') {
       return value;
     }
@@ -6778,14 +7662,18 @@ export class PqsSummaryService {
         }),
     );
 
-    return topologyEntries.sort((left, right) => left.label.localeCompare(right.label));
+    return topologyEntries.sort((left, right) =>
+      left.label.localeCompare(right.label),
+    );
   }
 
   private mergeNamespaceNodeTopologies(
     node: NodeConfig,
     topologies: PartyDetailResponse['partyTopologyByNode'],
   ): PartyDetailResponse['partyTopologyByNode'][number] {
-    const successfulTopologies = topologies.filter((entry) => entry.status === 'ok');
+    const successfulTopologies = topologies.filter(
+      (entry) => entry.status === 'ok',
+    );
     if (successfulTopologies.length > 0) {
       return {
         nodeId: node.id,
@@ -6914,7 +7802,8 @@ export class PqsSummaryService {
           normalizedEndIndex < partyIds.length && items.length > 0
             ? (items[items.length - 1] ?? null)
             : null,
-        nextAfter: startIndex > 0 && items.length > 0 ? (items[0] ?? null) : null,
+        nextAfter:
+          startIndex > 0 && items.length > 0 ? (items[0] ?? null) : null,
       };
     }
 
@@ -6936,7 +7825,9 @@ export class PqsSummaryService {
     };
   }
 
-  private normalizeTemplateIdentifier(templateId: string | null): string | null {
+  private normalizeTemplateIdentifier(
+    templateId: string | null,
+  ): string | null {
     if (typeof templateId !== 'string') {
       return null;
     }
@@ -6952,7 +7843,9 @@ export class PqsSummaryService {
     const normalized = choice.replace(/^c\|/, '');
     const separatorIndex = normalized.lastIndexOf('_');
 
-    return separatorIndex >= 0 ? normalized.slice(separatorIndex + 1) : normalized;
+    return separatorIndex >= 0
+      ? normalized.slice(separatorIndex + 1)
+      : normalized;
   }
 
   private normalizeParties(parties: string[] | string | null): string[] {
@@ -6975,7 +7868,9 @@ export class PqsSummaryService {
     return trimmed
       .slice(1, -1)
       .split(',')
-      .map((party) => this.normalizePartyIdentifier(party.trim().replace(/^"(.*)"$/, '$1')))
+      .map((party) =>
+        this.normalizePartyIdentifier(party.trim().replace(/^"(.*)"$/, '$1')),
+      )
       .filter(Boolean);
   }
 

@@ -1,16 +1,27 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import type { LocationQueryRaw } from 'vue-router';
-import { fetchLatestUpdates, fetchNodeTemplates, fetchNodeUpdates, fetchPartyUpdates, fetchTemplates } from '../lib/api';
-import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
-import type { GlobalUpdateEntry, GlobalUpdatesResponse, NodeUpdateEntry, NodeUpdatesResponse } from '../types/updates';
-import UpdatesAdvancedFilter from './UpdatesAdvancedFilter.vue';
-import UpdatesToolbar from './UpdatesToolbar.vue';
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import type { LocationQueryRaw } from "vue-router";
+import {
+  fetchLatestUpdates,
+  fetchNodeTemplates,
+  fetchNodeUpdates,
+  fetchPartyUpdates,
+  fetchTemplates,
+} from "../lib/api";
+import { DEFAULT_PAGE_SIZE, normalizePageSize } from "../lib/pagination";
+import type {
+  GlobalUpdateEntry,
+  GlobalUpdatesResponse,
+  NodeUpdateEntry,
+  NodeUpdatesResponse,
+} from "../types/updates";
+import UpdatesAdvancedFilter from "./UpdatesAdvancedFilter.vue";
+import UpdatesToolbar from "./UpdatesToolbar.vue";
 
-type FilterMode = 'or' | 'and';
-type UpdateScope = 'global' | 'node' | 'party';
-type HeadingTag = 'h2' | 'h3';
+type FilterMode = "or" | "and";
+type UpdateScope = "global" | "node" | "party";
+type HeadingTag = "h2" | "h3";
 type UpdatesResponse = GlobalUpdatesResponse | NodeUpdatesResponse;
 type UpdatesEntry = GlobalUpdateEntry | NodeUpdateEntry;
 
@@ -28,7 +39,7 @@ const props = withDefaults(
     showNodeColumn?: boolean;
     showPartyFilters?: boolean;
     responseLabelTitle?: boolean;
-    sourceTag: 'updates' | 'node' | 'party';
+    sourceTag: "updates" | "node" | "party";
     advancedFilterId: string;
     loadingMessage?: string;
     emptyMessage?: string;
@@ -37,18 +48,18 @@ const props = withDefaults(
     rowClass?: string;
   }>(),
   {
-    eyebrow: 'Updates',
+    eyebrow: "Updates",
     showTitle: true,
-    headingTag: 'h3',
-    queryPrefix: '',
+    headingTag: "h3",
+    queryPrefix: "",
     showNodeColumn: false,
     showPartyFilters: true,
     responseLabelTitle: false,
-    loadingMessage: 'Loading updates...',
-    emptyMessage: 'No updates available yet.',
-    tableAriaLabel: 'Updates',
-    spinnerLabel: 'Updating updates',
-    rowClass: '',
+    loadingMessage: "Loading updates...",
+    emptyMessage: "No updates available yet.",
+    tableAriaLabel: "Updates",
+    spinnerLabel: "Updating updates",
+    rowClass: "",
   },
 );
 
@@ -58,12 +69,21 @@ const updatesResponse = ref<UpdatesResponse | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(false);
 const showAdvancedFilter = ref(false);
-const partyFilterDraft = ref('');
-const templateFilterDraft = ref('');
+const partyFilterDraft = ref("");
+const templateFilterDraft = ref("");
 const templateOptions = ref<string[]>([]);
 const templatesLoaded = ref(false);
 
-function queryKey(base: 'before' | 'after' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit'): string {
+function queryKey(
+  base:
+    | "before"
+    | "after"
+    | "party"
+    | "template"
+    | "partyMode"
+    | "hideSplice"
+    | "limit",
+): string {
   if (!props.queryPrefix) {
     return base;
   }
@@ -74,46 +94,49 @@ function queryKey(base: 'before' | 'after' | 'party' | 'template' | 'partyMode' 
 function uniqueValues(values: string[]): string[] {
   return Array.from(
     new Set(
-      values
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0),
+      values.map((value) => value.trim()).filter((value) => value.length > 0),
     ),
   );
 }
 
 function readQueryCursor(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 function readQueryList(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    return value.filter(
+      (item): item is string =>
+        typeof item === "string" && item.trim().length > 0,
+    );
   }
 
-  return typeof value === 'string' && value.trim().length > 0 ? [value] : [];
+  return typeof value === "string" && value.trim().length > 0 ? [value] : [];
 }
 
 function readFilterMode(value: unknown): FilterMode {
-  return value === 'and' ? 'and' : 'or';
+  return value === "and" ? "and" : "or";
 }
 
 function readHideSplice(value: unknown): boolean {
   if (Array.isArray(value)) {
-    return value.includes('true');
+    return value.includes("true");
   }
 
-  return value === 'true';
+  return value === "true";
 }
 
 const activePartyFilters = computed(() =>
-  props.showPartyFilters ? uniqueValues(readQueryList(route.query[queryKey('party')])) : [],
+  props.showPartyFilters
+    ? uniqueValues(readQueryList(route.query[queryKey("party")]))
+    : [],
 );
 const activeTemplateFilters = computed(() =>
-  uniqueValues(readQueryList(route.query[queryKey('template')])),
+  uniqueValues(readQueryList(route.query[queryKey("template")])),
 );
 const activeFilterMode = computed<FilterMode>(() => {
-  const explicitMode = route.query[queryKey('partyMode')];
-  if (explicitMode === 'and' || explicitMode === 'or') {
+  const explicitMode = route.query[queryKey("partyMode")];
+  if (explicitMode === "and" || explicitMode === "or") {
     return explicitMode;
   }
 
@@ -121,80 +144,84 @@ const activeFilterMode = computed<FilterMode>(() => {
     return readFilterMode(route.query.mode);
   }
 
-  return 'or';
+  return "or";
 });
-const activeHideSplice = computed(() => readHideSplice(route.query[queryKey('hideSplice')]));
-const activePageSize = computed(() => normalizePageSize(route.query[queryKey('limit')]));
+const activeHideSplice = computed(() =>
+  readHideSplice(route.query[queryKey("hideSplice")]),
+);
+const activePageSize = computed(() =>
+  normalizePageSize(route.query[queryKey("limit")]),
+);
 
 function hasAdvancedFilterQuery(): boolean {
   return (
     activePartyFilters.value.length > 0 ||
     activeTemplateFilters.value.length > 0 ||
-    typeof route.query[queryKey('partyMode')] === 'string' ||
+    typeof route.query[queryKey("partyMode")] === "string" ||
     (!props.queryPrefix &&
       activePartyFilters.value.length > 0 &&
-      typeof route.query.mode === 'string') ||
+      typeof route.query.mode === "string") ||
     activeHideSplice.value
   );
 }
 
 function clearManagedKeys(query: LocationQueryRaw) {
-  delete query[queryKey('before')];
-  delete query[queryKey('after')];
-  delete query[queryKey('party')];
-  delete query[queryKey('template')];
-  delete query[queryKey('partyMode')];
-  delete query[queryKey('hideSplice')];
-  delete query[queryKey('limit')];
+  delete query[queryKey("before")];
+  delete query[queryKey("after")];
+  delete query[queryKey("party")];
+  delete query[queryKey("template")];
+  delete query[queryKey("partyMode")];
+  delete query[queryKey("hideSplice")];
+  delete query[queryKey("limit")];
 
   if (!props.queryPrefix) {
     delete query.mode;
   }
 }
 
-function buildQuery(
-  options?: {
-    before?: string;
-    after?: string;
-    parties?: string[];
-    templates?: string[];
-    mode?: FilterMode;
-    hideSplice?: boolean;
-    limit?: number;
-  },
-): LocationQueryRaw {
+function buildQuery(options?: {
+  before?: string;
+  after?: string;
+  parties?: string[];
+  templates?: string[];
+  mode?: FilterMode;
+  hideSplice?: boolean;
+  limit?: number;
+}): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
   clearManagedKeys(nextQuery);
 
   if (options?.before) {
-    nextQuery[queryKey('before')] = options.before;
+    nextQuery[queryKey("before")] = options.before;
   }
   if (options?.after) {
-    nextQuery[queryKey('after')] = options.after;
+    nextQuery[queryKey("after")] = options.after;
   }
 
   if (props.showPartyFilters && (options?.parties?.length ?? 0) > 0) {
-    nextQuery[queryKey('party')] = options?.parties;
-    nextQuery[queryKey('partyMode')] = options?.mode ?? 'or';
+    nextQuery[queryKey("party")] = options?.parties;
+    nextQuery[queryKey("partyMode")] = options?.mode ?? "or";
   }
 
   if ((options?.templates?.length ?? 0) > 0) {
-    nextQuery[queryKey('template')] = options?.templates;
+    nextQuery[queryKey("template")] = options?.templates;
   }
 
   if (options?.hideSplice) {
-    nextQuery[queryKey('hideSplice')] = 'true';
+    nextQuery[queryKey("hideSplice")] = "true";
   }
 
   const limit = normalizePageSize(options?.limit);
   if (limit !== DEFAULT_PAGE_SIZE) {
-    nextQuery[queryKey('limit')] = String(limit);
+    nextQuery[queryKey("limit")] = String(limit);
   }
 
   return nextQuery;
 }
 
-function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
+function formatRecordTime(
+  recordTime: string | null,
+): { date: string; time: string } | null {
   if (!recordTime) {
     return null;
   }
@@ -206,20 +233,31 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
 
   return {
     date: new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
+      dateStyle: "medium",
     }).format(parsed),
     time: new Intl.DateTimeFormat(undefined, {
-      timeStyle: 'medium',
+      timeStyle: "medium",
     }).format(parsed),
   };
 }
 
-function formatEstimatedTrafficUsd(value: string | null | undefined): string {
-  return value ? `$${value}` : '—';
+function formatEstimatedTrafficUsd(
+  value: string | null | undefined,
+  gapDays: number | null | undefined,
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  if (!gapDays) {
+    return `$${value}`;
+  }
+
+  return `$${value} (${gapDays} day${gapDays === 1 ? "" : "s"})`;
 }
 
 function resolveNodeId(update: UpdatesEntry): string | null {
-  if ('nodeId' in update && typeof update.nodeId === 'string') {
+  if ("nodeId" in update && typeof update.nodeId === "string") {
     return update.nodeId;
   }
 
@@ -227,7 +265,9 @@ function resolveNodeId(update: UpdatesEntry): string | null {
 }
 
 function resolveNodeLabel(update: UpdatesEntry): string | null {
-  return 'label' in update && typeof update.label === 'string' ? update.label : null;
+  return "label" in update && typeof update.label === "string"
+    ? update.label
+    : null;
 }
 
 const renderedUpdates = computed(() =>
@@ -241,15 +281,15 @@ const renderedUpdates = computed(() =>
 
 const rowClassList = computed(() => [
   props.rowClass,
-  props.showNodeColumn ? 'node-updates__row--with-node' : '',
+  props.showNodeColumn ? "node-updates__row--with-node" : "",
 ]);
 
 const headingText = computed(() => {
   if (
     props.responseLabelTitle &&
     updatesResponse.value &&
-    'label' in updatesResponse.value &&
-    typeof updatesResponse.value.label === 'string'
+    "label" in updatesResponse.value &&
+    typeof updatesResponse.value.label === "string"
   ) {
     return `${updatesResponse.value.label}${props.title}`;
   }
@@ -264,10 +304,12 @@ async function loadTemplateOptions() {
 
   try {
     const response =
-      props.scope === 'node' && props.nodeId
+      props.scope === "node" && props.nodeId
         ? await fetchNodeTemplates(props.nodeId)
         : await fetchTemplates();
-    templateOptions.value = response.templates.map((template) => template.templateId);
+    templateOptions.value = response.templates.map(
+      (template) => template.templateId,
+    );
   } catch {
     templateOptions.value = [];
   } finally {
@@ -280,15 +322,15 @@ async function loadUpdates() {
   error.value = null;
 
   try {
-    const before = readQueryCursor(route.query[queryKey('before')]);
-    const after = readQueryCursor(route.query[queryKey('after')]);
+    const before = readQueryCursor(route.query[queryKey("before")]);
+    const after = readQueryCursor(route.query[queryKey("after")]);
     const parties = activePartyFilters.value;
     const templates = activeTemplateFilters.value;
     const partyMode = activeFilterMode.value;
     const hideSplice = activeHideSplice.value;
     const limit = activePageSize.value;
 
-    if (props.scope === 'global') {
+    if (props.scope === "global") {
       const options: Parameters<typeof fetchLatestUpdates>[1] = {};
       if (before) {
         options.before = before;
@@ -311,8 +353,10 @@ async function loadUpdates() {
       return;
     }
 
-    if (props.scope === 'node' && props.nodeId) {
-      const options: NonNullable<Parameters<typeof fetchNodeUpdates>[1]> = { limit };
+    if (props.scope === "node" && props.nodeId) {
+      const options: NonNullable<Parameters<typeof fetchNodeUpdates>[1]> = {
+        limit,
+      };
       if (before) {
         options.before = before;
       }
@@ -334,8 +378,10 @@ async function loadUpdates() {
       return;
     }
 
-    if (props.scope === 'party' && props.partyId) {
-      const options: NonNullable<Parameters<typeof fetchPartyUpdates>[1]> = { limit };
+    if (props.scope === "party" && props.partyId) {
+      const options: NonNullable<Parameters<typeof fetchPartyUpdates>[1]> = {
+        limit,
+      };
       if (before) {
         options.before = before;
       }
@@ -353,9 +399,9 @@ async function loadUpdates() {
       return;
     }
 
-    throw new Error('Invalid updates browser configuration');
+    throw new Error("Invalid updates browser configuration");
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    error.value = err instanceof Error ? err.message : "Unknown error";
   } finally {
     loading.value = false;
   }
@@ -375,10 +421,10 @@ watch(
 
 watch(
   () => [
-    route.query[queryKey('party')],
-    route.query[queryKey('template')],
-    route.query[queryKey('partyMode')],
-    route.query[queryKey('hideSplice')],
+    route.query[queryKey("party")],
+    route.query[queryKey("template")],
+    route.query[queryKey("partyMode")],
+    route.query[queryKey("hideSplice")],
     props.queryPrefix ? undefined : route.query.mode,
   ],
   () => {
@@ -465,7 +511,7 @@ async function addPartyFilter() {
   }
 
   const nextParties = uniqueValues([...activePartyFilters.value, nextParty]);
-  partyFilterDraft.value = '';
+  partyFilterDraft.value = "";
 
   await pushQuery(
     buildQuery({
@@ -479,7 +525,9 @@ async function addPartyFilter() {
 }
 
 async function removePartyFilter(party: string) {
-  const nextParties = activePartyFilters.value.filter((candidate) => candidate !== party);
+  const nextParties = activePartyFilters.value.filter(
+    (candidate) => candidate !== party,
+  );
 
   await pushQuery(
     buildQuery({
@@ -498,8 +546,11 @@ async function addTemplateFilter() {
     return;
   }
 
-  const nextTemplates = uniqueValues([...activeTemplateFilters.value, nextTemplate]);
-  templateFilterDraft.value = '';
+  const nextTemplates = uniqueValues([
+    ...activeTemplateFilters.value,
+    nextTemplate,
+  ]);
+  templateFilterDraft.value = "";
 
   await pushQuery(
     buildQuery({
@@ -513,7 +564,9 @@ async function addTemplateFilter() {
 }
 
 async function removeTemplateFilter(templateId: string) {
-  const nextTemplates = activeTemplateFilters.value.filter((candidate) => candidate !== templateId);
+  const nextTemplates = activeTemplateFilters.value.filter(
+    (candidate) => candidate !== templateId,
+  );
 
   await pushQuery(
     buildQuery({
@@ -550,16 +603,18 @@ async function setHideSplice(hidden: boolean) {
   );
 }
 
-function updateLink(update: (typeof renderedUpdates.value)[number]): string | null {
+function updateLink(
+  update: (typeof renderedUpdates.value)[number],
+): string | null {
   if (!update.nodeId) {
     return null;
   }
 
   const params = new URLSearchParams();
-  params.set('from', props.sourceTag);
+  params.set("from", props.sourceTag);
 
-  if (props.sourceTag === 'party' && props.partyId) {
-    params.set('partyId', props.partyId);
+  if (props.sourceTag === "party" && props.partyId) {
+    params.set("partyId", props.partyId);
   }
 
   return `/nodes/${update.nodeId}/updates/${update.eventOffset}?${params.toString()}`;
@@ -624,9 +679,16 @@ function partyLink(party: string): string {
       />
     </div>
 
-    <p v-if="!updatesResponse && loading" class="dashboard__message">{{ loadingMessage }}</p>
-    <p v-else-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
-    <p v-else-if="updatesResponse && renderedUpdates.length === 0" class="dashboard__message">
+    <p v-if="!updatesResponse && loading" class="dashboard__message">
+      {{ loadingMessage }}
+    </p>
+    <p v-else-if="error" class="dashboard__message dashboard__message--error">
+      {{ error }}
+    </p>
+    <p
+      v-else-if="updatesResponse && renderedUpdates.length === 0"
+      class="dashboard__message"
+    >
       {{ emptyMessage }}
     </p>
 
@@ -650,7 +712,11 @@ function partyLink(party: string): string {
         role="table"
         :aria-label="tableAriaLabel"
       >
-        <div class="node-updates__row node-updates__row--head" :class="rowClassList" role="row">
+        <div
+          class="node-updates__row node-updates__row--head"
+          :class="rowClassList"
+          role="row"
+        >
           <span v-if="showNodeColumn" role="columnheader">Node</span>
           <span role="columnheader">Event Offset</span>
           <span role="columnheader">Record Time</span>
@@ -669,8 +735,12 @@ function partyLink(party: string): string {
           @keydown.enter.prevent="navigateToUpdate(update)"
           @keydown.space.prevent="navigateToUpdate(update)"
         >
-          <span v-if="showNodeColumn" class="activity-home__updates-node" role="cell">
-            {{ update.label ?? 'Unknown node' }}
+          <span
+            v-if="showNodeColumn"
+            class="activity-home__updates-node"
+            role="cell"
+          >
+            {{ update.label ?? "Unknown node" }}
           </span>
           <span class="node-updates__id" role="cell">
             <RouterLink
@@ -685,8 +755,12 @@ function partyLink(party: string): string {
           </span>
           <span class="node-updates__time" role="cell">
             <template v-if="update.recordTimeLines">
-              <span class="node-updates__time-date">{{ update.recordTimeLines.date }}</span>
-              <span class="node-updates__time-clock">{{ update.recordTimeLines.time }}</span>
+              <span class="node-updates__time-date">{{
+                update.recordTimeLines.date
+              }}</span>
+              <span class="node-updates__time-clock">{{
+                update.recordTimeLines.time
+              }}</span>
             </template>
             <template v-else>n/a</template>
           </span>
@@ -705,7 +779,12 @@ function partyLink(party: string): string {
             <template v-else>No parties</template>
           </span>
           <span class="node-updates__estimate" role="cell">
-            {{ formatEstimatedTrafficUsd(update.estimatedTrafficUsd) }}
+            {{
+              formatEstimatedTrafficUsd(
+                update.estimatedTrafficUsd,
+                update.estimatedTrafficUsdGapDays,
+              )
+            }}
           </span>
         </div>
       </div>

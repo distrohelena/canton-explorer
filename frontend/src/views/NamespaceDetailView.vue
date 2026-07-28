@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import QuerySourcePill from '../components/QuerySourcePill.vue';
-import { fetchNamespaceDetail, fetchNamespaceParties } from '../lib/api';
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../lib/pagination';
-import type { NamespaceDetailResponse, NamespacePartiesResponse } from '../types/namespaces';
-import type { PartyTopologyNodeEntry } from '../types/parties';
+import { computed, ref, watch } from "vue";
+import QuerySourcePill from "../components/QuerySourcePill.vue";
+import { fetchNamespaceDetail, fetchNamespaceParties } from "../lib/api";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "../lib/pagination";
+import type {
+  NamespaceDetailResponse,
+  NamespacePartiesResponse,
+} from "../types/namespaces";
+import type { PartyTopologyNodeEntry } from "../types/parties";
 
 const props = defineProps<{ namespaceId: string }>();
 
@@ -18,22 +21,22 @@ const partiesBeforeCursor = ref<string | null>(null);
 const partiesAfterCursor = ref<string | null>(null);
 
 const partyPurposeLabels: Record<string, string> = {
-  namespace: 'Namespace',
-  proofOfOwnership: 'Proof-of-Ownership',
-  protocol: 'Protocol',
+  namespace: "Namespace",
+  proofOfOwnership: "Proof-of-Ownership",
+  protocol: "Protocol",
 };
 const partyKeyLabels: Record<string, string> = {
-  ed25519: 'ED25519',
-  ecCurve25519: 'ED25519',
-  x25519: 'X25519',
+  ed25519: "ED25519",
+  ecCurve25519: "ED25519",
+  x25519: "X25519",
 };
 const partyKeyFormatLabels: Record<string, string> = {
-  derX509SubjectPublicKeyInfo: 'DER X.509 SPKI',
+  derX509SubjectPublicKeyInfo: "DER X.509 SPKI",
 };
 const partyPermissionLabels: Record<string, string> = {
-  confirmation: 'Confirmation',
-  submission: 'Submission',
-  observation: 'Observation',
+  confirmation: "Confirmation",
+  submission: "Submission",
+  observation: "Observation",
 };
 
 const renderedUpdates = computed(() =>
@@ -50,7 +53,9 @@ const renderedContracts = computed(() =>
   })),
 );
 
-function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
+function formatRecordTime(
+  recordTime: string | null,
+): { date: string; time: string } | null {
   if (!recordTime) {
     return null;
   }
@@ -61,13 +66,28 @@ function formatRecordTime(recordTime: string | null): { date: string; time: stri
   }
 
   return {
-    date: new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(parsed),
-    time: new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' }).format(parsed),
+    date: new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
+      parsed,
+    ),
+    time: new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+      parsed,
+    ),
   };
 }
 
-function formatEstimatedTrafficUsd(value: string | null | undefined): string {
-  return value ? `$${value}` : '—';
+function formatEstimatedTrafficUsd(
+  value: string | null | undefined,
+  gapDays: number | null | undefined,
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  if (!gapDays) {
+    return `$${value}`;
+  }
+
+  return `$${value} (${gapDays} day${gapDays === 1 ? "" : "s"})`;
 }
 
 function formatPartyPurposeLabel(value: string): string {
@@ -82,12 +102,12 @@ function formatPartyPurposeLabel(value: string): string {
   }
 
   return trimmedValue
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[-_]+/g, ' ')
-    .split(' ')
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .split(" ")
     .filter((segment) => segment.length > 0)
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
 function splitPartyPurposeLabels(value: string | null): string[] {
@@ -96,7 +116,7 @@ function splitPartyPurposeLabels(value: string | null): string[] {
   }
 
   return value
-    .split(',')
+    .split(",")
     .map((segment) => formatPartyPurposeLabel(segment))
     .filter((segment) => segment.length > 0);
 }
@@ -117,16 +137,16 @@ function formatPartyKeyLabel(value: string | null): string | null {
   }
 
   return trimmedValue
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[-_]+/g, ' ')
-    .split(' ')
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .split(" ")
     .filter((segment) => segment.length > 0)
     .map((segment) =>
       segment === segment.toUpperCase()
         ? segment
         : segment.charAt(0).toUpperCase() + segment.slice(1),
     )
-    .join(' ');
+    .join(" ");
 }
 
 function formatPartyPermissionLabel(value: string | null): string | null {
@@ -139,7 +159,11 @@ function formatPartyPermissionLabel(value: string | null): string | null {
     return null;
   }
 
-  return partyPermissionLabels[trimmedValue] ?? formatPartyKeyLabel(trimmedValue) ?? trimmedValue;
+  return (
+    partyPermissionLabels[trimmedValue] ??
+    formatPartyKeyLabel(trimmedValue) ??
+    trimmedValue
+  );
 }
 
 function formatPartyKeyFormatLabel(value: string | null): string | null {
@@ -152,11 +176,15 @@ function formatPartyKeyFormatLabel(value: string | null): string | null {
     return null;
   }
 
-  return partyKeyFormatLabels[trimmedValue] ?? formatPartyKeyLabel(trimmedValue) ?? trimmedValue;
+  return (
+    partyKeyFormatLabels[trimmedValue] ??
+    formatPartyKeyLabel(trimmedValue) ??
+    trimmedValue
+  );
 }
 
 function resolvePartyParticipantThreshold(
-  participants: PartyTopologyNodeEntry['partyToParticipants'],
+  participants: PartyTopologyNodeEntry["partyToParticipants"],
 ): number | null {
   const thresholds = participants
     .map((participant) => participant.threshold)
@@ -166,7 +194,7 @@ function resolvePartyParticipantThreshold(
 }
 
 function resolvePartyKeyThreshold(
-  keyMappings: PartyTopologyNodeEntry['partyToKeyMappings'],
+  keyMappings: PartyTopologyNodeEntry["partyToKeyMappings"],
 ): number | null {
   const thresholds = keyMappings
     .map((keyMapping) => keyMapping.threshold)
@@ -186,7 +214,7 @@ async function loadNamespaceParties() {
       after: partiesAfterCursor.value ?? undefined,
     });
   } catch (err) {
-    partiesError.value = err instanceof Error ? err.message : 'Unknown error';
+    partiesError.value = err instanceof Error ? err.message : "Unknown error";
     namespaceParties.value = null;
   } finally {
     partiesLoading.value = false;
@@ -198,10 +226,13 @@ async function loadNamespaceDetail() {
   namespaceDetail.value = null;
 
   try {
-    const [detail] = await Promise.all([fetchNamespaceDetail(props.namespaceId), loadNamespaceParties()]);
+    const [detail] = await Promise.all([
+      fetchNamespaceDetail(props.namespaceId),
+      loadNamespaceParties(),
+    ]);
     namespaceDetail.value = detail;
   } catch (err) {
-    detailError.value = err instanceof Error ? err.message : 'Unknown error';
+    detailError.value = err instanceof Error ? err.message : "Unknown error";
   }
 }
 
@@ -238,7 +269,8 @@ async function handlePartyPageSizeChange(event: Event) {
     return;
   }
 
-  partiesPageSize.value = Number.parseInt(target.value, 10) || DEFAULT_PAGE_SIZE;
+  partiesPageSize.value =
+    Number.parseInt(target.value, 10) || DEFAULT_PAGE_SIZE;
   resetPartyPagination();
   await loadNamespaceParties();
 }
@@ -256,18 +288,32 @@ watch(
 
 <template>
   <section class="party-detail">
-    <p v-if="detailError" class="node-detail__message node-detail__message--error">{{ detailError }}</p>
-    <p v-else-if="!namespaceDetail" class="node-detail__message">Loading namespace detail...</p>
+    <p
+      v-if="detailError"
+      class="node-detail__message node-detail__message--error"
+    >
+      {{ detailError }}
+    </p>
+    <p v-else-if="!namespaceDetail" class="node-detail__message">
+      Loading namespace detail...
+    </p>
     <div v-else class="node-page">
       <div class="node-page__rail">
-        <RouterLink class="node-detail__back" to="/parties" aria-label="Back to overview">←</RouterLink>
+        <RouterLink
+          class="node-detail__back"
+          to="/parties"
+          aria-label="Back to overview"
+          >←</RouterLink
+        >
       </div>
 
       <div class="node-page__main node-detail__content">
         <header class="node-detail__hero">
           <div>
             <p class="activity-home__eyebrow">Namespaces</p>
-            <h2 class="party-detail__title">{{ namespaceDetail.namespaceId }} Namespace</h2>
+            <h2 class="party-detail__title">
+              {{ namespaceDetail.namespaceId }} Namespace
+            </h2>
           </div>
         </header>
 
@@ -275,9 +321,13 @@ watch(
           <section class="node-detail__section party-detail__section--summary">
             <h3>Overview</h3>
             <dl class="detail-grid party-detail__summary-grid">
-              <div class="party-detail__summary-item party-detail__summary-item--full-row">
+              <div
+                class="party-detail__summary-item party-detail__summary-item--full-row"
+              >
                 <dt>Namespace ID</dt>
-                <dd class="update-detail__id">{{ namespaceDetail.namespaceId }}</dd>
+                <dd class="update-detail__id">
+                  {{ namespaceDetail.namespaceId }}
+                </dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Observed Parties</dt>
@@ -344,7 +394,10 @@ watch(
                 class="package-detail__list-row"
               >
                 <div class="party-detail__row-main">
-                  <RouterLink class="contract-detail__link" :to="`/parties/${encodeURIComponent(party.partyId)}`">
+                  <RouterLink
+                    class="contract-detail__link"
+                    :to="`/parties/${encodeURIComponent(party.partyId)}`"
+                  >
                     {{ party.partyId }}
                   </RouterLink>
                 </div>
@@ -352,10 +405,19 @@ watch(
               <p v-if="partiesError" class="update-detail__empty">
                 {{ partiesError }}
               </p>
-              <p v-else-if="partiesLoading && (namespaceParties?.parties.length ?? 0) === 0" class="update-detail__empty">
+              <p
+                v-else-if="
+                  partiesLoading &&
+                  (namespaceParties?.parties.length ?? 0) === 0
+                "
+                class="update-detail__empty"
+              >
                 Loading observed parties...
               </p>
-              <p v-else-if="(namespaceParties?.parties.length ?? 0) === 0" class="update-detail__empty">
+              <p
+                v-else-if="(namespaceParties?.parties.length ?? 0) === 0"
+                class="update-detail__empty"
+              >
                 No parties observed for this namespace.
               </p>
             </div>
@@ -384,7 +446,7 @@ watch(
                   v-else-if="topology.status === 'grpc_error'"
                   class="party-topology__state party-topology__state--error"
                 >
-                  {{ topology.errorMessage ?? 'Topology read failed.' }}
+                  {{ topology.errorMessage ?? "Topology read failed." }}
                 </p>
                 <template v-else>
                   <div
@@ -393,8 +455,20 @@ watch(
                   >
                     <div class="party-topology__group-title-row">
                       <h4>Party to Participant</h4>
-                      <span v-if="resolvePartyParticipantThreshold(topology.partyToParticipants) !== null" class="party-topology__threshold">
-                        Threshold {{ resolvePartyParticipantThreshold(topology.partyToParticipants) }}
+                      <span
+                        v-if="
+                          resolvePartyParticipantThreshold(
+                            topology.partyToParticipants,
+                          ) !== null
+                        "
+                        class="party-topology__threshold"
+                      >
+                        Threshold
+                        {{
+                          resolvePartyParticipantThreshold(
+                            topology.partyToParticipants,
+                          )
+                        }}
                       </span>
                     </div>
                     <div
@@ -403,18 +477,31 @@ watch(
                       class="party-topology__mapping"
                     >
                       <div class="party-topology__field">
-                        <span class="party-topology__label">Participant UID</span>
-                        <span class="party-topology__value party-topology__value--truncate">{{ participant.participantUid ?? 'Not Present' }}</span>
+                        <span class="party-topology__label"
+                          >Participant UID</span
+                        >
+                        <span
+                          class="party-topology__value party-topology__value--truncate"
+                          >{{
+                            participant.participantUid ?? "Not Present"
+                          }}</span
+                        >
                       </div>
                       <div class="party-topology__field">
                         <span class="party-topology__label">Permission</span>
                         <span
-                          v-if="formatPartyPermissionLabel(participant.permission)"
+                          v-if="
+                            formatPartyPermissionLabel(participant.permission)
+                          "
                           class="party-topology__pill"
                         >
-                          {{ formatPartyPermissionLabel(participant.permission) }}
+                          {{
+                            formatPartyPermissionLabel(participant.permission)
+                          }}
                         </span>
-                        <span v-else class="party-topology__value">Not Present</span>
+                        <span v-else class="party-topology__value"
+                          >Not Present</span
+                        >
                       </div>
                     </div>
                   </div>
@@ -425,8 +512,18 @@ watch(
                   >
                     <div class="party-topology__group-title-row">
                       <h4>Party to Key</h4>
-                      <span v-if="resolvePartyKeyThreshold(topology.partyToKeyMappings) !== null" class="party-topology__threshold">
-                        Threshold {{ resolvePartyKeyThreshold(topology.partyToKeyMappings) }}
+                      <span
+                        v-if="
+                          resolvePartyKeyThreshold(
+                            topology.partyToKeyMappings,
+                          ) !== null
+                        "
+                        class="party-topology__threshold"
+                      >
+                        Threshold
+                        {{
+                          resolvePartyKeyThreshold(topology.partyToKeyMappings)
+                        }}
                       </span>
                     </div>
                     <div
@@ -436,38 +533,66 @@ watch(
                     >
                       <div class="party-topology__field">
                         <span class="party-topology__label">Fingerprint</span>
-                        <span class="party-topology__value party-topology__value--truncate">{{ keyMapping.keyFingerprint ?? 'Not Present' }}</span>
+                        <span
+                          class="party-topology__value party-topology__value--truncate"
+                          >{{
+                            keyMapping.keyFingerprint ?? "Not Present"
+                          }}</span
+                        >
                       </div>
                       <div class="party-topology__field">
                         <span class="party-topology__label">Public Key</span>
-                        <span class="party-topology__value party-topology__value--truncate">{{ keyMapping.publicKey ?? 'Not Present' }}</span>
+                        <span
+                          class="party-topology__value party-topology__value--truncate"
+                          >{{ keyMapping.publicKey ?? "Not Present" }}</span
+                        >
                       </div>
                       <div class="party-topology__field">
                         <span class="party-topology__label">Purposes</span>
-                        <div v-if="splitPartyPurposeLabels(keyMapping.purpose).length > 0" class="party-topology__pill-list">
+                        <div
+                          v-if="
+                            splitPartyPurposeLabels(keyMapping.purpose).length >
+                            0
+                          "
+                          class="party-topology__pill-list"
+                        >
                           <span
-                            v-for="purpose in splitPartyPurposeLabels(keyMapping.purpose)"
+                            v-for="purpose in splitPartyPurposeLabels(
+                              keyMapping.purpose,
+                            )"
                             :key="purpose"
                             class="party-topology__pill"
                           >
                             {{ purpose }}
                           </span>
                         </div>
-                        <span v-else class="party-topology__value">Not Present</span>
+                        <span v-else class="party-topology__value"
+                          >Not Present</span
+                        >
                       </div>
                       <div class="party-topology__field">
                         <span class="party-topology__label">Key Type</span>
-                        <span v-if="formatPartyKeyLabel(keyMapping.keyType)" class="party-topology__pill">
+                        <span
+                          v-if="formatPartyKeyLabel(keyMapping.keyType)"
+                          class="party-topology__pill"
+                        >
                           {{ formatPartyKeyLabel(keyMapping.keyType) }}
                         </span>
-                        <span v-else class="party-topology__value">Not Present</span>
+                        <span v-else class="party-topology__value"
+                          >Not Present</span
+                        >
                       </div>
                       <div class="party-topology__field">
                         <span class="party-topology__label">Key Format</span>
-                        <span v-if="formatPartyKeyFormatLabel(keyMapping.keyFormat)" class="party-topology__pill">
+                        <span
+                          v-if="formatPartyKeyFormatLabel(keyMapping.keyFormat)"
+                          class="party-topology__pill"
+                        >
                           {{ formatPartyKeyFormatLabel(keyMapping.keyFormat) }}
                         </span>
-                        <span v-else class="party-topology__value">Not Present</span>
+                        <span v-else class="party-topology__value"
+                          >Not Present</span
+                        >
                       </div>
                     </div>
                   </div>
@@ -486,7 +611,9 @@ watch(
                 :to="`/nodes/${update.nodeId}/updates/${encodeURIComponent(update.eventOffset)}`"
               >
                 <div class="party-detail__row-main">
-                  <span class="party-detail__row-title">{{ update.label }}</span>
+                  <span class="party-detail__row-title">{{
+                    update.label
+                  }}</span>
                   <span class="update-detail__id">{{ update.updateId }}</span>
                   <div class="party-detail__row-parties">
                     <span
@@ -498,14 +625,26 @@ watch(
                     </span>
                   </div>
                 </div>
-                <span v-if="update.recordTimeLines" class="party-detail__meta party-detail__row-text">
-                  {{ update.recordTimeLines.date }} {{ update.recordTimeLines.time }}
+                <span
+                  v-if="update.recordTimeLines"
+                  class="party-detail__meta party-detail__row-text"
+                >
+                  {{ update.recordTimeLines.date }}
+                  {{ update.recordTimeLines.time }}
                 </span>
                 <span class="party-detail__meta party-detail__row-text">
-                  {{ formatEstimatedTrafficUsd(update.estimatedTrafficUsd) }}
+                  {{
+                    formatEstimatedTrafficUsd(
+                      update.estimatedTrafficUsd,
+                      update.estimatedTrafficUsdGapDays,
+                    )
+                  }}
                 </span>
               </RouterLink>
-              <p v-if="renderedUpdates.length === 0" class="update-detail__empty">
+              <p
+                v-if="renderedUpdates.length === 0"
+                class="update-detail__empty"
+              >
                 No updates observed for this namespace.
               </p>
             </div>
@@ -521,17 +660,28 @@ watch(
                 :to="`/nodes/${contract.nodeId}/contracts/${encodeURIComponent(contract.contractId)}`"
               >
                 <div class="party-detail__row-main">
-                  <span class="party-detail__row-title">{{ contract.label }}</span>
-                  <span class="update-detail__id">{{ contract.contractId }}</span>
+                  <span class="party-detail__row-title">{{
+                    contract.label
+                  }}</span>
+                  <span class="update-detail__id">{{
+                    contract.contractId
+                  }}</span>
                   <span class="party-detail__meta party-detail__row-text">
-                    {{ contract.templateId ?? 'Template not present' }}
+                    {{ contract.templateId ?? "Template not present" }}
                   </span>
                 </div>
-                <span v-if="contract.recordTimeLines" class="party-detail__meta party-detail__row-text">
-                  {{ contract.recordTimeLines.date }} {{ contract.recordTimeLines.time }}
+                <span
+                  v-if="contract.recordTimeLines"
+                  class="party-detail__meta party-detail__row-text"
+                >
+                  {{ contract.recordTimeLines.date }}
+                  {{ contract.recordTimeLines.time }}
                 </span>
               </RouterLink>
-              <p v-if="renderedContracts.length === 0" class="update-detail__empty">
+              <p
+                v-if="renderedContracts.length === 0"
+                class="update-detail__empty"
+              >
                 No contracts observed for this namespace.
               </p>
             </div>
