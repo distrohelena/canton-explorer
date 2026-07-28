@@ -18,6 +18,8 @@ import {
 export { normalizeApiBaseUrl };
 
 const RETRY_DELAY_MS = 250;
+const RESPONSE_DRAIN_TIMEOUT_MS = 250;
+const LOADING_QUIET_MS = 50;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_SETTLE_MS = 300;
 const ERROR_STATE_SELECTOR = [
@@ -27,6 +29,9 @@ const ERROR_STATE_SELECTOR = [
   '.node-detail__message--error',
   '.dashboard__message--error',
   '.search-results-view__error',
+  '.debugger-view__session-state--error',
+  '.debugger-template-picker__state--error',
+  '.monaco-surface__state--error',
 ].join(', ');
 
 export class ScreenshotRunnerError extends Error {
@@ -123,30 +128,34 @@ async function waitForLandmark(page, route, timeoutMs) {
   await waitForLocator(page.getByRole('heading', { name: landmark, exact: true }), timeoutMs);
 }
 
-async function waitForLoadingToDisappear(page, timeoutMs) {
-  const locators = [
-    page.getByText(/^Loading/i),
-    page.locator('[role="status"]'),
-    page.locator('[aria-busy="true"]'),
-  ];
-  for (const locator of locators) {
-    let count = 0;
-    try {
-      count = await locator.count();
-    } catch {
-      continue;
+export async function waitForLoadingToDisappear(page, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let quietSince = null;
+  while (Date.now() < deadline) {
+    const hasVisibleIndicator = await page.evaluate(() => {
+      const visible = (element) => {
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
+      };
+      const loading = [...document.querySelectorAll('body, body *')].some((element) => (
+        /^Loading/i.test((element.textContent ?? '').trim()) && visible(element)
+      ));
+      const status = [...document.querySelectorAll('[role="status"], [aria-busy="true"]')]
+        .some((element) => visible(element));
+      return loading || status;
+    });
+    if (hasVisibleIndicator) {
+      quietSince = null;
+    } else if (quietSince === null) {
+      quietSince = Date.now();
+    } else if (Date.now() - quietSince >= LOADING_QUIET_MS) {
+      return;
     }
-    for (let index = 0; index < count; index += 1) {
-      try {
-        if (await locator.nth(index).isVisible()) {
-          await locator.nth(index).waitFor({ state: 'hidden', timeout: timeoutMs });
-        }
-      } catch (error) {
-        if (/not attached|detached/i.test(errorMessage(error))) continue;
-        throw error;
-      }
-    }
+    await delay(Math.min(25, Math.max(1, deadline - Date.now())));
   }
+  throw new ScreenshotRunnerError('Loading indicators did not disappear before the readiness timeout', {
+    kind: 'readiness',
+  });
 }
 
 async function visibleCount(locator) {
@@ -246,6 +255,14 @@ function optionalActionSkip(error) {
   return error?.kind === 'optional-skip' || error?.code === 'missing-control' || error?.code === 'missing-selector';
 }
 
+function optionalDebuggerValidation(error, route, required) {
+  return !required && route.name === 'debugger' && error?.kind === 'validation';
+}
+
+function infrastructureFailure(error) {
+  return error?.kind !== 'validation' && error?.kind !== 'action' && error?.kind !== 'optional-skip';
+}
+
 function routeUrl(baseUrl, route) {
   if (!route.url) return null;
   return new URL(route.url, baseUrl).href;
@@ -321,6 +338,7 @@ function manifestForOutput(manifest, apiUrl) {
 
 export function resolveExitCode({ entries = [], strict = false, error = null } = {}) {
   if (error) return error.exitCode === 2 || error.kind === 'config' || error.name === 'ScreenshotConfigError' ? 2 : 1;
+  if (entries.some((entry) => entry.fatal === true)) return 1;
   if (entries.some((entry) => entry.status === 'failed' && entry.required !== false)) return 1;
   if (strict && entries.some((entry) => entry.status === 'failed' || entry.status === 'skipped')) return 1;
   return 0;
@@ -371,10 +389,15 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
   };
   const drainResponseTasks = async () => {
     await delay(0);
-    while (pendingDebuggerRequests.size > 0 || responseTasks.size > 0) {
-      await Promise.allSettled([
-        ...[...pendingDebuggerRequests.values()].map((pending) => pending.promise),
-        ...responseTasks,
+    const deadline = Date.now() + RESPONSE_DRAIN_TIMEOUT_MS;
+    while ((pendingDebuggerRequests.size > 0 || responseTasks.size > 0) && Date.now() < deadline) {
+      const remaining = deadline - Date.now();
+      await Promise.race([
+        Promise.allSettled([
+          ...[...pendingDebuggerRequests.values()].map((pending) => pending.promise),
+          ...responseTasks,
+        ]),
+        delay(remaining),
       ]);
       await delay(0);
     }
@@ -446,11 +469,13 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
         break;
       } catch (error) {
         lastError = error;
-        if (attempt === 0) continue;
+        if (attempt === 0 && !optionalActionSkip(error) && !optionalDebuggerValidation(error, captureRoute, required)) continue;
       }
     }
     if (!result) {
-      const status = !required && optionalActionSkip(lastError) ? 'skipped' : 'failed';
+      const isActionSkip = !required && optionalActionSkip(lastError);
+      const isDebuggerValidationSkip = optionalDebuggerValidation(lastError, captureRoute, required);
+      const status = isActionSkip || isDebuggerValidationSkip ? 'skipped' : 'failed';
       result = {
         route: route.name,
         state: state.name,
@@ -460,6 +485,7 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
         ...(status === 'skipped' ? { reason: errorMessage(lastError) } : { error: errorMessage(lastError) }),
         durationMs: Date.now() - started,
         required,
+        ...(status === 'failed' && (required || infrastructureFailure(lastError)) ? { fatal: true } : {}),
       };
     }
   } catch (error) {
@@ -472,6 +498,7 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
       error: errorMessage(error),
       durationMs: Date.now() - started,
       required,
+      fatal: true,
     };
   } finally {
     await drainResponseTasks();
@@ -482,6 +509,7 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
         result.status = required ? 'failed' : 'failed';
         delete result.output;
         result.error = `Failed to close browser context: ${errorMessage(error)}`;
+        result.fatal = true;
       }
     }
     for (const sessionId of sessionIds) {
@@ -548,7 +576,7 @@ export async function captureScreenshotMatrix(options = {}) {
           contextFactory: options.contextFactory,
           onContextCreated: options.onContextCreated,
         });
-        if (result.status === 'failed' && result.required !== false) break;
+        if (result.fatal === true) break;
       }
     } finally {
       if (ownsBrowser) await browser.close();

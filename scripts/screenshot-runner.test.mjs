@@ -13,6 +13,7 @@ import {
   normalizeApiBaseUrl,
   resolveExitCode,
   rewriteApiRequestUrl,
+  waitForLoadingToDisappear,
 } from './screenshot-runner.mjs';
 
 async function startServer(handler) {
@@ -192,9 +193,9 @@ test('treats current route-specific error classes as capture failures', async (t
   const output = await makeOutput();
   const frontend = await startServer((req, res) => {
     send(res, 200, `<!doctype html><html><body><main><h1>Fixture Ready</h1>
-      <p class="node-detail__message--error">node error</p>
-      <p class="dashboard__message--error">dashboard error</p>
-      <p class="search-results-view__error">search error</p>
+      <p class="debugger-view__session-state--error">session error</p>
+      <p class="debugger-template-picker__state--error">template error</p>
+      <p class="monaco-surface__state--error">source error</p>
     </main></body></html>`);
   });
   t.after(() => frontend.close());
@@ -205,6 +206,52 @@ test('treats current route-specific error classes as capture failures', async (t
 
   assert.equal(report.entries[0].status, 'failed');
   assert.match(report.entries[0].error, /error state/);
+});
+
+test('records debugger validation failures as optional skips with their validation reason', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><section><h2>Debugger</h2><p class="debugger-view__session-state--error">Replay failed</p></section></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [{
+      name: 'debugger', path: '/debugger?updateId=update-1', required: false,
+      readiness: { heading: 'Debugger', timeoutMs: 100, settleMs: 0 },
+      validation: { sessionRequired: true },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'skipped');
+  assert.match(report.entries[0].reason, /error state/);
+});
+
+test('records a missing optional debugger session as a validation skip', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><section><h2>Debugger</h2><p>Debugger catalog</p></section></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [{
+      name: 'debugger', path: '/debugger?updateId=update-1', required: false,
+      readiness: { heading: 'Debugger', timeoutMs: 100, settleMs: 0 },
+      validation: { sessionRequired: true },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'skipped');
+  assert.match(report.entries[0].reason, /did not create a debugger session/);
 });
 
 test('preserves configured readiness when discovery supplies only dynamic readiness metadata', async (t) => {
@@ -229,6 +276,26 @@ test('preserves configured readiness when discovery supplies only dynamic readin
   const report = await captureScreenshotMatrix({ config, manifest, browser });
 
   assert.equal(report.entries[0].status, 'captured');
+});
+
+test('waits for loading indicators that mount after the first readiness scan', async (t) => {
+  const frontend = await startServer((req, res) => {
+    send(res, 200, `<!doctype html><html><body><h1>Fixture Ready</h1><script>
+      setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<div id="late-loading">Loading late data</div>'), 10);
+      setTimeout(() => document.querySelector('#late-loading')?.remove(), 100);
+    </script></body></html>`);
+  });
+  t.after(() => frontend.close());
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  t.after(() => context.close());
+  await page.goto(`${frontend.url}/fixture`, { waitUntil: 'domcontentloaded' });
+
+  const started = Date.now();
+  await waitForLoadingToDisappear(page, 500);
+  assert.ok(Date.now() - started >= 70);
 });
 
 test('uses a fresh browser context for every route/state/viewport and keeps state failures isolated', async (t) => {
@@ -390,6 +457,67 @@ test('waits for a late debugger POST response before deleting sessions', async (
   assert.equal(report.entries[0].status, 'failed');
   assert.ok(sessionIds.length >= 2);
   assert.deepEqual(deletedIds.sort(), sessionIds.sort());
+});
+
+test('bounds cleanup when a debugger POST hangs forever', async (t) => {
+  const output = await makeOutput();
+  const api = await startServer(async (req, res) => {
+    await bodyOf(req);
+    if (req.method === 'POST' && req.url === '/api/debugger/sessions') {
+      setTimeout(() => json(res, 201, { sessionId: 'never-received' }), 1000);
+      return;
+    }
+    json(res, 200, { ok: true });
+  });
+  const frontend = await startServer((req, res) => {
+    if (req.url?.startsWith('/debugger')) {
+      send(res, 200, '<!doctype html><html><body><div id="loading">Loading debugger</div><script>fetch("/api/debugger/sessions", {method:"POST", body:"{}"});</script></body></html>');
+      return;
+    }
+    send(res, 404, 'not found');
+  });
+  t.after(async () => {
+    await frontend.close();
+    await api.close();
+  });
+  const config = configFor(frontend.url, output, {
+    apiUrl: api.url,
+    routes: [
+      {
+        name: 'debugger', path: '/debugger?updateId=update-1', required: false,
+        readiness: { heading: 'Debugger', timeoutMs: 20, settleMs: 0 },
+        states: [{ name: 'default', actions: [] }],
+      },
+      {
+        name: 'fixture', path: '/fixture', required: true,
+        readiness: { heading: 'Fixture Ready', timeoutMs: 100, settleMs: 0 },
+        states: [{ name: 'default', actions: [] }],
+      },
+    ],
+  });
+  const manifest = manifestFor(config);
+  const fixtureRoute = manifest.routes.find((route) => route.name === 'fixture');
+  fixtureRoute.url = '/fixture';
+  frontend.server.removeAllListeners('request');
+  frontend.server.on('request', (req, res) => {
+    if (req.url?.startsWith('/debugger')) {
+      send(res, 200, '<!doctype html><html><body><div id="loading">Loading debugger</div><script>fetch("/api/debugger/sessions", {method:"POST", body:"{}"});</script></body></html>');
+      return;
+    }
+    if (req.url?.startsWith('/fixture')) {
+      send(res, 200, '<!doctype html><html><body><main><h1>Fixture Ready</h1></main></body></html>');
+      return;
+    }
+    send(res, 404, 'not found');
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const started = Date.now();
+  const report = await captureScreenshotMatrix({ config, manifest, browser });
+
+  assert.ok(Date.now() - started < 800);
+  assert.equal(report.entries[0].status, 'failed');
+  assert.equal(report.entries.length, 1);
 });
 
 test('persists manifest and report atomically after entries and cleanup', async (t) => {
