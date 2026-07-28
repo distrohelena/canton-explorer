@@ -300,7 +300,8 @@ test('deduplicates exact logical entries while preserving scoped routes sharing 
   assert.equal(routes.get('token-detail').url, '/tokens/same%2Fid');
   assert.equal(routes.get('token-detail-transfers').url, '/tokens/same%2Fid');
   assert.equal(routes.get('node-detail-01').url, '/nodes/same%2Fid');
-  assert.equal(routes.get('node-detail-02').url, '/nodes/same%2Fid');
+  assert.equal(manifest.routes.filter((route) => route.dedupeKey === 'node-detail').length, 1);
+  assert.equal(routes.has('node-detail-02'), false);
   assert.equal(manifest.context.nodeId, 'same/id');
   assert.equal(manifest.context.eventOffset, 'same/offset');
 });

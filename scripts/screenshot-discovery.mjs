@@ -170,6 +170,7 @@ function routeLandmark(name) {
 
 function routeRecord({
   name,
+  dedupeKey = name,
   url = null,
   source,
   required = false,
@@ -183,6 +184,7 @@ function routeRecord({
   const landmark = validation.landmark ?? routeLandmark(name);
   const record = {
     name,
+    dedupeKey,
     url,
     source,
     required,
@@ -209,16 +211,12 @@ function routePath(...segments) {
   return `/${segments.map((segment) => encodeURIComponent(String(segment))).join('/')}`;
 }
 
-function logicalRouteState(route) {
-  return JSON.stringify({
-    name: route.name,
-    state: route.state ?? null,
-    view: route.metadata?.view ?? null,
-  });
+function routeDedupeKey(route) {
+  return JSON.stringify({ category: route.dedupeKey ?? route.name, url: route.url });
 }
 
 function addRoute(routes, skips, route) {
-  if (routes.some((candidate) => logicalRouteState(candidate) === logicalRouteState(route))) return false;
+  if (routes.some((candidate) => routeDedupeKey(candidate) === routeDedupeKey(route))) return false;
   routes.push(route);
   if (route.skipReason) skips.push({ name: route.name, source: route.source, reason: route.skipReason });
   return true;
@@ -373,6 +371,7 @@ export async function discoverScreenshotManifest(options = {}) {
   if (nodes.length === 0) {
     addUnavailableRoute(routes, skips, {
       name: 'node-detail-01',
+      dedupeKey: 'node-detail',
       source: '/nodes',
       expectedPath: '/nodes/:id',
       skipReason: errors.nodes ?? emptyReason('/nodes', 'nodes'),
@@ -384,6 +383,7 @@ export async function discoverScreenshotManifest(options = {}) {
     const url = routePath('nodes', nodeId);
     addRoute(routes, skips, routeRecord({
       name: `node-detail-${String(index + 1).padStart(2, '0')}`,
+      dedupeKey: 'node-detail',
       url,
       source: '/nodes',
       expectedPath: url,
