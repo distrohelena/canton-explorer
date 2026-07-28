@@ -247,7 +247,12 @@ function routeConfigByName(config) {
 }
 
 function addUnavailableRouteRecord(routes, skips, options) {
-  addRouteRecord(routes, skips, routeRecord({ ...options, url: null, required: false, dynamic: true }));
+  addRouteRecord(routes, skips, routeRecord({
+    ...options,
+    url: null,
+    required: options.required ?? false,
+    dynamic: true,
+  }));
 }
 
 async function readEndpoint({ apiUrl, fetchImpl, path, key, errors, failures }) {
@@ -305,6 +310,7 @@ export async function discoverScreenshotManifest(options = {}) {
   const failures = {};
   const skips = [];
   const routes = [];
+  const configuredRoutes = routeConfigByName(config);
   const configuredNames = new Set((config.routes ?? []).map((route) => route.name));
   const configuredKeys = new Set((config.routes ?? []).map((route) => route.discoveryKey).filter(Boolean));
   const routeIsConfigured = (name, discoveryKey = name) =>
@@ -319,13 +325,21 @@ export async function discoverScreenshotManifest(options = {}) {
   const addRoute = (...args) => {
     const route = args.length === 1 ? args[0] : args[2];
     if (!routeShouldEmit(route.name)) return false;
-    return addRouteRecord(routes, skips, route);
+    const configured = configuredRoutes.get(route.name);
+    const generated = configured?.dynamic
+      ? { ...route, required: configured.required ?? false, dynamic: true }
+      : route;
+    return addRouteRecord(routes, skips, generated);
   };
   const addUnavailableRoute = (...args) => {
     const routeOptions = args.length === 1 ? args[0] : args[2];
     if (!routeShouldEmit(routeOptions.name)) return false;
     const discoveryError = routeOptions.discoveryError ?? Object.values(errors).includes(routeOptions.skipReason);
-    return addUnavailableRouteRecord(routes, skips, { ...routeOptions, discoveryError });
+    const configured = configuredRoutes.get(routeOptions.name);
+    const generated = configured?.dynamic
+      ? { ...routeOptions, required: configured.required ?? false, dynamic: true }
+      : routeOptions;
+    return addUnavailableRouteRecord(routes, skips, { ...generated, discoveryError });
   };
   const wants = (name, discoveryKey = name) => routeIsConfigured(name, discoveryKey);
   const configuredActions = (config.routes ?? []).flatMap((route) =>
