@@ -1,0 +1,293 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  apiUrlForPath,
+  discoverScreenshotManifest,
+  normalizeApiBaseUrl,
+  requestJson,
+} from './screenshot-discovery.mjs';
+
+const apiBase = 'http://localhost:4600';
+
+function response(body, status = 200, statusText = 'OK') {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+    async json() {
+      return body;
+    },
+  };
+}
+
+function fixtureFetch(fixtures, calls = []) {
+  const fetchImpl = async (url, init = {}) => {
+    const parsed = new URL(url);
+    const key = `${parsed.pathname}${parsed.search}`;
+    calls.push({ url, init: { ...init } });
+    const fixture = fixtures[key];
+    if (fixture === undefined) {
+      return response({ error: `Missing fixture for ${key}` }, 404, 'Not Found');
+    }
+    return typeof fixture === 'function' ? fixture({ url, init }) : response(fixture);
+  };
+  return fetchImpl;
+}
+
+const fullFixtures = {
+  '/api/nodes': {
+    nodes: [
+      { id: 'node/one', label: 'One' },
+      { id: 'node two', label: 'Two' },
+    ],
+  },
+  '/api/updates?limit=1': {
+    updates: [{
+      nodeId: 'node/one',
+      eventOffset: 'offset/1',
+      updateId: 'update?one',
+      parties: ['party::one'],
+    }],
+  },
+  '/api/contracts?limit=1': {
+    contracts: [{
+      nodeId: 'node/one',
+      contractId: 'contract/one',
+      templateId: 'Module:Asset',
+    }],
+  },
+  '/api/parties': {
+    nodes: [{ nodeId: 'node/one', parties: ['party::one'] }],
+  },
+  '/api/parties/fingerprints?limit=1': {
+    fingerprints: ['namespace/one'],
+  },
+  '/api/tokens?limit=1': {
+    tokens: [{ tokenId: 'token/one', name: 'Token One', issuer: 'issuer::one' }],
+  },
+  '/api/tokens/transfers?limit=1': {
+    transfers: [{
+      tokenId: 'token/one',
+      updateId: 'transfer/update',
+      nodes: [{ nodeId: 'node/one', eventOffset: 'transfer/offset' }],
+    }],
+  },
+  '/api/templates': {
+    templates: [{ templateId: 'Module:Asset' }],
+  },
+  '/api/traffic-purchases?limit=1': {
+    purchases: [{
+      nodeId: 'node/one',
+      updateId: 'traffic/update',
+      eventOffset: 'traffic/offset',
+    }],
+    current: [{ nodeId: 'node/one' }],
+  },
+  '/api/nodes/node%2Fone/packages': {
+    nodeId: 'node/one',
+    packagesByName: [{
+      packageName: 'package/name',
+      packages: [{ packageId: 'package/id' }],
+    }],
+  },
+  '/api/nodes/node%20two/packages': {
+    nodeId: 'node two',
+    packagesByName: [],
+  },
+};
+
+test('normalizes API bases without double prefixes and preserves URL suffixes', () => {
+  assert.equal(normalizeApiBaseUrl('http://localhost:4600'), 'http://localhost:4600/api');
+  assert.equal(normalizeApiBaseUrl('http://localhost:4600/api'), 'http://localhost:4600/api');
+  assert.equal(normalizeApiBaseUrl('http://localhost:4600/api/'), 'http://localhost:4600/api');
+  assert.equal(
+    normalizeApiBaseUrl('http://localhost:4600/proxy/api/api/?tenant=one#fragment'),
+    'http://localhost:4600/proxy/api?tenant=one#fragment',
+  );
+});
+
+test('builds API URLs for relative and already-prefixed paths', () => {
+  assert.equal(
+    apiUrlForPath(apiBase, '/nodes?limit=1'),
+    'http://localhost:4600/api/nodes?limit=1',
+  );
+  assert.equal(
+    apiUrlForPath('http://localhost:4600/api/', '/api/updates?limit=1'),
+    'http://localhost:4600/api/updates?limit=1',
+  );
+  assert.equal(
+    apiUrlForPath(apiBase, 'http://localhost:4600/api/updates?limit=1'),
+    'http://localhost:4600/api/updates?limit=1',
+  );
+  assert.equal(
+    apiUrlForPath(apiBase, '/nodes/node%2Fone/packages'),
+    'http://localhost:4600/api/nodes/node%2Fone/packages',
+  );
+});
+
+test('requestJson uses injected fetch and preserves method, query, headers, and body', async () => {
+  const calls = [];
+  const fetchImpl = fixtureFetch({ '/api/custom?one=1&two=2': { ok: true } }, calls);
+  const body = JSON.stringify({ hello: 'world' });
+  const result = await requestJson(apiBase, '/custom?one=1&two=2', {
+    fetchImpl,
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body,
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(calls, [{
+    url: 'http://localhost:4600/api/custom?one=1&two=2',
+    init: {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    },
+  }]);
+});
+
+test('requestJson reports precise HTTP response errors', async () => {
+  const fetchImpl = fixtureFetch({
+    '/api/updates?limit=1': () => response({ message: 'unavailable' }, 503, 'Service Unavailable'),
+  });
+
+  await assert.rejects(
+    requestJson(apiBase, '/updates?limit=1', { fetchImpl }),
+    (error) => error.message === 'GET /updates?limit=1 returned 503 Service Unavailable',
+  );
+});
+
+test('discovers static and dynamic screenshot routes from every approved endpoint', async () => {
+  const calls = [];
+  const manifest = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    fetchImpl: fixtureFetch(fullFixtures, calls),
+  });
+  const routes = new Map(manifest.routes.map((route) => [route.name, route]));
+
+  assert.deepEqual(
+    ['updates', 'nodes', 'parties', 'contracts', 'tokens', 'canton-coin', 'traffic', 'settings']
+      .map((name) => routes.get(name).url),
+    ['/', '/nodes', '/parties', '/contracts', '/tokens', '/canton-coin', '/traffic', '/settings'],
+  );
+  assert.equal(routes.get('updates').required, true);
+  assert.equal(routes.get('updates').source, 'config');
+
+  assert.equal(routes.get('node-detail-01').url, '/nodes/node%2Fone');
+  assert.equal(routes.get('node-detail-02').url, '/nodes/node%20two');
+  assert.equal(routes.get('update-detail').url, '/nodes/node%2Fone/updates/offset%2F1');
+  assert.equal(routes.get('legacy-update-redirect').url, '/tx/update%3Fone');
+  assert.equal(routes.get('debugger').url, '/debugger?updateId=update%3Fone');
+  assert.equal(routes.get('contract-detail').url, '/nodes/node%2Fone/contracts/contract%2Fone');
+  assert.equal(routes.get('party-detail').url, '/parties/party%3A%3Aone');
+  assert.equal(routes.get('namespace-detail').url, '/namespaces/namespace%2Fone');
+  assert.equal(routes.get('token-detail').url, '/tokens/token%2Fone');
+  assert.equal(routes.get('token-transfer-detail').url, '/tokens/transfers/transfer%2Fupdate');
+  assert.equal(routes.get('package-family').url, '/packages/by-name/package%2Fname');
+  assert.equal(routes.get('package-detail').url, '/packages/package%2Fid');
+  assert.equal(routes.get('search-results').url, '/search?q=party%3A%3Aone');
+
+  assert.equal(routes.get('update-detail').metadata.nodeId, 'node/one');
+  assert.equal(routes.get('update-detail').metadata.eventOffset, 'offset/1');
+  assert.equal(routes.get('traffic').metadata.nodeIds[0], 'node/one');
+  assert.equal(routes.get('search-results').validation.heading, 'Search Results');
+  assert.deepEqual(routes.get('search-results').validation.states, ['result-group', 'no-results']);
+
+  for (const route of manifest.routes) {
+    assert.ok(route.source, `${route.name} source`);
+    assert.equal(typeof route.required, 'boolean');
+    assert.ok(route.expectedPath, `${route.name} expected path`);
+    assert.ok(route.readiness.landmark, `${route.name} readiness landmark`);
+  }
+  assert.equal(manifest.context.nodeId, 'node/one');
+  assert.equal(manifest.context.eventOffset, 'offset/1');
+  assert.equal(manifest.context.updateId, 'update?one');
+  assert.equal(manifest.context.trafficNodeIds[0], 'node/one');
+  assert.deepEqual(manifest.skips, []);
+  assert.deepEqual(
+    calls.map(({ url }) => new URL(url).pathname + new URL(url).search),
+    [
+      '/api/nodes',
+      '/api/updates?limit=1',
+      '/api/contracts?limit=1',
+      '/api/parties',
+      '/api/parties/fingerprints?limit=1',
+      '/api/tokens?limit=1',
+      '/api/tokens/transfers?limit=1',
+      '/api/templates',
+      '/api/traffic-purchases?limit=1',
+      '/api/nodes/node%2Fone/packages',
+      '/api/nodes/node%20two/packages',
+    ],
+  );
+});
+
+test('records empty collections and endpoint failures as precise optional skips', async () => {
+  const fixtures = {
+    '/api/nodes': { nodes: [{ id: 'node-1', label: 'One' }] },
+    '/api/updates?limit=1': { updates: [] },
+    '/api/contracts?limit=1': { contracts: [] },
+    '/api/parties': { nodes: [{ nodeId: 'node-1', parties: [] }] },
+    '/api/parties/fingerprints?limit=1': () => response({ error: 'offline' }, 502, 'Bad Gateway'),
+    '/api/tokens?limit=1': { tokens: [] },
+    '/api/tokens/transfers?limit=1': { transfers: [] },
+    '/api/templates': { templates: [] },
+    '/api/traffic-purchases?limit=1': { purchases: [], current: [] },
+    '/api/nodes/node-1/packages': { packagesByName: [] },
+  };
+  const manifest = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    fetchImpl: fixtureFetch(fixtures),
+  });
+  const routes = new Map(manifest.routes.map((route) => [route.name, route]));
+  const skipReasons = new Map(manifest.skips.map((skip) => [skip.name, skip.reason]));
+
+  assert.equal(routes.has('debugger'), false);
+  assert.equal(routes.has('update-detail'), true);
+  assert.equal(routes.get('update-detail').url, null);
+  assert.equal(routes.get('update-detail').required, false);
+  assert.equal(routes.get('update-detail').skipReason, 'GET /updates?limit=1 returned an empty updates collection');
+  assert.equal(routes.get('contract-detail').skipReason, 'GET /contracts?limit=1 returned an empty contracts collection');
+  assert.equal(routes.get('namespace-detail').skipReason, 'GET /parties/fingerprints?limit=1 returned 502 Bad Gateway');
+  assert.equal(routes.get('package-family').skipReason, 'GET /nodes/node-1/packages returned an empty packagesByName collection');
+  assert.equal(routes.get('token-detail').skipReason, 'GET /tokens?limit=1 returned an empty tokens collection');
+  assert.equal(routes.get('token-transfer-detail').skipReason, 'GET /tokens/transfers?limit=1 returned an empty transfers collection');
+  assert.equal(routes.get('search-results').skipReason, 'No discovered party or update ID for search query');
+  assert.equal(skipReasons.get('debugger'), 'No discovered update ID for debugger query');
+  assert.ok(manifest.context.discoveryErrors.fingerprints);
+});
+
+test('deduplicates equivalent route URLs while preserving deterministic names and live context', async () => {
+  const fixtures = structuredClone(fullFixtures);
+  fixtures['/api/nodes'] = {
+    nodes: [
+      { id: 'same/id', label: 'One' },
+      { id: 'same/id', label: 'Duplicate' },
+    ],
+  };
+  fixtures['/api/updates?limit=1'] = {
+    updates: [{ nodeId: 'same/id', eventOffset: 'same/offset', updateId: 'same/update' }],
+  };
+  fixtures['/api/contracts?limit=1'] = {
+    contracts: [{ nodeId: 'same/id', contractId: 'same/id' }],
+  };
+  fixtures['/api/parties'] = { nodes: [{ parties: ['same/id'] }] };
+  fixtures['/api/parties/fingerprints?limit=1'] = { fingerprints: ['same/id'] };
+  fixtures['/api/tokens?limit=1'] = { tokens: [{ tokenId: 'same/id' }] };
+  fixtures['/api/tokens/transfers?limit=1'] = { transfers: [{ updateId: 'same/update' }] };
+  fixtures['/api/nodes/same%2Fid/packages'] = {
+    packagesByName: [{ packageName: 'same/id', packages: [{ packageId: 'same/id' }] }],
+  };
+
+  const manifest = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    fetchImpl: fixtureFetch(fixtures),
+  });
+  const urls = manifest.routes.filter((route) => route.url).map((route) => route.url);
+  assert.equal(new Set(urls).size, urls.length);
+  assert.equal(manifest.routes.some((route) => route.name === 'node-detail-02'), false);
+  assert.equal(manifest.context.nodeId, 'same/id');
+  assert.equal(manifest.context.eventOffset, 'same/offset');
+});
