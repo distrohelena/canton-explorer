@@ -9,6 +9,7 @@ import {
   fetchNodeContracts,
   fetchNodeTemplates,
   fetchNodes,
+  fetchPackageDetail,
   fetchDebuggerEvents,
   fetchDebuggerSession,
   jumpDebuggerSessionToStep,
@@ -42,6 +43,7 @@ vi.mock('../lib/api', () => ({
   fetchNodeContracts: vi.fn(),
   fetchNodeTemplates: vi.fn(),
   fetchNodes: vi.fn(),
+  fetchPackageDetail: vi.fn(),
   fetchDebuggerSession: vi.fn(),
   fetchDebuggerEvents: vi.fn(),
   jumpDebuggerSessionToStep: vi.fn(),
@@ -103,8 +105,26 @@ describe('DebuggerView', () => {
     vi.mocked(fetchNodeTemplates).mockImplementation(async (nodeId) => ({
       templates:
         nodeId === 'participant-1'
-          ? [{ templateId: 'Main:Asset' }, { templateId: 'Main:Wallet' }]
-          : [{ templateId: 'Other:Holding' }],
+          ? [
+            {
+              templateId: 'Main:Asset',
+              packageId: 'pkg-a',
+              packageName: 'demo-package',
+              packageVersion: '1.0.0',
+            },
+            {
+              templateId: 'Main:Wallet',
+              packageId: 'pkg-a',
+              packageName: 'demo-package',
+              packageVersion: '1.0.0',
+            },
+          ]
+          : [{
+            templateId: 'Other:Holding',
+            packageId: 'pkg-b',
+            packageName: 'other-package',
+            packageVersion: '2.0.0',
+          }],
     }));
 
     await renderAt('/debugger');
@@ -139,9 +159,69 @@ describe('DebuggerView', () => {
 
     expect(screen.getByTestId('debugger-template-picker-selection')).toHaveTextContent('Exercise New');
     expect(screen.getByTestId('debugger-template-picker-selection')).toHaveTextContent('Main:Wallet');
+    expect(screen.getByTestId('debugger-template-picker-selection')).toHaveTextContent('pkg-a');
 
     expect(fetchNodeTemplates).toHaveBeenCalledWith('participant-1');
     expect(fetchNodeTemplates).toHaveBeenCalledWith('participant-2');
+    expect(createDebuggerSession).not.toHaveBeenCalled();
+  });
+
+  it('loads constructor arguments as step four for the Create path', async () => {
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
+    vi.mocked(fetchNodes).mockResolvedValue([{
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+    }] as never);
+    vi.mocked(fetchNodeTemplates).mockResolvedValue({
+      templates: [{
+        templateId: 'Main:Asset',
+        packageId: 'pkg-a',
+        packageName: 'demo-package',
+        packageVersion: '1.0.0',
+      }],
+    });
+    vi.mocked(fetchPackageDetail).mockResolvedValue({
+      packageId: 'pkg-a',
+      name: 'demo-package',
+      version: '1.0.0',
+      uploadedAt: null,
+      packageSize: null,
+      status: 'decoded',
+      seenOnNodes: [],
+      moduleCount: 1,
+      templateCount: 1,
+      dataTypeCount: 0,
+      modules: ['Main'],
+      templates: [{
+        templateId: 'Main:Asset',
+        moduleName: 'Main',
+        entityName: 'Asset',
+        createType: {
+          kind: 'record',
+          label: 'Main:Asset',
+          fields: [{ name: 'owner', type: { kind: 'builtin', label: 'Party' } }],
+        },
+      }],
+      dataTypes: [],
+    });
+
+    await renderAt('/debugger');
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+    await fireEvent.click(screen.getByRole('option', { name: /^Create / }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Participant 1.*PQS \+ gRPC/s }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Main:Asset.*demo-package/s }));
+
+    expect(await screen.findByTestId('debugger-template-step-constructor')).toBeInTheDocument();
+    expect((await screen.findAllByText('Constructor arguments')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('owner')).toBeInTheDocument();
+    const picker = screen.getByTestId('debugger-template-picker');
+    expect(picker).toHaveClass('debugger-template-picker--constructor-focus');
+    await fireEvent.click(screen.getByTestId('debugger-template-step-node'));
+    expect(picker).not.toHaveClass('debugger-template-picker--constructor-focus');
+    expect(screen.queryByTestId('debugger-template-step-constructor')).not.toBeInTheDocument();
+    expect(fetchPackageDetail).toHaveBeenCalledWith('pkg-a');
     expect(createDebuggerSession).not.toHaveBeenCalled();
   });
 
@@ -172,6 +252,69 @@ describe('DebuggerView', () => {
     expect(router.currentRoute.value.query.updateId).toBe('update-1');
     expect(router.currentRoute.value.query.nodeId).toBeUndefined();
     expect(router.currentRoute.value.query.eventOffset).toBeUndefined();
+  });
+
+  it('clears the active session when returning to the debugger session list', async () => {
+    vi.mocked(fetchDebuggerSession).mockResolvedValue({
+      sessionId: 'session-1',
+      nodeId: 'participant-1',
+      updateId: 'update-1',
+      offset: '42',
+      stepCount: 1,
+      currentStepIndex: 0,
+      isTerminal: false,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'stateEffect',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: null,
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: null,
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'session-1',
+      currentStepId: 'step-0',
+      realEvents: [],
+      replayEvents: [],
+    });
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([
+      {
+        sessionId: 'session-1',
+        nodeId: 'participant-1',
+        updateId: 'update-1',
+        offset: '42',
+        stepCount: 1,
+        currentStepIndex: 0,
+        isTerminal: false,
+        createdAt: '2026-07-22T12:00:00Z',
+      },
+    ]);
+
+    const { router } = await renderAt('/debugger?updateId=update-1&sessionId=session-1');
+
+    expect(await screen.findByTestId('debugger-editor-shell')).toBeInTheDocument();
+    await waitFor(() => expect(router.currentRoute.value.query.stepId).toBe('step-0'));
+    const initialFetchCount = vi.mocked(fetchDebuggerSession).mock.calls.length;
+
+    await router.push('/debugger');
+
+    expect(router.currentRoute.value.query.updateId).toBeUndefined();
+
+    expect(await screen.findByTestId('debugger-session-catalog')).toBeInTheDocument();
+    expect(await screen.findByText('session-1')).toBeInTheDocument();
+    expect(fetchDebuggerSessions).toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Open session session-1' }));
+
+    await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('session-1'));
+    expect(await screen.findByTestId('debugger-editor-shell')).toBeInTheDocument();
+    expect(vi.mocked(fetchDebuggerSession).mock.calls.length).toBeGreaterThan(initialFetchCount);
   });
 
   it('shows active contracts for Exercise Existing after the node is selected', async () => {

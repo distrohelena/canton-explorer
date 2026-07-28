@@ -827,6 +827,76 @@ body {
   gap: 12px;
 }
 
+.debugger-template-picker--constructor-focus .debugger-template-picker__steps {
+  position: relative;
+  display: block;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__steps > .debugger-template-picker__step:nth-child(-n + 3) {
+  position: absolute;
+  left: 0;
+  width: 10%;
+  height: 100%;
+  min-height: 0;
+  padding: 10px 8px;
+  cursor: pointer;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__steps > .debugger-template-picker__step:nth-child(1) {
+  top: 0;
+  z-index: 1;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__steps > .debugger-template-picker__step:nth-child(2) {
+  top: 0;
+  left: 3.333%;
+  z-index: 2;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__steps > .debugger-template-picker__step:nth-child(3) {
+  top: 0;
+  left: 6.666%;
+  z-index: 3;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__steps > .debugger-template-picker__step:nth-child(4) {
+  position: absolute;
+  top: 0;
+  left: 10%;
+  width: calc(90% - 12px);
+  height: 100%;
+  min-height: 0;
+  z-index: 4;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-header {
+  min-height: 0;
+  margin-bottom: 0;
+  gap: 5px;
+  display: block;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-number {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-header h2 {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-header p,
+.debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__options,
+.debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__search-wrap,
+.debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__state {
+  display: none;
+}
+
 .debugger-template-picker__step {
   min-width: 0;
   min-height: 0;
@@ -1011,6 +1081,83 @@ body {
   background: color-mix(in srgb, var(--accent-500) 8%, var(--surface-card));
   color: var(--text-700);
   font-size: 0.78rem;
+}
+
+.debugger-value-form {
+  min-height: 0;
+  overflow: auto;
+}
+
+.debugger-value-form__body,
+.debugger-value-form__record,
+.debugger-value-form__collection {
+  display: grid;
+  gap: 10px;
+}
+
+.debugger-value-form__record,
+.debugger-value-form__collection {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+
+.debugger-value-form__record legend,
+.debugger-value-form__collection legend {
+  padding: 0 5px;
+  color: var(--text-700);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.debugger-value-form__scalar,
+.debugger-value-form__toggle {
+  display: grid;
+  gap: 5px;
+  color: var(--text-600);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.debugger-value-form__scalar input:not([type='checkbox']),
+.debugger-value-form__map-row input,
+.debugger-value-form__scalar select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 9px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-900);
+  font: inherit;
+}
+
+.debugger-value-form__collection-row,
+.debugger-value-form__map-row {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+
+.debugger-value-form__error {
+  margin: 0;
+  color: var(--red-600);
+  font-size: 0.78rem;
+}
+
+.debugger-value-form button {
+  justify-self: start;
+  padding: 6px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface-muted);
+  color: var(--text-700);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
 }
 
 .debugger-view__workspace {
@@ -5163,6 +5310,57 @@ h3 {
   background: var(--status-down-bg);
   color: var(--red-600);
   border-color: var(--status-down-border);
+}
+
+@media (max-width: 900px) {
+  .debugger-template-picker__steps {
+    grid-template-columns: 1fr;
+  }
+
+  .debugger-template-picker--constructor-focus .debugger-template-picker__steps {
+    display: grid;
+    position: static;
+  }
+
+  .debugger-template-picker--constructor-focus .debugger-template-picker__steps > .debugger-template-picker__step:nth-child(-n + 3),
+  .debugger-template-picker--constructor-focus .debugger-template-picker__steps > .debugger-template-picker__step:nth-child(4) {
+    position: static;
+    grid-column: auto;
+    grid-row: auto;
+    width: auto;
+    height: auto;
+    min-height: 220px;
+    padding: 16px;
+    cursor: default;
+  }
+
+  .debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-header {
+    min-height: 58px;
+    margin-bottom: 14px;
+    gap: 11px;
+    display: flex;
+  }
+
+  .debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-number {
+    display: inline-flex;
+    margin-bottom: 0;
+  }
+
+  .debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-header h2 {
+    font-size: 1rem;
+    line-height: normal;
+    white-space: normal;
+  }
+
+  .debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__step-header p,
+  .debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__search-wrap,
+  .debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__state {
+    display: revert;
+  }
+
+  .debugger-template-picker--constructor-focus .debugger-template-picker__step:nth-child(-n + 3) .debugger-template-picker__options {
+    display: grid;
+  }
 }
 
 @media (max-width: 720px) {

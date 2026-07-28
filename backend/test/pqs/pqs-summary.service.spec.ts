@@ -503,6 +503,61 @@ describe('PqsSummaryService', () => {
     expect(typedPartyDetailFixture.partyTopologyByNode[0].status).toBe('ok');
   });
 
+  it('preserves package identity when building node template options', async () => {
+    const packageCache = {
+      listPackages: jest.fn().mockReturnValue([
+        { packageId: 'pkg-a', name: 'demo-package', version: '1.0.0' },
+        { packageId: 'pkg-b', name: 'demo-package', version: '2.0.0' },
+      ]),
+      listPackagesForNode: jest.fn().mockReturnValue([
+        {
+          packageId: 'pkg-b',
+          packageName: 'demo-package',
+          packageVersion: '2.0.0',
+        },
+        {
+          packageId: 'pkg-a',
+          packageName: 'demo-package',
+          packageVersion: '1.0.0',
+        },
+      ]),
+    };
+    const packageRegistry = {
+      inspectPackage: jest.fn(async (packageId: string) => ({
+        ok: true as const,
+        definition: {
+          templates: [{
+            templateId: 'Main:Asset',
+            packageId,
+          }],
+        },
+      })),
+    };
+    const service = new PqsSummaryService(
+      {} as never,
+      undefined,
+      packageCache as never,
+      packageRegistry as never,
+    );
+
+    await expect(service.fetchNodeTemplates({ id: 'participant-1' } as never)).resolves.toEqual({
+      templates: [
+        {
+          templateId: 'Main:Asset',
+          packageId: 'pkg-a',
+          packageName: 'demo-package',
+          packageVersion: '1.0.0',
+        },
+        {
+          templateId: 'Main:Asset',
+          packageId: 'pkg-b',
+          packageName: 'demo-package',
+          packageVersion: '2.0.0',
+        },
+      ],
+    });
+  });
+
   it('returns empty successful search groups without querying nodes for a blank query', async () => {
     const query = jest.fn();
     const list = jest
@@ -2858,7 +2913,7 @@ describe('PqsSummaryService', () => {
     jest.spyOn(service, 'fetchRecentUpdates').mockImplementation(async (node, options) => {
       expect(options).toEqual(
         expect.objectContaining({
-          limit: 4,
+          limit: 3,
           parties: ['Alice'],
           partyMode: 'and',
           hideSplice: true,
@@ -2871,7 +2926,7 @@ describe('PqsSummaryService', () => {
         return {
           nodeId: 'participant-1',
           label: 'Participant 1',
-          limit: 4,
+          limit: 3,
           nextBefore: null,
           nextAfter: null,
           updates: [

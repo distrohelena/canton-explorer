@@ -19,6 +19,7 @@ import {
   fetchDebuggerSessions,
   fetchNodeContracts,
   fetchNodeTemplates,
+  fetchPackageDetail,
   fetchNodes,
   fetchDebuggerEvents,
   fetchDebuggerSession,
@@ -35,6 +36,8 @@ import type {
 } from '../types/debugger';
 import type { NodeSnapshot } from '../types/nodes';
 import type { NodeActiveContractSummary } from '../types/contracts';
+import type { TemplateFilterEntry } from '../types/templates';
+import type { PackageTypeNode } from '../types/packages';
 
 interface DebuggerSourceTab {
   readonly path: string;
@@ -52,7 +55,7 @@ interface DebuggerTemplateGroup {
   nodeId: string;
   label: string;
   mode: NodeSnapshot['mode'];
-  templates: string[];
+  templates: TemplateFilterEntry[];
   error: string | null;
 }
 
@@ -71,6 +74,12 @@ const templateLoading = ref(false);
 const templateError = ref<string | null>(null);
 const templateGroups = ref<DebuggerTemplateGroup[]>([]);
 const selectedTemplate = ref<DebuggerTemplateSelection | null>(null);
+const constructorSchema = ref<PackageTypeNode | null>(null);
+const constructorLoading = ref(false);
+const constructorError = ref<string | null>(null);
+const constructorValue = ref<unknown | null>(null);
+const constructorValid = ref(false);
+const constructorTypeDefinitions = ref(new Map<string, PackageTypeNode>());
 const debuggerSessions = ref<DebuggerSessionSummary[]>([]);
 const debuggerSessionsLoading = ref(false);
 const debuggerSessionsError = ref<string | null>(null);
@@ -327,8 +336,11 @@ const templateOptions = computed<DebuggerTemplateOption[]>(() =>
   templateGroups.value.flatMap((group) =>
     group.error
       ? []
-      : group.templates.map((templateId) => ({
-        templateId,
+      : group.templates.map((template) => ({
+        templateId: template.templateId,
+        packageId: template.packageId ?? '',
+        packageName: template.packageName ?? null,
+        packageVersion: template.packageVersion ?? null,
         nodeId: group.nodeId,
         nodeLabel: group.label,
         mode: group.mode,
@@ -336,8 +348,73 @@ const templateOptions = computed<DebuggerTemplateOption[]>(() =>
   ),
 );
 
+let constructorLoadSequence = 0;
+
+function resetConstructorState() {
+  constructorLoadSequence += 1;
+  constructorSchema.value = null;
+  constructorLoading.value = false;
+  constructorError.value = null;
+  constructorValue.value = null;
+  constructorValid.value = false;
+  constructorTypeDefinitions.value = new Map();
+}
+
+function resolveConstructorType(node: PackageTypeNode): PackageTypeNode | null {
+  if (node.kind !== 'type_con' || !node.packageId || !node.typeId) {
+    return null;
+  }
+
+  return constructorTypeDefinitions.value.get(`${node.packageId}:${node.typeId}`) ?? null;
+}
+
+async function loadConstructorSchema(selection: DebuggerTemplateSelection) {
+  resetConstructorState();
+  if (selection.simulationKind !== 'create' || !selection.packageId) {
+    return;
+  }
+
+  const sequence = constructorLoadSequence;
+  constructorLoading.value = true;
+
+  try {
+    const detail = await fetchPackageDetail(selection.packageId);
+    if (sequence !== constructorLoadSequence) return;
+    if (detail.status !== 'decoded') {
+      throw new Error('The selected package is not available as a decoded package.');
+    }
+    const template = detail.templates.find((candidate) => candidate.templateId === selection.templateId);
+    if (!template) {
+      throw new Error('The selected template was not found in its package.');
+    }
+    if (!template.createType) {
+      throw new Error('The selected template does not expose a constructor schema.');
+    }
+    constructorTypeDefinitions.value = new Map(
+      detail.dataTypes
+        .filter((dataType) => dataType.definition)
+        .map((dataType) => [`${detail.packageId}:${dataType.typeId}`, dataType.definition!]),
+    );
+    constructorSchema.value = template.createType;
+  } catch (err) {
+    if (sequence === constructorLoadSequence) {
+      constructorError.value = err instanceof Error ? err.message : 'Unable to load template schema.';
+    }
+  } finally {
+    if (sequence === constructorLoadSequence) {
+      constructorLoading.value = false;
+    }
+  }
+}
+
+function resetNewSimulationState() {
+  selectedTemplate.value = null;
+  resetConstructorState();
+}
+
 function selectTemplate(selection: DebuggerTemplateSelection) {
   selectedTemplate.value = selection;
+  void loadConstructorSchema(selection);
 }
 
 async function loadActiveContracts(nodeId: string, simulationKind: DebuggerSimulationKind) {
@@ -848,6 +925,8 @@ async function loadDebuggerSession() {
     return;
   }
 
+  const loadKey = routeReplayKey.value;
+
   try {
     if (
       session.value
@@ -857,8 +936,6 @@ async function loadDebuggerSession() {
     ) {
       return;
     }
-
-    const loadKey = routeReplayKey.value;
 
     if (pendingLoadKey === loadKey) {
       return;
@@ -884,6 +961,10 @@ async function loadDebuggerSession() {
       nextSession = await jumpDebuggerSessionToStep(nextSession.sessionId, routeStepId.value);
     }
 
+    if (routeReplayKey.value !== loadKey || !hasReplayContext.value) {
+      return;
+    }
+
     rememberSessionSource(nextSession, {
       reset: nextSession.sessionId !== session.value?.sessionId,
     });
@@ -895,7 +976,7 @@ async function loadDebuggerSession() {
     session.value = null;
     replayEvents.value = [];
   } finally {
-    if (pendingLoadKey === routeReplayKey.value) {
+    if (pendingLoadKey === loadKey) {
       pendingLoadKey = null;
     }
     loading.value = false;
@@ -926,7 +1007,7 @@ async function loadTemplateCatalog() {
             nodeId: node.id,
             label: node.label,
             mode: node.mode,
-            templates: [...new Set(response.templates.map((template) => template.templateId))],
+            templates: response.templates,
             error: null,
           } satisfies DebuggerTemplateGroup;
         } catch (err) {
@@ -1016,7 +1097,7 @@ async function selectEventStep(stepId: string) {
 watch(
   routeReplayKey,
   () => {
-    if (syncingRouteFromSession) {
+    if (syncingRouteFromSession && hasReplayContext.value) {
       return;
     }
 
@@ -1026,6 +1107,10 @@ watch(
     } else if (showNewSimulation.value) {
       void loadTemplateCatalog();
     } else {
+      session.value = null;
+      replayEvents.value = [];
+      openSourceTabs.value = [];
+      activeSourcePath.value = null;
       void loadDebuggerSessions();
     }
   },
@@ -1147,8 +1232,15 @@ onBeforeUnmount(() => {
         :active-contracts-error="activeContractsError"
         :loading="templateLoading"
         :error="templateError"
+        :constructor-schema="constructorSchema"
+        :constructor-loading="constructorLoading"
+        :constructor-error="constructorError"
+        :constructor-resolve-type="resolveConstructorType"
         @select="selectTemplate"
         @node-select="loadActiveContracts"
+        @reset="resetNewSimulationState"
+        @constructor-value="constructorValue = $event"
+        @constructor-validity="constructorValid = $event"
       />
     </section>
     <p v-if="error" class="debugger-view__error-state" role="alert">{{ error }}</p>

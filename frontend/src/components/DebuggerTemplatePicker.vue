@@ -2,9 +2,14 @@
 import { computed, ref, watch } from 'vue';
 import type { NodeMode } from '../types/nodes';
 import type { NodeActiveContractSummary } from '../types/contracts';
+import DebuggerValueForm from './DebuggerValueForm.vue';
+import type { PackageTypeNode } from '../types/packages';
 
 export interface DebuggerTemplateOption {
   templateId: string;
+  packageId: string;
+  packageName: string | null;
+  packageVersion: string | null;
   nodeId: string;
   nodeLabel: string;
   mode: NodeMode;
@@ -14,6 +19,9 @@ export type DebuggerSimulationKind = 'create' | 'exercise_new' | 'exercise_exist
 
 export interface DebuggerTemplateSelection {
   templateId: string | null;
+  packageId: string;
+  packageName: string | null;
+  packageVersion: string | null;
   nodeId: string;
   nodeLabel: string;
   mode: NodeMode;
@@ -30,6 +38,10 @@ const props = withDefaults(
     activeContractsError?: string | null;
     loading?: boolean;
     error?: string | null;
+    constructorSchema?: PackageTypeNode | null;
+    constructorLoading?: boolean;
+    constructorError?: string | null;
+    constructorResolveType?: (node: PackageTypeNode) => PackageTypeNode | null;
   }>(),
   {
     modelValue: null,
@@ -38,12 +50,19 @@ const props = withDefaults(
     activeContractsError: null,
     loading: false,
     error: null,
+    constructorSchema: null,
+    constructorLoading: false,
+    constructorError: null,
+    constructorResolveType: undefined,
   },
 );
 
 const emit = defineEmits<{
   select: [selection: DebuggerTemplateSelection];
   nodeSelect: [nodeId: string, simulationKind: DebuggerSimulationKind];
+  reset: [];
+  constructorValue: [value: unknown | null];
+  constructorValidity: [valid: boolean];
 }>();
 
 const simulationOptions: Array<{ kind: DebuggerSimulationKind; label: string; description: string }> = [
@@ -66,6 +85,7 @@ const simulationOptions: Array<{ kind: DebuggerSimulationKind; label: string; de
 
 const selectedSimulationKind = ref<DebuggerSimulationKind | null>(null);
 const selectedNodeId = ref<string | null>(null);
+const constructorFocus = ref(false);
 const query = ref('');
 const highlightedIndex = ref(0);
 
@@ -87,6 +107,15 @@ const nodeOptions = computed(() => {
 
 const selectedNode = computed(() =>
   nodeOptions.value.find((node) => node.nodeId === selectedNodeId.value) ?? null,
+);
+
+watch(
+  () => props.modelValue,
+  (selection) => {
+    if (!selection) {
+      constructorFocus.value = false;
+    }
+  },
 );
 
 const isExerciseExisting = computed(() => selectedSimulationKind.value === 'exercise_existing');
@@ -151,17 +180,27 @@ watch(
 );
 
 function selectSimulationKind(kind: DebuggerSimulationKind) {
+  emit('reset');
+  constructorFocus.value = false;
   selectedSimulationKind.value = kind;
   selectedNodeId.value = null;
   query.value = '';
 }
 
 function selectNode(nodeId: string) {
+  constructorFocus.value = false;
   selectedNodeId.value = nodeId;
   query.value = '';
   if (selectedSimulationKind.value) {
     emit('nodeSelect', nodeId, selectedSimulationKind.value);
   }
+}
+
+function restoreTemplatePicker() {
+  if (constructorFocus.value) {
+    emit('reset');
+  }
+  constructorFocus.value = false;
 }
 
 function select(option: DebuggerTemplateOption) {
@@ -174,6 +213,7 @@ function select(option: DebuggerTemplateOption) {
     simulationKind: selectedSimulationKind.value,
     contractId: null,
   });
+  constructorFocus.value = true;
 }
 
 function selectContract(contract: NodeActiveContractSummary) {
@@ -183,12 +223,16 @@ function selectContract(contract: NodeActiveContractSummary) {
 
   emit('select', {
     templateId: contract.templateId,
+    packageId: '',
+    packageName: null,
+    packageVersion: null,
     nodeId: selectedNode.value.nodeId,
     nodeLabel: selectedNode.value.nodeLabel,
     mode: selectedNode.value.mode,
     simulationKind: selectedSimulationKind.value,
     contractId: contract.contractId,
   });
+  constructorFocus.value = false;
 }
 
 function handleSearchKeydown(event: KeyboardEvent) {
@@ -222,9 +266,17 @@ function handleSearchKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="debugger-template-picker" data-testid="debugger-template-picker">
+  <div
+    class="debugger-template-picker"
+    :class="{ 'debugger-template-picker--constructor-focus': constructorFocus }"
+    data-testid="debugger-template-picker"
+  >
     <div class="debugger-template-picker__steps">
-      <section class="debugger-template-picker__step" data-testid="debugger-template-step-simulation">
+      <section
+        class="debugger-template-picker__step"
+        data-testid="debugger-template-step-simulation"
+        @click="restoreTemplatePicker"
+      >
         <header class="debugger-template-picker__step-header">
           <span class="debugger-template-picker__step-number">01</span>
           <div>
@@ -241,7 +293,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             :class="{ 'debugger-template-picker__option--selected': simulation.kind === selectedSimulationKind }"
             role="option"
             :aria-selected="simulation.kind === selectedSimulationKind ? 'true' : 'false'"
-            @click="selectSimulationKind(simulation.kind)"
+            @click.stop="selectSimulationKind(simulation.kind)"
           >
             <span class="debugger-template-picker__option-template">{{ simulation.label }}</span>
             <span class="debugger-template-picker__option-meta">{{ simulation.description }}</span>
@@ -253,6 +305,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
         class="debugger-template-picker__step"
         :class="{ 'debugger-template-picker__step--disabled': !selectedSimulationKind }"
         data-testid="debugger-template-step-node"
+        @click="restoreTemplatePicker"
       >
         <header class="debugger-template-picker__step-header">
           <span class="debugger-template-picker__step-number">02</span>
@@ -271,7 +324,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             role="option"
             :aria-selected="node.nodeId === selectedNodeId ? 'true' : 'false'"
             :disabled="!selectedSimulationKind"
-            @click="selectNode(node.nodeId)"
+            @click.stop="selectNode(node.nodeId)"
           >
             <span class="debugger-template-picker__option-template">{{ node.nodeLabel }}</span>
             <span class="debugger-template-picker__option-meta">
@@ -291,6 +344,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
         class="debugger-template-picker__step"
         :class="{ 'debugger-template-picker__step--disabled': !selectedNode }"
         data-testid="debugger-template-step-template"
+        @click="restoreTemplatePicker"
       >
         <header class="debugger-template-picker__step-header">
           <span class="debugger-template-picker__step-number">03</span>
@@ -324,7 +378,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             role="option"
             :aria-selected="modelValue?.contractId === contract.contractId ? 'true' : 'false'"
             :disabled="!selectedNode || activeContractsLoading"
-            @click="selectContract(contract)"
+            @click.stop="selectContract(contract)"
           >
             <span class="debugger-template-picker__option-template">{{ contract.contractId }}</span>
             <span class="debugger-template-picker__option-meta">
@@ -345,7 +399,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
         <div v-else class="debugger-template-picker__options debugger-template-picker__options--templates" role="listbox" aria-label="Available templates">
           <button
             v-for="(option, index) in filteredOptions"
-            :key="`${option.nodeId}:${option.templateId}`"
+            :key="`${option.nodeId}:${option.packageId}:${option.templateId}`"
             type="button"
             class="debugger-template-picker__option"
             :class="{ 'debugger-template-picker__option--selected': modelValue?.nodeId === option.nodeId && modelValue?.templateId === option.templateId, 'debugger-template-picker__option--highlighted': index === highlightedIndex }"
@@ -353,12 +407,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
             :aria-selected="modelValue?.nodeId === option.nodeId && modelValue?.templateId === option.templateId ? 'true' : 'false'"
             :disabled="!selectedNode"
             @mouseenter="highlightedIndex = index"
-            @click="select(option)"
+            @click.stop="select(option)"
           >
             <span class="debugger-template-picker__option-template">{{ option.templateId }}</span>
             <span class="debugger-template-picker__option-meta">
               <span>{{ option.nodeLabel }}</span>
               <span>{{ option.nodeId }}</span>
+              <span>{{ option.packageName ?? option.packageId }}{{ option.packageVersion ? ` · ${option.packageVersion}` : '' }}</span>
               <span class="debugger-template-picker__option-mode">
                 {{ option.mode === 'pqs_only' ? 'PQS only' : 'PQS + gRPC' }}
               </span>
@@ -374,6 +429,31 @@ function handleSearchKeydown(event: KeyboardEvent) {
         <p v-if="!isExerciseExisting && loading" class="debugger-template-picker__state">Loading available templates...</p>
         <p v-else-if="!isExerciseExisting && error" class="debugger-template-picker__state debugger-template-picker__state--error">{{ error }}</p>
       </section>
+    <section
+      v-if="modelValue?.simulationKind === 'create' && constructorFocus"
+      class="debugger-template-picker__step"
+      :class="{ 'debugger-template-picker__step--disabled': !modelValue }"
+      data-testid="debugger-template-step-constructor"
+    >
+      <header class="debugger-template-picker__step-header">
+        <span class="debugger-template-picker__step-number">04</span>
+        <div>
+          <h2>Constructor arguments</h2>
+          <p>{{ constructorSchema ? 'Fill in the values for the selected template.' : 'Choose a template first.' }}</p>
+        </div>
+      </header>
+      <p v-if="constructorLoading" class="debugger-template-picker__state">Loading template schema...</p>
+      <p v-else-if="constructorError" class="debugger-template-picker__state debugger-template-picker__state--error">{{ constructorError }}</p>
+      <DebuggerValueForm
+        v-else-if="constructorSchema"
+        :schema="constructorSchema"
+        :resolve-type="constructorResolveType"
+        @value="emit('constructorValue', $event)"
+        @validity="emit('constructorValidity', $event)"
+      />
+      <p v-else class="debugger-template-picker__state">Select a template to configure its constructor arguments.</p>
+    </section>
+
     </div>
 
     <p
@@ -388,6 +468,8 @@ function handleSearchKeydown(event: KeyboardEvent) {
           : 'Create' }}
       <span aria-hidden="true">·</span>
       {{ modelValue.contractId ?? modelValue.templateId ?? 'Unknown template' }}
+      <span v-if="modelValue.packageId" aria-hidden="true">·</span>
+      <span v-if="modelValue.packageId">{{ modelValue.packageId }}</span>
       <span aria-hidden="true">·</span>
       {{ modelValue.nodeLabel }}
     </p>

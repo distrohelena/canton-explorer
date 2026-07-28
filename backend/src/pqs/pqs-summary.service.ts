@@ -2697,7 +2697,11 @@ export class PqsSummaryService {
     const partyMode = options?.partyMode ?? options?.mode;
     const hideSplice = options?.hideSplice === true;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
-    const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
+    // One extra row is enough to establish whether a node has another page.
+    // Fetching twice the requested global page from every node makes the home
+    // feed needlessly expensive, especially when each row also loads parties
+    // and traffic-cost metadata before the global merge.
+    const pageSize = normalizedLimit + 1;
     const nodeStates = nodes.map((node) => ({
       node,
       nextBefore: undefined as string | undefined,
@@ -7582,7 +7586,13 @@ export class PqsSummaryService {
   private async buildTemplateFilterResponse(
     packageIds: string[],
   ): Promise<TemplateFilterResponse> {
-    const templates = new Set<string>();
+    const packageMetadata = new Map(
+      (this.packageCacheService?.listPackages() ?? []).map((packageRef) => [
+        packageRef.packageId,
+        packageRef,
+      ]),
+    );
+    const templates = new Map<string, TemplateFilterResponse['templates'][number]>();
 
     for (const packageId of packageIds) {
       const inspection = this.packageRegistryService
@@ -7595,15 +7605,23 @@ export class PqsSummaryService {
 
       for (const template of inspection.definition.templates) {
         if (template.templateId.trim()) {
-          templates.add(template.templateId);
+          const metadata = packageMetadata.get(packageId);
+          templates.set(`${packageId}:${template.templateId}`, {
+            templateId: template.templateId,
+            packageId,
+            packageName: metadata?.name ?? null,
+            packageVersion: metadata?.version ?? null,
+          });
         }
       }
     }
 
     return {
-      templates: Array.from(templates)
-        .sort((left, right) => left.localeCompare(right))
-        .map((templateId) => ({ templateId })),
+      templates: Array.from(templates.values()).sort(
+        (left, right) =>
+          left.templateId.localeCompare(right.templateId) ||
+          left.packageId.localeCompare(right.packageId),
+      ),
     };
   }
 
