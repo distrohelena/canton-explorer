@@ -128,6 +128,117 @@ npm run start:frontend
 
 This builds the frontend once and serves the built assets on `http://localhost:46000` without file watching or hot reload.
 
+## Capture screenshots
+
+The screenshot command uses Playwright against the live application. Install the browser once on each development machine:
+
+```bash
+npx playwright install chromium
+```
+
+Before capturing, start the frontend, backend, and the Canton localnet/PQS services that provide the records shown by the explorer. The screenshot command does not start, stop, or provision those services. From the repository root, the usual development startup is:
+
+```bash
+npm run dev:backend
+npm run dev:frontend
+```
+
+The backend listens on `http://localhost:4600` and the frontend on `http://localhost:46000`. Run the two commands in separate terminals, with `backend/config/nodes.local.json`, `backend/.env`, the configured PostgreSQL services, and the Canton localnet ready first. A built frontend can be served with `npm run start:frontend`; the backend and localnet prerequisites are unchanged.
+
+Once those services are already running, capture the default matrix with:
+
+```bash
+npm run screenshots
+```
+
+The CLI options shown by `npm run screenshots -- --help` are also available for focused captures:
+
+```bash
+# Use a one-off 1440x900 viewport. The output folder uses custom-1440x900.
+npm run screenshots -- --viewport 1440x900
+
+# Capture one route and its configured states, or one exact route/state.
+npm run screenshots -- --route updates
+npm run screenshots -- --route tokens-known--filters
+
+# Choose the image/report directory.
+npm run screenshots -- --output ./screenshots/readme
+
+# Point the runner at services on another host or port.
+npm run screenshots -- --base-url http://127.0.0.1:46000 --api-url http://127.0.0.1:4600/api
+
+# Treat optional dynamic skips as failures, and show Chromium while capturing.
+npm run screenshots -- --strict
+npm run screenshots -- --headed
+```
+
+`--route` and `--viewport` are repeatable. `--route` accepts a route name such as `updates` or a route-state name such as `updates--filters`. `--base-url` is the frontend URL; `--api-url` may be a host-only URL or include `/api`, with trailing slashes normalized. `--output` defaults to `screenshots`. A custom ESM configuration can be supplied with `--config <path>`.
+
+### Advanced Filter and Search states
+
+The default matrix includes these exact optional route-state captures:
+
+| Route-state | UI state |
+| --- | --- |
+| `updates--filters` | Updates `Advanced Filter` (`home-updates-advanced-filter`) |
+| `contracts--filters` | Contracts `Advanced Filter` (`contracts-advanced-filter`) |
+| `parties--filters` | Parties in `Namespaces` mode, then `namespace-advanced-filter` |
+| `party-detail-updates--filters` | Party detail Updates `Advanced Filter` (`party-updates-advanced-filter`) |
+| `party-detail-contracts--filters` | Party detail Contracts `Advanced Filter` (`party-contracts-advanced-filter`) |
+| `tokens-known--filters` | Known Tokens `Advanced Filter` (`tokens-advanced-filter`) |
+| `tokens-transfers--filters` | Latest Transfers `Advanced Filter` (`token-transfers-advanced-filter`) |
+| `token-detail-transfers--filters` | Token detail Transfers `Advanced Filter` (`token-transfers-advanced-filter`) |
+| `traffic--filters` | Traffic Purchases `Advanced Search` (`traffic-purchases-advanced-search`) |
+
+Where live values exist, the runner fills representative party, template, token, issuer, movement, namespace, date, amount, and node fields before capturing. Missing controls, modes, or values make an optional state `skipped`; the default capture remains independent. Search Results is a separate dynamic route named `search-results` and uses a discovered party or update identifier.
+
+### Live records and output
+
+Dynamic route URLs are discovered immediately before the run from the live API, including nodes, updates, contracts, parties, namespace fingerprints, tokens, transfers, packages, templates, and traffic purchases. Update IDs, event offsets, contract IDs, party IDs, package IDs, token IDs, and debugger inputs therefore do not need to be edited by hand. Empty collections produce optional skipped entries with reasons. Dynamic candidates are validated after navigation, and optional skips or validation failures are recorded in `report.json`; `--strict` makes them fail the run. The manifest contains the resolved URLs and live context for diagnosis; filenames never contain live IDs and remain stable when the localnet is restarted.
+
+The default output is organized by viewport:
+
+```text
+screenshots/
+  desktop/
+    updates.png
+    updates--filters.png
+    contracts.png
+    ...
+  manifest.json
+  report.json
+```
+
+Custom viewports use names such as `custom-1440x900`, so their files are written under `screenshots/custom-1440x900/`. `manifest.json` records the discovered context and routes used for the run. `report.json` records the overall status and exit code, each captured/skipped/failed entry, timings, errors, and debugger-session cleanup results.
+
+The command exits with:
+
+- `0` when required captures succeed and optional dynamic/filter skips are allowed;
+- `1` for frontend/API connectivity failures, required capture failures, discovery/capture failures, or optional skips under `--strict`;
+- `2` for invalid CLI/configuration input or a missing Chromium installation.
+
+### Troubleshooting
+
+Use these checks from the repository root:
+
+```bash
+npm run screenshots -- --help
+npm run test:screenshots
+curl -f http://localhost:46000/
+curl -f 'http://localhost:4600/api/nodes?limit=1'
+```
+
+If the frontend or API is unreachable, restart the relevant service with `npm run dev:frontend` or `npm run dev:backend`, then verify that the configured Canton localnet, PQS database, gRPC targets, and `nodes.local.json` are available. For non-default ports or hosts, pass matching `--base-url` and `--api-url` values. If Chromium is missing, run `npx playwright install chromium` once and retry. If dynamic pages are skipped, inspect `manifest.json` and `report.json`; use `--strict` when a missing live record should fail the run.
+
+To embed an intentionally committed capture in this README, use a stable route/state path relative to the repository root:
+
+```markdown
+![Updates](screenshots/desktop/updates.png)
+![Updates with filters](screenshots/desktop/updates--filters.png)
+```
+
+Commit only the PNGs you want to publish. Keep `manifest.json` and `report.json` for local diagnostics unless they are useful as documentation.
+
 ## Generate debug DARs
 
 The debugger can show DAML source and source locations when it has a companion
