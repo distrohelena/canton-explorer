@@ -451,3 +451,33 @@ test('emits only the selected party-detail view while sharing the discovery endp
 
   assert.deepEqual(manifest.routes.map((route) => route.name), ['party-detail-updates']);
 });
+
+test('emits an unavailable selected node-detail ordinal when nodes are missing', async () => {
+  const config = {
+    routes: [{
+      name: 'node-detail-02',
+      required: false,
+      dynamic: true,
+      discoveryKey: 'node-detail',
+      states: [{ name: 'default', actions: [] }],
+    }],
+  };
+  for (const nodes of [[], [{ id: 'node-1', label: 'One' }]]) {
+    const fixtures = structuredClone(fullFixtures);
+    fixtures['/api/nodes'] = { nodes };
+    const manifest = await discoverScreenshotManifest({
+      apiUrl: apiBase,
+      config,
+      fetchImpl: fixtureFetch(fixtures),
+    });
+
+    assert.deepEqual(manifest.routes.map((route) => route.name), ['node-detail-02']);
+    if (nodes.length === 0) {
+      assert.equal(manifest.routes[0].url, null);
+      assert.match(manifest.routes[0].skipReason, /empty nodes collection/);
+    } else {
+      assert.equal(manifest.routes[0].url, null);
+      assert.match(manifest.routes[0].skipReason, /Only 1 node discovered/);
+    }
+  }
+});

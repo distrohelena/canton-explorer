@@ -310,6 +310,12 @@ export async function discoverScreenshotManifest(options = {}) {
   const routeIsConfigured = (name, discoveryKey = name) =>
     configuredNames.has(name) || configuredKeys.has(discoveryKey);
   const routeShouldEmit = (name) => configuredNames.has(name);
+  const configuredNodeDetailOrdinals = [...configuredNames]
+    .map((name) => /^node-detail-(\d+)$/.exec(name))
+    .filter(Boolean)
+    .map((match) => Number(match[1]))
+    .filter((ordinal) => Number.isInteger(ordinal) && ordinal > 0)
+    .sort((left, right) => left - right);
   const addRoute = (...args) => {
     const route = args.length === 1 ? args[0] : args[2];
     if (!routeShouldEmit(route.name)) return false;
@@ -439,30 +445,39 @@ export async function discoverScreenshotManifest(options = {}) {
   };
 
   const nodeForUpdate = firstString(update?.nodeId, context.nodeId);
-  if (nodes.length === 0) {
-    addUnavailableRoute(routes, skips, {
-      name: 'node-detail-01',
-      dedupeKey: 'node-detail',
-      source: '/nodes',
-      expectedPath: '/nodes/:id',
-      skipReason: errors.nodes ?? emptyReason('/nodes', 'nodes'),
-    });
-  }
   let nodeOrdinal = 0;
+  const seenNodeUrls = new Set();
   for (const node of nodes) {
     const nodeId = firstString(node?.id, node?.nodeId);
     if (!nodeId) continue;
     const url = routePath('nodes', nodeId);
     const routeName = `node-detail-${String(nodeOrdinal + 1).padStart(2, '0')}`;
-    const retained = addRoute(routes, skips, routeRecord({
+    const route = routeRecord({
       name: routeName,
       dedupeKey: 'node-detail',
       url,
       source: '/nodes',
       expectedPath: url,
       metadata: { nodeId },
-    }));
-    if (retained || !routeShouldEmit(routeName)) nodeOrdinal += 1;
+    });
+    const duplicate = seenNodeUrls.has(url);
+    seenNodeUrls.add(url);
+    const retained = addRoute(routes, skips, route);
+    if (retained || (!routeShouldEmit(routeName) && !duplicate)) nodeOrdinal += 1;
+  }
+  const skipReason = errors.nodes ?? (nodes.length === 0
+    ? emptyReason('/nodes', 'nodes')
+    : `Only ${nodes.length} node${nodes.length === 1 ? '' : 's'} discovered; requested node-detail ordinal is unavailable`);
+  for (const ordinal of configuredNodeDetailOrdinals) {
+    if (ordinal <= nodeOrdinal) continue;
+    const routeName = `node-detail-${String(ordinal).padStart(2, '0')}`;
+    addUnavailableRoute(routes, skips, {
+      name: routeName,
+      dedupeKey: routeName,
+      source: '/nodes',
+      expectedPath: '/nodes/:id',
+      skipReason,
+    });
   }
 
   if (update) {
