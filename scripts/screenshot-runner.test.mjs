@@ -189,6 +189,68 @@ test('accepts either a search result group or the explicit SearchResultsView emp
   assert.equal(report.entries[0].status, 'captured');
 });
 
+test('permits router query mutations after filter actions while preserving route identity', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, `<!doctype html><html><body><main><h1>Tokens</h1>
+      <button type="button" onclick="history.pushState({}, '', '/tokens?tokensName=Token')">Apply filters</button>
+    </main></body></html>`);
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [{
+      name: 'tokens-known', path: '/tokens', required: false,
+      readiness: { heading: 'Tokens', timeoutMs: 100, settleMs: 0 },
+      states: [{
+        name: 'filters', required: false,
+        actions: [{ kind: 'click', role: 'button', name: 'Apply filters' }],
+      }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'captured');
+});
+
+test('captures configured static token views included by discovery', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><main><h1>Tokens</h1></main></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [
+      { name: 'tokens-known', path: '/tokens', required: false, readiness: { heading: 'Tokens', timeoutMs: 100, settleMs: 0 }, states: [{ name: 'default', actions: [] }] },
+      { name: 'tokens-transfers', path: '/tokens', required: false, readiness: { heading: 'Tokens', timeoutMs: 100, settleMs: 0 }, states: [{ name: 'default', actions: [] }] },
+    ],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.deepEqual(report.entries.map((entry) => entry.route), ['tokens-known', 'tokens-transfers']);
+  assert.equal(report.entries.every((entry) => entry.status === 'captured'), true);
+});
+
+test('does not treat a persistent application status as a loading indicator', async (t) => {
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><main><h1>Canton Coin</h1><div role="status">Balance loaded</div></main></body></html>');
+  });
+  t.after(() => frontend.close());
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  t.after(() => context.close());
+  await page.goto(`${frontend.url}/canton-coin`, { waitUntil: 'domcontentloaded' });
+
+  await waitForLoadingToDisappear(page, 150);
+});
+
 test('treats current route-specific error classes as capture failures', async (t) => {
   const output = await makeOutput();
   const frontend = await startServer((req, res) => {
@@ -791,5 +853,32 @@ test('records an unavailable debugger route so strict mode fails on its runner e
 
   assert.equal(report.entries[0].route, 'debugger');
   assert.equal(report.entries[0].status, 'skipped');
+  assert.equal(report.exitCode, 1);
+});
+
+test('fails the runner for an optional route skipped by an endpoint failure', async () => {
+  const output = await makeOutput();
+  const config = configFor('http://127.0.0.1:1', output, {
+    apiUrl: 'http://127.0.0.1:1/api',
+    routes: [{
+      name: 'namespace-detail', path: '/namespaces/namespace-1', required: false,
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const manifest = {
+    ...manifestFor(config),
+    routes: [{
+      name: 'namespace-detail',
+      url: null,
+      required: false,
+      source: '/parties/fingerprints?limit=1',
+      skipReason: 'GET /parties/fingerprints?limit=1 returned 502 Bad Gateway',
+      discoveryError: true,
+    }],
+  };
+  const report = await captureScreenshotMatrix({ config, manifest, browser: { close() {} } });
+
+  assert.equal(report.entries[0].status, 'failed');
+  assert.equal(report.entries[0].fatal, true);
   assert.equal(report.exitCode, 1);
 });

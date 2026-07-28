@@ -127,6 +127,7 @@ export async function requestJson(apiBaseUrl, pathValue, options = {}) {
     const statusText = response?.statusText ? ` ${response.statusText}` : '';
     throw new ScreenshotDiscoveryError(
       `${method} ${requestPathForError(pathValue)} returned ${status}${statusText}`,
+      { kind: 'http' },
     );
   }
   try {
@@ -134,7 +135,7 @@ export async function requestJson(apiBaseUrl, pathValue, options = {}) {
   } catch (error) {
     throw new ScreenshotDiscoveryError(
       `${method} ${requestPathForError(pathValue)} returned invalid JSON`,
-      { cause: error },
+      { cause: error, kind: 'json' },
     );
   }
 }
@@ -197,6 +198,7 @@ function routeRecord({
   skipReason,
   validation = {},
   readiness = {},
+  discoveryError = false,
 }) {
   const landmark = validation.landmark ?? routeLandmark(name);
   const record = {
@@ -213,6 +215,7 @@ function routeRecord({
     metadata,
   };
   if (skipReason) record.skipReason = skipReason;
+  if (discoveryError) record.discoveryError = true;
   return record;
 }
 
@@ -232,7 +235,7 @@ function routeDedupeKey(route) {
   return JSON.stringify({ category: route.dedupeKey ?? route.name, url: route.url });
 }
 
-function addRoute(routes, skips, route) {
+function addRouteRecord(routes, skips, route) {
   if (routes.some((candidate) => routeDedupeKey(candidate) === routeDedupeKey(route))) return false;
   routes.push(route);
   if (route.skipReason) skips.push({ name: route.name, source: route.source, reason: route.skipReason });
@@ -243,17 +246,18 @@ function routeConfigByName(config) {
   return new Map((config?.routes ?? []).map((route) => [route.name, route]));
 }
 
-function addUnavailableRoute(routes, skips, options) {
-  addRoute(routes, skips, routeRecord({ ...options, url: null, required: false, dynamic: true }));
+function addUnavailableRouteRecord(routes, skips, options) {
+  addRouteRecord(routes, skips, routeRecord({ ...options, url: null, required: false, dynamic: true }));
 }
 
-async function readEndpoint({ apiUrl, fetchImpl, path, key, errors }) {
+async function readEndpoint({ apiUrl, fetchImpl, path, key, errors, failures }) {
   try {
     const value = await requestJson(apiUrl, path, { fetchImpl });
     return { value, records: collection(value, key) };
   } catch (error) {
     if (error?.kind === 'transport') throw error;
     errors[key] = endpointError(error);
+    failures[key] = true;
     return { value: null, records: null };
   }
 }
@@ -298,39 +302,75 @@ export async function discoverScreenshotManifest(options = {}) {
   const apiUrl = normalizeApiBaseUrl(options.apiUrl ?? config.apiUrl);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const errors = {};
+  const failures = {};
   const skips = [];
   const routes = [];
+  const configuredNames = new Set((config.routes ?? []).map((route) => route.name));
+  const configuredKeys = new Set((config.routes ?? []).map((route) => route.discoveryKey).filter(Boolean));
+  const routeIsConfigured = (name, discoveryKey = name) =>
+    configuredNames.has(name) || configuredKeys.has(discoveryKey);
+  const addRoute = (...args) => {
+    const route = args.length === 1 ? args[0] : args[2];
+    if (!routeIsConfigured(route.name, route.dedupeKey ?? route.name)) return false;
+    return addRouteRecord(routes, skips, route);
+  };
+  const addUnavailableRoute = (...args) => {
+    const routeOptions = args.length === 1 ? args[0] : args[2];
+    if (!routeIsConfigured(routeOptions.name, routeOptions.dedupeKey ?? routeOptions.name)) return false;
+    const discoveryError = routeOptions.discoveryError ?? Object.values(errors).includes(routeOptions.skipReason);
+    return addUnavailableRouteRecord(routes, skips, { ...routeOptions, discoveryError });
+  };
+  const wants = (name, discoveryKey = name) => routeIsConfigured(name, discoveryKey);
+  const configuredActions = (config.routes ?? []).flatMap((route) =>
+    (route.states ?? []).flatMap((state) => state.actions ?? []));
+  const actionValues = new Set(configuredActions.flatMap((action) =>
+    [action.valueFrom, action.labelFrom].filter(Boolean)));
+  const needs = {
+    nodes: wants('nodes') || wants('node-detail-01', 'node-detail') || wants('update-detail') ||
+      wants('contract-detail') || wants('package-family') || wants('package-detail') || wants('traffic') ||
+      actionValues.has('nodeId') || actionValues.has('nodes'),
+    updates: wants('update-detail') || wants('debugger') || wants('legacy-update-redirect') || wants('search') ||
+      actionValues.has('updateId'),
+    contracts: wants('contract-detail'),
+    parties: wants('parties') || wants('party-detail', 'party-detail') || wants('search') || actionValues.has('party'),
+    fingerprints: wants('namespace-detail') || actionValues.has('publicKey') || actionValues.has('namespace'),
+    tokens: wants('token-detail', 'token-detail') || actionValues.has('tokenId') || actionValues.has('tokenName') || actionValues.has('issuer'),
+    transfers: wants('token-transfer-detail') || actionValues.has('transferId'),
+    templates: actionValues.has('template'),
+    traffic: wants('traffic') || actionValues.has('trafficNodeIds'),
+  };
+  const needsPackages = wants('package-family') || wants('package-detail');
+  const readEndpointIfNeeded = (needed, endpoint) => needed
+    ? readEndpoint({ ...endpoint, errors, failures })
+    : Promise.resolve({ value: null, records: null });
   for (const configured of config.routes ?? []) {
-    if (configured.dynamic || configured.path === undefined || configured.required === false) continue;
+    if (configured.dynamic || configured.path === undefined) continue;
     addRoute(routes, skips, routeFromConfig(config, configured.name, configured.path));
   }
 
-  const nodesResult = await readEndpoint({ apiUrl, fetchImpl, path: '/nodes', key: 'nodes', errors });
-  const updateResult = await readEndpoint({ apiUrl, fetchImpl, path: '/updates?limit=1', key: 'updates', errors });
-  const contractResult = await readEndpoint({ apiUrl, fetchImpl, path: '/contracts?limit=1', key: 'contracts', errors });
-  const partiesResult = await readEndpoint({ apiUrl, fetchImpl, path: '/parties', key: 'parties', errors });
-  const fingerprintResult = await readEndpoint({
+  const nodesResult = await readEndpointIfNeeded(needs.nodes, { apiUrl, fetchImpl, path: '/nodes', key: 'nodes' });
+  const updateResult = await readEndpointIfNeeded(needs.updates, { apiUrl, fetchImpl, path: '/updates?limit=1', key: 'updates' });
+  const contractResult = await readEndpointIfNeeded(needs.contracts, { apiUrl, fetchImpl, path: '/contracts?limit=1', key: 'contracts' });
+  const partiesResult = await readEndpointIfNeeded(needs.parties, { apiUrl, fetchImpl, path: '/parties', key: 'parties' });
+  const fingerprintResult = await readEndpointIfNeeded(needs.fingerprints, {
     apiUrl,
     fetchImpl,
     path: '/parties/fingerprints?limit=1',
     key: 'fingerprints',
-    errors,
   });
-  const tokenResult = await readEndpoint({ apiUrl, fetchImpl, path: '/tokens?limit=1', key: 'tokens', errors });
-  const transferResult = await readEndpoint({
+  const tokenResult = await readEndpointIfNeeded(needs.tokens, { apiUrl, fetchImpl, path: '/tokens?limit=1', key: 'tokens' });
+  const transferResult = await readEndpointIfNeeded(needs.transfers, {
     apiUrl,
     fetchImpl,
     path: '/tokens/transfers?limit=1',
     key: 'transfers',
-    errors,
   });
-  const templateResult = await readEndpoint({ apiUrl, fetchImpl, path: '/templates', key: 'templates', errors });
-  const trafficResult = await readEndpoint({
+  const templateResult = await readEndpointIfNeeded(needs.templates, { apiUrl, fetchImpl, path: '/templates', key: 'templates' });
+  const trafficResult = await readEndpointIfNeeded(needs.traffic, {
     apiUrl,
     fetchImpl,
     path: '/traffic-purchases?limit=1',
     key: 'purchases',
-    errors,
   });
 
   const configuredMaxNodes = config.discovery?.maxNodes;
@@ -348,7 +388,12 @@ export async function discoverScreenshotManifest(options = {}) {
     const nodeId = firstString(node?.id, node?.nodeId);
     if (!nodeId) continue;
     const path = `/nodes/${encodeURIComponent(nodeId)}/packages`;
-    const result = await readEndpoint({ apiUrl, fetchImpl, path, key: 'packagesByName', errors });
+    const result = await readEndpointIfNeeded(needsPackages, {
+      apiUrl,
+      fetchImpl,
+      path,
+      key: 'packagesByName',
+    });
     packageResults.push({ ...result, nodeId, path });
   }
 
@@ -389,6 +434,7 @@ export async function discoverScreenshotManifest(options = {}) {
     nodes: contextNodes,
     trafficNodeIds,
     discoveryErrors: errors,
+    discoveryFailures: failures,
   };
 
   const nodeForUpdate = firstString(update?.nodeId, context.nodeId);
@@ -578,6 +624,7 @@ export async function discoverScreenshotManifest(options = {}) {
       metadata: { query: searchValue },
     }));
   } else {
+    const reason = errors.parties ?? errors.updates ?? 'No discovered party or update ID for search query';
     addUnavailableRoute(routes, skips, {
       name: 'search-results',
       source: '/parties',
@@ -586,7 +633,7 @@ export async function discoverScreenshotManifest(options = {}) {
         heading: 'Search Results',
         states: ['.search-results-group', '.search-results-view__empty'],
       },
-      skipReason: 'No discovered party or update ID for search query',
+      skipReason: reason,
     });
   }
 

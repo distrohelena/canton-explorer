@@ -143,7 +143,7 @@ export async function waitForLoadingToDisappear(page, timeoutMs) {
       const loading = [...document.querySelectorAll('body, body *')].some((element) => (
         /^Loading/i.test((element.textContent ?? '').trim()) && visible(element)
       ));
-      const status = [...document.querySelectorAll('[role="status"], [aria-busy="true"]')]
+      const status = [...document.querySelectorAll('[aria-busy="true"], [role="status"][data-loading="true"], [role="status"][aria-label^="Loading" i]')]
         .some((element) => visible(element));
       return loading || status;
     });
@@ -179,12 +179,12 @@ async function visibleCount(locator) {
   return visible;
 }
 
-async function validatePage(page, route, expectedUrl, sessionIds) {
+async function validatePage(page, route, expectedUrl, sessionIds, options = {}) {
   const actual = new URL(page.url());
   const expected = new URL(expectedUrl);
   const actualPath = `${actual.pathname}${actual.search}`;
   const expectedPath = `${expected.pathname}${expected.search}`;
-  if (actualPath !== expectedPath) {
+  if (actual.pathname !== expected.pathname || (!options.allowQueryChanges && actual.search !== expected.search)) {
     throw new ScreenshotRunnerError(`Expected final path ${expectedPath}, got ${actualPath}`, {
       kind: 'validation',
       code: 'final-path',
@@ -234,7 +234,7 @@ export async function waitForReadiness(page, route, expectedUrl, options = {}) {
   await waitForLoadingToDisappear(page, timeoutMs);
   const settleMs = route?.readiness?.settleMs ?? options.settleMs ?? DEFAULT_SETTLE_MS;
   if (settleMs > 0) await delay(settleMs);
-  await validatePage(page, route, expectedUrl, options.sessionIds ?? []);
+  await validatePage(page, route, expectedUrl, options.sessionIds ?? [], options);
 }
 
 async function extractSessionId(response) {
@@ -376,6 +376,7 @@ function manifestForOutput(manifest, apiUrl) {
       url: route.url ?? null,
       required: route.required !== false,
       source: route.source ?? 'discovery',
+      ...(route.discoveryError ? { discoveryError: true } : {}),
     })),
   };
 }
@@ -401,7 +402,8 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
     url: manifestRoute.expectedPath ?? route.expectedPath ?? manifestRoute.url,
   }) ?? url;
   if (!url) {
-    const status = required ? 'failed' : 'skipped';
+    const discoveryError = manifestRoute.discoveryError === true;
+    const status = discoveryError || required ? 'failed' : 'skipped';
     const result = {
       route: route.name,
       state: state.name,
@@ -411,6 +413,7 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
       ...(status === 'skipped' ? { reason: manifestRoute.skipReason ?? 'No discovered route URL' } : { error: manifestRoute.skipReason ?? 'No route URL' }),
       durationMs: Date.now() - started,
       required,
+      ...(discoveryError ? { fatal: true } : {}),
     };
     report.entries.push(result);
     await writeReport();
@@ -529,7 +532,11 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
             metadata: { route: route.name, state: state.name, required },
             required,
           });
-          await waitForReadiness(page, captureRoute, expectedUrl, { settleMs: config.settleMs, sessionIds });
+          await waitForReadiness(page, captureRoute, expectedUrl, {
+            settleMs: config.settleMs,
+            sessionIds,
+            allowQueryChanges: true,
+          });
         }
         await page.screenshot({ path: filePath, fullPage: true });
         result = {

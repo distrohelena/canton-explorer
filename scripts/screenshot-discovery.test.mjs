@@ -232,6 +232,8 @@ test('discovers static and dynamic screenshot routes from every approved endpoin
   assert.equal(routes.get('namespace-detail').url, '/namespaces/namespace%2Fone');
   assert.equal(routes.get('token-detail').url, '/tokens/token%2Fone');
   assert.equal(routes.get('token-detail-transfers').url, '/tokens/token%2Fone');
+  assert.equal(routes.get('tokens-known').url, '/tokens');
+  assert.equal(routes.get('tokens-transfers').url, '/tokens');
   assert.equal(routes.get('token-transfer-detail').url, '/tokens/transfers/transfer%2Fupdate');
   assert.equal(routes.get('package-family').url, '/packages/by-name/package%2Fname');
   assert.equal(routes.get('package-detail').url, '/packages/package%2Fid');
@@ -341,6 +343,7 @@ test('records empty collections and endpoint failures as precise optional skips'
   assert.equal(routes.get('update-detail').skipReason, 'GET /updates?limit=1 returned an empty updates collection');
   assert.equal(routes.get('contract-detail').skipReason, 'GET /contracts?limit=1 returned an empty contracts collection');
   assert.equal(routes.get('namespace-detail').skipReason, 'GET /parties/fingerprints?limit=1 returned 502 Bad Gateway');
+  assert.equal(routes.get('namespace-detail').discoveryError, true);
   assert.equal(routes.get('package-family').skipReason, 'GET /nodes/node-1/packages returned an empty packagesByName collection');
   assert.equal(routes.get('token-detail').skipReason, 'GET /tokens?limit=1 returned an empty tokens collection');
   assert.equal(routes.get('token-detail-transfers').skipReason, 'GET /tokens?limit=1 returned an empty tokens collection');
@@ -390,4 +393,24 @@ test('deduplicates exact logical entries while preserving scoped routes sharing 
   assert.equal(routes.has('node-detail-03'), false);
   assert.equal(manifest.context.nodeId, 'same/id');
   assert.equal(manifest.context.eventOffset, 'same/offset');
+});
+
+test('scopes discovery routes and endpoint work to configured route categories', async () => {
+  const calls = [];
+  const manifest = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    config: {
+      routes: [{
+        name: 'tokens-known',
+        path: '/tokens',
+        required: false,
+        states: [{ name: 'default', actions: [] }],
+      }],
+      discovery: { maxNodes: 1 },
+    },
+    fetchImpl: fixtureFetch(fullFixtures, calls),
+  });
+
+  assert.deepEqual(manifest.routes.map((route) => route.name), ['tokens-known']);
+  assert.deepEqual(calls, []);
 });
