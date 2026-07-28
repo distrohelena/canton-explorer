@@ -20,6 +20,23 @@ export class DebuggerController {
     return this.debuggerService.createSession(body.updateId ?? '');
   }
 
+  @Post('/sessions/simulate')
+  createSimulatedSession(
+    @Body() body: {
+      nodeId?: string;
+      packageId?: string;
+      templateId?: string;
+      argument?: unknown;
+    },
+  ) {
+    return this.debuggerService.createSimulatedSession({
+      nodeId: body.nodeId ?? '',
+      packageId: body.packageId ?? '',
+      templateId: body.templateId ?? '',
+      argument: body.argument,
+    });
+  }
+
   @Get('/sessions')
   listSessions() {
     return this.debuggerService.listSessions();

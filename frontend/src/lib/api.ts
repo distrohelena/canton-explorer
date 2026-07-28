@@ -432,6 +432,15 @@ export function createDebuggerSession(
   });
 }
 
+export function createSimulatedDebuggerSession(request: {
+  nodeId: string;
+  packageId: string;
+  templateId: string;
+  argument: unknown;
+}): Promise<DebuggerSessionResponse> {
+  return postJson<DebuggerSessionResponse>('/debugger/sessions/simulate', request);
+}
+
 export function fetchDebuggerSessions(): Promise<DebuggerSessionSummary[]> {
   return fetchJson<DebuggerSessionSummary[]>('/debugger/sessions');
 }

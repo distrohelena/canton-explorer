@@ -3,7 +3,9 @@ import type { PackageTypeNode } from '../types/packages';
 import {
   UNSET,
   createFormValue,
+  formTypeLabel,
   serializeFormValue,
+  toReplayValue,
   validateFormValue,
   type FormRecord,
 } from './debugger-value-form';
@@ -45,6 +47,21 @@ describe('debugger constructor value form', () => {
       ],
     });
     expect(validateFormValue(value, schema)).toEqual([]);
+  });
+
+  it('converts serialized constructor data into DAML replay runtime values', () => {
+    expect(toReplayValue({
+      kind: 'record',
+      fields: [
+        { label: 'owner', value: 'Alice::party' },
+        { label: 'name', value: 'Asset' },
+        { label: 'memo', value: { kind: 'optional', value: 'hello' } },
+      ],
+    }, schema)).toEqual({
+      owner: { __damlLfParty: 'Alice::party' },
+      name: 'Asset',
+      memo: 'hello',
+    });
   });
 
   it('keeps required values unset and reports a missing-field error', () => {
@@ -90,5 +107,19 @@ describe('debugger constructor value form', () => {
 
     expect(value.kind).toBe('record');
     expect((value as FormRecord).fields.description).toBeDefined();
+  });
+
+  it('formats DAML field types including Optional wrappers', () => {
+    expect(formTypeLabel({ kind: 'builtin', label: 'Party' })).toBe('Party');
+    expect(formTypeLabel({
+      kind: 'builtin',
+      label: 'Optional',
+      arguments: [{ kind: 'builtin', label: 'Text' }],
+    })).toBe('Optional Text');
+    expect(formTypeLabel({
+      kind: 'builtin',
+      label: 'List',
+      arguments: [{ kind: 'builtin', label: 'Int64' }],
+    })).toBe('List Int64');
   });
 });

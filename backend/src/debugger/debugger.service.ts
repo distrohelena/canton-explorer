@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { GrpcClientFactory } from '../grpc/grpc-client.factory';
 import { NodeConfigService } from '../config/node-config.service';
@@ -144,6 +145,66 @@ type LocalDebugDarEntry = {
   mainPackageId: string;
   payload: Uint8Array;
 };
+
+export interface SyntheticReplaySnapshotInput {
+  offset: string;
+  packageId: string;
+  moduleName: string;
+  entityName: string;
+  argument: unknown;
+}
+
+export function flattenSyntheticCreateReplayExpression(expression: {
+  lambda?: { parameters: string[]; body: unknown };
+}) {
+  let current = expression;
+  let argumentParameter = 'arg';
+
+  while (current.lambda?.body && typeof current.lambda.body === 'object') {
+    argumentParameter = current.lambda.parameters.at(-1) ?? argumentParameter;
+    const body = current.lambda.body as { lambda?: { parameters: string[]; body: unknown } };
+    if (!body.lambda) {
+      return { lambda: { parameters: [argumentParameter], body: current.lambda.body } };
+    }
+    current = body;
+  }
+
+  return current;
+}
+
+export function createSyntheticReplaySnapshot(input: SyntheticReplaySnapshotInput) {
+  const contractId = `#${input.offset.replace(/[^A-Za-z0-9]/g, '')}`;
+  return {
+    kind: 'transaction' as const,
+    offset: input.offset,
+    updateId: undefined,
+    actAs: [],
+    readAs: [],
+    events: [{
+      event: {
+        oneofKind: 'created' as const,
+        created: {
+          contractId,
+          templateId: {
+            packageId: input.packageId,
+            moduleName: input.moduleName,
+            entityName: input.entityName,
+          },
+          createArguments: input.argument,
+        },
+      },
+    }],
+    entrypoint: {
+      kind: 'create' as const,
+      templateId: {
+        packageId: input.packageId,
+        moduleName: input.moduleName,
+        entityName: input.entityName,
+      },
+      argument: input.argument,
+    },
+  };
+}
 
 export interface DebuggerSessionResponse {
   sessionId: string;
@@ -429,6 +490,115 @@ export class DebuggerService {
       }
 
       throw new InternalServerErrorException(`${message}${diagnostic}`);
+    } finally {
+      await client.disposeAsync?.();
+    }
+  }
+
+  async createSimulatedSession(input: {
+    nodeId: string;
+    packageId: string;
+    templateId: string;
+    argument: unknown;
+  }): Promise<DebuggerSessionResponse> {
+    const node = this.getNodeConfig(input.nodeId);
+    if (node.mode !== 'pqs_with_grpc') {
+      throw new BadRequestException('Simulation requires a node with gRPC access.');
+    }
+
+    const separatorIndex = input.templateId.lastIndexOf(':');
+    if (!input.packageId.trim() || separatorIndex <= 0 || separatorIndex === input.templateId.length - 1) {
+      throw new BadRequestException('A package ID and fully qualified template ID are required.');
+    }
+
+    const client = (await this.grpcClientFactory.create(node)) as unknown as DebuggerCapableClient;
+    const { debuggerSdk, damlLfSdk } = await this.loadSdkModules();
+    const sessionStore = await this.getSessionStore();
+    const packageReadService = await this.createPackageReadService(client);
+    const moduleName = input.templateId.slice(0, separatorIndex);
+    const entityName = input.templateId.slice(separatorIndex + 1);
+    const snapshot = createSyntheticReplaySnapshot({
+      offset: `simulation:${randomUUID()}`,
+      packageId: input.packageId.trim(),
+      moduleName,
+      entityName,
+      argument: input.argument,
+    });
+
+    try {
+      const environmentBuilder = new debuggerSdk.LedgerReplayEnvironmentBuilder({
+        contractService: this.createReplayContractService(node, client) as never,
+        eventQueryService: this.createReplayEventQueryService(node, client, snapshot.offset) as never,
+      });
+      const environment = await environmentBuilder.buildOrThrowAsync(snapshot as never);
+      const artifactResolver = new debuggerSdk.ReplayArtifactResolver({
+        participantPackageService: packageReadService as never,
+      });
+      const resolvedArtifacts = await artifactResolver.resolveAsync(environment.packageIds);
+
+      await this.packageSyncService.syncPackagesById(node, [...resolvedArtifacts.packageIds]);
+      const compilation = this.loadCompilationOrThrow(damlLfSdk, resolvedArtifacts.packageIds);
+      const sourceBundles = await this.loadSourceBundles(
+        packageReadService,
+        resolvedArtifacts.dars,
+        damlLfSdk,
+      );
+      const indexedCompilation = debuggerSdk.SourceIndexedCompilation.createOrThrow(
+        compilation,
+        sourceBundles,
+      );
+      const baseSimulationDefinitionResolver = new debuggerSdk.ReplayEntrypointDefinitionResolver(indexedCompilation);
+      const sessionLoader = new debuggerSdk.LedgerReplaySessionLoader({
+        updateLoader: {
+          loadOrThrowAsync: async () => snapshot as never,
+        },
+        environmentBuilder: {
+          buildOrThrowAsync: async () => environment,
+        },
+        definitionResolver: {
+          resolveEntrypointDefinitionOrThrow: (entrypoint: never) => {
+            const definition = baseSimulationDefinitionResolver.resolveEntrypointDefinitionOrThrow(entrypoint);
+            return {
+              ...definition,
+              replayExpression: flattenSyntheticCreateReplayExpression(definition.replayExpression as never),
+              replayBindingMode: 'createWrapper',
+            } as never;
+          },
+        } as never,
+        sourceMapper: new debuggerSdk.DamlSourceMapper(indexedCompilation),
+        evaluator: new damlLfSdk.DamlLfEvaluator(compilation),
+        determinismValidator: new debuggerSdk.ReplayDeterminismValidator(),
+      });
+      const debuggerClient = new debuggerSdk.LedgerReplayDebuggerClient({
+        sessionLoader,
+        sessionStore: sessionStore as never,
+      });
+      const session = await debuggerClient.loadSessionAsync(
+        new debuggerSdk.ReplaySessionRequest({ offset: snapshot.offset }),
+      );
+
+      if (!session.sessionId) {
+        throw new Error('Simulated replay session did not return a session id');
+      }
+
+      this.sessionArtifacts.set(session.sessionId, {
+        nodeId: node.id,
+        updateId: null,
+        offset: snapshot.offset,
+        createdAt: new Date().toISOString(),
+        sourceFilesByPath: this.flattenSourceFiles(sourceBundles),
+        realEvents: [],
+      });
+
+      return this.getSession(session.sessionId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Simulated debugger session failed';
+      if (message.includes('debug/source-map.json')) {
+        throw new BadRequestException(
+          'Debugger requires DAR source maps, but the relevant DAR does not contain debug/source-map.json.',
+        );
+      }
+      throw new InternalServerErrorException(message);
     } finally {
       await client.disposeAsync?.();
     }

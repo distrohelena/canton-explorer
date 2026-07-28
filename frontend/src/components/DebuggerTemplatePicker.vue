@@ -42,6 +42,9 @@ const props = withDefaults(
     constructorLoading?: boolean;
     constructorError?: string | null;
     constructorResolveType?: (node: PackageTypeNode) => PackageTypeNode | null;
+    constructorValid?: boolean;
+    creatingSession?: boolean;
+    createError?: string | null;
   }>(),
   {
     modelValue: null,
@@ -54,6 +57,9 @@ const props = withDefaults(
     constructorLoading: false,
     constructorError: null,
     constructorResolveType: undefined,
+    constructorValid: false,
+    creatingSession: false,
+    createError: null,
   },
 );
 
@@ -63,6 +69,7 @@ const emit = defineEmits<{
   reset: [];
   constructorValue: [value: unknown | null];
   constructorValidity: [valid: boolean];
+  createSession: [];
 }>();
 
 const simulationOptions: Array<{ kind: DebuggerSimulationKind; label: string; description: string }> = [
@@ -452,6 +459,16 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @validity="emit('constructorValidity', $event)"
       />
       <p v-else class="debugger-template-picker__state">Select a template to configure its constructor arguments.</p>
+      <p v-if="createError" class="debugger-template-picker__state debugger-template-picker__state--error">{{ createError }}</p>
+      <button
+        v-if="modelValue?.simulationKind === 'create'"
+        type="button"
+        class="debugger-template-picker__create-session"
+        :disabled="constructorLoading || !constructorSchema || !modelValue || !constructorValid || creatingSession"
+        @click.stop="emit('createSession')"
+      >
+        {{ creatingSession ? 'Creating debug session…' : 'Create debug session' }}
+      </button>
     </section>
 
     </div>

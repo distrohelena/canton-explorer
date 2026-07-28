@@ -86,6 +86,35 @@ function builtinLabel(node: PackageTypeNode): string {
   return node.label.split('.').at(-1)?.split(':').at(-1) ?? node.label;
 }
 
+function namedTypeLabel(label: string): string {
+  return label.split('.').at(-1) ?? label;
+}
+
+export function formTypeLabel(node: PackageTypeNode, resolver?: Resolver): string {
+  if (node.kind === 'type_con') {
+    return namedTypeLabel(node.label);
+  }
+
+  if (node.kind === 'synonym' || node.kind === 'forall') {
+    return namedTypeLabel(node.label);
+  }
+
+  if (node.kind === 'builtin') {
+    const label = builtinLabel(node);
+    const argumentsList = (node.arguments ?? []).map((argument) => formTypeLabel(argument, resolver));
+    if (argumentsList.length === 0) {
+      return label;
+    }
+    return `${label} ${argumentsList.join(' ')}`;
+  }
+
+  if (node.kind === 'nat') {
+    return 'Nat';
+  }
+
+  return namedTypeLabel(node.label);
+}
+
 export function createFormValue(node: PackageTypeNode, resolver?: Resolver): FormValue {
   const resolved = resolvedNode(node, resolver);
 
@@ -304,4 +333,83 @@ export function serializeFormValue(value: FormValue, node: PackageTypeNode): Ser
     case 'unsupported':
       throw new Error(value.message);
   }
+}
+
+export function toReplayValue(
+  value: SerializedDamlValue | null,
+  node: PackageTypeNode,
+  resolver?: Resolver,
+): unknown {
+  const actualNode = resolvedNode(node, resolver);
+
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    if (actualNode.kind === 'builtin') {
+      const label = builtinLabel(actualNode);
+      if (label === 'Party') return { __damlLfParty: value };
+      if (label === 'Numeric') return { __damlLfNumeric: String(value) };
+    }
+    if (actualNode.kind === 'nat') return { __damlLfNumeric: String(value) };
+    return value;
+  }
+
+  if ('kind' in value && value.kind === 'contract_id') {
+    return { __damlLfContractId: value.value };
+  }
+
+  if ('kind' in value && value.kind === 'record') {
+    const fields = new Map(value.fields.map((field) => [field.label, field.value]));
+    const recordFields = actualNode.fields ?? [];
+    return Object.fromEntries(
+      recordFields.map((field) => [
+        field.name,
+        toReplayValue(fields.get(field.name) ?? null, field.type, resolver),
+      ]),
+    );
+  }
+
+  if ('kind' in value && value.kind === 'optional') {
+    const argument = actualNode.kind === 'builtin' ? actualNode.arguments?.[0] : undefined;
+    return value.value === null || !argument ? null : toReplayValue(value.value, argument, resolver);
+  }
+
+  if ('kind' in value && value.kind === 'list') {
+    const argument = actualNode.kind === 'builtin' ? actualNode.arguments?.[0] : undefined;
+    return argument ? value.items.map((item) => toReplayValue(item, argument, resolver)) : [];
+  }
+
+  if ('kind' in value && value.kind === 'text_map') {
+    const argument = actualNode.kind === 'builtin' ? actualNode.arguments?.[0] : undefined;
+    return Object.fromEntries(
+      value.entries.map((entry) => [
+        entry.key,
+        argument ? toReplayValue(entry.value, argument, resolver) : entry.value,
+      ]),
+    );
+  }
+
+  if ('kind' in value && value.kind === 'gen_map') {
+    const argumentsList = actualNode.kind === 'builtin' ? actualNode.arguments ?? [] : [];
+    return value.entries.map((entry) => ({
+      key: argumentsList[0] ? toReplayValue(entry.key, argumentsList[0], resolver) : entry.key,
+      value: argumentsList[1] ? toReplayValue(entry.value, argumentsList[1], resolver) : entry.value,
+    }));
+  }
+
+  if ('kind' in value && value.kind === 'variant') {
+    const constructor = actualNode.kind === 'variant'
+      ? actualNode.constructors?.find((candidate) => candidate.name === value.constructor)
+      : undefined;
+    return {
+      constructor: value.constructor,
+      value: value.value === null || !constructor?.type
+        ? null
+        : toReplayValue(value.value, constructor.type, resolver),
+    };
+  }
+
+  if ('kind' in value && value.kind === 'enum') {
+    return value.constructor;
+  }
+
+  return null;
 }

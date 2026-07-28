@@ -5,6 +5,7 @@ import { defineComponent } from 'vue';
 import DebuggerView from './DebuggerView.vue';
 import {
   createDebuggerSession,
+  createSimulatedDebuggerSession,
   fetchDebuggerSessions,
   fetchNodeContracts,
   fetchNodeTemplates,
@@ -39,6 +40,7 @@ vi.mock('../components/MonacoCodeSurface.vue', () => ({
 
 vi.mock('../lib/api', () => ({
   createDebuggerSession: vi.fn(),
+  createSimulatedDebuggerSession: vi.fn(),
   fetchDebuggerSessions: vi.fn(),
   fetchNodeContracts: vi.fn(),
   fetchNodeTemplates: vi.fn(),
@@ -216,6 +218,7 @@ describe('DebuggerView', () => {
     expect(await screen.findByTestId('debugger-template-step-constructor')).toBeInTheDocument();
     expect((await screen.findAllByText('Constructor arguments')).length).toBeGreaterThan(0);
     expect(await screen.findByText('owner')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create debug session' })).toBeDisabled();
     const picker = screen.getByTestId('debugger-template-picker');
     expect(picker).toHaveClass('debugger-template-picker--constructor-focus');
     await fireEvent.click(screen.getByTestId('debugger-template-step-node'));
@@ -223,6 +226,96 @@ describe('DebuggerView', () => {
     expect(screen.queryByTestId('debugger-template-step-constructor')).not.toBeInTheDocument();
     expect(fetchPackageDetail).toHaveBeenCalledWith('pkg-a');
     expect(createDebuggerSession).not.toHaveBeenCalled();
+  });
+
+  it('creates a simulated debug session from valid constructor arguments', async () => {
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
+    vi.mocked(fetchNodes).mockResolvedValue([{
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+    }] as never);
+    vi.mocked(fetchNodeTemplates).mockResolvedValue({
+      templates: [{
+        templateId: 'Main:Asset',
+        packageId: 'pkg-a',
+        packageName: 'demo-package',
+        packageVersion: '1.0.0',
+      }],
+    });
+    vi.mocked(fetchPackageDetail).mockResolvedValue({
+      packageId: 'pkg-a',
+      name: 'demo-package',
+      version: '1.0.0',
+      uploadedAt: null,
+      packageSize: null,
+      status: 'decoded',
+      seenOnNodes: [],
+      moduleCount: 1,
+      templateCount: 1,
+      dataTypeCount: 0,
+      modules: ['Main'],
+      templates: [{
+        templateId: 'Main:Asset',
+        moduleName: 'Main',
+        entityName: 'Asset',
+        createType: {
+          kind: 'record',
+          label: 'Main:Asset',
+          fields: [{ name: 'owner', type: { kind: 'builtin', label: 'Party' } }],
+        },
+      }],
+      dataTypes: [],
+    });
+    vi.mocked(createSimulatedDebuggerSession).mockResolvedValue({
+      sessionId: 'simulation-session-1',
+      nodeId: 'participant-1',
+      updateId: null,
+      offset: 'simulation:abc',
+      stepCount: 1,
+      currentStepIndex: 0,
+      isTerminal: true,
+      currentStep: {
+        stepId: 'step-0',
+        stepIndex: 0,
+        phase: 'stateEffect',
+        stackFrames: [],
+        scopes: [],
+        locals: [],
+        arguments: [],
+        sourceLocation: null,
+        valuePreview: null,
+        stateDelta: null,
+      },
+      source: null,
+    });
+    vi.mocked(fetchDebuggerEvents).mockResolvedValue({
+      sessionId: 'simulation-session-1',
+      currentStepId: 'step-0',
+      realEvents: [],
+      replayEvents: [],
+    });
+
+    const { router } = await renderAt('/debugger');
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+    await fireEvent.click(screen.getByRole('option', { name: /^Create / }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Participant 1.*PQS \+ gRPC/s }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Main:Asset.*demo-package/s }));
+    await fireEvent.update(await screen.findByRole('textbox', { name: 'owner' }), 'Alice::123');
+
+    const createButton = await screen.findByRole('button', { name: 'Create debug session' });
+    await waitFor(() => expect(createButton).toBeEnabled());
+    await fireEvent.click(createButton);
+
+    await waitFor(() => expect(createSimulatedDebuggerSession).toHaveBeenCalledWith({
+      nodeId: 'participant-1',
+      packageId: 'pkg-a',
+      templateId: 'Main:Asset',
+      argument: { owner: { __damlLfParty: 'Alice::123' } },
+    }));
+    await waitFor(() => expect(router.currentRoute.value.query.sessionId).toBe('simulation-session-1'));
+    expect(router.currentRoute.value.query.updateId).toBeUndefined();
   });
 
   it('lists previously started sessions and opens a selected session', async () => {

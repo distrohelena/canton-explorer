@@ -16,6 +16,7 @@ import MonacoCodeSurface from '../components/MonacoCodeSurface.vue';
 import type { MonacoDebuggerHoverVariable } from '../components/MonacoCodeSurface.vue';
 import {
   createDebuggerSession,
+  createSimulatedDebuggerSession,
   fetchDebuggerSessions,
   fetchNodeContracts,
   fetchNodeTemplates,
@@ -27,6 +28,7 @@ import {
   stepDebuggerSession,
 } from '../lib/api';
 import { resolveDamlFunctionVariableRanges } from '../lib/daml-hover-resolution';
+import { toReplayValue } from '../lib/debugger-value-form';
 import { resolveDefaultControlPanelX } from '../lib/debugger-layout';
 import type {
   DebuggerReplayEventSummary,
@@ -79,6 +81,8 @@ const constructorLoading = ref(false);
 const constructorError = ref<string | null>(null);
 const constructorValue = ref<unknown | null>(null);
 const constructorValid = ref(false);
+const creatingSimulationSession = ref(false);
+const simulationError = ref<string | null>(null);
 const constructorTypeDefinitions = ref(new Map<string, PackageTypeNode>());
 const debuggerSessions = ref<DebuggerSessionSummary[]>([]);
 const debuggerSessionsLoading = ref(false);
@@ -330,7 +334,7 @@ const routeReplayKey = computed(() => JSON.stringify({
   stepId: routeStepId.value,
 }));
 
-const hasReplayContext = computed(() => Boolean(updateId.value));
+const hasReplayContext = computed(() => Boolean(updateId.value || routeSessionId.value));
 
 const templateOptions = computed<DebuggerTemplateOption[]>(() =>
   templateGroups.value.flatMap((group) =>
@@ -410,6 +414,45 @@ async function loadConstructorSchema(selection: DebuggerTemplateSelection) {
 function resetNewSimulationState() {
   selectedTemplate.value = null;
   resetConstructorState();
+}
+
+async function createSimulationSession() {
+  const selection = selectedTemplate.value;
+  if (
+    !selection
+    || selection.simulationKind !== 'create'
+    || !constructorValid.value
+    || constructorValue.value === null
+    || !constructorSchema.value
+  ) {
+    return;
+  }
+
+  creatingSimulationSession.value = true;
+  simulationError.value = null;
+  error.value = null;
+
+  try {
+    const nextSession = await createSimulatedDebuggerSession({
+      nodeId: selection.nodeId,
+      packageId: selection.packageId,
+      templateId: selection.templateId ?? '',
+      argument: toReplayValue(
+        constructorValue.value as never,
+        constructorSchema.value,
+        resolveConstructorType,
+      ),
+    });
+    showNewSimulation.value = false;
+    rememberSessionSource(nextSession, { reset: true });
+    session.value = nextSession;
+    await syncEvents(nextSession.sessionId);
+    await syncRouteToSession(nextSession);
+  } catch (err) {
+    simulationError.value = err instanceof Error ? err.message : 'Unable to create debug session.';
+  } finally {
+    creatingSimulationSession.value = false;
+  }
 }
 
 function selectTemplate(selection: DebuggerTemplateSelection) {
@@ -919,7 +962,7 @@ async function syncRouteToSession(nextSession: DebuggerSessionResponse | null) {
 }
 
 async function loadDebuggerSession() {
-  if (!updateId.value) {
+  if (!updateId.value && !routeSessionId.value) {
     session.value = null;
     error.value = 'Open the debugger from an update detail page to launch a replay session.';
     return;
@@ -951,10 +994,13 @@ async function loadDebuggerSession() {
       try {
         nextSession = await fetchDebuggerSession(routeSessionId.value);
       } catch {
-        nextSession = await createDebuggerSession(updateId.value);
+        if (!updateId.value) {
+          throw new Error('Debugger session could not be loaded.');
+        }
+        nextSession = await createDebuggerSession(updateId.value ?? '');
       }
     } else {
-      nextSession = await createDebuggerSession(updateId.value);
+      nextSession = await createDebuggerSession(updateId.value ?? '');
     }
 
     if (routeStepId.value && nextSession.currentStep.stepId !== routeStepId.value) {
@@ -1236,11 +1282,15 @@ onBeforeUnmount(() => {
         :constructor-loading="constructorLoading"
         :constructor-error="constructorError"
         :constructor-resolve-type="resolveConstructorType"
+        :constructor-valid="constructorValid"
         @select="selectTemplate"
         @node-select="loadActiveContracts"
         @reset="resetNewSimulationState"
         @constructor-value="constructorValue = $event"
         @constructor-validity="constructorValid = $event"
+        :creating-session="creatingSimulationSession"
+        :create-error="simulationError"
+        @create-session="createSimulationSession"
       />
     </section>
     <p v-if="error" class="debugger-view__error-state" role="alert">{{ error }}</p>
