@@ -246,6 +246,10 @@ function routeConfigByName(config) {
   return new Map((config?.routes ?? []).map((route) => [route.name, route]));
 }
 
+function isDynamicRouteConfig(route) {
+  return route?.dynamic === true || (route?.path === undefined && route?.discoveryKey !== undefined);
+}
+
 function addUnavailableRouteRecord(routes, skips, options) {
   addRouteRecord(routes, skips, routeRecord({
     ...options,
@@ -326,7 +330,7 @@ export async function discoverScreenshotManifest(options = {}) {
     const route = args.length === 1 ? args[0] : args[2];
     if (!routeShouldEmit(route.name)) return false;
     const configured = configuredRoutes.get(route.name);
-    const generated = configured?.dynamic
+    const generated = isDynamicRouteConfig(configured)
       ? { ...route, required: configured.required ?? false, dynamic: true }
       : route;
     return addRouteRecord(routes, skips, generated);
@@ -336,7 +340,7 @@ export async function discoverScreenshotManifest(options = {}) {
     if (!routeShouldEmit(routeOptions.name)) return false;
     const discoveryError = routeOptions.discoveryError ?? Object.values(errors).includes(routeOptions.skipReason);
     const configured = configuredRoutes.get(routeOptions.name);
-    const generated = configured?.dynamic
+    const generated = isDynamicRouteConfig(configured)
       ? { ...routeOptions, required: configured.required ?? false, dynamic: true }
       : routeOptions;
     return addUnavailableRouteRecord(routes, skips, { ...generated, discoveryError });

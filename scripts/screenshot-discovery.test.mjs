@@ -512,3 +512,31 @@ test('preserves configured requiredness for generated and unavailable dynamic ro
   assert.equal(unavailable.routes[0].required, true);
   assert.equal(unavailable.routes[0].url, null);
 });
+
+test('inherits requiredness for pathless discovery routes without dynamic flag', async () => {
+  const config = {
+    routes: [{
+      name: 'node-detail-02',
+      required: true,
+      discoveryKey: 'node-detail',
+      states: [{ name: 'default', actions: [] }],
+    }],
+  };
+
+  const generated = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    config,
+    fetchImpl: fixtureFetch(fullFixtures),
+  });
+  assert.equal(generated.routes[0].required, true);
+
+  const emptyFixtures = structuredClone(fullFixtures);
+  emptyFixtures['/api/nodes'] = { nodes: [] };
+  const unavailable = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    config,
+    fetchImpl: fixtureFetch(emptyFixtures),
+  });
+  assert.equal(unavailable.routes[0].required, true);
+  assert.equal(unavailable.routes[0].url, null);
+});
