@@ -55,7 +55,7 @@ Browser installation will be documented separately:
 npx playwright install chromium
 ```
 
-The first-run documentation will call this a one-time prerequisite, and the CLI will detect a missing Chromium executable and exit `1` with that exact install command. After the prerequisite, the capture itself remains one command and never downloads browsers implicitly.
+The first-run documentation will call this a one-time prerequisite, and the CLI will detect a missing Chromium executable and exit `2` with that exact install command. After the prerequisite, the capture itself remains one command and never downloads browsers implicitly.
 
 The command is intentionally attached to the already-running services. It will not start or stop the backend or frontend.
 
@@ -138,7 +138,7 @@ The discovery module will use a small typed fetch client independent of frontend
 | `/templates` | Representative template filter values |
 | `/traffic-purchases?limit=1` | Traffic filter values where available |
 
-Discovery will prefer the first usable record from each response, preserve the node ID and event offset together for node-scoped URLs, URL-encode all dynamic path/query values, and deduplicate equivalent URLs.
+Discovery will prefer the first usable record from each response, preserve the node ID and event offset together for node-scoped URLs, name multiple node-detail routes by deterministic API/config ordinal (`node-detail-01`, `node-detail-02`, ...), URL-encode all dynamic path/query values, and deduplicate equivalent URLs. The discovered search route is named `search-results` and uses `/search?q=<party or update ID>`, validating the `Search Results` heading and either a result group or explicit no-results state.
 
 Discovery is only a candidate source; the browser runner validates every dynamic candidate after navigation. Detail candidates must reach their expected final path and expose their configured heading or content landmark without an application error message. The legacy transaction candidate must finish on the expected node-scoped update detail path. The debugger candidate must produce a successful session response and expose the debugger workspace or catalog; a missing session, replay error, or error-state message makes the candidate skipped with the exact validation reason. Package-family, token, party, namespace, contract, update, and transfer candidates follow the same final-path/content rule. A candidate that fails validation is never captured under a misleading success filename.
 
@@ -238,7 +238,8 @@ The outcome truth table is:
 | Optional filter state has no eligible control/value | skipped | 0 | 1 |
 | Optional route fails after retry | failed | 0 | 1 |
 | Required route/state fails after retry | failed | 1 | 1 |
-| Invalid CLI/config/browser missing/connectivity failure | no entry or failed | 1/2 as applicable | 1/2 as applicable |
+| Invalid CLI/config/browser missing | no entry | 2 | 2 |
+| Connectivity failure | no entry or failed | 1 | 1 |
 
 The CLI uses exit `2` only for invalid arguments/configuration or a missing browser installation; service connectivity and capture failures use exit `1`.
 
