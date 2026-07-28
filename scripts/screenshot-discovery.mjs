@@ -335,14 +335,14 @@ export async function discoverScreenshotManifest(options = {}) {
 
   const configuredMaxNodes = config.discovery?.maxNodes;
   const nodeRecords = nodesResult.records ?? [];
-  const nodes = Number.isInteger(configuredMaxNodes) && configuredMaxNodes > 0
-    ? nodeRecords.slice(0, configuredMaxNodes)
-    : nodeRecords;
-  const contextNodes = nodes.flatMap((node) => {
+  const contextNodes = nodeRecords.flatMap((node) => {
     const id = firstString(node?.id, node?.nodeId);
     if (!id) return [];
     return [{ id, label: firstString(node?.label, node?.name, id) }];
   });
+  const nodes = Number.isInteger(configuredMaxNodes) && configuredMaxNodes > 0
+    ? nodeRecords.slice(0, configuredMaxNodes)
+    : nodeRecords;
   const packageResults = [];
   for (const node of nodes) {
     const nodeId = firstString(node?.id, node?.nodeId);

@@ -280,6 +280,35 @@ test('discovers static and dynamic screenshot routes from every approved endpoin
   );
 });
 
+test('keeps labels for every traffic node when bounded node routes use maxNodes', async () => {
+  const fixtures = structuredClone(fullFixtures);
+  const nodes = Array.from({ length: 6 }, (_, index) => ({
+    id: `node/${index + 1}`,
+    label: `Node ${index + 1}`,
+  }));
+  fixtures['/api/nodes'] = { nodes };
+  fixtures['/api/traffic-purchases?limit=1'] = {
+    purchases: nodes.map((node) => ({ nodeId: node.id })),
+    current: nodes.map((node) => ({ nodeId: node.id })),
+  };
+  fixtures['/api/nodes/node%2F3/packages'] = { packagesByName: [] };
+  fixtures['/api/nodes/node%2F4/packages'] = { packagesByName: [] };
+  const calls = [];
+
+  const manifest = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    fetchImpl: fixtureFetch(fixtures, calls),
+  });
+  const routes = new Map(manifest.routes.map((route) => [route.name, route]));
+
+  assert.deepEqual(manifest.context.nodes, nodes);
+  assert.deepEqual(manifest.context.trafficNodeIds, nodes.map((node) => node.id));
+  assert.equal(routes.has('node-detail-04'), true);
+  assert.equal(routes.has('node-detail-05'), false);
+  assert.equal(calls.some(({ url }) => url.endsWith('/api/nodes/node%2F5/packages')), false);
+  assert.equal(calls.some(({ url }) => url.endsWith('/api/nodes/node%2F6/packages')), false);
+});
+
 test('records empty collections and endpoint failures as precise optional skips', async () => {
   const fixtures = {
     '/api/nodes': { nodes: [{ id: 'node-1', label: 'One' }] },

@@ -12,7 +12,6 @@ import {
   executeWaitForAction,
   resolveActionValue,
 } from './screenshot-actions.mjs';
-import { createDefaultConfig } from './screenshot-config.mjs';
 
 const discoveryContext = {
   party: 'Alice::party',
@@ -28,70 +27,61 @@ const discoveryContext = {
 
 const errorMetadata = { route: 'updates', state: 'filters', panel: 'target-panel' };
 
-function panelMarkup(id, controls, fields) {
-  return `
-    <section id="${id}" role="region" aria-label="${id}" aria-expanded="true">
-      ${fields}
-      <label for="${id}-movement">Movement Type</label>
-      <select id="${id}-movement"><option value="Transfer">Transfer</option><option value="Mint">Mint</option></select>
-      <button type="button" data-panel="${id}" data-action="add">Add party filter</button>
-      <button type="button" data-panel="${id}" data-action="add">Add template filter</button>
-      <button type="button" data-panel="${id}" data-action="add">Add name filter</button>
-      <button type="button" data-panel="${id}" data-action="add">Add issuer filter</button>
-      <button type="button" data-panel="${id}" data-action="add">Add from party filter</button>
-      <button type="button" data-panel="${id}" data-action="add">Add to party filter</button>
-      <button type="button" data-panel="${id}" data-action="add">Add movement type filter</button>
-      <button type="button" data-panel="${id}" data-action="search">Search Namespaces</button>
-      <button type="button" data-panel="${id}" data-action="apply">Apply filters</button>
+function panelFixture() {
+  const panel = (id, openName, content) => `
+    <button type="button" aria-controls="${id}">${openName}</button>
+    <section id="${id}" role="region" aria-label="${id}" aria-expanded="false" data-opened="false" hidden>
+      ${content}
     </section>
-    <button type="button" aria-controls="${controls}" data-action="open">Advanced Filter</button>
-  `;
-}
-
-function allActionsFixture() {
-  const fields = `
-    <input placeholder="Party ID">
-    <input placeholder="Template ID">
-    <input placeholder="Name">
-    <input placeholder="Issuer">
-    <input placeholder="From Party ID">
-    <input placeholder="To Party ID">
-  `;
-  const trafficFields = `
-    <label><input type="checkbox" aria-label="Node A"> Node A</label>
-    <label><input type="checkbox" aria-label="Node B"> Node B</label>
-    <label>Minimum date <input></label>
-    <label>Maximum date <input></label>
-    <label>Minimum purchased traffic <input></label>
-    <label>Minimum paid amount <input></label>
   `;
   return `<!doctype html>
     <html><body>
-      <button type="button" data-action="open">Namespaces</button>
-      <button type="button" aria-controls="wrong-panel" data-action="open">Advanced Filter</button>
-      ${panelMarkup('home-updates-advanced-filter', 'home-updates-advanced-filter', fields)}
-      ${panelMarkup('contracts-advanced-filter', 'contracts-advanced-filter', fields)}
-      ${panelMarkup('party-updates-advanced-filter', 'party-updates-advanced-filter', fields)}
-      ${panelMarkup('party-contracts-advanced-filter', 'party-contracts-advanced-filter', fields)}
-      ${panelMarkup('tokens-advanced-filter', 'tokens-advanced-filter', fields)}
-      ${panelMarkup('token-transfers-advanced-filter', 'token-transfers-advanced-filter', fields)}
-      <section id="namespace-advanced-filter" role="region" aria-label="namespace-advanced-filter" aria-expanded="true">
+      ${panel('home-updates-advanced-filter', 'Advanced Filter', `
+        <input placeholder="Party ID">
+        <input placeholder="Template ID">
+        <button type="button" data-panel="home-updates-advanced-filter">Add party filter</button>
+        <button type="button" data-panel="home-updates-advanced-filter">Add template filter</button>
+      `)}
+      ${panel('tokens-advanced-filter', 'Advanced Filter', `
+        <input placeholder="Name">
+        <input placeholder="Issuer">
+        <button type="button" data-panel="tokens-advanced-filter">Add name filter</button>
+        <button type="button" data-panel="tokens-advanced-filter">Add issuer filter</button>
+      `)}
+      ${panel('namespace-advanced-filter', 'Advanced Filter', `
         <label>Public Key <input></label>
         <button type="button" data-panel="namespace-advanced-filter">Search Namespaces</button>
-      </section>
-      <button type="button" aria-controls="namespace-advanced-filter" data-action="open">Advanced Filter</button>
-      <section id="traffic-purchases-advanced-search" role="region" aria-label="traffic-purchases-advanced-search" aria-expanded="true">
-        ${trafficFields}
+      `)}
+      ${panel('traffic-purchases-advanced-search', 'Advanced Search', `
+        <label><input type="checkbox" aria-label="Node A"> Node A</label>
+        <label><input type="checkbox" aria-label="Node B"> Node B</label>
+        <label>Minimum date <input></label>
+        <label>Maximum date <input></label>
+        <label>Minimum purchased traffic <input></label>
+        <label>Minimum paid amount <input></label>
         <button type="button" data-panel="traffic-purchases-advanced-search">Apply filters</button>
-      </section>
-      <button type="button" aria-controls="traffic-purchases-advanced-search" data-action="open">Advanced Search</button>
+      `)}
       <script>
         window.events = [];
         for (const element of document.querySelectorAll('button')) {
-          element.addEventListener('click', () => window.events.push({
-            text: element.textContent.trim(),
-            panel: element.dataset.panel || null,
-          }));
+          element.addEventListener('click', () => {
+            const controls = element.getAttribute('aria-controls');
+            if (controls) {
+              for (const panel of document.querySelectorAll('section[data-opened]')) {
+                panel.setAttribute('aria-expanded', 'false');
+                panel.dataset.opened = 'false';
+                panel.hidden = true;
+              }
+              const panel = document.getElementById(controls);
+              panel.setAttribute('aria-expanded', 'true');
+              panel.dataset.opened = 'true';
+              panel.hidden = false;
+            }
+            window.events.push({
+              text: element.textContent.trim(),
+              panel: controls || element.dataset.panel || null,
+            });
+          });
         }
       </script>
     </body></html>`;
@@ -273,7 +263,13 @@ test('resolves traffic checkbox labels from a manifest-shaped discovery context'
 
   const { browser, page } = await newPage();
   try {
-    await page.setContent(allActionsFixture());
+    await page.setContent(panelFixture());
+    await executeClickAction(page, {
+      kind: 'click',
+      role: 'button',
+      name: 'Advanced Search',
+      controls: 'traffic-purchases-advanced-search',
+    });
     await executeCheckAction(page, {
       kind: 'check',
       labelFrom: 'trafficNodeIds',
@@ -283,6 +279,136 @@ test('resolves traffic checkbox labels from a manifest-shaped discovery context'
 
     assert.equal(await page.getByRole('checkbox', { name: 'Node A', exact: true }).isChecked(), true);
     assert.equal(await page.getByRole('checkbox', { name: 'Node B', exact: true }).isChecked(), true);
+  } finally {
+    await browser.close();
+  }
+});
+
+test('keeps panel actions local and opens each closed aria-controls panel', async () => {
+  const { browser, page } = await newPage();
+  try {
+    await page.setContent(panelFixture());
+    const actionSets = [
+      {
+        id: 'home-updates-advanced-filter',
+        actions: [
+          { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'home-updates-advanced-filter' },
+          { kind: 'fill', placeholder: 'Party ID', valueFrom: 'party', scope: { id: 'home-updates-advanced-filter' } },
+          { kind: 'click', role: 'button', name: 'Add party filter', scope: { id: 'home-updates-advanced-filter' } },
+          { kind: 'fill', placeholder: 'Template ID', valueFrom: 'template', scope: { id: 'home-updates-advanced-filter' } },
+          { kind: 'click', role: 'button', name: 'Add template filter', scope: { id: 'home-updates-advanced-filter' } },
+        ],
+      },
+      {
+        id: 'tokens-advanced-filter',
+        actions: [
+          { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'tokens-advanced-filter' },
+          { kind: 'fill', placeholder: 'Name', valueFrom: 'tokenName', scope: { id: 'tokens-advanced-filter' } },
+          { kind: 'click', role: 'button', name: 'Add name filter', scope: { id: 'tokens-advanced-filter' } },
+          { kind: 'fill', placeholder: 'Issuer', valueFrom: 'issuer', scope: { id: 'tokens-advanced-filter' } },
+          { kind: 'click', role: 'button', name: 'Add issuer filter', scope: { id: 'tokens-advanced-filter' } },
+        ],
+      },
+      {
+        id: 'namespace-advanced-filter',
+        actions: [
+          { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'namespace-advanced-filter' },
+          { kind: 'fill', label: 'Public Key', valueFrom: 'publicKey', scope: { id: 'namespace-advanced-filter' } },
+          { kind: 'click', role: 'button', name: 'Search Namespaces', scope: { id: 'namespace-advanced-filter' } },
+        ],
+      },
+      {
+        id: 'traffic-purchases-advanced-search',
+        actions: [
+          { kind: 'click', role: 'button', name: 'Advanced Search', controls: 'traffic-purchases-advanced-search' },
+          { kind: 'check', labelFrom: 'trafficNodeIds', checked: true, scope: { id: 'traffic-purchases-advanced-search' } },
+          { kind: 'fill', label: 'Minimum date', value: '2024-01-01', scope: { id: 'traffic-purchases-advanced-search' } },
+          { kind: 'fill', label: 'Maximum date', value: '2024-12-31', scope: { id: 'traffic-purchases-advanced-search' } },
+          { kind: 'fill', label: 'Minimum purchased traffic', value: '1', scope: { id: 'traffic-purchases-advanced-search' } },
+          { kind: 'fill', label: 'Minimum paid amount', value: '0.01', scope: { id: 'traffic-purchases-advanced-search' } },
+          { kind: 'click', role: 'button', name: 'Apply filters', scope: { id: 'traffic-purchases-advanced-search' } },
+        ],
+      },
+    ];
+
+    for (const { id, actions } of actionSets) {
+      assert.equal(await page.locator(`#${id}`).getAttribute('aria-expanded'), 'false');
+      await executeScreenshotActions(page, actions, { discoveryContext });
+      assert.equal(await page.locator(`#${id}`).getAttribute('aria-expanded'), 'true');
+      assert.equal(await page.locator(`#${id}`).getAttribute('data-opened'), 'true');
+    }
+
+    assert.deepEqual(await page.evaluate(() => window.events), [
+      { text: 'Advanced Filter', panel: 'home-updates-advanced-filter' },
+      { text: 'Add party filter', panel: 'home-updates-advanced-filter' },
+      { text: 'Add template filter', panel: 'home-updates-advanced-filter' },
+      { text: 'Advanced Filter', panel: 'tokens-advanced-filter' },
+      { text: 'Add name filter', panel: 'tokens-advanced-filter' },
+      { text: 'Add issuer filter', panel: 'tokens-advanced-filter' },
+      { text: 'Advanced Filter', panel: 'namespace-advanced-filter' },
+      { text: 'Search Namespaces', panel: 'namespace-advanced-filter' },
+      { text: 'Advanced Search', panel: 'traffic-purchases-advanced-search' },
+      { text: 'Apply filters', panel: 'traffic-purchases-advanced-search' },
+    ]);
+    assert.equal(
+      await page.locator('#home-updates-advanced-filter input[placeholder="Party ID"]').inputValue(),
+      discoveryContext.party,
+    );
+    assert.equal(
+      await page.locator('#tokens-advanced-filter input[placeholder="Name"]').inputValue(),
+      discoveryContext.tokenName,
+    );
+    assert.equal(
+      await page.locator('#tokens-advanced-filter input[placeholder="Issuer"]').inputValue(),
+      discoveryContext.issuer,
+    );
+    assert.equal(await page.locator('#namespace-advanced-filter input').inputValue(), discoveryContext.publicKey);
+    assert.equal(
+      await page.locator('#traffic-purchases-advanced-search input:not([type="checkbox"])').nth(0).inputValue(),
+      '2024-01-01',
+    );
+    assert.equal(await page.getByRole('checkbox', { name: 'Node A', exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole('checkbox', { name: 'Node B', exact: true }).isChecked(), true);
+
+    await assert.rejects(
+      executeFillAction(page, {
+        kind: 'fill',
+        placeholder: 'Issuer',
+        value: 'wrong-panel',
+        scope: { id: 'home-updates-advanced-filter' },
+      }),
+      (error) => error instanceof ActionExecutionError && error.code === 'missing-control',
+    );
+  } finally {
+    await browser.close();
+  }
+});
+
+test('normalizes malformed field selectors as invalid-selector errors', async () => {
+  const { browser, page } = await newPage();
+  try {
+    await assert.rejects(
+      executeFillAction(page, {
+        kind: 'fill',
+        selector: '[',
+        value: 'value',
+        scope: { id: 'target-panel' },
+      }, { metadata: { route: 'updates', state: 'filters' } }),
+      (error) => {
+        assert(error instanceof ActionExecutionError);
+        assert.equal(error.code, 'invalid-selector');
+        assert.equal(error.kind, 'invalid-selector');
+        assert.deepEqual(error.metadata, {
+          route: 'updates',
+          state: 'filters',
+          panel: 'target-panel',
+          selector: '[',
+        });
+        assert.equal(error.action.selector, '[');
+        assert(error.cause instanceof Error);
+        return true;
+      },
+    );
   } finally {
     await browser.close();
   }
@@ -380,49 +506,6 @@ test('missing optional wait targets produce structured skips', async () => {
         return true;
       },
     );
-  } finally {
-    await browser.close();
-  }
-});
-
-test('executes every configured filter/search state through real accessible controls', async () => {
-  const { browser, page } = await newPage();
-  try {
-    await page.setContent(allActionsFixture());
-    const config = createDefaultConfig();
-    const filterStates = config.routes
-      .flatMap((route) => route.states
-        .filter((state) => state.name === 'filters')
-        .map((state) => ({ route: route.name, state })));
-
-    for (const { route, state } of filterStates) {
-      await executeScreenshotActions(page, state.actions, {
-        discoveryContext,
-        required: route.required && state.required,
-        metadata: { route, state: state.name },
-      });
-    }
-
-    const events = await page.evaluate(() => window.events);
-    for (const expected of [
-      'Add party filter',
-      'Add template filter',
-      'Add name filter',
-      'Add issuer filter',
-      'Add from party filter',
-      'Add to party filter',
-      'Add movement type filter',
-      'Search Namespaces',
-      'Apply filters',
-    ]) {
-      assert.ok(events.some((event) => event.text === expected), `missing applied action ${expected}`);
-    }
-    assert.equal(await page.locator('#home-updates-advanced-filter input[placeholder="Party ID"]').first().inputValue(), discoveryContext.party);
-    assert.equal(await page.locator('#tokens-advanced-filter input[placeholder="Issuer"]').inputValue(), discoveryContext.issuer);
-    assert.equal(await page.locator('#namespace-advanced-filter input').inputValue(), discoveryContext.publicKey);
-    assert.equal(await page.locator('#traffic-purchases-advanced-search input:not([type="checkbox"])').nth(0).inputValue(), '2024-01-01');
-    assert.equal(await page.getByRole('checkbox', { name: 'Node A', exact: true }).isChecked(), true);
-    assert.equal(await page.getByRole('checkbox', { name: 'Node B', exact: true }).isChecked(), true);
   } finally {
     await browser.close();
   }

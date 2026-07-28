@@ -45,6 +45,9 @@ function normalizeOptions(options = {}) {
 
 function actionMetadata(action, options) {
   const metadata = { ...options.metadata };
+  if (metadata.selector === undefined && action?.selector !== undefined) {
+    metadata.selector = action.selector;
+  }
   if (metadata.panel === undefined) {
     const scope = isObject(action.scope) ? action.scope : null;
     const panel = scope?.id ?? scope?.ariaControls ?? scope?.['aria-controls'] ??
@@ -60,6 +63,24 @@ function actionError(message, action, options, errorOptions = {}) {
     action,
     metadata: actionMetadata(action, options),
   });
+}
+
+function selectorError(message, action, options, selector, cause) {
+  const error = actionError(message, action, options, {
+    code: 'invalid-selector',
+    kind: 'invalid-selector',
+    cause,
+  });
+  error.metadata.selector = selector;
+  return error;
+}
+
+function selectorLocator(root, selector, action, options, description = `selector ${selector}`) {
+  try {
+    return root.locator(selector);
+  } catch (error) {
+    throw selectorError(`Could not resolve ${description}: ${error.message}`, action, options, selector, error);
+  }
 }
 
 function isOptionalAction(action, options) {
@@ -105,10 +126,7 @@ async function requireUnique(locator, action, options, description) {
   try {
     matches = await count(locator);
   } catch (error) {
-    throw actionError(`Could not resolve ${description}: ${error.message}`, action, options, {
-      code: 'invalid-selector',
-      cause: error,
-    });
+    throw selectorError(`Could not resolve ${description}: ${error.message}`, action, options, action.selector, error);
   }
   if (matches === 0) {
     throw actionError(`Could not find ${description}`, action, options, {
@@ -179,7 +197,12 @@ async function resolveScope(root, scope, action, options) {
   }
 
   if (scope.selector !== undefined) {
-    return requireUnique(root.locator(scope.selector), action, options, `scope selector ${scope.selector}`);
+    return requireUnique(
+      selectorLocator(root, scope.selector, action, options, `scope selector ${scope.selector}`),
+      action,
+      options,
+      `scope selector ${scope.selector}`,
+    );
   }
 
   if (scope.role !== undefined || scope.name !== undefined) {
@@ -214,7 +237,7 @@ async function resolveClickLocator(root, action, options) {
     locator = locator.and(root.locator(attributeSelector('aria-controls', action.controls)));
   }
   if (action.selector !== undefined) {
-    locator = locator.and(root.locator(action.selector));
+    locator = locator.and(selectorLocator(root, action.selector, action, options));
   }
   return requireUnique(locator, action, options, `${action.role} ${action.name}`);
 }
@@ -229,7 +252,11 @@ async function resolveFieldLocator(root, action, options) {
     lookups.push({ locator: scopeRoot.getByPlaceholder(action.placeholder, { exact: true }), description: `placeholder ${action.placeholder}` });
   }
   if (action.selector !== undefined) {
-    lookups.push({ locator: scopeRoot.locator(action.selector), description: `selector ${action.selector}` });
+    lookups.push({
+      locator: selectorLocator(scopeRoot, action.selector, action, options),
+      description: `selector ${action.selector}`,
+      selector: true,
+    });
   }
   if (lookups.length === 0) {
     throw actionError('Field actions require label, placeholder, or selector', action, options, {
@@ -238,7 +265,13 @@ async function resolveFieldLocator(root, action, options) {
   }
 
   for (const lookup of lookups) {
-    if (await tryCount(lookup.locator) === 0) continue;
+    let matches;
+    try {
+      matches = lookup.selector ? await count(lookup.locator) : await tryCount(lookup.locator);
+    } catch (error) {
+      throw selectorError(`Could not resolve ${lookup.description}: ${error.message}`, action, options, action.selector, error);
+    }
+    if (matches === 0) continue;
     return requireUnique(lookup.locator, action, options, lookup.description);
   }
   throw actionError(`Could not find field for ${lookups.map((lookup) => lookup.description).join(', ')}`, action, options, {
@@ -253,14 +286,7 @@ async function resolveWaitLocator(root, action, options) {
   if (typeof action.selector !== 'string' || action.selector.trim() === '') {
     throw actionError('waitFor actions require a selector', action, options, { code: 'invalid-action' });
   }
-  try {
-    return root.locator(action.selector);
-  } catch (error) {
-    throw actionError(`Could not resolve selector ${action.selector}: ${error.message}`, action, options, {
-      code: 'invalid-selector',
-      cause: error,
-    });
-  }
+  return selectorLocator(root, action.selector, action, options);
 }
 
 export async function resolveActionLocator(pageOrLocator, action, options = {}) {
