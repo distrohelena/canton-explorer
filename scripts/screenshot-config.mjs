@@ -229,7 +229,6 @@ function trafficFilterActions() {
   const panelId = 'traffic-purchases-advanced-search';
   return [
     openPanel(panelId, 'Advanced Search'),
-    { kind: 'check', selector: 'input[type="checkbox"]', checked: true, scope: { id: panelId } },
     { kind: 'fill', label: 'Minimum date', value: '2024-01-01', scope: { id: panelId } },
     { kind: 'fill', label: 'Maximum date', value: '2024-12-31', scope: { id: panelId } },
     { kind: 'fill', label: 'Minimum purchased traffic', value: '1', scope: { id: panelId } },
