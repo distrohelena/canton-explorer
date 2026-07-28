@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,6 +127,99 @@ test('loads cwd-relative ESM config, applies CLI filters, and prints a concise s
     assert.match(stdout.text(), /1 captured, 1 skipped, 0 failed/);
     assert.match(stdout.text(), new RegExp(`${path.join(cwd, 'captures', 'report.json')}`));
     assert.equal(stderr.text(), '');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('returns 2 for malformed service URLs before checking services', async () => {
+  for (const flag of ['--base-url', '--api-url']) {
+    const stdout = stream();
+    const stderr = stream();
+    let serviceChecked = false;
+
+    const exitCode = await main([flag, 'not-a-url'], {
+      stdout,
+      stderr,
+      checkServices: async () => {
+        serviceChecked = true;
+      },
+      captureScreenshotMatrix: async () => ({ exitCode: 0, entries: [] }),
+    });
+
+    assert.equal(exitCode, 2, flag);
+    const label = flag === '--base-url' ? 'baseUrl' : 'apiUrl';
+    assert.match(stderr.text(), new RegExp(`Error: ${label} must be a valid http\\(s\\) URL`));
+    assert.equal(stdout.text(), '');
+    assert.equal(serviceChecked, false);
+  }
+});
+
+test('public main path persists manifest, report, and screenshot with an in-process fixture', async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'capture-screenshots-cli-fixture-'));
+  const stdout = stream();
+  const stderr = stream();
+  try {
+    await writeFile(path.join(cwd, 'fixture-config.mjs'), configModule());
+
+    let currentUrl = 'about:blank';
+    const locator = () => ({
+      count: async () => 0,
+      isVisible: async () => false,
+      nth: () => ({ isVisible: async () => false }),
+      waitFor: async () => {},
+    });
+    const page = {
+      on: () => {},
+      route: async () => {},
+      goto: async (url) => {
+        currentUrl = url;
+      },
+      url: () => currentUrl,
+      evaluate: async () => false,
+      locator,
+      getByRole: locator,
+      screenshot: async ({ path: screenshotPath }) => {
+        await mkdir(path.dirname(screenshotPath), { recursive: true });
+        await writeFile(screenshotPath, 'fixture screenshot');
+      },
+    };
+    const context = {
+      newPage: async () => page,
+      close: async () => {},
+    };
+    const browser = {
+      newContext: async () => context,
+      close: async () => {},
+    };
+
+    const exitCode = await main([
+      '--config', 'fixture-config.mjs',
+      '--route', 'updates',
+      '--output', path.join(cwd, 'captures'),
+    ], {
+      cwd,
+      stdout,
+      stderr,
+      checkServices: async () => {},
+      manifest: {
+        generatedAt: 'fixture-time',
+        context: {},
+        routes: [{ name: 'updates', url: '/', required: true, source: 'fixture' }],
+      },
+      browserFactory: async () => browser,
+    });
+
+    const output = path.join(cwd, 'captures');
+    const manifest = JSON.parse(await readFile(path.join(output, 'manifest.json'), 'utf8'));
+    const report = JSON.parse(await readFile(path.join(output, 'report.json'), 'utf8'));
+    assert.equal(exitCode, 0, `${stdout.text()}${stderr.text()}${JSON.stringify(report)}`);
+    assert.match(stdout.text(), /1 captured, 0 skipped, 0 failed/);
+    assert.equal(stderr.text(), '');
+    assert.equal(manifest.routes[0].source, 'fixture');
+    assert.equal(report.status, 'passed');
+    assert.equal(report.entries[0].status, 'captured');
+    assert.equal(await readFile(path.join(output, 'configured', 'updates.png'), 'utf8'), 'fixture screenshot');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

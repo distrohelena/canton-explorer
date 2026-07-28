@@ -85,6 +85,19 @@ function assertNonEmptyString(value, label) {
   }
 }
 
+function assertHttpUrl(value, label) {
+  assertNonEmptyString(value, label);
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new ScreenshotConfigError(`${label} must be a valid http(s) URL`);
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new ScreenshotConfigError(`${label} must be a valid http(s) URL`);
+  }
+}
+
 function assertPositiveInteger(value, label) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new ScreenshotConfigError(`${label} must be a positive integer`);
@@ -391,8 +404,8 @@ export function validateScreenshotConfig(input) {
   if (unknownKeys.length > 0) {
     throw new ScreenshotConfigError(`Unknown top-level config key: ${unknownKeys[0]}`);
   }
-  assertNonEmptyString(input.baseUrl, 'baseUrl');
-  assertNonEmptyString(input.apiUrl, 'apiUrl');
+  assertHttpUrl(input.baseUrl, 'baseUrl');
+  assertHttpUrl(input.apiUrl, 'apiUrl');
   assertNonEmptyString(input.output, 'output');
   if (typeof input.strict !== 'boolean') throw new ScreenshotConfigError('strict must be boolean');
   if (typeof input.headed !== 'boolean') throw new ScreenshotConfigError('headed must be boolean');

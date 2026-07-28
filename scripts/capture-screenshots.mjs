@@ -5,9 +5,7 @@ import {
   formatCliHelp,
   parseCliOptions,
 } from './screenshot-cli-options.mjs';
-import {
-  loadScreenshotConfig,
-} from './screenshot-config.mjs';
+import { loadScreenshotConfig } from './screenshot-config.mjs';
 import {
   apiUrlForPath,
   normalizeApiBaseUrl,
@@ -100,7 +98,14 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
     await checkServices(config, { fetchImpl });
 
     phase = 'capture';
-    const report = await runMatrix({ config, fetchImpl });
+    const report = await runMatrix({
+      config,
+      fetchImpl,
+      ...(dependencies.manifest ? { manifest: dependencies.manifest } : {}),
+      ...(dependencies.browserFactory ? { browserFactory: dependencies.browserFactory } : {}),
+      ...(dependencies.contextFactory ? { contextFactory: dependencies.contextFactory } : {}),
+      ...(dependencies.pageFactory ? { pageFactory: dependencies.pageFactory } : {}),
+    });
     printSummary(report, config, cwd, stdout);
     return report.exitCode ?? 1;
   } catch (error) {
