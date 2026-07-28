@@ -213,8 +213,8 @@ Custom viewports use names such as `custom-1440x900`, so their files are written
 
 The command exits with:
 
-- `0` when required captures succeed; optional dynamic/filter entries may be skipped or fail validation/capture without changing the exit code in non-strict mode;
-- `1` for frontend/API service or discovery failures, required route/state failures, or any optional dynamic/filter skip or failure when `--strict` is enabled;
+- `0` when required captures succeed and optional entries are only skipped or have non-fatal validation/action failures in non-strict mode;
+- `1` for frontend/API service or discovery failures, required route/state failures, optional infrastructure/browser/capture failures, or any optional dynamic/filter skip or failure when `--strict` is enabled;
 - `2` for invalid CLI/configuration input or a missing Chromium installation.
 
 ### Troubleshooting
