@@ -308,7 +308,7 @@ test('keeps labels for every traffic node when bounded node routes use maxNodes'
 
   assert.deepEqual(manifest.context.nodes, nodes);
   assert.deepEqual(manifest.context.trafficNodeIds, nodes.map((node) => node.id));
-  assert.equal(routes.has('node-detail-04'), true);
+  assert.equal(routes.has('node-detail-04'), false);
   assert.equal(routes.has('node-detail-05'), false);
   assert.equal(calls.some(({ url }) => url.endsWith('/api/nodes/node%2F5/packages')), false);
   assert.equal(calls.some(({ url }) => url.endsWith('/api/nodes/node%2F6/packages')), false);
@@ -413,4 +413,41 @@ test('scopes discovery routes and endpoint work to configured route categories',
 
   assert.deepEqual(manifest.routes.map((route) => route.name), ['tokens-known']);
   assert.deepEqual(calls, []);
+});
+
+test('emits only the selected node-detail route while sharing the discovery endpoint', async () => {
+  const manifest = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    config: {
+      routes: [{
+        name: 'node-detail-02',
+        required: false,
+        dynamic: true,
+        discoveryKey: 'node-detail',
+        states: [{ name: 'default', actions: [] }],
+      }],
+    },
+    fetchImpl: fixtureFetch(fullFixtures),
+  });
+
+  assert.deepEqual(manifest.routes.map((route) => route.name), ['node-detail-02']);
+  assert.equal(manifest.routes[0].url, '/nodes/node%20two');
+});
+
+test('emits only the selected party-detail view while sharing the discovery endpoint', async () => {
+  const manifest = await discoverScreenshotManifest({
+    apiUrl: apiBase,
+    config: {
+      routes: [{
+        name: 'party-detail-updates',
+        required: false,
+        dynamic: true,
+        discoveryKey: 'party-detail',
+        states: [{ name: 'default', actions: [] }],
+      }],
+    },
+    fetchImpl: fixtureFetch(fullFixtures),
+  });
+
+  assert.deepEqual(manifest.routes.map((route) => route.name), ['party-detail-updates']);
 });

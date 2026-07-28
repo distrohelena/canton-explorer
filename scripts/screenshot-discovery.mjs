@@ -309,14 +309,15 @@ export async function discoverScreenshotManifest(options = {}) {
   const configuredKeys = new Set((config.routes ?? []).map((route) => route.discoveryKey).filter(Boolean));
   const routeIsConfigured = (name, discoveryKey = name) =>
     configuredNames.has(name) || configuredKeys.has(discoveryKey);
+  const routeShouldEmit = (name) => configuredNames.has(name);
   const addRoute = (...args) => {
     const route = args.length === 1 ? args[0] : args[2];
-    if (!routeIsConfigured(route.name, route.dedupeKey ?? route.name)) return false;
+    if (!routeShouldEmit(route.name)) return false;
     return addRouteRecord(routes, skips, route);
   };
   const addUnavailableRoute = (...args) => {
     const routeOptions = args.length === 1 ? args[0] : args[2];
-    if (!routeIsConfigured(routeOptions.name, routeOptions.dedupeKey ?? routeOptions.name)) return false;
+    if (!routeShouldEmit(routeOptions.name)) return false;
     const discoveryError = routeOptions.discoveryError ?? Object.values(errors).includes(routeOptions.skipReason);
     return addUnavailableRouteRecord(routes, skips, { ...routeOptions, discoveryError });
   };
@@ -452,15 +453,16 @@ export async function discoverScreenshotManifest(options = {}) {
     const nodeId = firstString(node?.id, node?.nodeId);
     if (!nodeId) continue;
     const url = routePath('nodes', nodeId);
+    const routeName = `node-detail-${String(nodeOrdinal + 1).padStart(2, '0')}`;
     const retained = addRoute(routes, skips, routeRecord({
-      name: `node-detail-${String(nodeOrdinal + 1).padStart(2, '0')}`,
+      name: routeName,
       dedupeKey: 'node-detail',
       url,
       source: '/nodes',
       expectedPath: url,
       metadata: { nodeId },
     }));
-    if (retained) nodeOrdinal += 1;
+    if (retained || !routeShouldEmit(routeName)) nodeOrdinal += 1;
   }
 
   if (update) {
