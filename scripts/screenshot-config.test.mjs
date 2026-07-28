@@ -198,6 +198,7 @@ test('config loading resolves custom ESM paths from cwd and merges by top-level 
       `export default ${JSON.stringify({
         output: 'artifacts',
         settleMs: 42,
+        responseDrainTimeoutMs: 6_000,
         discovery: { maxNodes: 2 },
         viewports: [{ name: 'tablet', width: 800, height: 600 }],
         routes: [{ name: 'custom-route', path: '/custom', required: true, states: [{ name: 'default', actions: [] }] }],
@@ -207,11 +208,16 @@ test('config loading resolves custom ESM paths from cwd and merges by top-level 
     const config = await loadScreenshotConfig('custom.mjs', { cwd: directory });
     assert.equal(config.output, 'artifacts');
     assert.equal(config.settleMs, 42);
+    assert.equal(config.responseDrainTimeoutMs, 6_000);
     assert.equal(config.discovery.maxNodes, 2);
     assert.equal(config.discovery.maxNodesPerType, DEFAULT_CONFIG.discovery.maxNodesPerType);
     assert.deepEqual(config.viewports, [{ name: 'tablet', width: 800, height: 600 }]);
     assert.deepEqual(config.routes.map((route) => route.name), ['custom-route']);
     assert.equal(config.baseUrl, DEFAULT_CONFIG.baseUrl);
+    assert.equal(
+      applyCliFilters(config, parseCliOptions(['--route', 'custom-route'])).responseDrainTimeoutMs,
+      6_000,
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -221,6 +227,10 @@ test('config rejects unknown keys, invalid ids, duplicate combinations, and inva
   assert.throws(
     () => validateScreenshotConfig({ ...createDefaultConfig(), unexpected: true }),
     /unknown top-level/i,
+  );
+  assert.throws(
+    () => validateScreenshotConfig({ ...createDefaultConfig(), responseDrainTimeoutMs: 0 }),
+    /responseDrainTimeoutMs.*positive/i,
   );
   assert.throws(
     () => validateScreenshotConfig({

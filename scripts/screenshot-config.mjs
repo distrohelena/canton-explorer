@@ -27,6 +27,7 @@ export const CONFIG_TOP_LEVEL_KEYS = Object.freeze([
   'strict',
   'headed',
   'settleMs',
+  'responseDrainTimeoutMs',
   'discovery',
   'viewports',
   'routes',
@@ -339,6 +340,7 @@ export const DEFAULT_CONFIG = {
   strict: false,
   headed: false,
   settleMs: 300,
+  responseDrainTimeoutMs: 5_000,
   discovery: clone(DEFAULT_DISCOVERY),
   viewports: [{ name: 'desktop', width: 1440, height: 900 }],
   routes: DEFAULT_ROUTES,
@@ -395,6 +397,7 @@ export function validateScreenshotConfig(input) {
   if (typeof input.strict !== 'boolean') throw new ScreenshotConfigError('strict must be boolean');
   if (typeof input.headed !== 'boolean') throw new ScreenshotConfigError('headed must be boolean');
   assertPositiveInteger(input.settleMs, 'settleMs');
+  assertPositiveInteger(input.responseDrainTimeoutMs, 'responseDrainTimeoutMs');
   assertObject(input.discovery, 'discovery');
   for (const key of Object.keys(DEFAULT_DISCOVERY)) {
     if (input.discovery[key] !== undefined) {
