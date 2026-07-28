@@ -18,7 +18,7 @@ import {
 export { normalizeApiBaseUrl };
 
 const RETRY_DELAY_MS = 250;
-const RESPONSE_DRAIN_TIMEOUT_MS = 1_000;
+const RESPONSE_DRAIN_TIMEOUT_MS = 5_000;
 const CLEANUP_TIMEOUT_MS = 1_000;
 const LOADING_QUIET_MS = 50;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -392,7 +392,7 @@ function browserMissing(error) {
   return /executable doesn't exist|browser.*not.*installed|playwright install|Failed to launch/i.test(errorMessage(error));
 }
 
-async function captureEntry({ entry, config, manifest, browser, apiUrl, report, writeReport, fetchImpl, pageFactory, contextFactory, onContextCreated }) {
+async function captureEntry({ entry, config, manifest, browser, apiUrl, report, writeReport, fetchImpl, pageFactory, contextFactory, onContextCreated, responseDrainTimeoutMs }) {
   const { manifestRoute, route, state, viewport, filePath } = entry;
   const required = stateRequired({ ...route, required: manifestRoute.required ?? route.required }, state);
   const started = Date.now();
@@ -423,6 +423,10 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
   const responseTasks = new Set();
   const pendingDebuggerRequests = new Map();
   const captureRoute = mergeRouteMetadata(route, manifestRoute);
+  const configuredDrainTimeoutMs = responseDrainTimeoutMs ?? config.responseDrainTimeoutMs;
+  const drainTimeoutMs = Number.isFinite(configuredDrainTimeoutMs) && configuredDrainTimeoutMs > 0
+    ? Math.floor(configuredDrainTimeoutMs)
+    : RESPONSE_DRAIN_TIMEOUT_MS;
   const isDebuggerSessionRequest = (request) => request.method() === 'POST' && apiPath(request.url()) === '/api/debugger/sessions';
   const createPendingRequest = (request) => {
     let resolve;
@@ -433,7 +437,7 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
   };
   const drainResponseTasks = async () => {
     await delay(0);
-    const deadline = Date.now() + RESPONSE_DRAIN_TIMEOUT_MS;
+    const deadline = Date.now() + drainTimeoutMs;
     while ((pendingDebuggerRequests.size > 0 || responseTasks.size > 0) && Date.now() < deadline) {
       const remaining = deadline - Date.now();
       await Promise.race([
@@ -629,6 +633,7 @@ export async function captureScreenshotMatrix(options = {}) {
           pageFactory: options.pageFactory,
           contextFactory: options.contextFactory,
           onContextCreated: options.onContextCreated,
+          responseDrainTimeoutMs: options.responseDrainTimeoutMs,
         });
         if (result.fatal === true) break;
       }

@@ -552,6 +552,59 @@ test('waits for a late debugger POST response before deleting sessions', async (
   assert.deepEqual(deletedIds.sort(), sessionIds.sort());
 });
 
+test('drains a debugger POST response slower than the default review threshold', async (t) => {
+  const output = await makeOutput();
+  const sessionIds = [];
+  const deletedIds = [];
+  const api = await startServer(async (req, res) => {
+    await bodyOf(req);
+    if (req.method === 'POST' && req.url === '/api/debugger/sessions') {
+      const id = 'slow-session-1';
+      sessionIds.push(id);
+      setTimeout(() => json(res, 201, { sessionId: id }), 1_500);
+      return;
+    }
+    if (req.method === 'DELETE' && req.url?.startsWith('/api/debugger/sessions/')) {
+      deletedIds.push(req.url.split('/').pop());
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    json(res, 200, { ok: true });
+  });
+  let pageLoads = 0;
+  const frontend = await startServer((req, res) => {
+    if (req.url?.startsWith('/debugger')) {
+      pageLoads += 1;
+      const script = pageLoads >= 2
+        ? '<script>fetch("/api/debugger/sessions", {method:"POST", body:"{}"});</script>'
+        : '';
+      send(res, 200, `<!doctype html><html><body><main><h1>Debugger</h1><div>Loading debugger</div>${script}</main></body></html>`);
+      return;
+    }
+    send(res, 404, 'not found');
+  });
+  t.after(async () => {
+    await frontend.close();
+    await api.close();
+  });
+  const config = configFor(frontend.url, output, {
+    apiUrl: api.url,
+    routes: [{
+      name: 'debugger', path: '/debugger?updateId=update-1', required: false,
+      readiness: { heading: 'Debugger', timeoutMs: 40, settleMs: 0 },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'failed');
+  assert.deepEqual(sessionIds, ['slow-session-1']);
+  assert.deepEqual(deletedIds, sessionIds);
+});
+
 test('bounds cleanup when a debugger POST hangs forever', async (t) => {
   const output = await makeOutput();
   const api = await startServer(async (req, res) => {
@@ -606,7 +659,12 @@ test('bounds cleanup when a debugger POST hangs forever', async (t) => {
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const started = Date.now();
-  const report = await captureScreenshotMatrix({ config, manifest, browser });
+  const report = await captureScreenshotMatrix({
+    config,
+    manifest,
+    browser,
+    responseDrainTimeoutMs: 150,
+  });
 
   assert.ok(Date.now() - started < 1600);
   assert.equal(report.entries[0].status, 'failed');
