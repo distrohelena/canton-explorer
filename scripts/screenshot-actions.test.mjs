@@ -261,6 +261,33 @@ test('resolves discovery values, including nodeId fallback from nodes', async ()
   }
 });
 
+test('resolves traffic checkbox labels from a manifest-shaped discovery context', async () => {
+  const manifestContext = {
+    nodes: [
+      { id: 'node/one', label: 'Node A' },
+      { id: 'node/two', label: 'Node B' },
+    ],
+    trafficNodeIds: ['node/one', 'node/two'],
+  };
+  assert.deepEqual(resolveActionValue('trafficNodeIds', manifestContext), manifestContext.trafficNodeIds);
+
+  const { browser, page } = await newPage();
+  try {
+    await page.setContent(allActionsFixture());
+    await executeCheckAction(page, {
+      kind: 'check',
+      labelFrom: 'trafficNodeIds',
+      checked: true,
+      scope: { id: 'traffic-purchases-advanced-search' },
+    }, { discoveryContext: manifestContext });
+
+    assert.equal(await page.getByRole('checkbox', { name: 'Node A', exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole('checkbox', { name: 'Node B', exact: true }).isChecked(), true);
+  } finally {
+    await browser.close();
+  }
+});
+
 test('throws structured ambiguity, missing-control, and optional-skip errors with metadata', async () => {
   const { browser, page } = await newPage();
   try {

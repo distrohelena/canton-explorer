@@ -338,6 +338,11 @@ export async function discoverScreenshotManifest(options = {}) {
   const nodes = Number.isInteger(configuredMaxNodes) && configuredMaxNodes > 0
     ? nodeRecords.slice(0, configuredMaxNodes)
     : nodeRecords;
+  const contextNodes = nodes.flatMap((node) => {
+    const id = firstString(node?.id, node?.nodeId);
+    if (!id) return [];
+    return [{ id, label: firstString(node?.label, node?.name, id) }];
+  });
   const packageResults = [];
   for (const node of nodes) {
     const nodeId = firstString(node?.id, node?.nodeId);
@@ -381,6 +386,7 @@ export async function discoverScreenshotManifest(options = {}) {
     ...(packageContext?.packageId ? { packageId: packageContext.packageId } : {}),
     ...(packageContext?.packageName ? { packageName: packageContext.packageName } : {}),
     ...(template?.templateId ? { template: template.templateId } : {}),
+    nodes: contextNodes,
     trafficNodeIds,
     discoveryErrors: errors,
   };

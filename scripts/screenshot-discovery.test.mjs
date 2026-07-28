@@ -256,6 +256,10 @@ test('discovers static and dynamic screenshot routes from every approved endpoin
   assert.equal(manifest.context.namespace, undefined);
   assert.equal(manifest.context.issuer, 'issuer::one');
   assert.equal(manifest.context.tokenName, 'Token One');
+  assert.deepEqual(manifest.context.nodes, [
+    { id: 'node/one', label: 'One' },
+    { id: 'node two', label: 'Two' },
+  ]);
   assert.equal(manifest.context.trafficNodeIds[0], 'node/one');
   assert.deepEqual(manifest.skips, []);
   assert.deepEqual(
