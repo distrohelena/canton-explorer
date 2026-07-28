@@ -273,6 +273,7 @@ test('deduplicates exact logical entries while preserving scoped routes sharing 
     nodes: [
       { id: 'same/id', label: 'One' },
       { id: 'same/id', label: 'Duplicate' },
+      { id: 'unique/id', label: 'Unique' },
     ],
   };
   fixtures['/api/updates?limit=1'] = {
@@ -288,6 +289,7 @@ test('deduplicates exact logical entries while preserving scoped routes sharing 
   fixtures['/api/nodes/same%2Fid/packages'] = {
     packagesByName: [{ packageName: 'same/id', packages: [{ packageId: 'same/id' }] }],
   };
+  fixtures['/api/nodes/unique%2Fid/packages'] = { packagesByName: [] };
 
   const manifest = await discoverScreenshotManifest({
     apiUrl: apiBase,
@@ -300,8 +302,9 @@ test('deduplicates exact logical entries while preserving scoped routes sharing 
   assert.equal(routes.get('token-detail').url, '/tokens/same%2Fid');
   assert.equal(routes.get('token-detail-transfers').url, '/tokens/same%2Fid');
   assert.equal(routes.get('node-detail-01').url, '/nodes/same%2Fid');
-  assert.equal(manifest.routes.filter((route) => route.dedupeKey === 'node-detail').length, 1);
-  assert.equal(routes.has('node-detail-02'), false);
+  assert.equal(routes.get('node-detail-02').url, '/nodes/unique%2Fid');
+  assert.equal(manifest.routes.filter((route) => route.dedupeKey === 'node-detail').length, 2);
+  assert.equal(routes.has('node-detail-03'), false);
   assert.equal(manifest.context.nodeId, 'same/id');
   assert.equal(manifest.context.eventOffset, 'same/offset');
 });

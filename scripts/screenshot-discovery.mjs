@@ -377,18 +377,20 @@ export async function discoverScreenshotManifest(options = {}) {
       skipReason: errors.nodes ?? emptyReason('/nodes', 'nodes'),
     });
   }
-  for (const [index, node] of nodes.entries()) {
+  let nodeOrdinal = 0;
+  for (const node of nodes) {
     const nodeId = firstString(node?.id, node?.nodeId);
     if (!nodeId) continue;
     const url = routePath('nodes', nodeId);
-    addRoute(routes, skips, routeRecord({
-      name: `node-detail-${String(index + 1).padStart(2, '0')}`,
+    const retained = addRoute(routes, skips, routeRecord({
+      name: `node-detail-${String(nodeOrdinal + 1).padStart(2, '0')}`,
       dedupeKey: 'node-detail',
       url,
       source: '/nodes',
       expectedPath: url,
       metadata: { nodeId },
     }));
+    if (retained) nodeOrdinal += 1;
   }
 
   if (update) {
