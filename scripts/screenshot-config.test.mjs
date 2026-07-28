@@ -102,6 +102,7 @@ const filterMatrix = new Map([
   ]],
   ['traffic--filters', [
     { kind: 'click', role: 'button', name: 'Advanced Search', controls: 'traffic-purchases-advanced-search' },
+    { kind: 'check', labelFrom: 'trafficNodeIds', checked: true, scope: { id: 'traffic-purchases-advanced-search' } },
     { kind: 'fill', label: 'Minimum date', value: '2024-01-01', scope: { id: 'traffic-purchases-advanced-search' } },
     { kind: 'fill', label: 'Maximum date', value: '2024-12-31', scope: { id: 'traffic-purchases-advanced-search' } },
     { kind: 'fill', label: 'Minimum purchased traffic', value: '1', scope: { id: 'traffic-purchases-advanced-search' } },
@@ -151,10 +152,13 @@ test('traffic filter actions avoid ambiguous node checkbox selectors', () => {
   const trafficRoute = config.routes.find((route) => route.name === 'traffic');
   const trafficActions = trafficRoute.states.find((state) => state.name === 'filters').actions;
 
-  assert.equal(
-    trafficActions.some((action) => action.kind === 'check' && action.selector === 'input[type="checkbox"]'),
-    false,
-  );
+  assert.deepEqual(trafficActions[1], {
+    kind: 'check',
+    labelFrom: 'trafficNodeIds',
+    checked: true,
+    scope: { id: 'traffic-purchases-advanced-search' },
+  });
+  assert.equal(trafficActions[1].selector, undefined);
   assert.deepEqual(
     trafficActions.filter((action) => action.kind === 'fill').map((action) => action.label),
     ['Minimum date', 'Maximum date', 'Minimum purchased traffic', 'Minimum paid amount'],

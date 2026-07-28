@@ -10,6 +10,7 @@ export class ActionExecutionError extends Error {
     this.metadata = { ...(options.metadata ?? {}) };
     if (options.valueFrom !== undefined) this.valueFrom = options.valueFrom;
     if (options.count !== undefined) this.count = options.count;
+    if (options.target !== undefined) this.target = options.target;
   }
 }
 
@@ -26,17 +27,19 @@ function attributeSelector(attribute, value) {
 }
 
 function normalizeOptions(options = {}) {
-  if (!isObject(options)) return { discoveryContext: {}, metadata: {} };
+  if (!isObject(options)) return { discoveryContext: {}, metadata: {}, required: undefined };
   const hasOptionsShape = Object.hasOwn(options, 'discoveryContext') || Object.hasOwn(options, 'metadata');
   if (hasOptionsShape) {
     return {
       discoveryContext: options.discoveryContext ?? {},
       metadata: options.metadata ?? {},
+      required: options.required,
     };
   }
   return {
     discoveryContext: {},
     metadata: options,
+    required: undefined,
   };
 }
 
@@ -57,6 +60,26 @@ function actionError(message, action, options, errorOptions = {}) {
     action,
     metadata: actionMetadata(action, options),
   });
+}
+
+function isOptionalAction(action, options) {
+  return action?.optional === true || action?.required === false ||
+    options.required === false || options.metadata.required === false || options.metadata.optional === true;
+}
+
+function missingTarget(action, description, count = 0) {
+  return {
+    description,
+    count,
+    kind: action?.kind,
+    ...(action?.role === undefined ? {} : { role: action.role }),
+    ...(action?.name === undefined ? {} : { name: action.name }),
+    ...(action?.label === undefined ? {} : { label: action.label }),
+    ...(action?.labelFrom === undefined ? {} : { labelFrom: action.labelFrom }),
+    ...(action?.placeholder === undefined ? {} : { placeholder: action.placeholder }),
+    ...(action?.selector === undefined ? {} : { selector: action.selector }),
+    ...(action?.scope === undefined ? {} : { scope: action.scope }),
+  };
 }
 
 function ensureAction(action) {
@@ -90,7 +113,9 @@ async function requireUnique(locator, action, options, description) {
   if (matches === 0) {
     throw actionError(`Could not find ${description}`, action, options, {
       code: 'missing-control',
+      kind: isOptionalAction(action, options) ? 'optional-skip' : 'action',
       count: matches,
+      target: missingTarget(action, description, matches),
     });
   }
   if (matches !== 1) {
@@ -172,13 +197,11 @@ async function resolveScope(root, scope, action, options) {
   throw actionError('Action scope does not identify a target', action, options, { code: 'invalid-scope' });
 }
 
-function exactRoleLocator(root, action) {
+function exactRoleLocator(root, action, options) {
   if (typeof action.role !== 'string' || action.role.trim() === '' ||
       typeof action.name !== 'string' || action.name.trim() === '') {
-    throw new ActionExecutionError('Click actions require role and name', {
+    throw actionError('Click actions require role and name', action, options, {
       code: 'invalid-action',
-      action,
-      metadata: {},
     });
   }
   return root.getByRole(action.role, { name: action.name, exact: true });
@@ -186,7 +209,7 @@ function exactRoleLocator(root, action) {
 
 async function resolveClickLocator(root, action, options) {
   const scopeRoot = await resolveScope(root, action.scope, action, options);
-  let locator = exactRoleLocator(scopeRoot, action);
+  let locator = exactRoleLocator(scopeRoot, action, options);
   if (action.controls !== undefined) {
     locator = locator.and(root.locator(attributeSelector('aria-controls', action.controls)));
   }
@@ -220,7 +243,9 @@ async function resolveFieldLocator(root, action, options) {
   }
   throw actionError(`Could not find field for ${lookups.map((lookup) => lookup.description).join(', ')}`, action, options, {
     code: 'missing-control',
+    kind: isOptionalAction(action, options) ? 'optional-skip' : 'action',
     count: 0,
+    target: missingTarget(action, lookups.map((lookup) => lookup.description).join(', '), 0),
   });
 }
 
@@ -262,6 +287,7 @@ export function resolveActionValue(valueFrom, context = {}) {
     return context.nodeIds?.[0] ?? node?.id ?? node?.nodeId;
   }
   if (valueFrom === 'nodes') return context.nodes ?? context.trafficNodeIds;
+  if (valueFrom === 'trafficNodeIds') return context.trafficNodeIds ?? context.nodes;
   if (valueFrom === 'party') return context.party ?? context.partyId;
   if (valueFrom === 'template') return context.template ?? context.templateId;
   if (valueFrom === 'publicKey') return context.publicKey ?? context.namespaceId;
@@ -278,8 +304,9 @@ function actionValue(action, options) {
   if (valueIsMissing(value)) {
     throw actionError(`Discovery context is missing ${action.valueFrom}`, action, options, {
       code: 'missing-value',
-      kind: 'optional-skip',
+      kind: isOptionalAction(action, options) ? 'optional-skip' : 'action',
       valueFrom: action.valueFrom,
+      target: missingTarget(action, `discovery context ${action.valueFrom}`, 0),
     });
   }
   if (typeof value === 'object') {
@@ -289,6 +316,32 @@ function actionValue(action, options) {
     });
   }
   return String(value);
+}
+
+function actionLabels(action, options) {
+  const value = resolveActionValue(action.labelFrom, options.discoveryContext);
+  if (valueIsMissing(value)) {
+    throw actionError(`Discovery context is missing ${action.labelFrom}`, action, options, {
+      code: 'missing-value',
+      kind: isOptionalAction(action, options) ? 'optional-skip' : 'action',
+      valueFrom: action.labelFrom,
+      target: missingTarget(action, `discovery context ${action.labelFrom}`, 0),
+    });
+  }
+
+  const entries = Array.isArray(value) ? value : [value];
+  const nodes = Array.isArray(options.discoveryContext.nodes) ? options.discoveryContext.nodes : [];
+  return entries.map((entry) => {
+    const id = typeof entry === 'object' && entry !== null
+      ? entry.id ?? entry.nodeId
+      : entry;
+    const matchingNode = nodes.find((node) => (node?.id ?? node?.nodeId) === id);
+    return String(
+      typeof entry === 'object' && entry !== null
+        ? entry.label ?? entry.name ?? id
+        : matchingNode?.label ?? entry,
+    );
+  });
 }
 
 async function perform(locator, operation, action, options, description) {
@@ -325,26 +378,52 @@ export async function executeSelectAction(pageOrLocator, action, options = {}) {
 
 export async function executeCheckAction(pageOrLocator, action, options = {}) {
   const normalized = normalizeOptions(options);
-  const locator = await resolveActionLocator(pageOrLocator, action, normalized);
-  return perform(
-    locator,
-    (target) => action.checked ? target.check() : target.uncheck(),
-    action,
-    normalized,
-    action.checked ? 'check the target' : 'uncheck the target',
-  );
+  if (action.labelFrom === undefined) {
+    const locator = await resolveActionLocator(pageOrLocator, action, normalized);
+    return perform(
+      locator,
+      (target) => action.checked ? target.check() : target.uncheck(),
+      action,
+      normalized,
+      action.checked ? 'check the target' : 'uncheck the target',
+    );
+  }
+
+  const results = [];
+  for (const label of actionLabels(action, normalized)) {
+    const labelAction = { ...action, label };
+    delete labelAction.labelFrom;
+    const locator = await resolveActionLocator(pageOrLocator, labelAction, normalized);
+    results.push(await perform(
+      locator,
+      (target) => action.checked ? target.check() : target.uncheck(),
+      labelAction,
+      normalized,
+      action.checked ? `check ${label}` : `uncheck ${label}`,
+    ));
+  }
+  return results;
 }
 
 export async function executeWaitForAction(pageOrLocator, action, options = {}) {
   const normalized = normalizeOptions(options);
   const locator = await resolveActionLocator(pageOrLocator, action, normalized);
-  await perform(
-    locator,
-    (target) => target.waitFor({ state: action.state ?? 'visible', timeout: action.timeoutMs }),
-    action,
-    normalized,
-    'wait for the target',
-  );
+  try {
+    await perform(
+      locator,
+      (target) => target.waitFor({ state: action.state ?? 'visible', timeout: action.timeoutMs }),
+      action,
+      normalized,
+      'wait for the target',
+    );
+  } catch (error) {
+    if (!isOptionalAction(action, normalized) || error.code !== 'action-failed') throw error;
+    throw actionError(`Could not find selector ${action.selector}`, action, normalized, {
+      code: 'missing-control',
+      kind: 'optional-skip',
+      target: missingTarget(action, `selector ${action.selector}`, 0),
+    });
+  }
   return requireUnique(locator, action, normalized, `selector ${action.selector}`);
 }
 

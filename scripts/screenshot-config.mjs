@@ -144,7 +144,14 @@ function validateAction(action, label) {
       if (action.valueFrom !== undefined) validateValueFrom(action.valueFrom, `${label}.valueFrom`);
       break;
     case 'check':
-      validateLookupFields(action, label, ['label', 'placeholder', 'selector']);
+      if (action.labelFrom !== undefined) {
+        assertNonEmptyString(action.labelFrom, `${label}.labelFrom`);
+        if (!['nodes', 'trafficNodeIds'].includes(action.labelFrom)) {
+          throw new ScreenshotConfigError(`${label}.labelFrom must name a supported discovery context collection`);
+        }
+      } else {
+        validateLookupFields(action, label, ['label', 'placeholder', 'selector']);
+      }
       if (action.checked !== true && action.checked !== false) {
         throw new ScreenshotConfigError(`${label}.checked must be boolean`);
       }
@@ -229,6 +236,7 @@ function trafficFilterActions() {
   const panelId = 'traffic-purchases-advanced-search';
   return [
     openPanel(panelId, 'Advanced Search'),
+    { kind: 'check', labelFrom: 'trafficNodeIds', checked: true, scope: { id: panelId } },
     { kind: 'fill', label: 'Minimum date', value: '2024-01-01', scope: { id: panelId } },
     { kind: 'fill', label: 'Maximum date', value: '2024-12-31', scope: { id: panelId } },
     { kind: 'fill', label: 'Minimum purchased traffic', value: '1', scope: { id: panelId } },
