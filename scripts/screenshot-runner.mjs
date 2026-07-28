@@ -389,8 +389,11 @@ export function resolveExitCode({ entries = [], strict = false, error = null } =
   return 0;
 }
 
-function browserMissing(error) {
-  return /executable doesn't exist|browser.*not.*installed|playwright install|Failed to launch/i.test(errorMessage(error));
+export function isMissingBrowserError(error) {
+  const message = errorMessage(error);
+  return /executable (?:doesn't|does not) exist/i.test(message) ||
+    /please run .*playwright install/i.test(message) ||
+    /npx playwright install(?:\s|$)/i.test(message);
 }
 
 async function captureEntry({ entry, config, manifest, browser, apiUrl, report, writeReport, fetchImpl, pageFactory, contextFactory, onContextCreated, responseDrainTimeoutMs }) {
@@ -650,7 +653,7 @@ export async function captureScreenshotMatrix(options = {}) {
     report.exitCode = resolveExitCode({ entries: report.entries, strict: config.strict });
     report.status = report.exitCode === 0 ? 'passed' : 'failed';
   } catch (error) {
-    report.exitCode = error?.exitCode === 2 || browserMissing(error) ? 2 : 1;
+    report.exitCode = error?.exitCode === 2 || isMissingBrowserError(error) ? 2 : 1;
     report.status = error?.name === 'AbortError' ? 'interrupted' : 'failed';
     report.error = errorMessage(error);
   }

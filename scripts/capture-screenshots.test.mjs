@@ -66,6 +66,23 @@ test('checks the configured frontend and normalized API before capture work', as
   ]);
 });
 
+test('includes approved startup guidance in service connectivity failures', async () => {
+  await assert.rejects(
+    checkServiceReachability({
+      baseUrl: 'http://frontend.test',
+      apiUrl: 'http://api.test/api',
+    }, {
+      fetchImpl: async () => ({ ok: false, status: 503 }),
+    }),
+    (error) => {
+      assert.match(error.message, /npm run dev:frontend/);
+      assert.match(error.message, /npm run dev:backend/);
+      assert.match(error.message, /Canton localnet/);
+      return true;
+    },
+  );
+});
+
 test('loads cwd-relative ESM config, applies CLI filters, and prints a concise success summary', async () => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'capture-screenshots-cli-'));
   const stdout = stream();

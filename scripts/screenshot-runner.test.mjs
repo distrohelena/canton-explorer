@@ -823,6 +823,32 @@ test('resolves the required, optional, strict, invalid, and service exit matrix'
   assert.equal(resolveExitCode({ error: new Error('service failed'), entries: [] }), 1);
 });
 
+test('distinguishes missing Chromium from ordinary browser launch failures', async () => {
+  const output = await makeOutput();
+  const config = configFor('http://127.0.0.1:46000', output, {
+    apiUrl: 'http://127.0.0.1:4600/api',
+  });
+  const manifest = manifestFor(config);
+
+  const launchFailure = await captureScreenshotMatrix({
+    config,
+    manifest,
+    browserFactory: async () => {
+      throw new Error('Failed to launch browser: sandbox denied');
+    },
+  });
+  assert.equal(launchFailure.exitCode, 1);
+
+  const missingBrowser = await captureScreenshotMatrix({
+    config,
+    manifest,
+    browserFactory: async () => {
+      throw new Error("Executable doesn't exist at /tmp/chromium");
+    },
+  });
+  assert.equal(missingBrowser.exitCode, 2);
+});
+
 test('records an unavailable debugger route so strict mode fails on its runner entry', async () => {
   const output = await makeOutput();
   const config = configFor('http://127.0.0.1:1', output, {

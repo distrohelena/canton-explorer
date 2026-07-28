@@ -14,7 +14,10 @@ import {
 } from './screenshot-discovery.mjs';
 import {
   captureScreenshotMatrix,
+  isMissingBrowserError,
 } from './screenshot-runner.mjs';
+
+const SERVICE_STARTUP_GUIDANCE = 'Start the frontend with `npm run dev:frontend`, the backend with `npm run dev:backend`, and ensure the configured Canton localnet/PQS services are running.';
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
@@ -22,10 +25,6 @@ function errorMessage(error) {
 
 function writeLine(stream, line) {
   stream.write(`${line}\n`);
-}
-
-function browserMissing(error) {
-  return /executable doesn't exist|browser.*not.*installed|playwright install|failed to launch/i.test(errorMessage(error));
 }
 
 function counts(report) {
@@ -61,17 +60,17 @@ export async function checkServiceReachability(config, options = {}) {
     try {
       response = await fetchImpl(check.url, { method: 'GET' });
     } catch (error) {
-      throw new Error(`${check.name} is unreachable at ${check.url}: ${errorMessage(error)}`, { cause: error });
+      throw new Error(`${check.name} is unreachable at ${check.url}: ${errorMessage(error)} ${SERVICE_STARTUP_GUIDANCE}`, { cause: error });
     }
     if (!response?.ok) {
-      throw new Error(`${check.name} is unreachable at ${check.url}: HTTP ${response?.status ?? 'unknown'}`);
+      throw new Error(`${check.name} is unreachable at ${check.url}: HTTP ${response?.status ?? 'unknown'}. ${SERVICE_STARTUP_GUIDANCE}`);
     }
   }
 }
 
 function exitCodeForError(error, phase) {
   if (phase === 'parse' || phase === 'config') return 2;
-  if (error?.exitCode === 2 || browserMissing(error)) return 2;
+  if (error?.exitCode === 2 || isMissingBrowserError(error)) return 2;
   return 1;
 }
 
