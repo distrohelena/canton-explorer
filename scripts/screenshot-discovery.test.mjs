@@ -6,6 +6,7 @@ import {
   discoverScreenshotManifest,
   normalizeApiBaseUrl,
   requestJson,
+  ScreenshotDiscoveryError,
 } from './screenshot-discovery.mjs';
 
 const apiBase = 'http://localhost:4600';
@@ -107,6 +108,12 @@ test('normalizes API bases without double prefixes and preserves URL suffixes', 
   );
 });
 
+test('rejects invalid API base values before URL construction', () => {
+  for (const value of [undefined, null, '', '   ', 42, {}, [], new URL(apiBase)]) {
+    assert.throws(() => normalizeApiBaseUrl(value), ScreenshotDiscoveryError);
+  }
+});
+
 test('builds API URLs for relative and already-prefixed paths', () => {
   assert.equal(
     apiUrlForPath(apiBase, '/nodes?limit=1'),
@@ -156,6 +163,44 @@ test('requestJson reports precise HTTP response errors', async () => {
   await assert.rejects(
     requestJson(apiBase, '/updates?limit=1', { fetchImpl }),
     (error) => error.message === 'GET /updates?limit=1 returned 503 Service Unavailable',
+  );
+});
+
+test('requestJson wraps fetch transport failures with method, endpoint, and cause', async () => {
+  const cause = new Error('connect ECONNREFUSED');
+  const fetchImpl = async () => {
+    throw cause;
+  };
+
+  await assert.rejects(
+    requestJson(apiBase, '/nodes?limit=1', { fetchImpl, method: 'POST' }),
+    (error) => {
+      assert.ok(error instanceof ScreenshotDiscoveryError);
+      assert.equal(
+        error.message,
+        'POST /nodes?limit=1 failed for http://localhost:4600/api/nodes?limit=1: connect ECONNREFUSED',
+      );
+      assert.equal(error.cause, cause);
+      return true;
+    },
+  );
+});
+
+test('discoverScreenshotManifest propagates API transport failures', async () => {
+  const cause = new Error('socket hang up');
+  const fetchImpl = async () => {
+    throw cause;
+  };
+
+  await assert.rejects(
+    discoverScreenshotManifest({ apiUrl: apiBase, fetchImpl }),
+    (error) => {
+      assert.ok(error instanceof ScreenshotDiscoveryError);
+      assert.match(error.message, /GET \/nodes/);
+      assert.match(error.message, /http:\/\/localhost:4600\/api\/nodes/);
+      assert.equal(error.cause, cause);
+      return true;
+    },
   );
 });
 

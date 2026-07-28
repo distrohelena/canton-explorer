@@ -6,6 +6,7 @@ export class ScreenshotDiscoveryError extends Error {
   constructor(message, options = {}) {
     super(message, options);
     this.name = 'ScreenshotDiscoveryError';
+    this.kind = options.kind;
   }
 }
 
@@ -38,7 +39,10 @@ function ensureApiPath(pathname) {
 }
 
 export function normalizeApiBaseUrl(value) {
-  const original = String(value);
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new ScreenshotDiscoveryError('API base URL must be a non-empty string');
+  }
+  const original = value;
   const isRelative = !/^[a-z][a-z\d+.-]*:/i.test(original);
   const url = asUrl(original);
   url.pathname = normalizeApiPath(url.pathname);
@@ -100,11 +104,24 @@ function splitRequestOptions(options = {}) {
 
 export async function requestJson(apiBaseUrl, pathValue, options = {}) {
   const { fetchImpl, init } = splitRequestOptions(options);
-  if (typeof fetchImpl !== 'function') {
-    throw new ScreenshotDiscoveryError('A fetch implementation is required');
-  }
+  const endpointUrl = apiUrlForPath(apiBaseUrl, pathValue);
   const method = init.method ?? 'GET';
-  const response = await fetchImpl(apiUrlForPath(apiBaseUrl, pathValue), init);
+  if (typeof fetchImpl !== 'function') {
+    throw new ScreenshotDiscoveryError(
+      `${method} ${requestPathForError(pathValue)} failed for ${endpointUrl}: A fetch implementation is required`,
+      { kind: 'transport' },
+    );
+  }
+  let response;
+  try {
+    response = await fetchImpl(endpointUrl, init);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ScreenshotDiscoveryError(
+      `${method} ${requestPathForError(pathValue)} failed for ${endpointUrl}: ${reason}`,
+      { cause: error, kind: 'transport' },
+    );
+  }
   if (!response?.ok) {
     const status = response?.status ?? 'unknown';
     const statusText = response?.statusText ? ` ${response.statusText}` : '';
@@ -235,6 +252,7 @@ async function readEndpoint({ apiUrl, fetchImpl, path, key, errors }) {
     const value = await requestJson(apiUrl, path, { fetchImpl });
     return { value, records: collection(value, key) };
   } catch (error) {
+    if (error?.kind === 'transport') throw error;
     errors[key] = endpointError(error);
     return { value: null, records: null };
   }
