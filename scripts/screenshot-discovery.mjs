@@ -209,8 +209,16 @@ function routePath(...segments) {
   return `/${segments.map((segment) => encodeURIComponent(String(segment))).join('/')}`;
 }
 
+function logicalRouteState(route) {
+  return JSON.stringify({
+    name: route.name,
+    state: route.state ?? null,
+    view: route.metadata?.view ?? null,
+  });
+}
+
 function addRoute(routes, skips, route) {
-  if (route.url && routes.some((candidate) => candidate.url === route.url)) return false;
+  if (routes.some((candidate) => logicalRouteState(candidate) === logicalRouteState(route))) return false;
   routes.push(route);
   if (route.skipReason) skips.push({ name: route.name, source: route.source, reason: route.skipReason });
   return true;
@@ -329,7 +337,7 @@ export async function discoverScreenshotManifest(options = {}) {
   const contract = (contractResult.records ?? []).find((candidate) =>
     firstString(candidate?.contractId));
   const party = flattenParties(partiesResult.value)[0];
-  const namespace = firstString((fingerprintResult.records ?? [])[0]);
+  const namespaceId = firstString((fingerprintResult.records ?? [])[0]);
   const token = (tokenResult.records ?? []).find((candidate) => firstString(candidate?.tokenId));
   const transfer = (transferResult.records ?? []).find((candidate) => firstString(candidate?.updateId));
   const trafficPurchases = trafficResult.records ?? [];
@@ -349,8 +357,10 @@ export async function discoverScreenshotManifest(options = {}) {
     ...(firstString(update?.updateId) ? { updateId: update.updateId } : {}),
     ...(firstString(contract?.contractId) ? { contractId: contract.contractId } : {}),
     ...(party ? { party } : {}),
-    ...(namespace ? { namespace, publicKey: namespace } : {}),
+    ...(namespaceId ? { namespaceId, publicKey: namespaceId } : {}),
     ...(firstString(token?.tokenId) ? { tokenId: token.tokenId } : {}),
+    ...(firstString(token?.issuer) ? { issuer: token.issuer } : {}),
+    ...(firstString(token?.name, token?.tokenName) ? { tokenName: firstString(token?.name, token?.tokenName) } : {}),
     ...(firstString(transfer?.updateId) ? { transferId: transfer.updateId, transferUpdateId: transfer.updateId } : {}),
     ...(packageContext?.packageId ? { packageId: packageContext.packageId } : {}),
     ...(packageContext?.packageName ? { packageName: packageContext.packageName } : {}),
@@ -459,9 +469,9 @@ export async function discoverScreenshotManifest(options = {}) {
     }
   }
 
-  if (namespace) {
-    const url = routePath('namespaces', namespace);
-    addRoute(routes, skips, routeRecord({ name: 'namespace-detail', url, source: '/parties/fingerprints?limit=1', expectedPath: url, metadata: { namespace, publicKey: namespace } }));
+  if (namespaceId) {
+    const url = routePath('namespaces', namespaceId);
+    addRoute(routes, skips, routeRecord({ name: 'namespace-detail', url, source: '/parties/fingerprints?limit=1', expectedPath: url, metadata: { namespaceId, publicKey: namespaceId } }));
   } else {
     addUnavailableRoute(routes, skips, {
       name: 'namespace-detail',
@@ -474,8 +484,10 @@ export async function discoverScreenshotManifest(options = {}) {
   if (token) {
     const url = routePath('tokens', token.tokenId);
     addRoute(routes, skips, routeRecord({ name: 'token-detail', url, source: '/tokens?limit=1', expectedPath: url, metadata: { tokenId: token.tokenId, issuer: token.issuer, tokenName: token.name } }));
+    addRoute(routes, skips, routeRecord({ name: 'token-detail-transfers', url, source: '/tokens?limit=1', expectedPath: url, metadata: { tokenId: token.tokenId, issuer: token.issuer, tokenName: token.name, view: 'transfers' } }));
   } else {
     addUnavailableRoute(routes, skips, { name: 'token-detail', source: '/tokens?limit=1', expectedPath: '/tokens/:tokenId', skipReason: errors.tokens ?? emptyReason('/tokens?limit=1', 'tokens') });
+    addUnavailableRoute(routes, skips, { name: 'token-detail-transfers', source: '/tokens?limit=1', expectedPath: '/tokens/:tokenId', skipReason: errors.tokens ?? emptyReason('/tokens?limit=1', 'tokens') });
   }
 
   if (transfer) {

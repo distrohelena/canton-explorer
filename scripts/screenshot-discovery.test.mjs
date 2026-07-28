@@ -182,8 +182,11 @@ test('discovers static and dynamic screenshot routes from every approved endpoin
   assert.equal(routes.get('debugger').url, '/debugger?updateId=update%3Fone');
   assert.equal(routes.get('contract-detail').url, '/nodes/node%2Fone/contracts/contract%2Fone');
   assert.equal(routes.get('party-detail').url, '/parties/party%3A%3Aone');
+  assert.equal(routes.get('party-detail-updates').url, '/parties/party%3A%3Aone');
+  assert.equal(routes.get('party-detail-contracts').url, '/parties/party%3A%3Aone');
   assert.equal(routes.get('namespace-detail').url, '/namespaces/namespace%2Fone');
   assert.equal(routes.get('token-detail').url, '/tokens/token%2Fone');
+  assert.equal(routes.get('token-detail-transfers').url, '/tokens/token%2Fone');
   assert.equal(routes.get('token-transfer-detail').url, '/tokens/transfers/transfer%2Fupdate');
   assert.equal(routes.get('package-family').url, '/packages/by-name/package%2Fname');
   assert.equal(routes.get('package-detail').url, '/packages/package%2Fid');
@@ -204,6 +207,10 @@ test('discovers static and dynamic screenshot routes from every approved endpoin
   assert.equal(manifest.context.nodeId, 'node/one');
   assert.equal(manifest.context.eventOffset, 'offset/1');
   assert.equal(manifest.context.updateId, 'update?one');
+  assert.equal(manifest.context.namespaceId, 'namespace/one');
+  assert.equal(manifest.context.namespace, undefined);
+  assert.equal(manifest.context.issuer, 'issuer::one');
+  assert.equal(manifest.context.tokenName, 'Token One');
   assert.equal(manifest.context.trafficNodeIds[0], 'node/one');
   assert.deepEqual(manifest.skips, []);
   assert.deepEqual(
@@ -253,13 +260,14 @@ test('records empty collections and endpoint failures as precise optional skips'
   assert.equal(routes.get('namespace-detail').skipReason, 'GET /parties/fingerprints?limit=1 returned 502 Bad Gateway');
   assert.equal(routes.get('package-family').skipReason, 'GET /nodes/node-1/packages returned an empty packagesByName collection');
   assert.equal(routes.get('token-detail').skipReason, 'GET /tokens?limit=1 returned an empty tokens collection');
+  assert.equal(routes.get('token-detail-transfers').skipReason, 'GET /tokens?limit=1 returned an empty tokens collection');
   assert.equal(routes.get('token-transfer-detail').skipReason, 'GET /tokens/transfers?limit=1 returned an empty transfers collection');
   assert.equal(routes.get('search-results').skipReason, 'No discovered party or update ID for search query');
   assert.equal(skipReasons.get('debugger'), 'No discovered update ID for debugger query');
   assert.ok(manifest.context.discoveryErrors.fingerprints);
 });
 
-test('deduplicates equivalent route URLs while preserving deterministic names and live context', async () => {
+test('deduplicates exact logical entries while preserving scoped routes sharing a URL', async () => {
   const fixtures = structuredClone(fullFixtures);
   fixtures['/api/nodes'] = {
     nodes: [
@@ -285,9 +293,14 @@ test('deduplicates equivalent route URLs while preserving deterministic names an
     apiUrl: apiBase,
     fetchImpl: fixtureFetch(fixtures),
   });
-  const urls = manifest.routes.filter((route) => route.url).map((route) => route.url);
-  assert.equal(new Set(urls).size, urls.length);
-  assert.equal(manifest.routes.some((route) => route.name === 'node-detail-02'), false);
+  const routes = new Map(manifest.routes.map((route) => [route.name, route]));
+  assert.equal(routes.get('party-detail').url, '/parties/same%2Fid');
+  assert.equal(routes.get('party-detail-updates').url, '/parties/same%2Fid');
+  assert.equal(routes.get('party-detail-contracts').url, '/parties/same%2Fid');
+  assert.equal(routes.get('token-detail').url, '/tokens/same%2Fid');
+  assert.equal(routes.get('token-detail-transfers').url, '/tokens/same%2Fid');
+  assert.equal(routes.get('node-detail-01').url, '/nodes/same%2Fid');
+  assert.equal(routes.get('node-detail-02').url, '/nodes/same%2Fid');
   assert.equal(manifest.context.nodeId, 'same/id');
   assert.equal(manifest.context.eventOffset, 'same/offset');
 });
