@@ -29,7 +29,7 @@ const requiredRouteIds = [
   'canton-coin',
   'traffic',
   'settings',
-  'search',
+  'search-results',
   'node-detail-01',
   'node-detail-02',
   'update-detail',
@@ -45,15 +45,70 @@ const requiredRouteIds = [
 ];
 
 const filterMatrix = new Map([
-  ['updates--filters', 'home-updates-advanced-filter'],
-  ['contracts--filters', 'contracts-advanced-filter'],
-  ['parties--filters', 'namespace-advanced-filter'],
-  ['party-detail-updates--filters', 'party-updates-advanced-filter'],
-  ['party-detail-contracts--filters', 'party-contracts-advanced-filter'],
-  ['tokens-known--filters', 'tokens-advanced-filter'],
-  ['tokens-transfers--filters', 'token-transfers-advanced-filter'],
-  ['token-detail-transfers--filters', 'token-transfers-advanced-filter'],
-  ['traffic--filters', 'traffic-purchases-advanced-search'],
+  ['updates--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'home-updates-advanced-filter' },
+    { kind: 'fill', placeholder: 'Party ID', valueFrom: 'party', scope: { id: 'home-updates-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add party filter', scope: { id: 'home-updates-advanced-filter' } },
+    { kind: 'fill', placeholder: 'Template ID', valueFrom: 'template', scope: { id: 'home-updates-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add template filter', scope: { id: 'home-updates-advanced-filter' } },
+  ]],
+  ['contracts--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'contracts-advanced-filter' },
+    { kind: 'fill', placeholder: 'Party ID', valueFrom: 'party', scope: { id: 'contracts-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add party filter', scope: { id: 'contracts-advanced-filter' } },
+    { kind: 'fill', placeholder: 'Template ID', valueFrom: 'template', scope: { id: 'contracts-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add template filter', scope: { id: 'contracts-advanced-filter' } },
+  ]],
+  ['parties--filters', [
+    { kind: 'click', role: 'button', name: 'Namespaces' },
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'namespace-advanced-filter' },
+    { kind: 'fill', label: 'Public Key', valueFrom: 'publicKey', scope: { id: 'namespace-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Search Namespaces', scope: { id: 'namespace-advanced-filter' } },
+  ]],
+  ['party-detail-updates--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'party-updates-advanced-filter' },
+    { kind: 'fill', placeholder: 'Template ID', valueFrom: 'template', scope: { id: 'party-updates-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add template filter', scope: { id: 'party-updates-advanced-filter' } },
+  ]],
+  ['party-detail-contracts--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'party-contracts-advanced-filter' },
+    { kind: 'fill', placeholder: 'Template ID', valueFrom: 'template', scope: { id: 'party-contracts-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add template filter', scope: { id: 'party-contracts-advanced-filter' } },
+  ]],
+  ['tokens-known--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'tokens-advanced-filter' },
+    { kind: 'fill', placeholder: 'Name', valueFrom: 'tokenName', scope: { id: 'tokens-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add name filter', scope: { id: 'tokens-advanced-filter' } },
+    { kind: 'fill', placeholder: 'Issuer', valueFrom: 'issuer', scope: { id: 'tokens-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add issuer filter', scope: { id: 'tokens-advanced-filter' } },
+  ]],
+  ['tokens-transfers--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'token-transfers-advanced-filter' },
+    { kind: 'fill', placeholder: 'From Party ID', valueFrom: 'party', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add from party filter', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'fill', placeholder: 'To Party ID', valueFrom: 'party', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add to party filter', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'select', label: 'Movement Type', value: 'Transfer', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add movement type filter', scope: { id: 'token-transfers-advanced-filter' } },
+  ]],
+  ['token-detail-transfers--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Filter', controls: 'token-transfers-advanced-filter' },
+    { kind: 'fill', placeholder: 'From Party ID', valueFrom: 'party', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add from party filter', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'fill', placeholder: 'To Party ID', valueFrom: 'party', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add to party filter', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'select', label: 'Movement Type', value: 'Transfer', scope: { id: 'token-transfers-advanced-filter' } },
+    { kind: 'click', role: 'button', name: 'Add movement type filter', scope: { id: 'token-transfers-advanced-filter' } },
+  ]],
+  ['traffic--filters', [
+    { kind: 'click', role: 'button', name: 'Advanced Search', controls: 'traffic-purchases-advanced-search' },
+    { kind: 'check', selector: 'input[type="checkbox"]', checked: true, scope: { id: 'traffic-purchases-advanced-search' } },
+    { kind: 'fill', label: 'Minimum date', value: '2024-01-01', scope: { id: 'traffic-purchases-advanced-search' } },
+    { kind: 'fill', label: 'Maximum date', value: '2024-12-31', scope: { id: 'traffic-purchases-advanced-search' } },
+    { kind: 'fill', label: 'Minimum purchased traffic', value: '1', scope: { id: 'traffic-purchases-advanced-search' } },
+    { kind: 'fill', label: 'Minimum paid amount', value: '0.01', scope: { id: 'traffic-purchases-advanced-search' } },
+    { kind: 'click', role: 'button', name: 'Apply filters', scope: { id: 'traffic-purchases-advanced-search' } },
+  ]],
 ]);
 
 test('default config exposes stable route and exact scoped filter ids', () => {
@@ -65,6 +120,16 @@ test('default config exposes stable route and exact scoped filter ids', () => {
   }
   assert.notEqual(routes.get('debugger').required, true);
   assert.equal(routes.get('debugger').dynamic, true);
+  assert.equal(routes.has('search'), false);
+  assert.deepEqual(
+    {
+      name: routes.get('search-results').name,
+      path: routes.get('search-results').path,
+      dynamic: routes.get('search-results').dynamic,
+      discoveryKey: routes.get('search-results').discoveryKey,
+    },
+    { name: 'search-results', path: undefined, dynamic: true, discoveryKey: 'search' },
+  );
 
   const captures = new Map(
     config.routes.flatMap((route) =>
@@ -76,24 +141,10 @@ test('default config exposes stable route and exact scoped filter ids', () => {
     [...captures.keys()].filter((id) => id.endsWith('--filters')).sort(),
   );
 
-  for (const [id, controls] of filterMatrix) {
+  for (const [id, expectedActions] of filterMatrix) {
     const { state } = captures.get(id);
-    const action = state.actions.find((candidate) => candidate.kind === 'click' && candidate.controls);
-    assert.equal(action.controls, controls, id);
-    assert.ok(state.actions.some((candidate) => candidate.kind === 'fill'), id);
-    const submitIndex = state.actions.findIndex(
-      (candidate) => candidate.kind === 'click' && ['Apply filters', 'Search Namespaces'].includes(candidate.name),
-    );
-    assert.ok(
-      state.actions.findIndex((candidate) => candidate.kind === 'fill') < submitIndex,
-      `${id} should fill before applying`,
-    );
+    assert.deepEqual(state.actions, expectedActions, id);
   }
-
-  const partiesFilter = captures.get('parties--filters').state.actions;
-  assert.ok(partiesFilter.some((action) => action.kind === 'click' && action.name === 'Namespaces'));
-  assert.ok(partiesFilter.some((action) => action.kind === 'click' && action.name === 'Add filter'));
-  assert.ok(partiesFilter.some((action) => action.kind === 'click' && action.name === 'Search Namespaces'));
 });
 
 test('viewport specs parse positive dimensions and deterministic custom names', () => {
@@ -191,9 +242,16 @@ test('config rejects unknown keys, invalid ids, duplicate combinations, and inva
   assert.throws(
     () => validateScreenshotConfig({
       ...createDefaultConfig(),
-      routes: [{ name: 'route', path: '/', states: [{ name: 'default', actions: [{ kind: 'click' }] }] }],
+      routes: [{ name: 'route', path: '/', states: [{ name: 'default', actions: [{ kind: 'click', name: 'Advanced Filter' }] }] }],
     }),
-    /target|name|selector|controls/i,
+    /role/i,
+  );
+  assert.throws(
+    () => validateScreenshotConfig({
+      ...createDefaultConfig(),
+      routes: [{ name: 'route', path: '/', states: [{ name: 'default', actions: [{ kind: 'click', role: 'button' }] }] }],
+    }),
+    /name/i,
   );
 });
 

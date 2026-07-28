@@ -106,12 +106,6 @@ function actionScope(action, label) {
   }
 }
 
-function hasTarget(action) {
-  return ['name', 'label', 'placeholder', 'selector', 'controls'].some(
-    (key) => typeof action[key] === 'string' && action[key].trim() !== '',
-  );
-}
-
 function validateLookupFields(action, label, keys) {
   if (!keys.some((key) => action[key] !== undefined)) {
     throw new ScreenshotConfigError(`${label} needs a ${keys.join(', ')} target`);
@@ -128,15 +122,18 @@ function validateAction(action, label) {
 
   switch (action.kind) {
     case 'click':
-      if (action.role !== undefined) assertNonEmptyString(action.role, `${label}.role`);
-      if (!hasTarget(action)) {
-        throw new ScreenshotConfigError(`${label} needs a name, label, selector, or controls target`);
-      }
+      assertNonEmptyString(action.role, `${label}.role`);
+      assertNonEmptyString(action.name, `${label}.name`);
       if (action.controls !== undefined) assertNonEmptyString(action.controls, `${label}.controls`);
+      if (action.selector !== undefined) assertNonEmptyString(action.selector, `${label}.selector`);
       break;
     case 'fill':
       validateLookupFields(action, label, ['label', 'placeholder', 'selector']);
-      validateValueFrom(action.valueFrom, `${label}.valueFrom`);
+      if ((action.value === undefined) === (action.valueFrom === undefined)) {
+        throw new ScreenshotConfigError(`${label} needs value or valueFrom`);
+      }
+      if (action.value !== undefined) assertNonEmptyString(action.value, `${label}.value`);
+      if (action.valueFrom !== undefined) validateValueFrom(action.valueFrom, `${label}.valueFrom`);
       break;
     case 'select':
       validateLookupFields(action, label, ['label', 'placeholder', 'selector']);
@@ -168,34 +165,77 @@ function validateValueFrom(value, label) {
   }
 }
 
-function filterActions(panelId, { mode, fill = 'party', submit = 'Apply filters' } = {}) {
-  const actions = [];
-  if (mode) actions.push({ kind: 'click', role: 'button', name: mode });
-  actions.push({
-    kind: 'click',
-    role: 'button',
-    name: panelId.includes('search') ? 'Advanced Search' : 'Advanced Filter',
-    controls: panelId,
-  });
-  actions.push({
-    kind: 'fill',
-    scope: { id: panelId },
-    label: fill === 'publicKey' ? 'Public Key' : 'Party ID',
-    valueFrom: fill,
-  });
-  actions.push({
-    kind: 'click',
-    role: 'button',
-    name: 'Add filter',
-    scope: { id: panelId },
-  });
-  actions.push({
-    kind: 'click',
-    role: 'button',
-    name: submit,
-    scope: { id: panelId },
-  });
+function panelClick(panelId, name) {
+  return { kind: 'click', role: 'button', name, scope: { id: panelId } };
+}
+
+function openPanel(panelId, name = 'Advanced Filter') {
+  return { kind: 'click', role: 'button', name, controls: panelId };
+}
+
+function fillFrom(panelId, lookup, valueFrom) {
+  return { kind: 'fill', ...lookup, valueFrom, scope: { id: panelId } };
+}
+
+function filterActions(panelId, options = {}) {
+  const actions = [openPanel(panelId, options.panelName)];
+  if (options.party) {
+    actions.push(fillFrom(panelId, { placeholder: 'Party ID' }, 'party'));
+    actions.push(panelClick(panelId, 'Add party filter'));
+  }
+  if (options.template) {
+    actions.push(fillFrom(panelId, { placeholder: 'Template ID' }, 'template'));
+    actions.push(panelClick(panelId, 'Add template filter'));
+  }
+  if (options.name) {
+    actions.push(fillFrom(panelId, { placeholder: 'Name' }, 'tokenName'));
+    actions.push(panelClick(panelId, 'Add name filter'));
+  }
+  if (options.issuer) {
+    actions.push(fillFrom(panelId, { placeholder: 'Issuer' }, 'issuer'));
+    actions.push(panelClick(panelId, 'Add issuer filter'));
+  }
+  if (options.fromParty) {
+    actions.push(fillFrom(panelId, { placeholder: 'From Party ID' }, 'party'));
+    actions.push(panelClick(panelId, 'Add from party filter'));
+  }
+  if (options.toParty) {
+    actions.push(fillFrom(panelId, { placeholder: 'To Party ID' }, 'party'));
+    actions.push(panelClick(panelId, 'Add to party filter'));
+  }
+  if (options.movementType) {
+    actions.push({
+      kind: 'select',
+      label: 'Movement Type',
+      value: 'Transfer',
+      scope: { id: panelId },
+    });
+    actions.push(panelClick(panelId, 'Add movement type filter'));
+  }
   return actions;
+}
+
+function namespaceFilterActions() {
+  const panelId = 'namespace-advanced-filter';
+  return [
+    { kind: 'click', role: 'button', name: 'Namespaces' },
+    openPanel(panelId),
+    fillFrom(panelId, { label: 'Public Key' }, 'publicKey'),
+    panelClick(panelId, 'Search Namespaces'),
+  ];
+}
+
+function trafficFilterActions() {
+  const panelId = 'traffic-purchases-advanced-search';
+  return [
+    openPanel(panelId, 'Advanced Search'),
+    { kind: 'check', selector: 'input[type="checkbox"]', checked: true, scope: { id: panelId } },
+    { kind: 'fill', label: 'Minimum date', value: '2024-01-01', scope: { id: panelId } },
+    { kind: 'fill', label: 'Maximum date', value: '2024-12-31', scope: { id: panelId } },
+    { kind: 'fill', label: 'Minimum purchased traffic', value: '1', scope: { id: panelId } },
+    { kind: 'fill', label: 'Minimum paid amount', value: '0.01', scope: { id: panelId } },
+    panelClick(panelId, 'Apply filters'),
+  ];
 }
 
 function route(name, pathValue, options = {}) {
@@ -212,15 +252,15 @@ function route(name, pathValue, options = {}) {
 }
 
 const FILTER_STATES = {
-  updates: filterActions('home-updates-advanced-filter'),
-  contracts: filterActions('contracts-advanced-filter'),
-  parties: filterActions('namespace-advanced-filter', { mode: 'Namespaces', fill: 'publicKey', submit: 'Search Namespaces' }),
-  'party-detail-updates': filterActions('party-updates-advanced-filter'),
-  'party-detail-contracts': filterActions('party-contracts-advanced-filter'),
-  'tokens-known': filterActions('tokens-advanced-filter'),
-  'tokens-transfers': filterActions('token-transfers-advanced-filter', { fill: 'movementType' }),
-  'token-detail-transfers': filterActions('token-transfers-advanced-filter', { fill: 'movementType' }),
-  traffic: filterActions('traffic-purchases-advanced-search', { fill: 'party' }),
+  updates: filterActions('home-updates-advanced-filter', { party: true, template: true }),
+  contracts: filterActions('contracts-advanced-filter', { party: true, template: true }),
+  parties: namespaceFilterActions(),
+  'party-detail-updates': filterActions('party-updates-advanced-filter', { template: true }),
+  'party-detail-contracts': filterActions('party-contracts-advanced-filter', { template: true }),
+  'tokens-known': filterActions('tokens-advanced-filter', { name: true, issuer: true }),
+  'tokens-transfers': filterActions('token-transfers-advanced-filter', { fromParty: true, toParty: true, movementType: true }),
+  'token-detail-transfers': filterActions('token-transfers-advanced-filter', { fromParty: true, toParty: true, movementType: true }),
+  traffic: trafficFilterActions(),
 };
 
 function withFilterState(name, actions) {
@@ -239,7 +279,7 @@ const DEFAULT_ROUTES = [
   route('canton-coin', '/canton-coin'),
   route('traffic', '/traffic', { states: withFilterState('traffic', FILTER_STATES.traffic) }),
   route('settings', '/settings'),
-  route('search', '/search', { required: false, dynamic: true, discoveryKey: 'search' }),
+  route('search-results', undefined, { required: false, dynamic: true, discoveryKey: 'search' }),
   route('node-detail-01', undefined, { required: false, dynamic: true, discoveryKey: 'node-detail' }),
   route('node-detail-02', undefined, { required: false, dynamic: true, discoveryKey: 'node-detail' }),
   route('update-detail', undefined, { required: false, dynamic: true, discoveryKey: 'update-detail' }),
