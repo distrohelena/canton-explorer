@@ -18,7 +18,8 @@ import {
 export { normalizeApiBaseUrl };
 
 const RETRY_DELAY_MS = 250;
-const RESPONSE_DRAIN_TIMEOUT_MS = 250;
+const RESPONSE_DRAIN_TIMEOUT_MS = 1_000;
+const CLEANUP_TIMEOUT_MS = 1_000;
 const LOADING_QUIET_MS = 50;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_SETTLE_MS = 300;
@@ -32,6 +33,7 @@ const ERROR_STATE_SELECTOR = [
   '.debugger-view__session-state--error',
   '.debugger-template-picker__state--error',
   '.monaco-surface__state--error',
+  '.party-topology__state--error',
 ].join(', ');
 
 export class ScreenshotRunnerError extends Error {
@@ -40,6 +42,7 @@ export class ScreenshotRunnerError extends Error {
     this.name = 'ScreenshotRunnerError';
     this.exitCode = options.exitCode;
     this.kind = options.kind;
+    this.code = options.code;
   }
 }
 
@@ -182,11 +185,17 @@ async function validatePage(page, route, expectedUrl, sessionIds) {
   const actualPath = `${actual.pathname}${actual.search}`;
   const expectedPath = `${expected.pathname}${expected.search}`;
   if (actualPath !== expectedPath) {
-    throw new ScreenshotRunnerError(`Expected final path ${expectedPath}, got ${actualPath}`, { kind: 'validation' });
+    throw new ScreenshotRunnerError(`Expected final path ${expectedPath}, got ${actualPath}`, {
+      kind: 'validation',
+      code: 'final-path',
+    });
   }
 
   if (await visibleCount(page.locator(ERROR_STATE_SELECTOR)) > 0) {
-    throw new ScreenshotRunnerError(`Route ${route.name} rendered an error state`, { kind: 'validation' });
+    throw new ScreenshotRunnerError(`Route ${route.name} rendered an error state`, {
+      kind: 'validation',
+      code: 'error-state',
+    });
   }
 
   const validation = route.validation ?? {};
@@ -206,10 +215,16 @@ async function validatePage(page, route, expectedUrl, sessionIds) {
     if (await visibleCount(stateLocator) > 0) hasValidationState = true;
   }
   if (!hasValidationState) {
-    throw new ScreenshotRunnerError(`Route ${route.name} is missing validation state alternatives`, { kind: 'validation' });
+    throw new ScreenshotRunnerError(`Route ${route.name} is missing validation state alternatives`, {
+      kind: 'validation',
+      code: 'content-state',
+    });
   }
   if (validation.sessionRequired && sessionIds.length === 0) {
-    throw new ScreenshotRunnerError(`Route ${route.name} did not create a debugger session`, { kind: 'validation' });
+    throw new ScreenshotRunnerError(`Route ${route.name} did not create a debugger session`, {
+      kind: 'validation',
+      code: 'missing-session',
+    });
   }
 }
 
@@ -240,11 +255,39 @@ function isDebuggerSessionResponse(response) {
 
 async function deleteDebuggerSession(apiUrl, sessionId, fetchImpl) {
   const endpoint = apiUrlForPath(apiUrl, `/debugger/sessions/${encodeURIComponent(sessionId)}`);
-  const response = await fetchImpl(endpoint, { method: 'DELETE' });
-  if (!response?.ok) {
-    throw new ScreenshotRunnerError(`DELETE ${endpoint} returned ${response?.status ?? 'unknown'}`, { kind: 'cleanup' });
+  const controller = new AbortController();
+  let timeoutId;
+  const request = Promise.resolve().then(() => fetchImpl(endpoint, {
+    method: 'DELETE',
+    signal: controller.signal,
+  }));
+  try {
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        controller.abort();
+        reject(new ScreenshotRunnerError(`DELETE ${endpoint} timed out after ${CLEANUP_TIMEOUT_MS}ms`, {
+          kind: 'cleanup',
+          code: 'timeout',
+        }));
+      }, CLEANUP_TIMEOUT_MS);
+    });
+    const response = await Promise.race([request, timeout]);
+    if (!response?.ok) {
+      throw new ScreenshotRunnerError(`DELETE ${endpoint} returned ${response?.status ?? 'unknown'}`, { kind: 'cleanup' });
+    }
+    return endpoint;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new ScreenshotRunnerError(`DELETE ${endpoint} timed out after ${CLEANUP_TIMEOUT_MS}ms`, {
+        kind: 'cleanup',
+        code: 'timeout',
+        cause: error,
+      });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return endpoint;
 }
 
 function stateRequired(route, state) {
@@ -256,7 +299,8 @@ function optionalActionSkip(error) {
 }
 
 function optionalDebuggerValidation(error, route, required) {
-  return !required && route.name === 'debugger' && error?.kind === 'validation';
+  return !required && route.name === 'debugger' &&
+    ['missing-session', 'error-state'].includes(error?.code);
 }
 
 function infrastructureFailure(error) {
@@ -441,12 +485,40 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
     page.on('response', onResponse);
     await page.route('**/*', createApiRouteHandler(apiUrl));
 
+    const failureResult = (error) => {
+      const isActionSkip = !required && optionalActionSkip(error);
+      const isDebuggerValidationSkip = optionalDebuggerValidation(error, captureRoute, required);
+      const status = isActionSkip || isDebuggerValidationSkip ? 'skipped' : 'failed';
+      return {
+        route: route.name,
+        state: state.name,
+        viewport: viewport.name,
+        url,
+        status,
+        ...(status === 'skipped' ? { reason: errorMessage(error) } : { error: errorMessage(error) }),
+        durationMs: Date.now() - started,
+        required,
+        ...(status === 'failed' && (required || infrastructureFailure(error)) ? { fatal: true } : {}),
+      };
+    };
+
     let lastError;
+    let readinessComplete = false;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       if (attempt > 0) await delay(RETRY_DELAY_MS);
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutFor(captureRoute) });
         await waitForReadiness(page, captureRoute, expectedUrl, { settleMs: config.settleMs, sessionIds });
+        readinessComplete = true;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!readinessComplete) {
+      result = failureResult(lastError);
+    } else {
+      try {
         if (state.actions?.length) {
           await executeScreenshotActions(page, state.actions, {
             discoveryContext: manifest.context ?? {},
@@ -466,27 +538,9 @@ async function captureEntry({ entry, config, manifest, browser, apiUrl, report, 
           durationMs: Date.now() - started,
           required,
         };
-        break;
       } catch (error) {
-        lastError = error;
-        if (attempt === 0 && !optionalActionSkip(error) && !optionalDebuggerValidation(error, captureRoute, required)) continue;
+        result = failureResult(error);
       }
-    }
-    if (!result) {
-      const isActionSkip = !required && optionalActionSkip(lastError);
-      const isDebuggerValidationSkip = optionalDebuggerValidation(lastError, captureRoute, required);
-      const status = isActionSkip || isDebuggerValidationSkip ? 'skipped' : 'failed';
-      result = {
-        route: route.name,
-        state: state.name,
-        viewport: viewport.name,
-        url,
-        status,
-        ...(status === 'skipped' ? { reason: errorMessage(lastError) } : { error: errorMessage(lastError) }),
-        durationMs: Date.now() - started,
-        required,
-        ...(status === 'failed' && (required || infrastructureFailure(lastError)) ? { fatal: true } : {}),
-      };
     }
   } catch (error) {
     result = {

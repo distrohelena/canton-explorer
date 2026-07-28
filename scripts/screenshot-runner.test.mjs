@@ -196,6 +196,7 @@ test('treats current route-specific error classes as capture failures', async (t
       <p class="debugger-view__session-state--error">session error</p>
       <p class="debugger-template-picker__state--error">template error</p>
       <p class="monaco-surface__state--error">source error</p>
+      <p class="party-topology__state--error">topology error</p>
     </main></body></html>`);
   });
   t.after(() => frontend.close());
@@ -254,6 +255,31 @@ test('records a missing optional debugger session as a validation skip', async (
   assert.match(report.entries[0].reason, /did not create a debugger session/);
 });
 
+test('keeps an optional debugger final-path mismatch as a failed validation', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><section><h2>Debugger</h2></section></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [{
+      name: 'debugger', path: '/debugger?updateId=update-1', required: false,
+      readiness: { heading: 'Debugger', timeoutMs: 100, settleMs: 0 },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const manifest = manifestFor(config);
+  manifest.routes[0].expectedPath = '/debugger?updateId=other';
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest, browser });
+
+  assert.equal(report.entries[0].status, 'failed');
+  assert.equal(report.entries[0].required, false);
+  assert.match(report.entries[0].error, /Expected final path/);
+});
+
 test('preserves configured readiness when discovery supplies only dynamic readiness metadata', async (t) => {
   const output = await makeOutput();
   const frontend = await startServer((req, res) => {
@@ -296,6 +322,73 @@ test('waits for loading indicators that mount after the first readiness scan', a
   const started = Date.now();
   await waitForLoadingToDisappear(page, 500);
   assert.ok(Date.now() - started >= 70);
+});
+
+test('does not retry an action failure after readiness succeeds', async (t) => {
+  const output = await makeOutput();
+  let navigations = 0;
+  const frontend = await startServer((req, res) => {
+    if (req.url?.startsWith('/fixture')) navigations += 1;
+    send(res, 200, '<!doctype html><html><body><main><h1>Fixture Ready</h1></main></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [{
+      name: 'fixture', path: '/fixture', required: false,
+      readiness: { heading: 'Fixture Ready', timeoutMs: 100, settleMs: 0 },
+      states: [{ name: 'optional-action', actions: [{ kind: 'click', role: 'button', name: 'Missing' }] }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const report = await captureScreenshotMatrix({ config, manifest: manifestFor(config), browser });
+
+  assert.equal(report.entries[0].status, 'skipped');
+  assert.equal(navigations, 1);
+});
+
+test('does not retry a screenshot failure and stops the matrix', async (t) => {
+  const output = await makeOutput();
+  const frontend = await startServer((req, res) => {
+    send(res, 200, '<!doctype html><html><body><main><h1>Fixture Ready</h1></main></body></html>');
+  });
+  t.after(() => frontend.close());
+  const config = configFor(frontend.url, output, {
+    apiUrl: `${frontend.url}/api`,
+    routes: [
+      {
+        name: 'first', path: '/first', required: false,
+        readiness: { heading: 'Fixture Ready', timeoutMs: 100, settleMs: 0 },
+        states: [{ name: 'default', actions: [] }],
+      },
+      {
+        name: 'second', path: '/second', required: true,
+        readiness: { heading: 'Fixture Ready', timeoutMs: 100, settleMs: 0 },
+        states: [{ name: 'default', actions: [] }],
+      },
+    ],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  let screenshotCalls = 0;
+  const report = await captureScreenshotMatrix({
+    config,
+    manifest: manifestFor(config),
+    browser,
+    pageFactory: async (context) => {
+      const page = await context.newPage();
+      page.screenshot = async () => {
+        screenshotCalls += 1;
+        throw new Error('screenshot write failed');
+      };
+      return page;
+    },
+  });
+
+  assert.equal(screenshotCalls, 1);
+  assert.equal(report.entries.length, 1);
+  assert.equal(report.entries[0].status, 'failed');
 });
 
 test('uses a fresh browser context for every route/state/viewport and keeps state failures isolated', async (t) => {
@@ -418,7 +511,7 @@ test('waits for a late debugger POST response before deleting sessions', async (
     if (req.method === 'POST' && req.url === '/api/debugger/sessions') {
       const id = `late-session-${sessionIds.length + 1}`;
       sessionIds.push(id);
-      setTimeout(() => json(res, 201, { sessionId: id }), 100);
+      setTimeout(() => json(res, 201, { sessionId: id }), 600);
       return;
     }
     if (req.method === 'DELETE' && req.url?.startsWith('/api/debugger/sessions/')) {
@@ -446,7 +539,7 @@ test('waits for a late debugger POST response before deleting sessions', async (
     apiUrl: api.url,
     routes: [{
       name: 'debugger', path: '/debugger?updateId=update-1', required: false,
-      readiness: { heading: 'Debugger', timeoutMs: 40, settleMs: 0 },
+      readiness: { heading: 'Debugger', timeoutMs: 700, settleMs: 0 },
       states: [{ name: 'default', actions: [] }],
     }],
   });
@@ -464,7 +557,6 @@ test('bounds cleanup when a debugger POST hangs forever', async (t) => {
   const api = await startServer(async (req, res) => {
     await bodyOf(req);
     if (req.method === 'POST' && req.url === '/api/debugger/sessions') {
-      setTimeout(() => json(res, 201, { sessionId: 'never-received' }), 1000);
       return;
     }
     json(res, 200, { ok: true });
@@ -478,6 +570,7 @@ test('bounds cleanup when a debugger POST hangs forever', async (t) => {
   });
   t.after(async () => {
     await frontend.close();
+    api.server.closeAllConnections?.();
     await api.close();
   });
   const config = configFor(frontend.url, output, {
@@ -515,9 +608,56 @@ test('bounds cleanup when a debugger POST hangs forever', async (t) => {
   const started = Date.now();
   const report = await captureScreenshotMatrix({ config, manifest, browser });
 
-  assert.ok(Date.now() - started < 800);
+  assert.ok(Date.now() - started < 1600);
   assert.equal(report.entries[0].status, 'failed');
   assert.equal(report.entries.length, 1);
+});
+
+test('reports a bounded debugger DELETE timeout as cleanup failure', async (t) => {
+  const output = await makeOutput();
+  const api = await startServer(async (req, res) => {
+    await bodyOf(req);
+    if (req.method === 'POST' && req.url === '/api/debugger/sessions') {
+      json(res, 201, { sessionId: 'cleanup-timeout-session' });
+      return;
+    }
+    json(res, 200, { ok: true });
+  });
+  const frontend = await startServer((req, res) => {
+    if (req.url?.startsWith('/debugger')) {
+      send(res, 200, '<!doctype html><html><body><main><h1>Debugger</h1><script>fetch("/api/debugger/sessions", {method:"POST"});</script></main></body></html>');
+      return;
+    }
+    send(res, 404, 'not found');
+  });
+  t.after(async () => {
+    await frontend.close();
+    await api.close();
+  });
+  const config = configFor(frontend.url, output, {
+    apiUrl: api.url,
+    routes: [{
+      name: 'debugger', path: '/debugger', required: false,
+      readiness: { heading: 'Debugger', timeoutMs: 100, settleMs: 0 },
+      states: [{ name: 'default', actions: [] }],
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const started = Date.now();
+  const report = await captureScreenshotMatrix({
+    config,
+    manifest: manifestFor(config),
+    browser,
+    fetchImpl: async (_url, init) => {
+      if (init?.method === 'DELETE') return new Promise(() => {});
+      return { ok: true, status: 200 };
+    },
+  });
+
+  assert.ok(Date.now() - started < 1600);
+  assert.equal(report.cleanup[0].status, 'failed');
+  assert.match(report.cleanup[0].error, /timed out/);
 });
 
 test('persists manifest and report atomically after entries and cleanup', async (t) => {
