@@ -594,7 +594,7 @@ export class GrpcOperationsService {
       try {
         const response = await client.participantPackageService.listPackagesAsync({});
 
-        return (response.packageDescriptions ?? [])
+        const packageRefs = (response.packageDescriptions ?? [])
           .map((description) => ({
             packageId: description.packageId,
             mainPackageId: description.packageId,
@@ -603,7 +603,31 @@ export class GrpcOperationsService {
             uploadedAt: description.uploadedAt?.toISOString() ?? null,
             packageSize: description.size ?? null,
           }))
-          .sort((left, right) => left.packageId.localeCompare(right.packageId));
+          ;
+
+        try {
+          const knownPackages = await client.packageManagementService.listKnownPackagesAsync({});
+          const listedPackageIds = new Set(packageRefs.map((packageRef) => packageRef.packageId));
+          for (const packageDetails of knownPackages.packageDetails ?? []) {
+            if (listedPackageIds.has(packageDetails.packageId)) {
+              continue;
+            }
+
+            packageRefs.push({
+              packageId: packageDetails.packageId,
+              mainPackageId: packageDetails.packageId,
+              name: packageDetails.name || null,
+              version: packageDetails.version || null,
+              uploadedAt: packageDetails.knownSince?.toISOString() ?? null,
+              packageSize: packageDetails.packageSize ?? null,
+            });
+          }
+        } catch {
+          // ParticipantPackageService remains the primary source when the admin
+          // package-management RPC is unavailable on older participants.
+        }
+
+        return packageRefs.sort((left, right) => left.packageId.localeCompare(right.packageId));
       } catch (error) {
         if (!this.shouldFallbackToLedgerPackageListing(error)) {
           throw error;
@@ -685,7 +709,7 @@ export class GrpcOperationsService {
     return (
       error.message.includes('Method not found:') &&
       error.message.includes('PackageService/ListPackages')
-    );
+    ) || error.message.includes('Request message serialization failure');
   }
 
   private loadTopologySdk(): Promise<TopologySdkModule> {

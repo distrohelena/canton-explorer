@@ -1398,6 +1398,18 @@ describe('GrpcOperationsService', () => {
             ],
           }),
         },
+        packageManagementService: {
+          listKnownPackagesAsync: jest.fn().mockResolvedValue({
+            packageDetails: [
+              {
+                packageId: SAMPLE_DAML_FIXTURE.packageId,
+                name: 'splice-amulet',
+                version: '0.1.18',
+                packageSize: cachedPackage.data.length,
+              },
+            ],
+          }),
+        },
         packageService: {
           getPackageAsync: jest.fn().mockResolvedValue({
             archivePayload,
@@ -1448,6 +1460,73 @@ describe('GrpcOperationsService', () => {
     expect(disposeAsync).toHaveBeenCalledTimes(2);
   });
 
+  it('includes ledger-visible packages omitted by the participant package listing', async () => {
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(
+      process.cwd(),
+      'test/fixtures/daml/package-cache.sqlite',
+    );
+    const cachedPackage = new PackageCacheService().getPackage(SAMPLE_DAML_FIXTURE.packageId);
+    if (!cachedPackage) {
+      throw new Error('Missing DAML fixture package');
+    }
+    const archivePayload = extractDamlLfArchivePayloadOrThrow(new Uint8Array(cachedPackage.data));
+    const service = new GrpcOperationsService({
+      create: () => ({
+        participantPackageService: {
+          listPackagesAsync: jest.fn().mockResolvedValue({
+            packageDescriptions: [
+              {
+                packageId: 'participant-only-package',
+                name: 'participant-only',
+                version: '1.0.0',
+                uploadedAt: new Date('2026-07-03T10:00:00.000Z'),
+                size: 1024,
+              },
+            ],
+          }),
+        },
+        packageManagementService: {
+          listKnownPackagesAsync: jest.fn().mockResolvedValue({
+            packageDetails: [
+              {
+                packageId: SAMPLE_DAML_FIXTURE.packageId,
+                name: 'splice-amulet',
+                version: '0.1.18',
+                packageSize: cachedPackage.data.length,
+              },
+            ],
+          }),
+        },
+        packageService: {
+          listPackagesAsync: jest.fn().mockResolvedValue({
+            packageIds: ['participant-only-package', SAMPLE_DAML_FIXTURE.packageId],
+          }),
+          getPackageAsync: jest.fn().mockResolvedValue({ archivePayload }),
+        },
+        disposeAsync: jest.fn().mockResolvedValue(undefined),
+      }),
+    } as never);
+
+    await expect(service.fetchPackageRefs(grpcNode)).resolves.toEqual([
+      {
+        packageId: SAMPLE_DAML_FIXTURE.packageId,
+        mainPackageId: SAMPLE_DAML_FIXTURE.packageId,
+        name: 'splice-amulet',
+        version: '0.1.18',
+        uploadedAt: null,
+        packageSize: cachedPackage.data.length,
+      },
+      {
+        packageId: 'participant-only-package',
+        mainPackageId: 'participant-only-package',
+        name: 'participant-only',
+        version: '1.0.0',
+        uploadedAt: '2026-07-03T10:00:00.000Z',
+        packageSize: 1024,
+      },
+    ]);
+  });
+
   it('falls back to ledger package listing when participant package admin RPC is unavailable', async () => {
     process.env.PACKAGE_CACHE_DB_PATH = resolve(
       process.cwd(),
@@ -1467,7 +1546,7 @@ describe('GrpcOperationsService', () => {
             .fn()
             .mockRejectedValue(
               new Error(
-                'Method not found: com.digitalasset.canton.admin.participant.v30.PackageService/ListPackages',
+                'gRPC INTERNAL from com.digitalasset.canton.admin.participant.v30.PackageService.ListPackages: Request message serialization failure:',
               ),
             ),
         },

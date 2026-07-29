@@ -4,6 +4,7 @@ import type { PackageTypeNode } from '../types/packages';
 import {
   UNSET,
   createFormValue,
+  formTypeLabel,
   serializeFormValue,
   validateFormValue,
   type FormValue,
@@ -48,9 +49,16 @@ function updateScalar(value: FormValue, event: Event) {
   }
 }
 
-function renderValue(node: PackageTypeNode, value: FormValue, path: string, label?: string): VNode {
+function renderValue(
+  node: PackageTypeNode,
+  value: FormValue,
+  path: string,
+  label?: string,
+  placeholderType?: string,
+): VNode {
   const actualNode = resolved(node);
   const title = label ?? labelFor(actualNode);
+  const typeText = placeholderType ?? formTypeLabel(node, props.resolveType);
 
   if (value.kind === 'unsupported') {
     return h('p', { class: 'debugger-value-form__error' }, value.message);
@@ -79,15 +87,15 @@ function renderValue(node: PackageTypeNode, value: FormValue, path: string, labe
             type: 'checkbox',
             checked: present,
             onChange: (event: Event) => {
-              value.value = (event.target as HTMLInputElement).checked && argument
-                ? createFormValue(argument, props.resolveType)
+          value.value = (event.target as HTMLInputElement).checked && argument
+            ? createFormValue(argument, props.resolveType)
                 : UNSET;
             },
           }),
           ` ${title} (optional)`,
         ]),
         present && argument && value.value !== UNSET
-          ? renderValue(argument, value.value, path, title)
+          ? renderValue(argument, value.value, path, title, typeText)
           : null,
       ]);
     }
@@ -98,7 +106,7 @@ function renderValue(node: PackageTypeNode, value: FormValue, path: string, labe
         h('legend', title),
         ...value.items.map((item, index) => argument
           ? h('div', { class: 'debugger-value-form__collection-row' }, [
-            renderValue(argument, item, `${path}.${index}`, `${title} ${index + 1}`),
+            renderValue(argument, item, `${path}.${index}`, `${title} ${index + 1}`, typeText),
             h('button', {
               type: 'button',
               onClick: () => value.items.splice(index, 1),
@@ -123,12 +131,13 @@ function renderValue(node: PackageTypeNode, value: FormValue, path: string, labe
             ? h('input', {
               value: entry.key,
               'aria-label': `${title} key ${index + 1}`,
+              placeholder: `${typeText} key`,
               onInput: (event: Event) => { entry.key = (event.target as HTMLInputElement).value; },
             })
             : keyNode
               ? renderValue(keyNode, entry.key, `${path}.${index}.key`, 'Key')
               : null,
-          valueNode ? renderValue(valueNode, entry.value, `${path}.${index}.value`, 'Value') : null,
+          valueNode ? renderValue(valueNode, entry.value, `${path}.${index}.value`, 'Value', typeText) : null,
           h('button', { type: 'button', onClick: () => value.entries.splice(index, 1) }, 'Remove'),
         ])),
         h('button', {
@@ -154,6 +163,7 @@ function renderValue(node: PackageTypeNode, value: FormValue, path: string, labe
           type: builtin === 'Bool' ? 'checkbox' : 'text',
           checked: builtin === 'Bool' ? inputValue(value) : undefined,
           value: builtin === 'Bool' ? undefined : inputValue(value),
+          placeholder: typeText,
           onInput: (event: Event) => updateScalar(value, event),
           onChange: (event: Event) => {
             if (builtin === 'Bool' && value.kind === 'scalar') {

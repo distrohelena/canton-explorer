@@ -15,6 +15,13 @@ type ParticipantPackageDescription = {
   uploadedAt?: Date;
   size?: number;
 };
+type KnownPackageDetails = {
+  packageId: string;
+  name?: string;
+  version?: string;
+  knownSince?: Date;
+  packageSize?: number;
+};
 type TopologyMappingContext = {
   signedByFingerprints?: string[];
 };
@@ -158,6 +165,11 @@ type SdkCantonClient = {
     listPackagesAsync(
       input: Record<string, never>,
     ): Promise<{ packageDescriptions?: ParticipantPackageDescription[] }>;
+  };
+  packageManagementService: {
+    listKnownPackagesAsync(input: Record<string, never>): Promise<{
+      packageDetails?: KnownPackageDetails[];
+    }>;
   };
   participantStatusService: {
     getParticipantStatusAsync(input: Record<string, never>): Promise<{

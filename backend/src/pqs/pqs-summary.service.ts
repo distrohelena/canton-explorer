@@ -2454,17 +2454,17 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         purchases.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalTrafficCursor(purchases[purchases.length - 1]!)
+          ? encodeGlobalTrafficCursor(purchases[purchases.length - 1])
           : null,
       nextAfter:
         purchases.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalTrafficCursor(purchases[0]!)
+              ? encodeGlobalTrafficCursor(purchases[0])
               : null
             : beforeCursor
-              ? encodeGlobalTrafficCursor(purchases[0]!)
+              ? encodeGlobalTrafficCursor(purchases[0])
               : null,
       purchases,
       current,
@@ -2820,17 +2820,17 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         updates.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalUpdateCursor(updates[updates.length - 1]!)
+          ? encodeGlobalUpdateCursor(updates[updates.length - 1])
           : null,
       nextAfter:
         updates.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalUpdateCursor(updates[0]!)
+              ? encodeGlobalUpdateCursor(updates[0])
               : null
             : beforeCursor
-              ? encodeGlobalUpdateCursor(updates[0]!)
+              ? encodeGlobalUpdateCursor(updates[0])
               : null,
       updates,
     };
@@ -4184,17 +4184,17 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         contracts.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalContractCursor(contracts[contracts.length - 1]!)
+          ? encodeGlobalContractCursor(contracts[contracts.length - 1])
           : null,
       nextAfter:
         contracts.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalContractCursor(contracts[0]!)
+              ? encodeGlobalContractCursor(contracts[0])
               : null
             : beforeCursor
-              ? encodeGlobalContractCursor(contracts[0]!)
+              ? encodeGlobalContractCursor(contracts[0])
               : null,
       contracts,
     };
@@ -4346,17 +4346,17 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         contracts.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalContractCursor(contracts[contracts.length - 1]!)
+          ? encodeGlobalContractCursor(contracts[contracts.length - 1])
           : null,
       nextAfter:
         contracts.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalContractCursor(contracts[0]!)
+              ? encodeGlobalContractCursor(contracts[0])
               : null
             : beforeCursor
-              ? encodeGlobalContractCursor(contracts[0]!)
+              ? encodeGlobalContractCursor(contracts[0])
               : null,
       contracts,
     };
@@ -4596,19 +4596,17 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         pagedHolders.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalTokenHolderCursor(
-              pagedHolders[pagedHolders.length - 1]!,
-            )
+          ? encodeGlobalTokenHolderCursor(pagedHolders[pagedHolders.length - 1])
           : null,
       nextAfter:
         pagedHolders.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalTokenHolderCursor(pagedHolders[0]!)
+              ? encodeGlobalTokenHolderCursor(pagedHolders[0])
               : null
             : beforeCursor
-              ? encodeGlobalTokenHolderCursor(pagedHolders[0]!)
+              ? encodeGlobalTokenHolderCursor(pagedHolders[0])
               : null,
       holders: pagedHolders,
     };
@@ -4645,17 +4643,17 @@ export class PqsSummaryService {
       limit: normalizedLimit,
       nextBefore:
         pagedTokens.length > 0 && (useAfterCursor || hasMoreInDirection)
-          ? encodeGlobalTokenCursor(pagedTokens[pagedTokens.length - 1]!)
+          ? encodeGlobalTokenCursor(pagedTokens[pagedTokens.length - 1])
           : null,
       nextAfter:
         pagedTokens.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalTokenCursor(pagedTokens[0]!)
+              ? encodeGlobalTokenCursor(pagedTokens[0])
               : null
             : beforeCursor
-              ? encodeGlobalTokenCursor(pagedTokens[0]!)
+              ? encodeGlobalTokenCursor(pagedTokens[0])
               : null,
       tokens: pagedTokens,
     };
@@ -4898,7 +4896,7 @@ export class PqsSummaryService {
       nextBefore:
         pagedTransfers.length > 0 && (useAfterCursor || hasMoreInDirection)
           ? encodeGlobalTokenTransferCursor(
-              pagedTransfers[pagedTransfers.length - 1]!,
+              pagedTransfers[pagedTransfers.length - 1],
             )
           : null,
       nextAfter:
@@ -4906,10 +4904,10 @@ export class PqsSummaryService {
           ? null
           : useAfterCursor
             ? hasMoreInDirection
-              ? encodeGlobalTokenTransferCursor(pagedTransfers[0]!)
+              ? encodeGlobalTokenTransferCursor(pagedTransfers[0])
               : null
             : beforeCursor
-              ? encodeGlobalTokenTransferCursor(pagedTransfers[0]!)
+              ? encodeGlobalTokenTransferCursor(pagedTransfers[0])
               : null,
       transfers: pagedTransfers,
     };
@@ -4980,14 +4978,20 @@ export class PqsSummaryService {
     node: NodeConfig,
     eventOffset: string,
   ): Promise<NodeUpdateDetailResponse> {
-    return this.fetchUpdateDetailWithQuery(node, singleUpdateQuery(node, eventOffset));
+    return this.fetchUpdateDetailWithQuery(
+      node,
+      singleUpdateQuery(node, eventOffset),
+    );
   }
 
   async fetchUpdateDetailById(
     node: NodeConfig,
     updateId: string,
   ): Promise<NodeUpdateDetailResponse> {
-    return this.fetchUpdateDetailWithQuery(node, singleUpdateByIdQuery(node, updateId));
+    return this.fetchUpdateDetailWithQuery(
+      node,
+      singleUpdateByIdQuery(node, updateId),
+    );
   }
 
   private async fetchUpdateDetailWithQuery(
@@ -5295,7 +5299,7 @@ export class PqsSummaryService {
     const [pqsTokens, grpcTokens, builtinTokens] = await Promise.all([
       this.fetchObservedTokensForNode(node, TOKEN_TRANSFER_CACHE_LIMIT),
       useGrpcHoldingViews
-        ? this.grpcOperationsService!.fetchHoldingV2Tokens(node)
+        ? this.grpcOperationsService.fetchHoldingV2Tokens(node)
         : Promise.resolve([] as TokenSummary[]),
       this.fetchBuiltinTokensForNode(node),
     ]);
@@ -5479,7 +5483,7 @@ export class PqsSummaryService {
         includeCip112: !useGrpcHoldingViews,
       }),
       useGrpcHoldingViews
-        ? this.grpcOperationsService!.fetchHoldingV2TokenHolders(node)
+        ? this.grpcOperationsService.fetchHoldingV2TokenHolders(node)
         : Promise.resolve([] as GrpcTokenHolderObservation[]),
     ]);
     const holders = [
@@ -6960,8 +6964,8 @@ export class PqsSummaryService {
 
     const decoderInput = {
       ...input,
-      exerciseArgument: (input.exerciseArgument ?? null) as Buffer | null,
-      exerciseResult: (input.exerciseResult ?? null) as Buffer | null,
+      exerciseArgument: input.exerciseArgument ?? null,
+      exerciseResult: input.exerciseResult ?? null,
     };
     const initialDecode =
       await this.damlValueDecoder.decodeExerciseValue(decoderInput);
@@ -7592,7 +7596,10 @@ export class PqsSummaryService {
         packageRef,
       ]),
     );
-    const templates = new Map<string, TemplateFilterResponse['templates'][number]>();
+    const templates = new Map<
+      string,
+      TemplateFilterResponse['templates'][number]
+    >();
 
     for (const packageId of packageIds) {
       const inspection = this.packageRegistryService

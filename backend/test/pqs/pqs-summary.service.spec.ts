@@ -33,24 +33,41 @@ function encodeVarint(value: number): Buffer {
   return Buffer.from(bytes);
 }
 
-function encodeLengthDelimited(fieldNumber: number, payload: Buffer | string): Buffer {
-  const bytes = typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload;
-  return Buffer.concat([encodeVarint((fieldNumber << 3) | 2), encodeVarint(bytes.length), bytes]);
+function encodeLengthDelimited(
+  fieldNumber: number,
+  payload: Buffer | string,
+): Buffer {
+  const bytes =
+    typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload;
+  return Buffer.concat([
+    encodeVarint((fieldNumber << 3) | 2),
+    encodeVarint(bytes.length),
+    bytes,
+  ]);
 }
 
 function encodeVarintField(fieldNumber: number, value: number): Buffer {
   return Buffer.concat([encodeVarint(fieldNumber << 3), encodeVarint(value)]);
 }
 
-function buildRewardCouponInstance(rewardRound: number, rewardAmount: number): Buffer {
+function buildRewardCouponInstance(
+  rewardRound: number,
+  rewardAmount: number,
+): Buffer {
   const rewardRoundValue = encodeLengthDelimited(
     1,
     encodeLengthDelimited(
       13,
-      encodeLengthDelimited(1, encodeLengthDelimited(1, encodeVarintField(3, rewardRound))),
+      encodeLengthDelimited(
+        1,
+        encodeLengthDelimited(1, encodeVarintField(3, rewardRound)),
+      ),
     ),
   );
-  const rewardAmountValue = encodeLengthDelimited(1, encodeVarintField(3, rewardAmount));
+  const rewardAmountValue = encodeLengthDelimited(
+    1,
+    encodeVarintField(3, rewardAmount),
+  );
   const record = encodeLengthDelimited(
     13,
     Buffer.concat([
@@ -86,7 +103,8 @@ const typedUpdateDetailFixture = {
   nodeId: 'participant-1',
   label: 'Participant 1',
   eventOffset: '0000000000000001',
-  updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+  updateId:
+    '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
   recordTime: '2026-07-01T12:00:00.000Z',
   parties: ['Alice'],
   events: [
@@ -112,7 +130,8 @@ const typedUpdateDetailFixture = {
     },
   ],
   meta: {
-    update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+    update_id:
+      '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
     record_time: 1782907200000000,
   },
 } satisfies NodeUpdateDetailResponse;
@@ -125,7 +144,8 @@ const typedContractDetailFixture = {
   packageId: 'main-package',
   packageName: 'main-package-name',
   packageVersion: '1.2.3',
-  createdUpdateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+  createdUpdateId:
+    '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
   createdEventOffset: '0000000000000001',
   createdRecordTime: '2026-07-01T12:00:00.000Z',
   archivedUpdateId: null,
@@ -300,7 +320,8 @@ const typedPartyDetailFixture = {
       nodeId: 'participant-1',
       label: 'Participant 1',
       eventOffset: '0000000000000001',
-      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      updateId:
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
       estimatedTrafficUsd: null,
@@ -309,7 +330,8 @@ const typedPartyDetailFixture = {
       nodeId: 'participant-2',
       label: 'Participant 2',
       eventOffset: '0000000000000002',
-      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+      updateId:
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
       recordTime: '2026-07-01T11:00:00.000Z',
       parties: ['Alice'],
       estimatedTrafficUsd: null,
@@ -402,7 +424,8 @@ const typedNamespaceDetailFixture = {
       nodeId: 'participant-2',
       label: 'Participant 2',
       eventOffset: '42',
-      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      updateId:
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-09T12:00:00.000Z',
       parties: ['Alice::1220abcd', 'Bob::1220abcd'],
     },
@@ -410,7 +433,8 @@ const typedNamespaceDetailFixture = {
       nodeId: 'participant-1',
       label: 'Participant 1',
       eventOffset: '41',
-      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+      updateId:
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
       recordTime: '2026-07-09T11:00:00.000Z',
       parties: ['Alice::1220abcd'],
     },
@@ -496,9 +520,15 @@ describe('PqsSummaryService', () => {
   it('keeps typed decode-state fixtures in sync with update and contract detail responses', () => {
     expect(typedUpdateDetailFixture.events[0].createData).toBeDefined();
     expect(typedContractDetailFixture.contractData).toBeDefined();
-    expect(typedPackageDetailFixture.templates[0].templateId).toBe('Splice.Amulet:SvRewardCoupon');
-    expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
-    expect(typedNodePackagesFixture.packagesByName[0].packageName).toBe('daml-prim');
+    expect(typedPackageDetailFixture.templates[0].templateId).toBe(
+      'Splice.Amulet:SvRewardCoupon',
+    );
+    expect(typedPackageFamilyFixture.packages[0].packageId).toBe(
+      'splice-amulet-v2',
+    );
+    expect(typedNodePackagesFixture.packagesByName[0].packageName).toBe(
+      'daml-prim',
+    );
     expect(typedPartyDetailFixture.recentContracts[0].contractId).toBe('00abc');
     expect(typedPartyDetailFixture.partyTopologyByNode[0].status).toBe('ok');
   });
@@ -526,10 +556,12 @@ describe('PqsSummaryService', () => {
       inspectPackage: jest.fn(async (packageId: string) => ({
         ok: true as const,
         definition: {
-          templates: [{
-            templateId: 'Main:Asset',
-            packageId,
-          }],
+          templates: [
+            {
+              templateId: 'Main:Asset',
+              packageId,
+            },
+          ],
         },
       })),
     };
@@ -540,7 +572,9 @@ describe('PqsSummaryService', () => {
       packageRegistry as never,
     );
 
-    await expect(service.fetchNodeTemplates({ id: 'participant-1' } as never)).resolves.toEqual({
+    await expect(
+      service.fetchNodeTemplates({ id: 'participant-1' } as never),
+    ).resolves.toEqual({
       templates: [
         {
           templateId: 'Main:Asset',
@@ -562,18 +596,22 @@ describe('PqsSummaryService', () => {
     const query = jest.fn();
     const list = jest
       .fn()
-      .mockReturnValue([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' }]);
+      .mockReturnValue([
+        { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+      ]);
     const packageCache = {
       listPackages: jest.fn(),
     };
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async () => ({ query }),
-      } as never,
+      },
       undefined,
-      packageCache as never,
+      packageCache,
       undefined,
-      { list } as never,
+      { list },
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
     };
@@ -655,20 +693,24 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ parties: [] }] });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async () => ({ query: participantQuery }),
-      } as never,
+      },
       undefined,
       {
         listPackages: jest.fn().mockReturnValue([]),
-      } as never,
+      },
       undefined,
       {
         list: jest
           .fn()
-          .mockReturnValue([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' }]),
-      } as never,
+          .mockReturnValue([
+            { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+          ]),
+      },
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
     };
@@ -713,23 +755,26 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ parties: ['Alice'] }] });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
-      } as never,
+      },
       undefined,
       {
         listPackages: jest.fn().mockReturnValue([]),
-      } as never,
+      },
       undefined,
       {
         list: jest.fn().mockReturnValue([
           { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ]),
-      } as never,
+      },
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
     };
@@ -770,20 +815,24 @@ describe('PqsSummaryService', () => {
       })
       .mockResolvedValueOnce({ rows: [{ parties: [] }] });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async () => ({ query: participantQuery }),
-      } as never,
+      },
       undefined,
       {
         listPackages: jest.fn().mockReturnValue([]),
-      } as never,
+      },
       undefined,
       {
         list: jest
           .fn()
-          .mockReturnValue([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' }]),
-      } as never,
+          .mockReturnValue([
+            { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+          ]),
+      },
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
     };
@@ -815,8 +864,10 @@ describe('PqsSummaryService', () => {
   });
 
   it('searches package ids and package names from the cache only', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
       undefined,
       {
         listPackages: jest.fn().mockReturnValue([
@@ -842,11 +893,11 @@ describe('PqsSummaryService', () => {
             packageSize: 123,
           },
         ]),
-      } as never,
+      },
       undefined,
       {
         list: jest.fn().mockReturnValue([]),
-      } as never,
+      },
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
     };
@@ -914,23 +965,26 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ parties: [] }] });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
-      } as never,
+      },
       undefined,
       {
         listPackages: jest.fn().mockReturnValue([]),
-      } as never,
+      },
       undefined,
       {
         list: jest.fn().mockReturnValue([
           { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ]),
-      } as never,
+      },
     ) as PqsSummaryService & {
       search?: (query: string) => Promise<SearchResultsResponse>;
     };
@@ -954,27 +1008,35 @@ describe('PqsSummaryService', () => {
   });
 
   it('returns all cached packages for a package name', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
       undefined,
       {
-        listPackagesByName: jest.fn().mockReturnValue(typedPackageFamilyFixture.packages),
-      } as never,
+        listPackagesByName: jest
+          .fn()
+          .mockReturnValue(typedPackageFamilyFixture.packages),
+      },
       undefined,
     ) as PqsSummaryService & {
-      fetchPackagesByName?: (packageName: string) => Promise<PackageFamilyResponse>;
+      fetchPackagesByName?: (
+        packageName: string,
+      ) => Promise<PackageFamilyResponse>;
     };
 
     expect(typeof service.fetchPackagesByName).toBe('function');
 
-    await expect(service.fetchPackagesByName?.('splice-amulet')).resolves.toEqual(
-      typedPackageFamilyFixture,
-    );
+    await expect(
+      service.fetchPackagesByName?.('splice-amulet'),
+    ).resolves.toEqual(typedPackageFamilyFixture);
   });
 
   it('returns cached installed packages for a node grouped by package name', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
       undefined,
       {
         listPackagesForNode: jest.fn().mockReturnValue([
@@ -1009,10 +1071,13 @@ describe('PqsSummaryService', () => {
             seenAt: '2026-07-02T12:05:00.000Z',
           },
         ]),
-      } as never,
+      },
       undefined,
     ) as PqsSummaryService & {
-      fetchNodePackages?: (node: { id: string; label: string }) => Promise<NodePackagesResponse>;
+      fetchNodePackages?: (node: {
+        id: string;
+        label: string;
+      }) => Promise<NodePackagesResponse>;
     };
 
     expect(typeof service.fetchNodePackages).toBe('function');
@@ -1041,12 +1106,15 @@ describe('PqsSummaryService', () => {
     });
     const participant2Query = jest.fn(async () => ({ rows: [] }));
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
-      } as never,
+      },
       undefined,
       undefined,
       undefined,
@@ -1092,12 +1160,14 @@ describe('PqsSummaryService', () => {
       throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
     });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async () => ({
           query: participant1Query,
         }),
-      } as never,
+      },
       undefined,
       undefined,
       undefined,
@@ -1140,7 +1210,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_offset: '0000000000000001',
               record_time: '2026-07-01T12:00:00.000Z',
             },
@@ -1152,7 +1223,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               parties: ['Alice', 'Bob'],
             },
           ],
@@ -1185,7 +1257,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
               event_offset: '0000000000000002',
               record_time: '2026-07-01T11:00:00.000Z',
             },
@@ -1197,7 +1270,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e2',
               parties: ['Alice'],
             },
           ],
@@ -1220,12 +1294,15 @@ describe('PqsSummaryService', () => {
       return { rows: [] };
     });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
-      } as never,
+      },
       undefined,
       {
         getPackage: jest.fn().mockReturnValue({
@@ -1236,15 +1313,17 @@ describe('PqsSummaryService', () => {
           packageSize: 1024,
           data: Buffer.from('package'),
         }),
-      } as never,
+      },
       undefined,
       undefined,
       {
         fetchPartyTopology: jest
           .fn()
           .mockResolvedValueOnce(typedPartyDetailFixture.partyTopologyByNode[0])
-          .mockResolvedValueOnce(typedPartyDetailFixture.partyTopologyByNode[1]),
-      } as never,
+          .mockResolvedValueOnce(
+            typedPartyDetailFixture.partyTopologyByNode[1],
+          ),
+      },
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
         nodes: Array<{ id: string; label: string }>,
@@ -1281,7 +1360,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_offset: '39',
               record_time: '2026-07-02T12:00:00.000Z',
             },
@@ -1293,7 +1373,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               parties: [prefixedPartyId],
             },
           ],
@@ -1324,12 +1405,14 @@ describe('PqsSummaryService', () => {
       return { rows: [] };
     });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async () => ({
           query: participantQuery,
         }),
-      } as never,
+      },
       undefined,
       {
         getPackage: jest.fn().mockReturnValue({
@@ -1340,7 +1423,7 @@ describe('PqsSummaryService', () => {
           packageSize: 1024,
           data: Buffer.from('package'),
         }),
-      } as never,
+      },
       undefined,
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
@@ -1372,7 +1455,8 @@ describe('PqsSummaryService', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           eventOffset: '39',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-02T12:00:00.000Z',
           parties: [strippedPartyId],
           estimatedTrafficUsd: null,
@@ -1412,16 +1496,18 @@ describe('PqsSummaryService', () => {
       return { rows: [] };
     });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async () => ({
           query: participantQuery,
         }),
-      } as never,
+      },
       undefined,
       {
         getPackage: jest.fn(),
-      } as never,
+      },
       undefined,
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
@@ -1471,12 +1557,14 @@ describe('PqsSummaryService', () => {
       return { rows: [] };
     });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async () => ({
           query: participantQuery,
         }),
-      } as never,
+      },
       undefined,
       undefined,
       undefined,
@@ -1492,7 +1580,7 @@ describe('PqsSummaryService', () => {
           partyToParticipants: [],
           partyToKeyMappings: [],
         })),
-      } as never,
+      },
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
         nodes: Array<{
@@ -1545,10 +1633,14 @@ describe('PqsSummaryService', () => {
   });
 
   it('returns namespace detail aggregated across all matching parties by exact namespace suffix', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
-        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
-      } as never,
+        getRawExecutor: async () => ({
+          query: jest.fn().mockResolvedValue({ rows: [] }),
+        }),
+      },
       undefined,
       {
         getPackage: jest.fn().mockReturnValue({
@@ -1559,7 +1651,7 @@ describe('PqsSummaryService', () => {
           packageSize: 1024,
           data: Buffer.from('package'),
         }),
-      } as never,
+      },
       undefined,
       undefined,
       {
@@ -1630,7 +1722,7 @@ describe('PqsSummaryService', () => {
             partyToParticipants: [],
             partyToKeyMappings: [],
           }),
-      } as never,
+      },
     ) as PqsSummaryService & {
       fetchNamespaceDetail?: (
         nodes: Array<{
@@ -1645,7 +1737,11 @@ describe('PqsSummaryService', () => {
     (service as any).fetchActivePartiesForNode = jest
       .fn()
       .mockResolvedValueOnce(['Alice::1220abcd'])
-      .mockResolvedValueOnce(['Alice::1220abcd', 'Bob::1220abcd', 'Carol::1220eeee']);
+      .mockResolvedValueOnce([
+        'Alice::1220abcd',
+        'Bob::1220abcd',
+        'Carol::1220eeee',
+      ]);
     (service as any).fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
       limit: 10,
       nextBefore: null,
@@ -1675,10 +1771,14 @@ describe('PqsSummaryService', () => {
   });
 
   it('keeps namespace detail available when PQS fails for one node', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
-        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
-      } as never,
+        getRawExecutor: async () => ({
+          query: jest.fn().mockResolvedValue({ rows: [] }),
+        }),
+      },
       undefined,
       {
         getPackage: jest.fn().mockReturnValue({
@@ -1689,7 +1789,7 @@ describe('PqsSummaryService', () => {
           packageSize: 1024,
           data: Buffer.from('package'),
         }),
-      } as never,
+      },
       undefined,
       undefined,
       {
@@ -1721,7 +1821,7 @@ describe('PqsSummaryService', () => {
             },
           ],
         }),
-      } as never,
+      },
     ) as PqsSummaryService & {
       fetchNamespaceDetail?: (
         nodes: Array<{
@@ -1746,7 +1846,8 @@ describe('PqsSummaryService', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           eventOffset: '42',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-09T12:00:00.000Z',
           parties: ['Alice::1220abcd'],
         },
@@ -1798,7 +1899,8 @@ describe('PqsSummaryService', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           eventOffset: '42',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-09T12:00:00.000Z',
           parties: ['Alice::1220abcd'],
         },
@@ -1848,10 +1950,14 @@ describe('PqsSummaryService', () => {
   });
 
   it('returns paginated namespace parties aggregated by exact namespace suffix', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
-        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
-      } as never,
+        getRawExecutor: async () => ({
+          query: jest.fn().mockResolvedValue({ rows: [] }),
+        }),
+      },
       undefined,
       undefined,
       undefined,
@@ -1860,8 +1966,12 @@ describe('PqsSummaryService', () => {
         listLocalParties: jest
           .fn()
           .mockResolvedValueOnce(['Alice::1220abcd'])
-          .mockResolvedValueOnce(['Alice::1220abcd', 'Bob::1220abcd', 'Carol::1220eeee']),
-      } as never,
+          .mockResolvedValueOnce([
+            'Alice::1220abcd',
+            'Bob::1220abcd',
+            'Carol::1220eeee',
+          ]),
+      },
     ) as PqsSummaryService & {
       fetchNamespaceParties?: (
         nodes: Array<{
@@ -1877,7 +1987,11 @@ describe('PqsSummaryService', () => {
     (service as any).fetchActivePartiesForNode = jest
       .fn()
       .mockResolvedValueOnce(['Alice::1220abcd'])
-      .mockResolvedValueOnce(['Alice::1220abcd', 'Bob::1220abcd', 'Carol::1220eeee']);
+      .mockResolvedValueOnce([
+        'Alice::1220abcd',
+        'Bob::1220abcd',
+        'Carol::1220eeee',
+      ]);
 
     await expect(
       service.fetchNamespaceParties?.(
@@ -1896,11 +2010,13 @@ describe('PqsSummaryService', () => {
   });
 
   it('returns namespace parties from healthy nodes when another node PQS is unavailable', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      {
-        getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
-      } as never,
-    ) as PqsSummaryService & {
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )({
+      getRawExecutor: async () => ({
+        query: jest.fn().mockResolvedValue({ rows: [] }),
+      }),
+    }) as PqsSummaryService & {
       fetchNamespaceParties?: (
         nodes: Array<{
           id: string;
@@ -1955,7 +2071,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_offset: '0000000000000001',
               record_time: '2026-07-01T12:00:00.000Z',
             },
@@ -1967,7 +2084,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               parties: ['Alice'],
             },
           ],
@@ -1990,13 +2108,17 @@ describe('PqsSummaryService', () => {
       return { rows: [] };
     });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async (node: { id: string }) => ({
           query:
-            node.id === 'participant-1' ? participant1Query : jest.fn(async () => ({ rows: [] })),
+            node.id === 'participant-1'
+              ? participant1Query
+              : jest.fn(async () => ({ rows: [] })),
         }),
-      } as never,
+      },
       undefined,
       {
         getPackage: jest.fn().mockReturnValue({
@@ -2007,7 +2129,7 @@ describe('PqsSummaryService', () => {
           packageSize: 1024,
           data: Buffer.from('package'),
         }),
-      } as never,
+      },
       undefined,
       undefined,
       {
@@ -2029,7 +2151,7 @@ describe('PqsSummaryService', () => {
             partyToParticipants: [],
             partyToKeyMappings: [],
           }),
-      } as never,
+      },
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
         nodes: Array<{ id: string; label: string }>,
@@ -2063,7 +2185,8 @@ describe('PqsSummaryService', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           eventOffset: '0000000000000001',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-01T12:00:00.000Z',
           parties: ['Alice'],
           estimatedTrafficUsd: null,
@@ -2106,7 +2229,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_offset: '0000000000000001',
               record_time: '2026-07-01T12:00:00.000Z',
             },
@@ -2118,7 +2242,8 @@ describe('PqsSummaryService', () => {
         return {
           rows: [
             {
-              update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               parties: ['Alice'],
             },
           ],
@@ -2145,12 +2270,15 @@ describe('PqsSummaryService', () => {
       throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
     });
 
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
-      } as never,
+      },
       undefined,
       {
         getPackage: jest.fn().mockReturnValue({
@@ -2161,7 +2289,7 @@ describe('PqsSummaryService', () => {
           packageSize: 1024,
           data: Buffer.from('package'),
         }),
-      } as never,
+      },
       undefined,
       undefined,
       {
@@ -2173,7 +2301,7 @@ describe('PqsSummaryService', () => {
           partyToParticipants: [],
           partyToKeyMappings: [],
         }),
-      } as never,
+      },
     ) as PqsSummaryService & {
       fetchPartyDetail?: (
         nodes: Array<{ id: string; label: string }>,
@@ -2207,7 +2335,8 @@ describe('PqsSummaryService', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           eventOffset: '0000000000000001',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-01T12:00:00.000Z',
           parties: ['Alice'],
           estimatedTrafficUsd: null,
@@ -2240,8 +2369,10 @@ describe('PqsSummaryService', () => {
   });
 
   it('returns decoded package detail with metadata, node presence, and decoded structure', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue({
@@ -2263,7 +2394,7 @@ describe('PqsSummaryService', () => {
             seenAt: '2026-07-02T12:00:00.000Z',
           },
         ]),
-      } as never,
+      },
       {
         inspectPackage: jest.fn().mockResolvedValue({
           ok: true,
@@ -2317,21 +2448,25 @@ describe('PqsSummaryService', () => {
             dataTypeCount: 1,
           },
         }),
-      } as never,
+      },
     ) as PqsSummaryService & {
-      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+      fetchPackageDetail?: (
+        packageId: string,
+      ) => Promise<PackageDetailResponse>;
     };
 
     expect(typeof service.fetchPackageDetail).toBe('function');
 
-    await expect(service.fetchPackageDetail?.('splice-amulet')).resolves.toEqual(
-      typedPackageDetailFixture,
-    );
+    await expect(
+      service.fetchPackageDetail?.('splice-amulet'),
+    ).resolves.toEqual(typedPackageDetailFixture);
   });
 
   it('returns invalid package detail with metadata but empty decoded lists', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue({
@@ -2342,20 +2477,24 @@ describe('PqsSummaryService', () => {
           packageSize: 4,
         }),
         listNodesForPackage: jest.fn().mockReturnValue([]),
-      } as never,
+      },
       {
         inspectPackage: jest.fn().mockResolvedValue({
           ok: false,
           reason: 'invalid_package',
         }),
-      } as never,
+      },
     ) as PqsSummaryService & {
-      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+      fetchPackageDetail?: (
+        packageId: string,
+      ) => Promise<PackageDetailResponse>;
     };
 
     expect(typeof service.fetchPackageDetail).toBe('function');
 
-    await expect(service.fetchPackageDetail?.('broken-package')).resolves.toEqual({
+    await expect(
+      service.fetchPackageDetail?.('broken-package'),
+    ).resolves.toEqual({
       packageId: 'broken-package',
       name: 'broken-package',
       version: '0.0.0',
@@ -2373,8 +2512,10 @@ describe('PqsSummaryService', () => {
   });
 
   it('returns not-available package detail when metadata exists but package bytes do not', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue({
@@ -2396,20 +2537,24 @@ describe('PqsSummaryService', () => {
             seenAt: '2026-07-11T10:00:00.000Z',
           },
         ]),
-      } as never,
+      },
       {
         inspectPackage: jest.fn().mockResolvedValue({
           ok: false,
           reason: 'missing_package',
         }),
-      } as never,
+      },
     ) as PqsSummaryService & {
-      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+      fetchPackageDetail?: (
+        packageId: string,
+      ) => Promise<PackageDetailResponse>;
     };
 
     expect(typeof service.fetchPackageDetail).toBe('function');
 
-    await expect(service.fetchPackageDetail?.('pqs-only-package')).resolves.toEqual({
+    await expect(
+      service.fetchPackageDetail?.('pqs-only-package'),
+    ).resolves.toEqual({
       packageId: 'pqs-only-package',
       name: 'pqs-only-package',
       version: '3.5.2',
@@ -2434,25 +2579,29 @@ describe('PqsSummaryService', () => {
   });
 
   it('throws Package not found for unknown package ids', async () => {
-    const service = new (PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService)(
-      { getRawExecutor: async () => ({ query: jest.fn() }) } as never,
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
       undefined,
       {
         getPackageMetadata: jest.fn().mockReturnValue(null),
         listNodesForPackage: jest.fn(),
-      } as never,
+      },
       {
         inspectPackage: jest.fn(),
-      } as never,
+      },
     ) as PqsSummaryService & {
-      fetchPackageDetail?: (packageId: string) => Promise<PackageDetailResponse>;
+      fetchPackageDetail?: (
+        packageId: string,
+      ) => Promise<PackageDetailResponse>;
     };
 
     expect(typeof service.fetchPackageDetail).toBe('function');
 
-    await expect(service.fetchPackageDetail?.('missing-package')).rejects.toThrow(
-      'Package not found',
-    );
+    await expect(
+      service.fetchPackageDetail?.('missing-package'),
+    ).rejects.toThrow('Package not found');
   });
 
   it('returns a normalized ledger summary from schema-qualified PQS tables', async () => {
@@ -2582,8 +2731,14 @@ describe('PqsSummaryService', () => {
       1,
       expect.stringContaining('from "public"."__transactions" tx'),
     );
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('order by tx.offset desc'));
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 26'));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('order by tx.offset desc'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('limit 26'),
+    );
     expect(query).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('join "public"."__contracts" contract_row'),
@@ -2626,7 +2781,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '9130',
             record_time: '2026-07-03T12:00:00.000Z',
           },
@@ -2635,7 +2791,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice'],
           },
         ],
@@ -2670,7 +2827,8 @@ describe('PqsSummaryService', () => {
       updates: [
         {
           eventOffset: '9130',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-03T12:00:00.000Z',
           estimatedTrafficUsd: null,
           parties: ['Alice'],
@@ -2682,10 +2840,22 @@ describe('PqsSummaryService', () => {
       1,
       expect.stringContaining('from "public"."__transactions" tx'),
     );
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Alice'"));
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'p|Alice'"));
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('contract_row.witnesses'));
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('exercise_row.witnesses'));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("'Alice'"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("'p|Alice'"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('contract_row.witnesses'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('exercise_row.witnesses'),
+    );
     expect(query).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('join "public"."__contracts" contract_row'),
@@ -2698,7 +2868,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '9130',
             record_time: '2026-07-03T12:00:00.000Z',
           },
@@ -2707,7 +2878,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice'],
           },
         ],
@@ -2756,7 +2928,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '9130',
             record_time: '2026-07-03T12:00:00.000Z',
           },
@@ -2765,7 +2938,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice'],
           },
         ],
@@ -2814,7 +2988,8 @@ describe('PqsSummaryService', () => {
       updates: [
         {
           eventOffset: '9130',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-03T12:00:00.000Z',
           estimatedTrafficUsd: null,
           parties: ['Alice'],
@@ -2828,7 +3003,9 @@ describe('PqsSummaryService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining("update_event_templates.template_id not like 'Splice.%'"),
+      expect.stringContaining(
+        "update_event_templates.template_id not like 'Splice.%'",
+      ),
     );
     expect(fetchEventsSpy).not.toHaveBeenCalled();
   });
@@ -2878,8 +3055,14 @@ describe('PqsSummaryService', () => {
       },
     );
 
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('tx.offset < 110'));
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('limit 3'));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('tx.offset < 110'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('limit 3'),
+    );
     expect(updates).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -2910,76 +3093,78 @@ describe('PqsSummaryService', () => {
       getRawExecutor: async () => ({ query: jest.fn() }),
     } as never);
 
-    jest.spyOn(service, 'fetchRecentUpdates').mockImplementation(async (node, options) => {
-      expect(options).toEqual(
-        expect.objectContaining({
-          limit: 3,
-          parties: ['Alice'],
-          partyMode: 'and',
-          hideSplice: true,
-        }),
-      );
-      expect(options).not.toHaveProperty('before', '202');
-      expect(options).not.toHaveProperty('after', '202');
+    jest
+      .spyOn(service, 'fetchRecentUpdates')
+      .mockImplementation(async (node, options) => {
+        expect(options).toEqual(
+          expect.objectContaining({
+            limit: 3,
+            parties: ['Alice'],
+            partyMode: 'and',
+            hideSplice: true,
+          }),
+        );
+        expect(options).not.toHaveProperty('before', '202');
+        expect(options).not.toHaveProperty('after', '202');
 
-      if (node.id === 'participant-1') {
+        if (node.id === 'participant-1') {
+          return {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            limit: 3,
+            nextBefore: null,
+            nextAfter: null,
+            updates: [
+              {
+                eventOffset: '103',
+                updateId: '00000000000000000000000000000003',
+                recordTime: '2026-07-01T12:03:00.000Z',
+                parties: ['Alice'],
+              },
+              {
+                eventOffset: '101',
+                updateId: '00000000000000000000000000000001',
+                recordTime: '2026-07-01T12:01:00.000Z',
+                parties: ['Alice'],
+              },
+              {
+                eventOffset: '099',
+                updateId: '00000000000000000000000000000000',
+                recordTime: '2026-07-01T11:59:00.000Z',
+                parties: ['Alice'],
+              },
+            ],
+          };
+        }
+
         return {
-          nodeId: 'participant-1',
-          label: 'Participant 1',
-          limit: 3,
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          limit: 4,
           nextBefore: null,
           nextAfter: null,
           updates: [
             {
-              eventOffset: '103',
-              updateId: '00000000000000000000000000000003',
-              recordTime: '2026-07-01T12:03:00.000Z',
+              eventOffset: '202',
+              updateId: '00000000000000000000000000000012',
+              recordTime: '2026-07-01T12:02:00.000Z',
               parties: ['Alice'],
             },
             {
-              eventOffset: '101',
-              updateId: '00000000000000000000000000000001',
+              eventOffset: '201',
+              updateId: '00000000000000000000000000000011',
               recordTime: '2026-07-01T12:01:00.000Z',
               parties: ['Alice'],
             },
             {
-              eventOffset: '099',
-              updateId: '00000000000000000000000000000000',
-              recordTime: '2026-07-01T11:59:00.000Z',
+              eventOffset: '198',
+              updateId: '00000000000000000000000000000010',
+              recordTime: '2026-07-01T11:58:00.000Z',
               parties: ['Alice'],
             },
           ],
         };
-      }
-
-      return {
-        nodeId: 'participant-2',
-        label: 'Participant 2',
-        limit: 4,
-        nextBefore: null,
-        nextAfter: null,
-        updates: [
-          {
-            eventOffset: '202',
-            updateId: '00000000000000000000000000000012',
-            recordTime: '2026-07-01T12:02:00.000Z',
-            parties: ['Alice'],
-          },
-          {
-            eventOffset: '201',
-            updateId: '00000000000000000000000000000011',
-            recordTime: '2026-07-01T12:01:00.000Z',
-            parties: ['Alice'],
-          },
-          {
-            eventOffset: '198',
-            updateId: '00000000000000000000000000000010',
-            recordTime: '2026-07-01T11:58:00.000Z',
-            parties: ['Alice'],
-          },
-        ],
-      };
-    });
+      });
 
     const nodes = [
       {
@@ -3006,10 +3191,11 @@ describe('PqsSummaryService', () => {
       hideSplice: true,
     });
 
-    expect(firstPage.updates.map((update) => `${update.nodeId}:${update.eventOffset}`)).toEqual([
-      'participant-1:103',
-      'participant-2:202',
-    ]);
+    expect(
+      firstPage.updates.map(
+        (update) => `${update.nodeId}:${update.eventOffset}`,
+      ),
+    ).toEqual(['participant-1:103', 'participant-2:202']);
     expect(firstPage.nextBefore).toEqual(expect.any(String));
     expect(firstPage.nextBefore).not.toBe('202');
     expect(firstPage.nextAfter).toBeNull();
@@ -3021,10 +3207,11 @@ describe('PqsSummaryService', () => {
       hideSplice: true,
     });
 
-    expect(olderPage.updates.map((update) => `${update.nodeId}:${update.eventOffset}`)).toEqual([
-      'participant-1:101',
-      'participant-2:201',
-    ]);
+    expect(
+      olderPage.updates.map(
+        (update) => `${update.nodeId}:${update.eventOffset}`,
+      ),
+    ).toEqual(['participant-1:101', 'participant-2:201']);
     expect(olderPage.nextAfter).toEqual(expect.any(String));
     expect(olderPage.nextBefore).toEqual(expect.any(String));
   });
@@ -3037,27 +3224,29 @@ describe('PqsSummaryService', () => {
       fetchRecentUpdates: jest.Mock;
     };
 
-    serviceWithFetch.fetchRecentUpdates = jest.fn(async (node: { id: string; label: string }) => {
-      if (node.id === 'participant-2') {
-        throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
-      }
+    serviceWithFetch.fetchRecentUpdates = jest.fn(
+      async (node: { id: string; label: string }) => {
+        if (node.id === 'participant-2') {
+          throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+        }
 
-      return {
-        nodeId: node.id,
-        label: node.label,
-        limit: 25,
-        nextBefore: null,
-        nextAfter: null,
-        updates: [
-          {
-            eventOffset: '103',
-            updateId: 'update-103',
-            recordTime: '2026-07-01T12:03:00.000Z',
-            parties: ['Alice'],
-          },
-        ],
-      };
-    });
+        return {
+          nodeId: node.id,
+          label: node.label,
+          limit: 25,
+          nextBefore: null,
+          nextAfter: null,
+          updates: [
+            {
+              eventOffset: '103',
+              updateId: 'update-103',
+              recordTime: '2026-07-01T12:03:00.000Z',
+              parties: ['Alice'],
+            },
+          ],
+        };
+      },
+    );
 
     await expect(
       service.fetchGlobalRecentUpdates(
@@ -3127,7 +3316,9 @@ describe('PqsSummaryService', () => {
       ),
     ).resolves.toEqual(typedNodeContractsFixture);
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by tx.offset desc'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('order by tx.offset desc'),
+    );
     expect(query).toHaveBeenCalledWith(expect.stringContaining('limit 3'));
   });
 
@@ -3139,26 +3330,28 @@ describe('PqsSummaryService', () => {
       fetchNodeContracts: jest.Mock;
     };
 
-    serviceWithFetch.fetchNodeContracts = jest.fn(async (node: { id: string; label: string }) => {
-      if (node.id === 'participant-2') {
-        throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
-      }
+    serviceWithFetch.fetchNodeContracts = jest.fn(
+      async (node: { id: string; label: string }) => {
+        if (node.id === 'participant-2') {
+          throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+        }
 
-      return {
-        nodeId: node.id,
-        label: node.label,
-        limit: 25,
-        nextBefore: null,
-        nextAfter: null,
-        contracts: [
-          {
-            contractId: '00abc',
-            templateId: 'Main:Vault',
-            createdRecordTime: '2026-07-01T12:03:00.000Z',
-          },
-        ],
-      };
-    });
+        return {
+          nodeId: node.id,
+          label: node.label,
+          limit: 25,
+          nextBefore: null,
+          nextAfter: null,
+          contracts: [
+            {
+              contractId: '00abc',
+              templateId: 'Main:Vault',
+              createdRecordTime: '2026-07-01T12:03:00.000Z',
+            },
+          ],
+        };
+      },
+    );
 
     await expect(
       service.fetchGlobalContracts(
@@ -3192,20 +3385,22 @@ describe('PqsSummaryService', () => {
       fetchNodeContracts: jest.Mock;
     };
 
-    serviceWithFetch.fetchNodeContracts = jest.fn(async (node: { id: string; label: string }) => ({
-      nodeId: node.id,
-      label: node.label,
-      limit: 25,
-      nextBefore: null,
-      nextAfter: null,
-      contracts: [
-        {
-          contractId: `contract-${node.id}`,
-          templateId: 'Main:Vault',
-          createdRecordTime: '2026-07-01T12:03:00.000Z',
-        },
-      ],
-    }));
+    serviceWithFetch.fetchNodeContracts = jest.fn(
+      async (node: { id: string; label: string }) => ({
+        nodeId: node.id,
+        label: node.label,
+        limit: 25,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: [
+          {
+            contractId: `contract-${node.id}`,
+            templateId: 'Main:Vault',
+            createdRecordTime: '2026-07-01T12:03:00.000Z',
+          },
+        ],
+      }),
+    );
 
     await expect(
       service.fetchGlobalContracts(
@@ -3214,7 +3409,7 @@ describe('PqsSummaryService', () => {
           { id: 'participant-2', label: 'Participant 2' },
         ] as never,
         10,
-        { nodeIds: ['participant-2'] } as never,
+        { nodeIds: ['participant-2'] },
       ),
     ).resolves.toMatchObject({
       contracts: [expect.objectContaining({ nodeId: 'participant-2' })],
@@ -3241,7 +3436,7 @@ describe('PqsSummaryService', () => {
       service.fetchGlobalContracts(
         [{ id: 'participant-1', label: 'Participant 1' }] as never,
         10,
-        { nodeIds: [] } as never,
+        { nodeIds: [] },
       ),
     ).resolves.toEqual({
       limit: 10,
@@ -3377,8 +3572,12 @@ describe('PqsSummaryService', () => {
       ],
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('tx.offset > 101'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by tx.offset asc'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('tx.offset > 101'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('order by tx.offset asc'),
+    );
   });
 
   it('adds template and hide-splice filters to the ACS query', async () => {
@@ -3409,8 +3608,12 @@ describe('PqsSummaryService', () => {
       { limit: 25, templates: ['Main:Asset'], hideSplice: true },
     );
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("end = 'Main:Asset'"));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("end not like 'Splice.%'"));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("end = 'Main:Asset'"),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("end not like 'Splice.%'"),
+    );
   });
 
   it('joins ACS party filters with OR by default', async () => {
@@ -3442,10 +3645,14 @@ describe('PqsSummaryService', () => {
     );
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("array['Alice', 'p|Alice']::text[] && contract_row.witnesses"),
+      expect.stringContaining(
+        "array['Alice', 'p|Alice']::text[] && contract_row.witnesses",
+      ),
     );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("array['Bob', 'p|Bob']::text[] && contract_row.witnesses"),
+      expect.stringContaining(
+        "array['Bob', 'p|Bob']::text[] && contract_row.witnesses",
+      ),
     );
     expect(query).toHaveBeenCalledWith(expect.stringContaining('\n      or '));
   });
@@ -3554,7 +3761,10 @@ describe('PqsSummaryService', () => {
       1,
       expect.stringContaining('from "public"."__exercises" exercise_row'),
     );
-    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Alice'"));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("'Alice'"),
+    );
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Bob'"));
     expect(updates).toEqual({
       nodeId: 'participant-1',
@@ -3633,7 +3843,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3642,7 +3853,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3653,7 +3865,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3662,7 +3875,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3673,7 +3887,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3682,7 +3897,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3710,38 +3926,54 @@ describe('PqsSummaryService', () => {
     };
 
     await expect(
-      serviceWithDetail.fetchUpdateDetail?.call(service, node, '0000000000000001'),
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
+        node,
+        '0000000000000001',
+      ),
     ).resolves.toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
       eventOffset: '0000000000000001',
-      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      updateId:
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
       estimatedTrafficUsd: null,
       events: [],
       meta: {
-        update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+        update_id:
+          '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
         record_time: '2026-07-01T12:00:00.000Z',
         event_offset: '0000000000000001',
       },
     });
 
     await expect(
-      serviceWithDetail.fetchUpdateDetail?.call(service, node, '0000000000000001'),
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
+        node,
+        '0000000000000001',
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         eventOffset: '0000000000000001',
-        updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+        updateId:
+          '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       }),
     );
 
     await expect(
-      serviceWithDetail.fetchUpdateDetail?.call(service, node, '0000000000000001'),
+      serviceWithDetail.fetchUpdateDetail?.call(
+        service,
+        node,
+        '0000000000000001',
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         eventOffset: '0000000000000001',
-        updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+        updateId:
+          '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       }),
     );
 
@@ -3796,7 +4028,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3844,7 +4077,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -3853,7 +4087,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -3868,7 +4103,8 @@ describe('PqsSummaryService', () => {
             choice: null,
             witnesses: ['Alice', 'Bob'],
             raw: {
-              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3883,7 +4119,8 @@ describe('PqsSummaryService', () => {
             choice: 'Archive',
             witnesses: ['Alice'],
             raw: {
-              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:1',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3925,7 +4162,8 @@ describe('PqsSummaryService', () => {
             createData: null,
             exerciseData: null,
             raw: {
-              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3943,7 +4181,8 @@ describe('PqsSummaryService', () => {
             createData: null,
             exerciseData: null,
             raw: {
-              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:1',
               contract_id: '00abc',
               template_id: 'Main:Asset',
@@ -3979,7 +4218,9 @@ describe('PqsSummaryService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining('order by update_id asc nulls last, event_id asc nulls last'),
+      expect.stringContaining(
+        'order by update_id asc nulls last, event_id asc nulls last',
+      ),
     );
   });
 
@@ -3989,10 +4230,12 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
+            update_id:
+              '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
             record_time_iso: '2026-07-02T10:55:21.000Z',
             meta: {
-              update_id: '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
+              update_id:
+                '\\x12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
               event_offset: '39',
               record_time: 1782989721000000,
             },
@@ -4002,7 +4245,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
+            update_id:
+              '12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
             parties: ['Alice', 'Bob'],
           },
         ],
@@ -4027,7 +4271,8 @@ describe('PqsSummaryService', () => {
             event_id: '#0:12',
             contract_id:
               '00e072d1af33d8e9eedf85cdafe3bb122cf74beaf77aed62d9dd3e9060278a7de7ca121220f2b77ff18dc0c6923a6acf5b7ed90c846e08e0a2c57edfd57e536564c2f740c7',
-            template_id: 't|#splice-wallet:Splice.Wallet.Install:WalletAppInstall',
+            template_id:
+              't|#splice-wallet:Splice.Wallet.Install:WalletAppInstall',
             choice: 'c|WalletAppInstall_ExecuteBatch',
             witnesses: ['Alice'],
             raw: {
@@ -4119,7 +4364,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             event_offset: '0000000000000001',
             record_time: '2026-07-01T12:00:00.000Z',
           },
@@ -4128,7 +4374,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             parties: ['Alice'],
           },
         ],
@@ -4143,7 +4390,8 @@ describe('PqsSummaryService', () => {
             choice: null,
             witnesses: ['Alice'],
             raw: {
-              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               tree_event_witnesses: ['Alice'],
@@ -4176,7 +4424,8 @@ describe('PqsSummaryService', () => {
             eventKind: 'create',
             templateId: null,
             raw: {
-              update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+              update_id:
+                '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
               event_id: '#0:0',
               contract_id: '00abc',
               tree_event_witnesses: ['Alice'],
@@ -4193,7 +4442,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
+            update_id:
+              '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
             event_offset: '9130',
             record_time: '2026-07-02T03:50:00.000Z',
           },
@@ -4202,7 +4452,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
+            update_id:
+              '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
             parties: ['sv::party'],
           },
         ],
@@ -4212,7 +4463,8 @@ describe('PqsSummaryService', () => {
           {
             event_kind: 'non_consuming_exercise',
             event_id: '#0:0',
-            contract_id: '00966590c35cea9eb8357db014e64b1197499f2a58320f1eaff6a25719aa78ddb4',
+            contract_id:
+              '00966590c35cea9eb8357db014e64b1197499f2a58320f1eaff6a25719aa78ddb4',
             template_id: 't|#splice-dso-governance:Splice.DsoRules:DsoRules',
             choice: 'c|DsoRules_ReceiveSvRewardCoupon',
             witnesses: ['sv::party'],
@@ -4223,7 +4475,8 @@ describe('PqsSummaryService', () => {
           {
             event_kind: 'create',
             event_id: '#0:5',
-            contract_id: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+            contract_id:
+              '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
             template_id: 'Splice.Amulet:SvRewardCoupon',
             choice: null,
             witnesses: ['sv::party'],
@@ -4279,7 +4532,8 @@ describe('PqsSummaryService', () => {
                       label: 'couponContractId',
                       value: {
                         kind: 'contract_id',
-                        value: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+                        value:
+                          '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
                       },
                     },
                   ],
@@ -4319,7 +4573,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220c4d4cb71a7824ad32684cbb91ba37b285cec60a45c94c561531c2b1cfaf689b8',
+            update_id:
+              '1220c4d4cb71a7824ad32684cbb91ba37b285cec60a45c94c561531c2b1cfaf689b8',
             event_offset: '11327',
             record_time: '2026-07-02T17:20:00.000Z',
           },
@@ -4328,8 +4583,11 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            update_id: '1220c4d4cb71a7824ad32684cbb91ba37b285cec60a45c94c561531c2b1cfaf689b8',
-            parties: ['sv::1220b4ee7468a5025b999cf14a12569eaaf1de7f1441d0cc6c54f759574825e552b9'],
+            update_id:
+              '1220c4d4cb71a7824ad32684cbb91ba37b285cec60a45c94c561531c2b1cfaf689b8',
+            parties: [
+              'sv::1220b4ee7468a5025b999cf14a12569eaaf1de7f1441d0cc6c54f759574825e552b9',
+            ],
           },
         ],
       })
@@ -4341,9 +4599,12 @@ describe('PqsSummaryService', () => {
             contract_id:
               '00966590c35cea9eb8357db014e64b1197499f2a58320f1eaff6a25719aa78ddb4ca1212201db4c45f5974070e20c390d2bf5eebc07635beb7af47b8f203f4839829120488',
             template_id: 't|#splice-dso-governance:Splice.DsoRules:DsoRules',
-            package_id: 'i|4974c654485d4ecaa6b5caf8ef3c2679efa8195c4b50d4965a8fff1b72e8efa4',
+            package_id:
+              'i|4974c654485d4ecaa6b5caf8ef3c2679efa8195c4b50d4965a8fff1b72e8efa4',
             choice: 'c|DsoRules_SubmitStatusReport',
-            witnesses: ['sv::1220b4ee7468a5025b999cf14a12569eaaf1de7f1441d0cc6c54f759574825e552b9'],
+            witnesses: [
+              'sv::1220b4ee7468a5025b999cf14a12569eaaf1de7f1441d0cc6c54f759574825e552b9',
+            ],
             exercise_argument: SUBMIT_STATUS_REPORT_ARGUMENT,
             exercise_result: SUBMIT_STATUS_REPORT_RESULT,
             raw: {
@@ -4436,7 +4697,8 @@ describe('PqsSummaryService', () => {
 
   it('returns contract detail with created update metadata and decoded contract data', async () => {
     const findUnique = jest.fn().mockResolvedValue({
-      contractId: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+      contractId:
+        '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
       templateId: {
         packageId: 'splice-amulet',
         moduleName: 'Splice.Amulet',
@@ -4447,7 +4709,8 @@ describe('PqsSummaryService', () => {
       createdEventOffset: '9130',
       archivedEventOffset: null,
       createdTransaction: {
-        transactionId: '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
+        transactionId:
+          '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
         offset: '9130',
         effectiveAt: new Date('2026-07-02T03:50:00.000Z'),
       },
@@ -4486,12 +4749,14 @@ describe('PqsSummaryService', () => {
     ).resolves.toEqual({
       nodeId: 'cnqs-sv',
       label: 'CNQS Super Validator',
-      contractId: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+      contractId:
+        '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
       templateId: 'Splice.Amulet:SvRewardCoupon',
       packageId: 'splice-amulet',
       packageName: 'splice-amulet',
       packageVersion: '0.1.24',
-      createdUpdateId: '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
+      createdUpdateId:
+        '122062f9df8def1e8bb8b495505e0fe889bee2e7af580ab08ec799f2103ddf67c4cd',
       createdEventOffset: '9130',
       createdRecordTime: '2026-07-02T03:50:00.000Z',
       archivedUpdateId: null,
@@ -4511,7 +4776,8 @@ describe('PqsSummaryService', () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: {
-        contractId: '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
+        contractId:
+          '001fcf4bfc68ce9fd303f206ad839bfaba1fa714b2bf8f41304bc7701baf90736c',
       },
       include: { createdTransaction: true, archivedTransaction: true },
     });
@@ -4529,16 +4795,19 @@ describe('PqsSummaryService', () => {
       contractId:
         '00e072d1af33d8e9eedf85cdafe3bb122cf74beaf77aed62d9dd3e9060278a7de7ca121220f2b77ff18dc0c6923a6acf5b7ed90c846e08e0a2c57edfd57e536564c2f740c7',
       templateId: {
-        packageId: '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
+        packageId:
+          '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
         moduleName: 'Splice.Wallet.Install',
         entityName: 'WalletAppInstall',
       },
-      packageId: '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
+      packageId:
+        '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
       payload: WALLET_APP_INSTALL_INSTANCE,
       createdEventOffset: '39',
       archivedEventOffset: null,
       createdTransaction: {
-        transactionId: '12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
+        transactionId:
+          '12206f756ff544575b5bda691dcd828cd98c772ff4fa99ec9343c19ffc0d2e1077c3',
         offset: '39',
         effectiveAt: new Date('2026-07-02T10:55:21.000Z'),
       },
@@ -4552,7 +4821,8 @@ describe('PqsSummaryService', () => {
       decoder,
       {
         getPackage: () => ({
-          packageId: '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
+          packageId:
+            '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
           name: 'splice-wallet',
           version: '0.1.19',
           uploadedAt: '1782930612094920',
@@ -4577,7 +4847,8 @@ describe('PqsSummaryService', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         templateId: 'Splice.Wallet.Install:WalletAppInstall',
-        packageId: '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
+        packageId:
+          '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
         packageName: 'splice-wallet',
         packageVersion: '0.1.19',
         contractData: {
@@ -4627,7 +4898,9 @@ describe('PqsSummaryService', () => {
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([
       { id: 'participant-1', label: 'Participant 1' } as never,
@@ -4712,7 +4985,9 @@ describe('PqsSummaryService', () => {
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
@@ -4780,7 +5055,9 @@ describe('PqsSummaryService', () => {
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
@@ -4813,7 +5090,9 @@ describe('PqsSummaryService', () => {
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
@@ -4972,8 +5251,12 @@ describe('PqsSummaryService', () => {
     ).fetchTokens([node]);
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
-    expect(packageSyncService.syncPackagesById).toHaveBeenCalledWith(node, ['vault-base-package']);
-    expect(packageRegistry.invalidatePackage).toHaveBeenCalledWith('vault-base-package');
+    expect(packageSyncService.syncPackagesById).toHaveBeenCalledWith(node, [
+      'vault-base-package',
+    ]);
+    expect(packageRegistry.invalidatePackage).toHaveBeenCalledWith(
+      'vault-base-package',
+    );
     expect(response).toEqual({
       limit: 25,
       nextBefore: null,
@@ -5029,86 +5312,88 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'cip112-underlying-1':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'issuer', value: 'Issuer' },
-                    { label: 'instrumentIdText', value: 'USDCx' },
-                    { label: 'owner', value: 'Alice' },
-                    { label: 'amount', value: '150.0000000000' },
-                    { label: 'name', value: 'USDCx' },
-                  ],
-                },
-              };
-            case 'cip112-share-1':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    {
-                      label: 'vaultIdentity',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'VaultAdmin' },
-                          { label: 'id', value: 'vault-1' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'cip112-underlying-1':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'issuer', value: 'Issuer' },
+                      { label: 'instrumentIdText', value: 'USDCx' },
+                      { label: 'owner', value: 'Alice' },
+                      { label: 'amount', value: '150.0000000000' },
+                      { label: 'name', value: 'USDCx' },
+                    ],
+                  },
+                };
+              case 'cip112-share-1':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      {
+                        label: 'vaultIdentity',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'VaultAdmin' },
+                            { label: 'id', value: 'vault-1' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'owner', value: 'Alice' },
-                    { label: 'name', value: 'USDCx Test Vault Share' },
-                    { label: 'symbol', value: 'vUSDCx-SHARE' },
-                    { label: 'amount', value: '55.0000000000' },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Alice' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                      { label: 'owner', value: 'Alice' },
+                      { label: 'name', value: 'USDCx Test Vault Share' },
+                      { label: 'symbol', value: 'vUSDCx-SHARE' },
+                      { label: 'amount', value: '55.0000000000' },
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Alice' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'amount', value: '150.0000000000' },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      { label: 'amount', value: '150.0000000000' },
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const grpcOperationsService = {
       fetchHoldingV2Tokens: jest.fn().mockResolvedValue([
@@ -5145,7 +5430,9 @@ describe('PqsSummaryService', () => {
           nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
         ) => Promise<TokensResponse>;
       }
-    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' }]);
+    ).fetchTokens([
+      { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+    ]);
 
     expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'participant-1' }),
@@ -5232,7 +5519,9 @@ describe('PqsSummaryService', () => {
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
@@ -5307,7 +5596,9 @@ describe('PqsSummaryService', () => {
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
@@ -5553,7 +5844,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-1',
           event_offset: '101',
           record_time: '2026-07-07T11:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-1'),
         },
@@ -5565,7 +5857,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-2',
           event_offset: '202',
           record_time: '2026-07-07T12:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-2'),
         },
@@ -5574,40 +5867,43 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => ({
-          status: 'decoded',
-          value: {
-            kind: 'record',
-            fields: [
-              {
-                label: 'transfer',
-                value:
-                  contractInstance.toString() === 'transfer-2'
-                    ? {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Alice' },
-                          { label: 'receiver', value: 'Bob' },
-                          { label: 'amount', value: '42.0' },
-                        ],
-                      }
-                    : {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Carol' },
-                          { label: 'receiver', value: 'Dave' },
-                          { label: 'amount', value: '12.5' },
-                        ],
-                      },
-              },
-            ],
-          },
-        })),
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => ({
+            status: 'decoded',
+            value: {
+              kind: 'record',
+              fields: [
+                {
+                  label: 'transfer',
+                  value:
+                    contractInstance.toString() === 'transfer-2'
+                      ? {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Alice' },
+                            { label: 'receiver', value: 'Bob' },
+                            { label: 'amount', value: '42.0' },
+                          ],
+                        }
+                      : {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Carol' },
+                            { label: 'receiver', value: 'Dave' },
+                            { label: 'amount', value: '12.5' },
+                          ],
+                        },
+                },
+              ],
+            },
+          }),
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -5713,7 +6009,8 @@ describe('PqsSummaryService', () => {
           fields: [
             {
               label: 'dso',
-              value: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
+              value:
+                'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
             },
             { label: 'owner', value: 'RewardReceiver' },
             {
@@ -5742,14 +6039,18 @@ describe('PqsSummaryService', () => {
           options?: { before?: string; after?: string },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers([{ id: 'cnqs-sv', label: 'CNQS Super Validator' }], 25);
+    ).fetchLatestTokenTransfers(
+      [{ id: 'cnqs-sv', label: 'CNQS Super Validator' }],
+      25,
+    );
 
     expect(response.transfers).toEqual([
       {
         tokenId: 'canton-coin',
         tokenName: 'Canton Coin',
         amount: '20000',
-        sender: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
+        sender:
+          'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
         receiver: 'RewardReceiver',
         updateId: 'token-update-amulet',
         recordTime: '2026-07-07T13:00:00.000Z',
@@ -5766,7 +6067,9 @@ describe('PqsSummaryService', () => {
 
   it('returns an empty transfer page when one node succeeds with no transfers and another node fails', async () => {
     const emptyQuery = jest.fn().mockResolvedValue({ rows: [] });
-    const failingQuery = jest.fn().mockRejectedValue(new Error('pqs unavailable'));
+    const failingQuery = jest
+      .fn()
+      .mockRejectedValue(new Error('pqs unavailable'));
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
@@ -5866,7 +6169,10 @@ describe('PqsSummaryService', () => {
           options?: { before?: string; after?: string },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers([{ id: 'participant-1', label: 'Participant 1' }], 25);
+    ).fetchLatestTokenTransfers(
+      [{ id: 'participant-1', label: 'Participant 1' }],
+      25,
+    );
 
     expect(response.transfers).toEqual([
       {
@@ -5895,7 +6201,8 @@ describe('PqsSummaryService', () => {
           update_id: 'shared-update-1',
           event_offset: '29615',
           record_time: '2026-07-07T12:54:23.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('shared-transfer'),
         },
@@ -5907,7 +6214,8 @@ describe('PqsSummaryService', () => {
           update_id: 'shared-update-1',
           event_offset: '58393',
           record_time: '2026-07-07T12:54:23.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('shared-transfer'),
         },
@@ -5945,7 +6253,8 @@ describe('PqsSummaryService', () => {
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -5972,7 +6281,8 @@ describe('PqsSummaryService', () => {
         tokenId: 'canton-coin',
         tokenName: 'Canton Coin',
         amount: '455660.1600000000',
-        sender: 'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
+        sender:
+          'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df',
         receiver:
           'app_provider_quickstart-helena-1::122083ea37f868bc1df967ab64179ba230e243296096d6333d3063f2f0de05d278bf',
         updateId: 'shared-update-1',
@@ -6000,7 +6310,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-1',
           event_offset: '101',
           record_time: '2026-07-07T11:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-1'),
         },
@@ -6012,7 +6323,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-2',
           event_offset: '202',
           record_time: '2026-07-07T12:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-2'),
         },
@@ -6021,40 +6333,43 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => ({
-          status: 'decoded',
-          value: {
-            kind: 'record',
-            fields: [
-              {
-                label: 'transfer',
-                value:
-                  contractInstance.toString() === 'transfer-2'
-                    ? {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Alice' },
-                          { label: 'receiver', value: 'Bob' },
-                          { label: 'amount', value: '42.0' },
-                        ],
-                      }
-                    : {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Carol' },
-                          { label: 'receiver', value: 'Dave' },
-                          { label: 'amount', value: '12.5' },
-                        ],
-                      },
-              },
-            ],
-          },
-        })),
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => ({
+            status: 'decoded',
+            value: {
+              kind: 'record',
+              fields: [
+                {
+                  label: 'transfer',
+                  value:
+                    contractInstance.toString() === 'transfer-2'
+                      ? {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Alice' },
+                            { label: 'receiver', value: 'Bob' },
+                            { label: 'amount', value: '42.0' },
+                          ],
+                        }
+                      : {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Carol' },
+                            { label: 'receiver', value: 'Dave' },
+                            { label: 'amount', value: '12.5' },
+                          ],
+                        },
+                },
+              ],
+            },
+          }),
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -6109,7 +6424,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-1',
           event_offset: '101',
           record_time: '2026-07-07T11:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-1'),
         },
@@ -6121,7 +6437,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-2',
           event_offset: '202',
           record_time: '2026-07-07T12:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-2'),
         },
@@ -6130,40 +6447,43 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => ({
-          status: 'decoded',
-          value: {
-            kind: 'record',
-            fields: [
-              {
-                label: 'transfer',
-                value:
-                  contractInstance.toString() === 'transfer-2'
-                    ? {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Alice' },
-                          { label: 'receiver', value: 'Bob' },
-                          { label: 'amount', value: '42.0' },
-                        ],
-                      }
-                    : {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Carol' },
-                          { label: 'receiver', value: 'Dave' },
-                          { label: 'amount', value: '12.5' },
-                        ],
-                      },
-              },
-            ],
-          },
-        })),
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => ({
+            status: 'decoded',
+            value: {
+              kind: 'record',
+              fields: [
+                {
+                  label: 'transfer',
+                  value:
+                    contractInstance.toString() === 'transfer-2'
+                      ? {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Alice' },
+                            { label: 'receiver', value: 'Bob' },
+                            { label: 'amount', value: '42.0' },
+                          ],
+                        }
+                      : {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Carol' },
+                            { label: 'receiver', value: 'Dave' },
+                            { label: 'amount', value: '12.5' },
+                          ],
+                        },
+                },
+              ],
+            },
+          }),
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -6218,7 +6538,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-1',
           event_offset: '101',
           record_time: '2026-07-07T11:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-1'),
         },
@@ -6230,7 +6551,8 @@ describe('PqsSummaryService', () => {
           update_id: 'token-update-2',
           event_offset: '202',
           record_time: '2026-07-07T12:00:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('transfer-2'),
         },
@@ -6239,40 +6561,43 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => ({
-          status: 'decoded',
-          value: {
-            kind: 'record',
-            fields: [
-              {
-                label: 'transfer',
-                value:
-                  contractInstance.toString() === 'transfer-2'
-                    ? {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Alice' },
-                          { label: 'receiver', value: 'Bob' },
-                          { label: 'amount', value: '42.0' },
-                        ],
-                      }
-                    : {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Carol' },
-                          { label: 'receiver', value: 'Dave' },
-                          { label: 'amount', value: '12.5' },
-                        ],
-                      },
-              },
-            ],
-          },
-        })),
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => ({
+            status: 'decoded',
+            value: {
+              kind: 'record',
+              fields: [
+                {
+                  label: 'transfer',
+                  value:
+                    contractInstance.toString() === 'transfer-2'
+                      ? {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Alice' },
+                            { label: 'receiver', value: 'Bob' },
+                            { label: 'amount', value: '42.0' },
+                          ],
+                        }
+                      : {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Carol' },
+                            { label: 'receiver', value: 'Dave' },
+                            { label: 'amount', value: '12.5' },
+                          ],
+                        },
+                },
+              ],
+            },
+          }),
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -6341,7 +6666,8 @@ describe('PqsSummaryService', () => {
           update_id: 'shared-update-1',
           event_offset: '29615',
           record_time: '2026-07-07T12:54:23.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('shared-transfer'),
         },
@@ -6353,7 +6679,8 @@ describe('PqsSummaryService', () => {
           update_id: 'shared-update-1',
           event_offset: '58393',
           record_time: '2026-07-07T12:54:23.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('shared-transfer'),
         },
@@ -6383,7 +6710,8 @@ describe('PqsSummaryService', () => {
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -6454,7 +6782,8 @@ describe('PqsSummaryService', () => {
           update_id: 'canton-update-1',
           event_offset: '903',
           record_time: '2026-07-07T14:12:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('canton-transfer'),
         },
@@ -6463,114 +6792,117 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'validator-license-transfer':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Alice' },
-                    { label: 'amount', value: '42.5000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'validator-license-transfer':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Alice' },
+                      { label: 'amount', value: '42.5000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            case 'validator-license-holding':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Alice' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                    ],
+                  },
+                };
+              case 'validator-license-holding':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Alice' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'amount', value: '150.0000000000' },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      { label: 'amount', value: '150.0000000000' },
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    {
-                      label: 'transfer',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Carol' },
-                          { label: 'receiver', value: 'Dave' },
-                          { label: 'amount', value: '12.5' },
-                        ],
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      {
+                        label: 'transfer',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Carol' },
+                            { label: 'receiver', value: 'Dave' },
+                            { label: 'amount', value: '12.5' },
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -6649,7 +6981,8 @@ describe('PqsSummaryService', () => {
               event_kind: 'consuming_exercise',
               event_id: '#0:3',
               contract_id: 'old-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: 'TransferUnderlying',
               witnesses: ['vault-party'],
@@ -6662,11 +6995,14 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:4',
               contract_id: 'new-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['vault-party'],
-              contract_instance: Buffer.from('new-underlying-contract-instance'),
+              contract_instance: Buffer.from(
+                'new-underlying-contract-instance',
+              ),
               exercise_argument: null,
               exercise_result: null,
               raw: {},
@@ -6693,57 +7029,59 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'new-underlying-contract-instance':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'issuer', value: 'Issuer' },
-                    { label: 'instrumentIdText', value: 'USDCx' },
-                    {
-                      label: 'transferPolicy',
-                      value: {
-                        kind: 'enum',
-                        constructor: 'StrictVaultTransfers',
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'new-underlying-contract-instance':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'issuer', value: 'Issuer' },
+                      { label: 'instrumentIdText', value: 'USDCx' },
+                      {
+                        label: 'transferPolicy',
+                        value: {
+                          kind: 'enum',
+                          constructor: 'StrictVaultTransfers',
+                        },
                       },
-                    },
-                    { label: 'account', value: { kind: 'unit' } },
-                    { label: 'amount', value: '100.0000000000' },
-                  ],
-                },
-              };
-            case 'new-share-contract-instance':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    {
-                      label: 'vaultIdentity',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'VaultAdmin' },
-                          { label: 'id', value: 'vault-1' },
-                        ],
+                      { label: 'account', value: { kind: 'unit' } },
+                      { label: 'amount', value: '100.0000000000' },
+                    ],
+                  },
+                };
+              case 'new-share-contract-instance':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      {
+                        label: 'vaultIdentity',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'VaultAdmin' },
+                            { label: 'id', value: 'vault-1' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'owner', value: 'Alice' },
-                    { label: 'name', value: 'USDCx Test Vault Share' },
-                    { label: 'symbol', value: 'vUSDCx-SHARE' },
-                    { label: 'amount', value: '100.0000000000' },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'not_available',
-              };
-          }
-        }),
+                      { label: 'owner', value: 'Alice' },
+                      { label: 'name', value: 'USDCx Test Vault Share' },
+                      { label: 'symbol', value: 'vUSDCx-SHARE' },
+                      { label: 'amount', value: '100.0000000000' },
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'not_available',
+                };
+            }
+          },
+        ),
       decodeExerciseValue: jest.fn().mockImplementation(() => ({
         argument: {
           status: 'decoded',
@@ -6795,7 +7133,8 @@ describe('PqsSummaryService', () => {
     );
     expect(response.transfers).toEqual([
       {
-        rowId: '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId:
+          '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'VaultAdmin::vault-1:share',
@@ -6814,7 +7153,8 @@ describe('PqsSummaryService', () => {
         ],
       },
       {
-        rowId: '1220aa11:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
+        rowId:
+          '1220aa11:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'Issuer::USDCx',
@@ -6864,11 +7204,14 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:4',
               contract_id: 'new-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['vault-party'],
-              contract_instance: Buffer.from('new-underlying-contract-instance'),
+              contract_instance: Buffer.from(
+                'new-underlying-contract-instance',
+              ),
               exercise_argument: null,
               exercise_result: null,
               raw: {},
@@ -6895,57 +7238,59 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'new-underlying-contract-instance':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'issuer', value: 'Issuer' },
-                    { label: 'instrumentIdText', value: 'USDCx' },
-                    {
-                      label: 'transferPolicy',
-                      value: {
-                        kind: 'enum',
-                        constructor: 'StrictVaultTransfers',
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'new-underlying-contract-instance':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'issuer', value: 'Issuer' },
+                      { label: 'instrumentIdText', value: 'USDCx' },
+                      {
+                        label: 'transferPolicy',
+                        value: {
+                          kind: 'enum',
+                          constructor: 'StrictVaultTransfers',
+                        },
                       },
-                    },
-                    { label: 'account', value: { kind: 'unit' } },
-                    { label: 'amount', value: '100.0000000000' },
-                  ],
-                },
-              };
-            case 'new-share-contract-instance':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    {
-                      label: 'vaultIdentity',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'VaultAdmin' },
-                          { label: 'id', value: 'vault-1' },
-                        ],
+                      { label: 'account', value: { kind: 'unit' } },
+                      { label: 'amount', value: '100.0000000000' },
+                    ],
+                  },
+                };
+              case 'new-share-contract-instance':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      {
+                        label: 'vaultIdentity',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'VaultAdmin' },
+                            { label: 'id', value: 'vault-1' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'owner', value: 'Alice' },
-                    { label: 'name', value: 'USDCx Test Vault Share' },
-                    { label: 'symbol', value: 'vUSDCx-SHARE' },
-                    { label: 'amount', value: '100.0000000000' },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'not_available',
-              };
-          }
-        }),
+                      { label: 'owner', value: 'Alice' },
+                      { label: 'name', value: 'USDCx Test Vault Share' },
+                      { label: 'symbol', value: 'vUSDCx-SHARE' },
+                      { label: 'amount', value: '100.0000000000' },
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'not_available',
+                };
+            }
+          },
+        ),
       decodeExerciseValue: jest.fn().mockImplementation(() => ({
         argument: { status: 'not_available' },
         result: { status: 'not_available' },
@@ -6970,7 +7315,8 @@ describe('PqsSummaryService', () => {
 
     expect(response.transfers).toEqual([
       {
-        rowId: '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId:
+          '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'VaultAdmin::vault-1:share',
@@ -6989,7 +7335,8 @@ describe('PqsSummaryService', () => {
         ],
       },
       {
-        rowId: '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
+        rowId:
+          '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'Issuer::USDCx',
@@ -7065,11 +7412,14 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:3',
               contract_id: 'new-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['Issuer', 'Bob'],
-              contract_instance: Buffer.from('new-underlying-contract-instance'),
+              contract_instance: Buffer.from(
+                'new-underlying-contract-instance',
+              ),
               exercise_argument: null,
               exercise_result: null,
               raw: {},
@@ -7083,38 +7433,120 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          if (contractInstance.toString() !== 'new-underlying-contract-instance') {
-            return {
-              status: 'not_available',
-            };
-          }
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            if (
+              contractInstance.toString() !== 'new-underlying-contract-instance'
+            ) {
+              return {
+                status: 'not_available',
+              };
+            }
 
-          return {
-            status: 'decoded',
-            value: {
-              kind: 'record',
-              fields: [
-                { label: 'issuer', value: 'Issuer' },
-                { label: 'instrumentIdText', value: 'USDCx' },
-                {
-                  label: 'transferPolicy',
-                  value: {
-                    kind: 'enum',
-                    constructor: 'StrictVaultTransfers',
+            return {
+              status: 'decoded',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'issuer', value: 'Issuer' },
+                  { label: 'instrumentIdText', value: 'USDCx' },
+                  {
+                    label: 'transferPolicy',
+                    value: {
+                      kind: 'enum',
+                      constructor: 'StrictVaultTransfers',
+                    },
                   },
-                },
-                { label: 'owner', value: 'Bob' },
-                { label: 'amount', value: '25.0000000000' },
-              ],
-            },
-          };
-        }),
+                  { label: 'owner', value: 'Bob' },
+                  { label: 'amount', value: '25.0000000000' },
+                ],
+              },
+            };
+          },
+        ),
       decodeExerciseValue: jest
         .fn()
-        .mockImplementation(({ exerciseArgument }: { exerciseArgument: Buffer | null }) => {
-          const argumentName = exerciseArgument?.toString();
-          if (argumentName === 'sender-eventlog-argument') {
+        .mockImplementation(
+          ({ exerciseArgument }: { exerciseArgument: Buffer | null }) => {
+            const argumentName = exerciseArgument?.toString();
+            if (argumentName === 'sender-eventlog-argument') {
+              return {
+                argument: {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'admin', value: 'Issuer' },
+                      {
+                        label: 'account',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'owner',
+                              value: { kind: 'optional', value: 'Alice' },
+                            },
+                            {
+                              label: 'provider',
+                              value: { kind: 'optional', value: null },
+                            },
+                            { label: 'id', value: '' },
+                          ],
+                        },
+                      },
+                      {
+                        label: 'transferLegSides',
+                        value: {
+                          kind: 'list',
+                          items: [
+                            {
+                              kind: 'record',
+                              fields: [
+                                { label: 'transferLegId', value: 'transfer-1' },
+                                {
+                                  label: 'side',
+                                  value: {
+                                    kind: 'enum',
+                                    constructor: 'SenderSide',
+                                  },
+                                },
+                                {
+                                  label: 'otherside',
+                                  value: {
+                                    kind: 'record',
+                                    fields: [
+                                      {
+                                        label: 'owner',
+                                        value: {
+                                          kind: 'optional',
+                                          value: 'Bob',
+                                        },
+                                      },
+                                      {
+                                        label: 'provider',
+                                        value: {
+                                          kind: 'optional',
+                                          value: null,
+                                        },
+                                      },
+                                      { label: 'id', value: '' },
+                                    ],
+                                  },
+                                },
+                                { label: 'amount', value: '25.0000000000' },
+                                { label: 'instrumentId', value: 'USDCx' },
+                              ],
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+                result: { status: 'decoded', value: { kind: 'unit' } },
+              };
+            }
+
             return {
               argument: {
                 status: 'decoded',
@@ -7129,7 +7561,7 @@ describe('PqsSummaryService', () => {
                         fields: [
                           {
                             label: 'owner',
-                            value: { kind: 'optional', value: 'Alice' },
+                            value: { kind: 'optional', value: 'Bob' },
                           },
                           {
                             label: 'provider',
@@ -7152,7 +7584,7 @@ describe('PqsSummaryService', () => {
                                 label: 'side',
                                 value: {
                                   kind: 'enum',
-                                  constructor: 'SenderSide',
+                                  constructor: 'ReceiverSide',
                                 },
                               },
                               {
@@ -7164,15 +7596,12 @@ describe('PqsSummaryService', () => {
                                       label: 'owner',
                                       value: {
                                         kind: 'optional',
-                                        value: 'Bob',
+                                        value: 'Alice',
                                       },
                                     },
                                     {
                                       label: 'provider',
-                                      value: {
-                                        kind: 'optional',
-                                        value: null,
-                                      },
+                                      value: { kind: 'optional', value: null },
                                     },
                                     { label: 'id', value: '' },
                                   ],
@@ -7190,81 +7619,8 @@ describe('PqsSummaryService', () => {
               },
               result: { status: 'decoded', value: { kind: 'unit' } },
             };
-          }
-
-          return {
-            argument: {
-              status: 'decoded',
-              value: {
-                kind: 'record',
-                fields: [
-                  { label: 'admin', value: 'Issuer' },
-                  {
-                    label: 'account',
-                    value: {
-                      kind: 'record',
-                      fields: [
-                        {
-                          label: 'owner',
-                          value: { kind: 'optional', value: 'Bob' },
-                        },
-                        {
-                          label: 'provider',
-                          value: { kind: 'optional', value: null },
-                        },
-                        { label: 'id', value: '' },
-                      ],
-                    },
-                  },
-                  {
-                    label: 'transferLegSides',
-                    value: {
-                      kind: 'list',
-                      items: [
-                        {
-                          kind: 'record',
-                          fields: [
-                            { label: 'transferLegId', value: 'transfer-1' },
-                            {
-                              label: 'side',
-                              value: {
-                                kind: 'enum',
-                                constructor: 'ReceiverSide',
-                              },
-                            },
-                            {
-                              label: 'otherside',
-                              value: {
-                                kind: 'record',
-                                fields: [
-                                  {
-                                    label: 'owner',
-                                    value: {
-                                      kind: 'optional',
-                                      value: 'Alice',
-                                    },
-                                  },
-                                  {
-                                    label: 'provider',
-                                    value: { kind: 'optional', value: null },
-                                  },
-                                  { label: 'id', value: '' },
-                                ],
-                              },
-                            },
-                            { label: 'amount', value: '25.0000000000' },
-                            { label: 'instrumentId', value: 'USDCx' },
-                          ],
-                        },
-                      ],
-                    },
-                  },
-                ],
-              },
-            },
-            result: { status: 'decoded', value: { kind: 'unit' } },
-          };
-        }),
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
@@ -7335,7 +7691,8 @@ describe('PqsSummaryService', () => {
               event_kind: 'non_consuming_exercise',
               event_id: '#0:1',
               contract_id: 'event-log-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingEventLog',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingEventLog',
               package_id: 'vault-base-package',
               choice: 'EventLog_HoldingsChange',
               witnesses: ['Issuer', 'Alice', 'Vault'],
@@ -7368,7 +7725,8 @@ describe('PqsSummaryService', () => {
               event_kind: 'non_consuming_exercise',
               event_id: '#0:2',
               contract_id: 'event-log-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingEventLog',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingEventLog',
               package_id: 'vault-base-package',
               choice: 'EventLog_HoldingsChange',
               witnesses: ['Issuer', 'Alice', 'Vault'],
@@ -7401,7 +7759,8 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:3',
               contract_id: 'new-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['Issuer', 'Vault'],
@@ -7493,11 +7852,14 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:4',
               contract_id: 'new-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['vault-party'],
-              contract_instance: Buffer.from('new-underlying-contract-instance'),
+              contract_instance: Buffer.from(
+                'new-underlying-contract-instance',
+              ),
               exercise_argument: null,
               exercise_result: null,
               raw: {},
@@ -7524,57 +7886,59 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'new-underlying-contract-instance':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'issuer', value: 'Issuer' },
-                    { label: 'instrumentIdText', value: 'USDCx' },
-                    {
-                      label: 'transferPolicy',
-                      value: {
-                        kind: 'enum',
-                        constructor: 'StrictVaultTransfers',
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'new-underlying-contract-instance':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'issuer', value: 'Issuer' },
+                      { label: 'instrumentIdText', value: 'USDCx' },
+                      {
+                        label: 'transferPolicy',
+                        value: {
+                          kind: 'enum',
+                          constructor: 'StrictVaultTransfers',
+                        },
                       },
-                    },
-                    { label: 'account', value: { kind: 'unit' } },
-                    { label: 'amount', value: '100.0000000000' },
-                  ],
-                },
-              };
-            case 'new-share-contract-instance':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    {
-                      label: 'vaultIdentity',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'VaultAdmin' },
-                          { label: 'id', value: 'vault-1' },
-                        ],
+                      { label: 'account', value: { kind: 'unit' } },
+                      { label: 'amount', value: '100.0000000000' },
+                    ],
+                  },
+                };
+              case 'new-share-contract-instance':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      {
+                        label: 'vaultIdentity',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'VaultAdmin' },
+                            { label: 'id', value: 'vault-1' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'owner', value: 'Alice' },
-                    { label: 'name', value: 'USDCx Test Vault Share' },
-                    { label: 'symbol', value: 'vUSDCx-SHARE' },
-                    { label: 'amount', value: '100.0000000000' },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'not_available',
-              };
-          }
-        }),
+                      { label: 'owner', value: 'Alice' },
+                      { label: 'name', value: 'USDCx Test Vault Share' },
+                      { label: 'symbol', value: 'vUSDCx-SHARE' },
+                      { label: 'amount', value: '100.0000000000' },
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'not_available',
+                };
+            }
+          },
+        ),
       decodeExerciseValue: jest.fn().mockImplementation(() => ({
         argument: { status: 'not_available' },
         result: { status: 'not_available' },
@@ -7602,7 +7966,8 @@ describe('PqsSummaryService', () => {
 
     expect(response.transfers).toEqual([
       {
-        rowId: '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId:
+          '1220cc33:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'VaultAdmin::vault-1:share',
@@ -7621,7 +7986,8 @@ describe('PqsSummaryService', () => {
         ],
       },
       {
-        rowId: '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
+        rowId:
+          '1220cc33:#0:4:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'Issuer::USDCx',
@@ -7684,11 +8050,14 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:1',
               contract_id: 'minted-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['mint-witness'],
-              contract_instance: Buffer.from('minted-underlying-contract-instance'),
+              contract_instance: Buffer.from(
+                'minted-underlying-contract-instance',
+              ),
               exercise_argument: null,
               exercise_result: null,
               raw: {},
@@ -7702,31 +8071,36 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          if (contractInstance.toString() !== 'minted-underlying-contract-instance') {
-            return { status: 'not_available' };
-          }
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            if (
+              contractInstance.toString() !==
+              'minted-underlying-contract-instance'
+            ) {
+              return { status: 'not_available' };
+            }
 
-          return {
-            status: 'decoded',
-            value: {
-              kind: 'record',
-              fields: [
-                { label: 'issuer', value: 'Issuer' },
-                { label: 'instrumentIdText', value: 'USDCx' },
-                {
-                  label: 'transferPolicy',
-                  value: {
-                    kind: 'enum',
-                    constructor: 'StrictVaultTransfers',
+            return {
+              status: 'decoded',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'issuer', value: 'Issuer' },
+                  { label: 'instrumentIdText', value: 'USDCx' },
+                  {
+                    label: 'transferPolicy',
+                    value: {
+                      kind: 'enum',
+                      constructor: 'StrictVaultTransfers',
+                    },
                   },
-                },
-                { label: 'account', value: { kind: 'unit' } },
-                { label: 'amount', value: '25.0000000000' },
-              ],
-            },
-          };
-        }),
+                  { label: 'account', value: { kind: 'unit' } },
+                  { label: 'amount', value: '25.0000000000' },
+                ],
+              },
+            };
+          },
+        ),
       decodeExerciseValue: jest.fn().mockImplementation(() => ({
         argument: { status: 'decoded', value: { kind: 'unit' } },
         result: { status: 'decoded', value: { kind: 'unit' } },
@@ -7758,7 +8132,8 @@ describe('PqsSummaryService', () => {
       expect.stringContaining('join "public"."__exercises" exercise_row'),
     );
     expect(response).toEqual({
-      rowId: '1220bb22:#0:1:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Mint',
+      rowId:
+        '1220bb22:#0:1:Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding:Mint',
       movementType: 'Mint',
       source: 'pqs_inferred_holding_v2',
       tokenId: 'Issuer::USDCx',
@@ -7814,7 +8189,8 @@ describe('PqsSummaryService', () => {
               event_kind: 'consuming_exercise',
               event_id: '#0:3',
               contract_id: 'old-underlying-contract-1',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: 'TransferUnderlying',
               witnesses: ['vault-party'],
@@ -7828,11 +8204,14 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:4',
               contract_id: 'new-underlying-contract-1',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['vault-party'],
-              contract_instance: Buffer.from('new-underlying-contract-instance'),
+              contract_instance: Buffer.from(
+                'new-underlying-contract-instance',
+              ),
               exercise_argument: null,
               exercise_result: null,
               raw: {},
@@ -7842,7 +8221,8 @@ describe('PqsSummaryService', () => {
               event_kind: 'consuming_exercise',
               event_id: '#0:3',
               contract_id: 'old-underlying-contract-2',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: 'TransferUnderlying',
               witnesses: ['vault-party'],
@@ -7856,11 +8236,14 @@ describe('PqsSummaryService', () => {
               event_kind: 'create',
               event_id: '#0:4',
               contract_id: 'new-underlying-contract-2',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: null,
               witnesses: ['vault-party'],
-              contract_instance: Buffer.from('new-underlying-contract-instance'),
+              contract_instance: Buffer.from(
+                'new-underlying-contract-instance',
+              ),
               exercise_argument: null,
               exercise_result: null,
               raw: {},
@@ -7874,39 +8257,43 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          if (contractInstance.toString() !== 'new-underlying-contract-instance') {
-            return {
-              status: 'not_available',
-            };
-          }
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            if (
+              contractInstance.toString() !== 'new-underlying-contract-instance'
+            ) {
+              return {
+                status: 'not_available',
+              };
+            }
 
-          return {
-            status: 'decoded',
-            value: {
-              kind: 'record',
-              fields: [
-                { label: 'issuer', value: 'Issuer' },
-                { label: 'instrumentIdText', value: 'USDCx' },
-                {
-                  label: 'transferPolicy',
-                  value: {
-                    kind: 'enum',
-                    constructor: 'StrictVaultTransfers',
+            return {
+              status: 'decoded',
+              value: {
+                kind: 'record',
+                fields: [
+                  { label: 'issuer', value: 'Issuer' },
+                  { label: 'instrumentIdText', value: 'USDCx' },
+                  {
+                    label: 'transferPolicy',
+                    value: {
+                      kind: 'enum',
+                      constructor: 'StrictVaultTransfers',
+                    },
                   },
-                },
-                {
-                  label: 'account',
-                  value: {
-                    kind: 'record',
-                    fields: [{ label: 'owner', value: 'Alice' }],
+                  {
+                    label: 'account',
+                    value: {
+                      kind: 'record',
+                      fields: [{ label: 'owner', value: 'Alice' }],
+                    },
                   },
-                },
-                { label: 'amount', value: '100.0000000000' },
-              ],
-            },
-          };
-        }),
+                  { label: 'amount', value: '100.0000000000' },
+                ],
+              },
+            };
+          },
+        ),
       decodeExerciseValue: jest.fn().mockImplementation(() => ({
         argument: {
           status: 'decoded',
@@ -7950,7 +8337,10 @@ describe('PqsSummaryService', () => {
           limit?: number,
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers([{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }], 25);
+    ).fetchLatestTokenTransfers(
+      [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }],
+      25,
+    );
 
     expect(
       query.mock.calls.filter(
@@ -7991,7 +8381,8 @@ describe('PqsSummaryService', () => {
           update_id: 'canton-update-1',
           event_offset: '903',
           record_time: '2026-07-07T14:12:00.000Z',
-          template_id: 'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
+          template_id:
+            'Splice.AmuletTransferInstruction:AmuletTransferInstruction',
           package_id: 'splice-amulet-package',
           contract_instance: Buffer.from('canton-transfer'),
         },
@@ -8000,115 +8391,118 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'validator-license-transfer-2':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Bob' },
-                    { label: 'amount', value: '10.0000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'validator-license-transfer-2':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Bob' },
+                      { label: 'amount', value: '10.0000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            case 'validator-license-transfer-1':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Alice' },
-                    { label: 'amount', value: '42.5000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                    ],
+                  },
+                };
+              case 'validator-license-transfer-1':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Alice' },
+                      { label: 'amount', value: '42.5000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    {
-                      label: 'transfer',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'sender', value: 'Carol' },
-                          { label: 'receiver', value: 'Dave' },
-                          { label: 'amount', value: '12.5' },
-                        ],
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      {
+                        label: 'transfer',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'sender', value: 'Carol' },
+                            { label: 'receiver', value: 'Dave' },
+                            { label: 'amount', value: '12.5' },
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -8215,90 +8609,92 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'validator-license-transfer-2':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Bob' },
-                    { label: 'amount', value: '10.0000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'validator-license-transfer-2':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Bob' },
+                      { label: 'amount', value: '10.0000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Alice' },
-                    { label: 'amount', value: '42.5000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Alice' },
+                      { label: 'amount', value: '42.5000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
@@ -8373,90 +8769,92 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'validator-license-transfer-2':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Bob' },
-                    { label: 'amount', value: '10.0000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'validator-license-transfer-2':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Bob' },
+                      { label: 'amount', value: '10.0000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Alice' },
-                    { label: 'amount', value: '42.5000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Alice' },
+                      { label: 'amount', value: '42.5000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
@@ -8531,90 +8929,92 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'validator-license-transfer-2':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Bob' },
-                    { label: 'amount', value: '10.0000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'validator-license-transfer-2':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Bob' },
+                      { label: 'amount', value: '10.0000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'sender', value: 'Issuer' },
-                    { label: 'receiver', value: 'Alice' },
-                    { label: 'amount', value: '42.5000000000' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'sender', value: 'Issuer' },
+                      { label: 'receiver', value: 'Alice' },
+                      { label: 'amount', value: '42.5000000000' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [
-                                { key: 'name', value: 'Validator License' },
-                                { key: 'symbol', value: 'VL' },
-                              ],
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                  { key: 'symbol', value: 'VL' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
@@ -8715,7 +9115,8 @@ describe('PqsSummaryService', () => {
               event_kind: 'consuming_exercise',
               event_id: '#0:3',
               contract_id: 'old-underlying-contract',
-              template_id: 'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
+              template_id:
+                'Oz.Vault.Base.TestToken.CIP112:TestUnderlyingHolding',
               package_id: 'vault-base-package',
               choice: 'TransferUnderlying',
               witnesses: ['vault-party'],
@@ -8746,36 +9147,38 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          if (contractInstance.toString() !== 'share-contract-instance') {
-            return {
-              status: 'not_available',
-            };
-          }
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            if (contractInstance.toString() !== 'share-contract-instance') {
+              return {
+                status: 'not_available',
+              };
+            }
 
-          return {
-            status: 'decoded',
-            value: {
-              kind: 'record',
-              fields: [
-                {
-                  label: 'vaultIdentity',
-                  value: {
-                    kind: 'record',
-                    fields: [
-                      { label: 'admin', value: 'LegacyVaultAdmin' },
-                      { label: 'id', value: 'legacy-vault-id' },
-                    ],
+            return {
+              status: 'decoded',
+              value: {
+                kind: 'record',
+                fields: [
+                  {
+                    label: 'vaultIdentity',
+                    value: {
+                      kind: 'record',
+                      fields: [
+                        { label: 'admin', value: 'LegacyVaultAdmin' },
+                        { label: 'id', value: 'legacy-vault-id' },
+                      ],
+                    },
                   },
-                },
-                { label: 'owner', value: 'Alice' },
-                { label: 'name', value: 'USDCx Test Vault Share' },
-                { label: 'symbol', value: 'vUSDCx-SHARE' },
-                { label: 'amount', value: '55.0000000000' },
-              ],
-            },
-          };
-        }),
+                  { label: 'owner', value: 'Alice' },
+                  { label: 'name', value: 'USDCx Test Vault Share' },
+                  { label: 'symbol', value: 'vUSDCx-SHARE' },
+                  { label: 'amount', value: '55.0000000000' },
+                ],
+              },
+            };
+          },
+        ),
       decodeExerciseValue: jest.fn().mockReturnValue({
         argument: {
           status: 'decoded',
@@ -8823,7 +9226,9 @@ describe('PqsSummaryService', () => {
       undefined,
       grpcOperationsService as never,
     );
-    const nodes = [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1', mode: 'pqs_with_grpc' }] as const;
+    const nodes = [
+      { id: 'cnqs-extra-1', label: 'CNQS Extra 1', mode: 'pqs_with_grpc' },
+    ] as const;
 
     const response = await (
       service as PqsSummaryService & {
@@ -8837,7 +9242,8 @@ describe('PqsSummaryService', () => {
 
     expect(response.transfers).toEqual([
       {
-        rowId: '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
+        rowId:
+          '1220aa11:#0:5:Oz.Vault.Base.ShareToken.CIP112:ShareHolding:Create',
         movementType: 'Create',
         source: 'pqs_inferred_holding_v2',
         tokenId: 'RegistryAdmin::USDCx-SHARE',
@@ -8894,88 +9300,95 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'alice-holding':
-            case 'alice-holding-shared':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Alice' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'alice-holding':
+              case 'alice-holding-shared':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Alice' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'amount', value: '150.0000000000' },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [{ key: 'name', value: 'Validator License' }],
+                      { label: 'amount', value: '150.0000000000' },
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Bob' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Bob' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'amount', value: '90.0000000000' },
-                    {
-                      label: 'meta',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          {
-                            label: 'values',
-                            value: {
-                              kind: 'text_map',
-                              entries: [{ key: 'name', value: 'Validator License' }],
+                      { label: 'amount', value: '90.0000000000' },
+                      {
+                        label: 'meta',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            {
+                              label: 'values',
+                              value: {
+                                kind: 'text_map',
+                                entries: [
+                                  { key: 'name', value: 'Validator License' },
+                                ],
+                              },
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -9091,7 +9504,9 @@ describe('PqsSummaryService', () => {
       expect.stringContaining('join "public"."__contracts" contract_row'),
     );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('join "public"."__contract_tpe" contract_tpe_row'),
+      expect.stringContaining(
+        'join "public"."__contract_tpe" contract_tpe_row',
+      ),
     );
     expect(response).toEqual({
       tokenId: 'VaultAdmin::vault-1:share',
@@ -9210,9 +9625,9 @@ describe('PqsSummaryService', () => {
       'RegistryAdmin::USDCx-SHARE',
     );
 
-    expect(grpcOperationsService.fetchHoldingV2TokenHolders).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'cnqs-extra-1' }),
-    );
+    expect(
+      grpcOperationsService.fetchHoldingV2TokenHolders,
+    ).toHaveBeenCalledWith(expect.objectContaining({ id: 'cnqs-extra-1' }));
     expect(response).toEqual({
       tokenId: 'RegistryAdmin::USDCx-SHARE',
       limit: 25,
@@ -9301,7 +9716,9 @@ describe('PqsSummaryService', () => {
 
     const response = await (
       service as PqsSummaryService & {
-        fetchTokens: (nodes: Array<{ id: string; label: string }>) => Promise<TokensResponse>;
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
       }
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
@@ -9364,66 +9781,69 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'alice-amulet-1':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Alice' },
-                    {
-                      label: 'amount',
-                      value: {
-                        kind: 'record',
-                        fields: [{ label: 'initialAmount', value: '25.0' }],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'alice-amulet-1':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Alice' },
+                      {
+                        label: 'amount',
+                        value: {
+                          kind: 'record',
+                          fields: [{ label: 'initialAmount', value: '25.0' }],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            case 'alice-amulet-2':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Alice' },
-                    {
-                      label: 'amount',
-                      value: {
-                        kind: 'record',
-                        fields: [{ label: 'initialAmount', value: '10.0' }],
+                    ],
+                  },
+                };
+              case 'alice-amulet-2':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Alice' },
+                      {
+                        label: 'amount',
+                        value: {
+                          kind: 'record',
+                          fields: [{ label: 'initialAmount', value: '10.0' }],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Bob' },
-                    {
-                      label: 'amount',
-                      value: {
-                        kind: 'record',
-                        fields: [{ label: 'initialAmount', value: '5.0' }],
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Bob' },
+                      {
+                        label: 'amount',
+                        value: {
+                          kind: 'record',
+                          fields: [{ label: 'initialAmount', value: '5.0' }],
+                        },
                       },
-                    },
-                  ],
-                },
-              };
-          }
-        }),
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       } as never,
       decoder as never,
@@ -9502,52 +9922,54 @@ describe('PqsSummaryService', () => {
     const decoder = {
       decodeContractInstance: jest
         .fn()
-        .mockImplementation(({ contractInstance }: { contractInstance: Buffer }) => {
-          switch (contractInstance.toString()) {
-            case 'alice-holding':
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Alice' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+        .mockImplementation(
+          ({ contractInstance }: { contractInstance: Buffer }) => {
+            switch (contractInstance.toString()) {
+              case 'alice-holding':
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Alice' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'amount', value: '150.0000000000' },
-                  ],
-                },
-              };
-            default:
-              return {
-                status: 'decoded',
-                value: {
-                  kind: 'record',
-                  fields: [
-                    { label: 'owner', value: 'Bob' },
-                    {
-                      label: 'instrumentId',
-                      value: {
-                        kind: 'record',
-                        fields: [
-                          { label: 'admin', value: 'Issuer' },
-                          { label: 'id', value: 'validator-license' },
-                        ],
+                      { label: 'amount', value: '150.0000000000' },
+                    ],
+                  },
+                };
+              default:
+                return {
+                  status: 'decoded',
+                  value: {
+                    kind: 'record',
+                    fields: [
+                      { label: 'owner', value: 'Bob' },
+                      {
+                        label: 'instrumentId',
+                        value: {
+                          kind: 'record',
+                          fields: [
+                            { label: 'admin', value: 'Issuer' },
+                            { label: 'id', value: 'validator-license' },
+                          ],
+                        },
                       },
-                    },
-                    { label: 'amount', value: '90.0000000000' },
-                  ],
-                },
-              };
-          }
-        }),
+                      { label: 'amount', value: '90.0000000000' },
+                    ],
+                  },
+                };
+            }
+          },
+        ),
     };
     const service = new PqsSummaryService(
       {
@@ -9624,7 +10046,9 @@ describe('PqsSummaryService', () => {
 
   it('throws when a token detail is requested for an unknown token id', async () => {
     const service = new PqsSummaryService({
-      getRawExecutor: async () => ({ query: jest.fn().mockResolvedValue({ rows: [] }) }),
+      getRawExecutor: async () => ({
+        query: jest.fn().mockResolvedValue({ rows: [] }),
+      }),
     } as never);
 
     await expect(
@@ -9635,7 +10059,10 @@ describe('PqsSummaryService', () => {
             tokenId: string,
           ) => Promise<unknown>;
         }
-      ).fetchTokenDetail([{ id: 'participant-1', label: 'Participant 1' }], 'missing-token'),
+      ).fetchTokenDetail(
+        [{ id: 'participant-1', label: 'Participant 1' }],
+        'missing-token',
+      ),
     ).rejects.toThrow('Token not found');
   });
 
@@ -9687,8 +10114,12 @@ describe('PqsSummaryService', () => {
         },
       ],
     });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("module_name = 'Splice.AmuletRules'"));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('exercise_row.argument as exercise_argument'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("module_name = 'Splice.AmuletRules'"),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('exercise_row.argument as exercise_argument'),
+    );
   });
 
   it('supports newer traffic purchase pages using an after cursor', async () => {
@@ -9741,8 +10172,12 @@ describe('PqsSummaryService', () => {
         { updateId: 'update-traffic-3', eventOffset: '43' },
       ],
     });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('tx.offset > 42'));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('order by tx.offset asc'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('tx.offset > 42'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('order by tx.offset asc'),
+    );
   });
 
   it('applies date, purchased traffic, and paid amount filters', async () => {
@@ -9770,10 +10205,22 @@ describe('PqsSummaryService', () => {
       },
     );
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("tx.effective_at >= '2026-07-01'::date"));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("tx.effective_at < ('2026-07-31'::date + interval '1 day')"));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("exercise_tpe_row.choice::text like '%AmuletRules_BuyMemberTraffic'"));
-    expect(query).toHaveBeenCalledWith(expect.not.stringContaining("exercise_row.argument->>'trafficAmount'"));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("tx.effective_at >= '2026-07-01'::date"),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "tx.effective_at < ('2026-07-31'::date + interval '1 day')",
+      ),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "exercise_tpe_row.choice::text like '%AmuletRules_BuyMemberTraffic'",
+      ),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.not.stringContaining("exercise_row.argument->>'trafficAmount'"),
+    );
   });
 
   it('merges selected node traffic purchases into one globally paginated result', async () => {
@@ -9816,10 +10263,22 @@ describe('PqsSummaryService', () => {
       });
 
     await expect(
-      (service as PqsSummaryService & { fetchGlobalTrafficPurchases: Function }).fetchGlobalTrafficPurchases(
+      (
+        service as PqsSummaryService & { fetchGlobalTrafficPurchases: Function }
+      ).fetchGlobalTrafficPurchases(
         [
-          { id: 'participant-1', label: 'Participant 1', role: 'participant', mode: 'pqs_only' },
-          { id: 'participant-2', label: 'Participant 2', role: 'participant', mode: 'pqs_only' },
+          {
+            id: 'participant-1',
+            label: 'Participant 1',
+            role: 'participant',
+            mode: 'pqs_only',
+          },
+          {
+            id: 'participant-2',
+            label: 'Participant 2',
+            role: 'participant',
+            mode: 'pqs_only',
+          },
         ] as never,
         10,
         { nodeIds: ['participant-1', 'participant-2'] },
@@ -9827,8 +10286,16 @@ describe('PqsSummaryService', () => {
     ).resolves.toMatchObject({
       limit: 10,
       purchases: [
-        { nodeId: 'participant-2', label: 'Participant 2', updateId: 'update-2' },
-        { nodeId: 'participant-1', label: 'Participant 1', updateId: 'update-1' },
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          updateId: 'update-2',
+        },
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          updateId: 'update-1',
+        },
       ],
     });
     expect(fetchTrafficPurchases).toHaveBeenNthCalledWith(
@@ -9851,15 +10318,18 @@ describe('PqsSummaryService', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ update_id: 'update-1', parties: ['Alice'] }] });
+      .mockResolvedValueOnce({
+        rows: [{ update_id: 'update-1', parties: ['Alice'] }],
+      });
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
     } as never);
     const trafficCostEstimateService = {
       estimate: jest.fn().mockResolvedValue('12.34'),
     };
-    (service as PqsSummaryService & { trafficCostEstimateService: unknown })
-      .trafficCostEstimateService = trafficCostEstimateService;
+    (
+      service as PqsSummaryService & { trafficCostEstimateService: unknown }
+    ).trafficCostEstimateService = trafficCostEstimateService;
     jest.spyOn(service, 'fetchTrafficPurchases').mockResolvedValue({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -9886,7 +10356,9 @@ describe('PqsSummaryService', () => {
       pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('tx.paid_traffic_cost::text'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('tx.paid_traffic_cost::text'),
+    );
     expect(trafficCostEstimateService.estimate).toHaveBeenCalledWith(
       '100',
       expect.objectContaining({ purchasedTraffic: '1000', amuletPaid: '5' }),
@@ -9908,10 +10380,11 @@ describe('PqsSummaryService', () => {
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
     } as never);
-    (service as PqsSummaryService & { trafficCostEstimateService: unknown })
-      .trafficCostEstimateService = {
-        estimate: jest.fn().mockResolvedValue('12.34'),
-      };
+    (
+      service as PqsSummaryService & { trafficCostEstimateService: unknown }
+    ).trafficCostEstimateService = {
+      estimate: jest.fn().mockResolvedValue('12.34'),
+    };
     jest.spyOn(service, 'fetchTrafficPurchases').mockResolvedValue({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -9928,21 +10401,28 @@ describe('PqsSummaryService', () => {
         },
       ],
     });
-    jest.spyOn(service as never, 'fetchPartiesByUpdateId' as never).mockResolvedValue(
-      new Map([['update-1', ['Alice']]]),
+    jest
+      .spyOn(service as never, 'fetchPartiesByUpdateId' as never)
+      .mockResolvedValue(new Map([['update-1', ['Alice']]]));
+    jest
+      .spyOn(service as never, 'fetchEventsByUpdateId' as never)
+      .mockResolvedValue([]);
+
+    const response = await service.fetchUpdateDetail(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      '10',
     );
-    jest.spyOn(service as never, 'fetchEventsByUpdateId' as never).mockResolvedValue([]);
 
-    const response = await service.fetchUpdateDetail({
-      id: 'participant-1',
-      label: 'Participant 1',
-      role: 'participant',
-      mode: 'pqs_only',
-      ledgerLabel: 'Retail Ledger',
-      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
-    }, '10');
-
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('tx.paid_traffic_cost::text'));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('tx.paid_traffic_cost::text'),
+    );
     expect(response.estimatedTrafficUsd).toBe('12.34');
     expect(response).not.toHaveProperty('paidTrafficCost');
   });
