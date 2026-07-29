@@ -9,16 +9,16 @@ ledger views and its deeper filtering and transfer workflows.
 
 <table>
   <tr>
-    <td><img src="screenshots/readme/custom-1440x900/updates.png" alt="Canton Explorer updates overview" /></td>
-    <td><img src="screenshots/readme/custom-1440x900/update-detail.png" alt="Canton Explorer update detail with events and exercise data" /></td>
+    <td><img src="https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/updates.png" alt="Canton Explorer updates overview" /></td>
+    <td><img src="https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/update-detail.png" alt="Canton Explorer update detail with events and exercise data" /></td>
   </tr>
   <tr>
-    <td><img src="screenshots/readme/custom-1440x900/updates--filters.png" alt="Canton Explorer updates Advanced Filter" /></td>
-    <td><img src="screenshots/readme/custom-1440x900/contracts--filters.png" alt="Canton Explorer contracts Advanced Filter with node and template controls" /></td>
+    <td><img src="https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/updates--filters.png" alt="Canton Explorer updates Advanced Filter" /></td>
+    <td><img src="https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/contracts--filters.png" alt="Canton Explorer contracts Advanced Filter with node and template controls" /></td>
   </tr>
   <tr>
-    <td><img src="screenshots/readme/custom-1440x900/traffic--filters.png" alt="Canton Explorer Traffic Purchases Advanced Search" /></td>
-    <td><img src="screenshots/readme/custom-1440x900/token-detail-transfers.png" alt="Canton Explorer Canton Coin balances and latest transfers" /></td>
+    <td><img src="https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/traffic--filters.png" alt="Canton Explorer Traffic Purchases Advanced Search" /></td>
+    <td><img src="https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/token-detail-transfers.png" alt="Canton Explorer Canton Coin balances and latest transfers" /></td>
   </tr>
 </table>
 
@@ -253,8 +253,8 @@ If the frontend or API is unreachable, restart the relevant service with `npm ru
 To embed an intentionally committed capture in this README, use a stable route/state path relative to the repository root:
 
 ```markdown
-![Updates](screenshots/desktop/updates.png)
-![Updates with filters](screenshots/desktop/updates--filters.png)
+![Updates](https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/updates.png)
+![Updates with filters](https://raw.githubusercontent.com/distrohelena/canton-explorer/main/screenshots/readme/custom-1440x900/updates--filters.png)
 ```
 
 Commit only the PNGs you want to publish. Keep `manifest.json` and `report.json` for local diagnostics unless they are useful as documentation.
