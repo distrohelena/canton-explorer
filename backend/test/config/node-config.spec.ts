@@ -63,6 +63,7 @@ describe('parseNodeConfigFile', () => {
       user: 'ledger-api-user',
       audience: 'https://canton.network.global',
       secret: 'unsafe',
+      expiresInSeconds: 3600,
     });
   });
 
@@ -97,6 +98,7 @@ describe('parseNodeConfigFile', () => {
       sub: 'ledger-api-user',
       aud: 'https://canton.network.global',
       privateKeyEnv: 'CANTON_ES256_PRIVATE_JWK',
+      expiresInSeconds: 3600,
     });
   });
 

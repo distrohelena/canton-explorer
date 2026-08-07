@@ -5,6 +5,7 @@ import type {
   QueryClient,
 } from '@distrohelena/canton-typescript-sdk';
 import type { NodeConfig } from '../config/node-config.schema';
+import { appLogger, truncateForLog } from '../logging/app-logger';
 
 type PqsManager = Pick<CantonManager, 'query' | 'disposeAsync'>;
 export interface PqsRawExecutor {
@@ -32,9 +33,21 @@ export class PqsManagerFactory implements OnModuleDestroy {
   async getRawExecutor(node: NodeConfig): Promise<PqsRawExecutor> {
     const query = await this.getPqsQuery(node);
     return {
-      query: async <TRow>(sql: string, values: readonly unknown[] = []) => ({
-        rows: [...(await query.$queryRaw<TRow>(sql, values))],
-      }),
+      query: async <TRow>(sql: string, values: readonly unknown[] = []) => {
+        const startedAt = Date.now();
+        try {
+          const rows = [...(await query.$queryRaw<TRow>(sql, values))];
+          appLogger.debug(
+            `[pqs] node=${node.id} ms=${Date.now() - startedAt} rows=${rows.length} sql=${truncateForLog(sql)}`,
+          );
+          return { rows };
+        } catch (error) {
+          appLogger.debug(
+            `[pqs] node=${node.id} ms=${Date.now() - startedAt} sql=${truncateForLog(sql)} failed=${(error as Error)?.message ?? error}`,
+          );
+          throw error;
+        }
+      },
     };
   }
 

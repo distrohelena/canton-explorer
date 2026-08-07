@@ -30,6 +30,7 @@ const grpcAuthSchema = z
         user: z.string().min(1),
         audience: z.string().min(1),
         secret: z.string().min(1),
+        expiresInSeconds: z.number().int().positive().default(3600),
       })
       .strict(),
     z
@@ -38,6 +39,7 @@ const grpcAuthSchema = z
         sub: z.string().min(1),
         aud: z.string().min(1),
         privateKeyEnv: z.string().min(1),
+        expiresInSeconds: z.number().int().positive().default(3600),
       })
       .strict(),
     z

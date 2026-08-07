@@ -62,6 +62,7 @@ describe('NodePollerService', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         sourceStatus: {
           pqs: expect.objectContaining({
@@ -305,6 +306,7 @@ describe('NodePollerService', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
       }),
     );

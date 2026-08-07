@@ -43,6 +43,24 @@ const modeLabel = computed(() =>
 
 const grpcNotConfigured = computed(() => node.value?.mode === 'pqs_only');
 
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) {
+    return 'n/a';
+  }
+
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime()) ? 'n/a' : dateFormatter.format(timestamp);
+}
+
 function formatBoolean(value: boolean | null | undefined) {
   if (value === null || value === undefined) {
     return 'n/a';
@@ -93,7 +111,7 @@ function formatSynchronizerHealth(value: string) {
       </header>
 
       <div class="node-detail__sections">
-        <section class="node-detail__section node-detail__section--half">
+        <section class="node-detail__section node-detail__section--full">
           <h3>Service Health</h3>
           <dl class="detail-grid">
             <div>
@@ -122,10 +140,14 @@ function formatSynchronizerHealth(value: string) {
                     : 'Unavailable'
               }}</dd>
             </div>
+            <div>
+              <dt>Ledger version</dt>
+              <dd>{{ grpcNotConfigured ? 'Not configured' : node.serviceInfo.ledgerApiVersion ?? 'n/a' }}</dd>
+            </div>
           </dl>
         </section>
 
-        <section class="node-detail__section node-detail__section--half">
+        <section class="node-detail__section node-detail__section--full">
           <h3>Ledger Snapshot</h3>
           <dl class="detail-grid">
             <div>
@@ -138,7 +160,7 @@ function formatSynchronizerHealth(value: string) {
             </div>
             <div>
               <dt>Latest event</dt>
-              <dd>{{ node.ledgerSummary.latestEventAt ?? 'n/a' }}</dd>
+              <dd>{{ formatDate(node.ledgerSummary.latestEventAt) }}</dd>
             </div>
             <div>
               <dt>Active contracts</dt>

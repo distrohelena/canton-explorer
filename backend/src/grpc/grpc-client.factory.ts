@@ -155,6 +155,9 @@ type SdkCantonClient = {
   healthService: {
     checkAsync(input: { service?: string }): Promise<LedgerHealthResponse>;
   };
+  versionService: {
+    getLedgerApiVersionAsync(input: Record<string, never>): Promise<{ version?: string }>;
+  };
   partyManagementService: {
     listKnownPartiesAsync(input: {
       pageSize: number;
@@ -349,6 +352,7 @@ export class GrpcClientFactory {
             user: node.grpc.auth.user,
             audience: node.grpc.auth.audience,
             secret: node.grpc.auth.secret,
+            expiresInSeconds: node.grpc.auth.expiresInSeconds,
           }),
         );
       case 'self_signed_es256': {
@@ -364,6 +368,7 @@ export class GrpcClientFactory {
             sub: node.grpc.auth.sub,
             aud: node.grpc.auth.aud,
             privateKeyJwkBase64Url,
+            expiresInSeconds: node.grpc.auth.expiresInSeconds,
           }),
         );
       }

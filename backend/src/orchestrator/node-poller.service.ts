@@ -242,6 +242,7 @@ export class NodePollerService
       reachable: false,
       healthCheckImplemented: false,
       servingStatus: null,
+      ledgerApiVersion: null,
     };
   }
 

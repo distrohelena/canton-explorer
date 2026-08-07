@@ -20,6 +20,7 @@ vi.mock('../lib/api', () => ({
       reachable: true,
       healthCheckImplemented: true,
       servingStatus: 'SERVING',
+      ledgerApiVersion: '3.2.0',
     },
     ledgerSummary: {
       ledgerLabel: 'Retail Ledger',
@@ -129,10 +130,10 @@ describe('NodeDetailView', () => {
     expect(screen.getByRole('heading', { name: 'Service Health' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ledger Snapshot' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Service Health' }).closest('section')).toHaveClass(
-      'node-detail__section--half',
+      'node-detail__section--full',
     );
     expect(screen.getByRole('heading', { name: 'Ledger Snapshot' }).closest('section')).toHaveClass(
-      'node-detail__section--half',
+      'node-detail__section--full',
     );
     expect(screen.getByRole('heading', { name: 'Participant Status' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Installed Packages' })).toBeInTheDocument();
@@ -171,6 +172,7 @@ describe('NodeDetailView', () => {
         reachable: true,
         healthCheckImplemented: true,
         servingStatus: 'SERVING',
+        ledgerApiVersion: '3.2.0',
       },
       ledgerSummary: {
         ledgerLabel: 'Retail Ledger 2',
@@ -259,5 +261,6 @@ describe('NodeDetailView', () => {
     expect(screen.getByText('3.4.0')).toBeInTheDocument();
     expect(screen.getByText('physical::1220def')).toBeInTheDocument();
     expect(screen.getByText('sync-service')).toBeInTheDocument();
+    expect(screen.getByText('3.2.0')).toBeInTheDocument();
   });
 });

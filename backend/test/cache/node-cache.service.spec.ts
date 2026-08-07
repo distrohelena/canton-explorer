@@ -224,6 +224,7 @@ describe('NodeCacheService', () => {
         reachable: false,
         healthCheckImplemented: false,
         servingStatus: null,
+        ledgerApiVersion: null,
       },
       ledgerSummary: {
         ledgerLabel: 'Participant 2 Ledger',

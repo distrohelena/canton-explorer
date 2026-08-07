@@ -24,6 +24,7 @@ export interface NodeSnapshot {
     reachable: boolean;
     healthCheckImplemented: boolean;
     servingStatus: string | null;
+    ledgerApiVersion: string | null;
   };
   ledgerSummary: {
     ledgerLabel: string;

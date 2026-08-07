@@ -23,6 +23,7 @@ export interface ServiceInfo {
   reachable: boolean;
   healthCheckImplemented: boolean;
   servingStatus: string | null;
+  ledgerApiVersion: string | null;
 }
 
 export interface NodeActivitySample {

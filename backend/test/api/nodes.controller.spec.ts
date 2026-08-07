@@ -820,6 +820,7 @@ describe('NodesController', () => {
         reachable: true,
         healthCheckImplemented: true,
         servingStatus: 'SERVING',
+        ledgerApiVersion: '3.2.0',
       },
       ledgerSummary: {
         ledgerLabel: 'Retail Ledger',

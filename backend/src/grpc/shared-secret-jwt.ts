@@ -4,9 +4,13 @@ export interface SharedSecretJwtConfig {
   user: string;
   audience: string;
   secret: string;
+  expiresInSeconds?: number;
 }
 
+const DEFAULT_EXPIRES_IN_SECONDS = 3600;
+
 export function createSharedSecretJwt(config: SharedSecretJwtConfig): string {
+  const issuedAt = Math.floor(Date.now() / 1000);
   const encodedHeader = encodeBase64Url(
     JSON.stringify({
       alg: 'HS256',
@@ -17,6 +21,8 @@ export function createSharedSecretJwt(config: SharedSecretJwtConfig): string {
     JSON.stringify({
       sub: config.user,
       aud: config.audience,
+      iat: issuedAt,
+      exp: issuedAt + (config.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS),
     }),
   );
   const encodedSignature = createHmac('sha256', config.secret)

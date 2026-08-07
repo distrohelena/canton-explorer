@@ -19,6 +19,7 @@ import type {
 import type { CachedPackageBlob, CachedPackageRef } from '../packages/package-cache.service';
 import { GrpcClientFactory } from './grpc-client.factory';
 import { encodeDamlLfArchive } from './daml-lf-archive';
+import { appLogger } from '../logging/app-logger';
 
 export interface GrpcPartyTopologyParticipantMapping {
   participantId: string | null;
@@ -221,20 +222,46 @@ export class GrpcOperationsService {
         reachable: false,
         healthCheckImplemented: false,
         servingStatus: null,
+        ledgerApiVersion: null,
       };
     }
 
-    return this.withClient(node, async (client) => {
-      const response = await client.healthService.checkAsync({ service: '' });
+    return this.withClient(node, 'fetchOperationalInfo', async (client) => {
+      const [response, ledgerApiVersion] = await Promise.all([
+        client.healthService.checkAsync({ service: '' }),
+        this.fetchLedgerApiVersion(node, client),
+      ]);
       const servingStatus = this.mapHealthStatus(response?.status);
+
+      if (servingStatus === null) {
+        appLogger.warn(
+          `[grpc] node=${node.id} op=fetchOperationalInfo unmapped health status raw=${JSON.stringify(response?.status)}`,
+        );
+      }
 
       return {
         target: node.grpc.ledgerTarget,
         reachable: true,
         healthCheckImplemented: servingStatus !== null,
         servingStatus,
+        ledgerApiVersion,
       };
     });
+  }
+
+  private async fetchLedgerApiVersion(
+    node: NodeConfig,
+    client: Awaited<ReturnType<GrpcClientFactory['create']>>,
+  ): Promise<string | null> {
+    try {
+      const response = await client.versionService.getLedgerApiVersionAsync({});
+      return this.nullIfEmptyString(response?.version);
+    } catch (error) {
+      appLogger.debug(
+        `[grpc] node=${node.id} op=fetchLedgerApiVersion failed=${(error as Error)?.message ?? error}`,
+      );
+      return null;
+    }
   }
 
   async listLocalParties(node: NodeConfig): Promise<string[]> {
@@ -242,7 +269,7 @@ export class GrpcOperationsService {
       return [];
     }
 
-    return this.withClient(node, async (client) => this.listLocalPartiesWithClient(client));
+    return this.withClient(node, 'listLocalParties', async (client) => this.listLocalPartiesWithClient(client));
   }
 
   async listKnownPartyFingerprints(node: NodeConfig): Promise<string[]> {
@@ -250,7 +277,7 @@ export class GrpcOperationsService {
       return [];
     }
 
-    return this.withClient(node, async (client) => {
+    return this.withClient(node, 'listKnownPartyFingerprints', async (client) => {
       const [partyTopologyResponse, localParties] = await Promise.all([
         client.topologyAggregationService.listPartiesAsync({
           synchronizerIds: [],
@@ -276,7 +303,7 @@ export class GrpcOperationsService {
     }
 
     try {
-      return await this.withClient(node, async (client) => {
+      return await this.withClient(node, 'fetchHoldingV2Tokens', async (client) => {
         const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
         const deduped = new Map<string, TokenSummary>();
 
@@ -307,7 +334,7 @@ export class GrpcOperationsService {
     }
 
     try {
-      return await this.withClient(node, async (client) => {
+      return await this.withClient(node, 'fetchHoldingV2TokenHolders', async (client) => {
         const activeContracts = await this.fetchHoldingV2ActiveContracts(client);
         const deduped = new Map<string, GrpcTokenHolderObservation>();
 
@@ -350,7 +377,7 @@ export class GrpcOperationsService {
     }
 
     try {
-      return await this.withClient(node, async (client) => {
+      return await this.withClient(node, 'fetchPartyTopology', async (client) => {
         const [partyTopologyResponse, keyOwnerResponse, rawPartyToParticipantResponse] =
           await Promise.all([
             client.topologyAggregationService.listPartiesAsync({
@@ -498,7 +525,7 @@ export class GrpcOperationsService {
       throw new Error(`Node ${node.id} does not define grpc settings`);
     }
 
-    return this.withClient(node, async (client) => {
+    return this.withClient(node, 'fetchParticipantStatus', async (client) => {
       const response = await client.participantStatusService.getParticipantStatusAsync({});
       const status = response.status;
 
@@ -560,7 +587,7 @@ export class GrpcOperationsService {
       return [];
     }
 
-    return this.withClient(node, async (client) => {
+    return this.withClient(node, 'fetchTrafficStates', async (client) => {
       const response = await client.participantStatusService.getParticipantStatusAsync({});
       const synchronizers = response.status?.connectedSynchronizers ?? [];
 
@@ -590,7 +617,7 @@ export class GrpcOperationsService {
       return [];
     }
 
-    return this.withClient(node, async (client) => {
+    return this.withClient(node, 'fetchPackageRefs', async (client) => {
       try {
         const response = await client.participantPackageService.listPackagesAsync({});
 
@@ -666,7 +693,7 @@ export class GrpcOperationsService {
       return [];
     }
 
-    return this.withClient(node, async (client) => {
+    return this.withClient(node, 'fetchPackagesByRefs', async (client) => {
       return Promise.all(
         packageRefs.map(async (packageRef) => {
           const response = await client.packageService.getPackageAsync({
@@ -1431,12 +1458,21 @@ export class GrpcOperationsService {
 
   private async withClient<T>(
     node: NodeConfig,
+    label: string,
     run: (client: Awaited<ReturnType<GrpcClientFactory['create']>>) => Promise<T>,
   ): Promise<T> {
     const client = await this.clientFactory.create(node);
+    const startedAt = Date.now();
 
     try {
-      return await run(client);
+      const result = await run(client);
+      appLogger.debug(`[grpc] node=${node.id} op=${label} ms=${Date.now() - startedAt}`);
+      return result;
+    } catch (error) {
+      appLogger.debug(
+        `[grpc] node=${node.id} op=${label} ms=${Date.now() - startedAt} failed=${(error as Error)?.message ?? error}`,
+      );
+      throw error;
     } finally {
       await client.disposeAsync?.();
     }

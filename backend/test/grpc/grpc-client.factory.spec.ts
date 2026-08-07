@@ -243,10 +243,10 @@ describe('GrpcClientFactory', () => {
       alg: 'ES256',
       typ: 'JWT',
     });
-    expect(JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'))).toEqual({
-      sub: 'ledger-api-user',
-      aud: 'https://canton.network.global',
-    });
+    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+    expect(payload.sub).toBe('ledger-api-user');
+    expect(payload.aud).toBe('https://canton.network.global');
+    expect(payload.exp).toBe(payload.iat + 3600);
     expect(
       verify(
         'sha256',

@@ -8,12 +8,16 @@ export interface SelfSignedEs256JwtConfig {
   sub: string;
   aud: string;
   privateKeyJwkBase64Url: string;
+  expiresInSeconds?: number;
 }
+
+const DEFAULT_EXPIRES_IN_SECONDS = 3600;
 
 export function createSelfSignedEs256Jwt(
   config: SelfSignedEs256JwtConfig,
 ): string {
   const privateKey = importPrivateKey(config.privateKeyJwkBase64Url);
+  const issuedAt = Math.floor(Date.now() / 1000);
   const encodedHeader = encodeBase64Url(
     JSON.stringify({
       alg: 'ES256',
@@ -24,6 +28,8 @@ export function createSelfSignedEs256Jwt(
     JSON.stringify({
       sub: config.sub,
       aud: config.aud,
+      iat: issuedAt,
+      exp: issuedAt + (config.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS),
     }),
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;

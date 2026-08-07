@@ -5125,8 +5125,8 @@ h3 {
   margin-bottom: 16px;
 }
 
-.node-detail__section--half {
-  grid-column: span 1;
+.node-detail__section--full {
+  grid-column: 1 / -1;
 }
 
 .node-detail__message {

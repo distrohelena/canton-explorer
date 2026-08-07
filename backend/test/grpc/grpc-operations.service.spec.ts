@@ -37,6 +37,9 @@ describe('GrpcOperationsService', () => {
             status: 'serving',
           }),
         },
+        versionService: {
+          getLedgerApiVersionAsync: async () => ({ version: '3.2.0' }),
+        },
       }),
     } as never);
 
@@ -58,6 +61,42 @@ describe('GrpcOperationsService', () => {
     expect(result.reachable).toBe(true);
     expect(result.healthCheckImplemented).toBe(true);
     expect(result.servingStatus).toBe('SERVING');
+    expect(result.ledgerApiVersion).toBe('3.2.0');
+  });
+
+  it('falls back to a null ledger version when the version RPC fails', async () => {
+    const service = new GrpcOperationsService({
+      create: () => ({
+        healthService: {
+          checkAsync: async (_request: { service?: string }) => ({
+            status: 'serving',
+          }),
+        },
+        versionService: {
+          getLedgerApiVersionAsync: async () => {
+            throw new Error('unimplemented');
+          },
+        },
+      }),
+    } as never);
+
+    const result = await service.fetchOperationalInfo({
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
+    });
+
+    expect(result.reachable).toBe(true);
+    expect(result.ledgerApiVersion).toBeNull();
   });
 
   it('reads traffic state for every connected synchronizer', async () => {
