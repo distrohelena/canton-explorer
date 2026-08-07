@@ -41,6 +41,7 @@ describe('PartiesView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -101,6 +102,7 @@ describe('PartiesView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -131,6 +133,7 @@ describe('PartiesView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 2',
@@ -263,6 +266,7 @@ describe('PartiesView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -293,6 +297,7 @@ describe('PartiesView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 2',
@@ -412,6 +417,7 @@ describe('PartiesView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -519,6 +525,7 @@ describe('PartiesView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 1',
@@ -592,6 +599,7 @@ describe('PartiesView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -685,6 +693,7 @@ describe('PartiesView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -772,6 +781,7 @@ describe('PartiesView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 2',
@@ -847,6 +857,7 @@ describe('PartiesView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 2',

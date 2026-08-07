@@ -28,6 +28,7 @@ const node: NodeSnapshot = {
     reachable: true,
     healthCheckImplemented: true,
     servingStatus: 'SERVING',
+    ledgerApiVersion: null,
   },
   ledgerSummary: {
     ledgerLabel: 'Retail Ledger',

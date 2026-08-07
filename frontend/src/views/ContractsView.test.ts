@@ -59,6 +59,7 @@ describe('ContractsView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -131,6 +132,7 @@ describe('ContractsView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -161,6 +163,7 @@ describe('ContractsView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 2',
@@ -238,6 +241,7 @@ describe('ContractsView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -268,6 +272,7 @@ describe('ContractsView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 2',
@@ -487,6 +492,7 @@ describe('ContractsView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',
@@ -517,6 +523,7 @@ describe('ContractsView', () => {
           reachable: true,
           healthCheckImplemented: true,
           servingStatus: 'SERVING',
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger 2',
@@ -608,6 +615,7 @@ describe('ContractsView', () => {
           reachable: false,
           healthCheckImplemented: false,
           servingStatus: null,
+          ledgerApiVersion: null,
         },
         ledgerSummary: {
           ledgerLabel: 'Retail Ledger',

@@ -716,12 +716,16 @@ export class GrpcOperationsService {
   private mapHealthStatus(status: unknown): string | null {
     switch (status) {
       case 'serving':
+      case 1:
         return 'SERVING';
       case 'notServing':
+      case 2:
         return 'NOT_SERVING';
       case 'serviceUnknown':
+      case 3:
         return 'SERVICE_UNKNOWN';
       case 'unknown':
+      case 0:
         return 'UNKNOWN';
       default:
         return null;

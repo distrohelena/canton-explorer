@@ -25,6 +25,7 @@ const healthyNode: NodeSnapshot = {
     reachable: true,
     healthCheckImplemented: true,
     servingStatus: 'SERVING',
+    ledgerApiVersion: null,
   },
   ledgerSummary: {
     ledgerLabel: 'Retail Ledger',
@@ -156,6 +157,7 @@ describe('SettingsView', () => {
         reachable: false,
         healthCheckImplemented: false,
         servingStatus: null,
+        ledgerApiVersion: null,
       },
       sourceStatus: {
         ...healthyNode.sourceStatus,

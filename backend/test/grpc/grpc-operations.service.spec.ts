@@ -64,6 +64,40 @@ describe('GrpcOperationsService', () => {
     expect(result.ledgerApiVersion).toBe('3.2.0');
   });
 
+  it('maps the raw numeric protobuf serving status returned by the gRPC transport', async () => {
+    const service = new GrpcOperationsService({
+      create: () => ({
+        healthService: {
+          checkAsync: async (_request: { service?: string }) => ({
+            status: 1,
+          }),
+        },
+        versionService: {
+          getLedgerApiVersionAsync: async () => ({ version: '3.2.0' }),
+        },
+      }),
+    } as never);
+
+    const result = await service.fetchOperationalInfo({
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
+    });
+
+    expect(result.reachable).toBe(true);
+    expect(result.healthCheckImplemented).toBe(true);
+    expect(result.servingStatus).toBe('SERVING');
+  });
+
   it('falls back to a null ledger version when the version RPC fails', async () => {
     const service = new GrpcOperationsService({
       create: () => ({

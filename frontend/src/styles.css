@@ -4559,8 +4559,11 @@ h3 {
 }
 
 .parties-page__party-link {
-  justify-content: flex-start;
+  display: block;
   text-decoration: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .parties-page__results {
