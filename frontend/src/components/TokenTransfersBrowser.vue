@@ -534,23 +534,23 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
       />
     </Transition>
 
-    <p v-if="!tokenTransfersResponse && loadingTransfers" class="dashboard__message">
-      {{ loadingMessage }}
-    </p>
-    <p v-else-if="tokenTransfersError" class="dashboard__message dashboard__message--error">
+    <p v-if="tokenTransfersError" class="dashboard__message dashboard__message--error">
       {{ tokenTransfersError }}
     </p>
-    <p v-else-if="tokenTransfersResponse && renderedTransfers.length === 0" class="dashboard__message">
+    <p
+      v-else-if="tokenTransfersResponse && renderedTransfers.length === 0 && !loadingTransfers"
+      class="dashboard__message"
+    >
       {{ emptyMessage }}
     </p>
 
     <section
-      v-else-if="tokenTransfersResponse"
+      v-if="!tokenTransfersError && (loadingTransfers || renderedTransfers.length > 0)"
       :class="bare ? 'tokens-page__table-shell' : 'node-updates__section'"
       :aria-busy="loadingTransfers ? 'true' : 'false'"
     >
       <div
-        v-if="loadingTransfers"
+        v-if="loadingTransfers && renderedTransfers.length > 0"
         class="node-updates__overlay"
         role="status"
         :aria-label="spinnerLabel"
@@ -560,7 +560,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
 
       <div
         class="node-updates__table"
-        :class="{ 'node-updates__table--loading': loadingTransfers }"
+        :class="{ 'node-updates__table--loading': loadingTransfers && renderedTransfers.length > 0 }"
         role="table"
         :aria-label="tableAriaLabel"
       >
@@ -571,6 +571,15 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
           <span role="columnheader">From</span>
           <span role="columnheader">To</span>
           <span role="columnheader">Record Time</span>
+        </div>
+
+        <div
+          v-if="loadingTransfers && renderedTransfers.length === 0"
+          class="node-updates__row node-updates__row--loading"
+          role="row"
+        >
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>{{ loadingMessage }}</span>
         </div>
 
         <div

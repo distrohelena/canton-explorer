@@ -15,10 +15,14 @@ const props = withDefaults(
     contracts: ContractRow[];
     showNodeColumn?: boolean;
     ariaLabel?: string;
+    loading?: boolean;
+    loadingMessage?: string;
   }>(),
   {
     showNodeColumn: false,
     ariaLabel: 'Contracts',
+    loading: false,
+    loadingMessage: 'Loading contracts...',
   },
 );
 
@@ -84,6 +88,14 @@ const renderedContracts = computed(() =>
       <span role="columnheader">Contract ID</span>
       <span role="columnheader">Template ID</span>
       <span role="columnheader">Created Record Time</span>
+    </div>
+
+    <div
+      v-if="loading && renderedContracts.length === 0"
+      class="node-updates__row node-updates__row--loading"
+    >
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>{{ loadingMessage }}</span>
     </div>
 
     <template v-if="renderedContracts.length > 0">

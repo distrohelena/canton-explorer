@@ -81,7 +81,8 @@ describe('PartiesView', () => {
       },
     });
 
-    expect(screen.getByText('Loading parties...')).toBeInTheDocument();
+    expect(screen.getByText('Loading nodes...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading nodes' })).toBeInTheDocument();
   });
 
   it('renders the first node parties first and lazy-loads the other node on click', async () => {
@@ -195,11 +196,11 @@ describe('PartiesView', () => {
       },
     });
 
-    expect(await screen.findByRole('button', { name: 'Active Parties' })).toHaveAttribute(
+    expect(await screen.findByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
+    expect(screen.getByRole('button', { name: 'Active Parties' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
     expect(
       screen.queryByRole('heading', { name: 'No gRPC nodes available' }),
     ).not.toBeInTheDocument();

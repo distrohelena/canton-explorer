@@ -55,7 +55,10 @@ const packages = computed(() =>
 <template>
   <section class="package-detail">
     <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="!packageFamily" class="node-detail__message">Loading package family...</p>
+    <p v-else-if="!packageFamily" class="node-detail__message inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading package family...</span>
+    </p>
     <div v-else class="node-page">
       <div class="node-page__rail">
         <RouterLink class="node-detail__back" to="/" aria-label="Back to overview">

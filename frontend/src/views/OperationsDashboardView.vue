@@ -17,7 +17,10 @@ const { nodes, loading, error, refresh } = useNodes();
       </div>
     </div>
 
-    <p v-if="loading" class="dashboard__message">Loading node status...</p>
+    <p v-if="loading" class="dashboard__message inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading node status...</span>
+    </p>
     <p v-else-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
     <div v-else class="dashboard__grid">
       <NodeStatusCard v-for="node in nodes" :key="node.id" :node="node" />

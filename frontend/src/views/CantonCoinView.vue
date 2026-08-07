@@ -185,8 +185,9 @@ onMounted(() => {
       </div>
     </header>
 
-    <div v-if="loading" class="canton-coin-page__state" role="status">
-      Loading Canton Coin history…
+    <div v-if="loading" class="canton-coin-page__state inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading Canton Coin history…</span>
     </div>
 
     <div

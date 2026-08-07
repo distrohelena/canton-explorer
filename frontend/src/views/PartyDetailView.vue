@@ -168,7 +168,6 @@ watch(
 <template>
   <section class="party-detail">
     <p v-if="detailError" class="node-detail__message node-detail__message--error">{{ detailError }}</p>
-    <p v-else-if="!partyDetail" class="node-detail__message">Loading party detail...</p>
     <div v-else class="node-page">
       <div class="node-page__rail">
         <RouterLink class="node-detail__back" to="/parties" aria-label="Back to overview">←</RouterLink>
@@ -178,14 +177,23 @@ watch(
         <header class="node-detail__hero">
           <div>
             <p class="activity-home__eyebrow">Parties</p>
-            <h2 class="party-detail__title">{{ partyDetail.partyId }} Party</h2>
+            <h2 class="party-detail__title">{{ props.partyId }}</h2>
           </div>
         </header>
 
         <div class="node-detail__sections party-detail__sections">
           <section class="node-detail__section party-detail__section--summary">
             <h3>Overview</h3>
-            <dl class="detail-grid party-detail__summary-grid">
+            <div
+              v-if="!partyDetail"
+              class="inline-loading"
+              role="status"
+              aria-label="Loading overview"
+            >
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading overview...</span>
+            </div>
+            <dl v-else class="detail-grid party-detail__summary-grid">
               <div class="party-detail__summary-item party-detail__summary-item--full-row">
                 <dt>Party ID</dt>
                 <dd class="update-detail__id">{{ partyDetail.partyId }}</dd>
@@ -207,7 +215,16 @@ watch(
 
           <section class="node-detail__section party-detail__section--nodes">
             <h3>Observed Nodes</h3>
-            <div class="package-detail__list">
+            <div
+              v-if="!partyDetail"
+              class="inline-loading"
+              role="status"
+              aria-label="Loading observed nodes"
+            >
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading observed nodes...</span>
+            </div>
+            <div v-else class="package-detail__list">
               <div
                 v-for="node in partyDetail.nodes"
                 :key="node.nodeId"
@@ -227,7 +244,16 @@ watch(
 
           <section class="node-detail__section party-detail__section--topology">
             <h3>Party Topology</h3>
-            <div class="party-topology__list">
+            <div
+              v-if="!partyDetail"
+              class="inline-loading"
+              role="status"
+              aria-label="Loading party topology"
+            >
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading party topology...</span>
+            </div>
+            <div v-else class="party-topology__list">
               <article
                 v-for="topology in partyDetail.partyTopologyByNode"
                 :key="topology.nodeId"

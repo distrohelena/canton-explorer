@@ -200,6 +200,72 @@ function guidePositions(days: 1 | 7 | 30): string[] {
   );
 }
 
+interface AxisTickMark {
+  position: string;
+  label: string;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TICK_INTERVAL_MS: Record<1 | 7 | 30, number> = {
+  1: 2 * 60 * 60 * 1000,
+  7: DAY_MS,
+  30: 2 * DAY_MS,
+};
+const TICK_EDGE_GUARD_PERCENT = 6;
+
+function formatTickLabel(timestampMs: number, days: 1 | 7 | 30): string {
+  if (days === 1) {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date(timestampMs));
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(timestampMs));
+}
+
+function localDayStartMs(timestampMs: number): number {
+  const localMidnight = new Date(timestampMs);
+  localMidnight.setHours(0, 0, 0, 0);
+  return localMidnight.getTime();
+}
+
+function intermediateAxisTicks(
+  series: ActivitySeries,
+  windowMinutes: number,
+  generatedAt: string | null,
+  days: 1 | 7 | 30,
+): AxisTickMark[] {
+  const domain = chartDomain(series, windowMinutes, generatedAt);
+  if (domain === null) {
+    return [];
+  }
+
+  // Anchor ticks to local midnight (rather than the UTC epoch) so hour ticks land on even
+  // hours and day ticks land on calendar-day boundaries in the viewer's own timezone.
+  const intervalMs = TICK_INTERVAL_MS[days];
+  const dayStartMs = localDayStartMs(domain.startMs);
+  const firstTickMs =
+    dayStartMs + Math.ceil((domain.startMs - dayStartMs) / intervalMs) * intervalMs;
+
+  const ticks: AxisTickMark[] = [];
+
+  for (let tickMs = firstTickMs; tickMs < domain.endMs; tickMs += intervalMs) {
+    const position = ((tickMs - domain.startMs) / domain.durationMs) * 100;
+    if (position < TICK_EDGE_GUARD_PERCENT || position > 100 - TICK_EDGE_GUARD_PERCENT) {
+      continue;
+    }
+
+    ticks.push({ position: `${position}%`, label: formatTickLabel(tickMs, days) });
+  }
+
+  return ticks;
+}
+
 function formatAxisLabel(timestampMs: number, mode: 'start' | 'end', days: 1 | 7 | 30): string {
   if (days === 1 && mode === 'end') {
     return new Intl.DateTimeFormat('en-US', {
@@ -280,7 +346,10 @@ function verticalScaleLabels(
       </div>
     </div>
 
-    <p v-if="loading" class="dashboard__message">Loading activity history...</p>
+    <p v-if="loading" class="dashboard__message inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading activity history...</span>
+    </p>
     <p v-else-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
 
     <template v-else-if="nodes.length > 0">
@@ -345,6 +414,7 @@ function verticalScaleLabels(
                 <svg
                   class="activity-panel__chart"
                   viewBox="0 0 320 96"
+                  preserveAspectRatio="none"
                   role="img"
                   :aria-label="`${series.label} activity history`"
                 >
@@ -354,6 +424,7 @@ function verticalScaleLabels(
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="3"
+                    vector-effect="non-scaling-stroke"
                     :points="linePoints(
                       series,
                       windowMinutesLabel,
@@ -371,6 +442,14 @@ function verticalScaleLabels(
             >
               <span class="activity-panel__axis-label activity-panel__axis-label--start">
                 {{ formatAxisLabel(chartDomain(series, windowMinutesLabel, history?.generatedAt ?? null)!.startMs, 'start', selectedDays) }}
+              </span>
+              <span
+                v-for="tick in intermediateAxisTicks(series, windowMinutesLabel, history?.generatedAt ?? null, selectedDays)"
+                :key="`${series.nodeId}-${tick.position}`"
+                class="activity-panel__axis-label activity-panel__axis-label--tick"
+                :style="{ left: tick.position }"
+              >
+                {{ tick.label }}
               </span>
               <span class="activity-panel__axis-label activity-panel__axis-label--end">
                 {{ formatAxisLabel(chartDomain(series, windowMinutesLabel, history?.generatedAt ?? null)!.endMs, 'end', selectedDays) }}

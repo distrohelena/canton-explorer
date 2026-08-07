@@ -46,12 +46,19 @@ describe('PartyDetailView', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows a loading state before the party detail resolves', async () => {
+  it('draws the section blocks with their titles instantly, loading only their content', async () => {
     vi.mocked(api.fetchPartyDetail).mockReturnValue(new Promise(() => undefined));
 
     await renderAt('/parties/Alice');
 
-    expect(screen.getByText('Loading party detail...')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Observed Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();
+
+    expect(screen.getByRole('status', { name: 'Loading overview' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading observed nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading party topology' })).toBeInTheDocument();
   });
 
   it('renders a summary-first party detail page with inline paginated updates and contracts browsers', async () => {
@@ -250,7 +257,7 @@ describe('PartyDetailView', () => {
 
     const { container } = await renderAt('/parties/Alice');
 
-    expect(await screen.findByRole('heading', { name: 'Alice Party' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Alice' })).toBeInTheDocument();
     expect(container.querySelector('.party-detail__sections')).not.toBeNull();
     expect(container.querySelector('.party-detail__summary-grid')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute(

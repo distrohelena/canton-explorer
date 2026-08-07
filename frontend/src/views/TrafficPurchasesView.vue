@@ -230,7 +230,10 @@ onMounted(() => {
       </div>
     </header>
 
-    <div v-if="loading" class="traffic-page__state" role="status">Loading traffic purchases…</div>
+    <div v-if="loading" class="traffic-page__state inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading traffic purchases…</span>
+    </div>
 
     <div v-else-if="error" class="traffic-page__state traffic-page__state--error" role="alert">
       <strong>Unable to load traffic purchases.</strong>

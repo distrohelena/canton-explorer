@@ -143,8 +143,9 @@ onBeforeUnmount(() => {
         <span v-if="isRefreshing" class="settings-section__refreshing">Refreshing…</span>
       </div>
 
-      <div v-if="loading" class="settings-state" role="status">
-        Loading indexing status…
+      <div v-if="loading" class="settings-state inline-loading" role="status">
+        <span class="node-updates__spinner" aria-hidden="true"></span>
+        <span>Loading indexing status…</span>
       </div>
 
       <div v-else-if="error && nodes.length === 0" class="settings-state settings-state--error" role="alert">

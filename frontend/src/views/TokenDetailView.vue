@@ -168,7 +168,14 @@ watch(
 <template>
   <section class="contract-detail">
     <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="loadingTokenDetail || !tokenDetail || !tokenHolders" class="node-detail__message">Loading token detail...</p>
+    <p
+      v-else-if="loadingTokenDetail || !tokenDetail || !tokenHolders"
+      class="node-detail__message inline-loading"
+      role="status"
+    >
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading token detail...</span>
+    </p>
     <div v-else class="node-page">
       <div class="node-page__rail">
         <RouterLink class="node-detail__back" to="/tokens" aria-label="Back to overview">
@@ -260,8 +267,9 @@ watch(
               </div>
             </header>
 
-            <p v-if="loadingTokenHolders" class="dashboard__message">
-              Loading token holders...
+            <p v-if="loadingTokenHolders" class="dashboard__message inline-loading" role="status">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading token holders...</span>
             </p>
 
             <p v-else-if="tokenHolders.holders.length === 0" class="dashboard__message">

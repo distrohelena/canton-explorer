@@ -176,33 +176,41 @@ type SdkCantonClient = {
   };
   participantStatusService: {
     getParticipantStatusAsync(input: Record<string, never>): Promise<{
-      status?: {
-        uid: string;
-        uptime?: { seconds: string; nanos: number };
-        ports: Record<string, number>;
-        active: boolean;
-        topologyQueues?: {
-          manager: number;
-          dispatcher: number;
-          clients: number;
-        };
-        components: Array<{
-          name: string;
-          kind: 'unknown' | 'ok' | 'degraded' | 'failed' | 'fatal';
-          description?: string;
-        }>;
-        version: string;
-        connectedSynchronizers: Array<{
-          physicalSynchronizerId: string;
-          health: 'unspecified' | 'healthy' | 'unhealthy';
-        }>;
-        supportedProtocolVersions: number[];
-      };
-      notInitialized?: {
-        active: boolean;
-        waitingForExternalInput: 'unspecified' | 'id' | 'nodeTopology' | 'initialization';
-        version: string;
-      };
+      kind:
+        | {
+            oneofKind: 'status';
+            status: {
+              uid: string;
+              uptime?: { seconds: string; nanos: number };
+              ports: Record<string, number>;
+              active: boolean;
+              topologyQueues?: {
+                manager: number;
+                dispatcher: number;
+                clients: number;
+              };
+              components: Array<{
+                name: string;
+                kind: 'unknown' | 'ok' | 'degraded' | 'failed' | 'fatal';
+                description?: string;
+              }>;
+              version: string;
+              connectedSynchronizers: Array<{
+                physicalSynchronizerId: string;
+                health: 'unspecified' | 'healthy' | 'unhealthy';
+              }>;
+              supportedProtocolVersions: number[];
+            };
+          }
+        | {
+            oneofKind: 'notInitialized';
+            notInitialized: {
+              active: boolean;
+              waitingForExternalInput: 'unspecified' | 'id' | 'nodeTopology' | 'initialization';
+              version: string;
+            };
+          }
+        | { oneofKind: undefined };
     }>;
   };
   trafficControlService: {

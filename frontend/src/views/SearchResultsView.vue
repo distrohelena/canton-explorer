@@ -88,7 +88,10 @@ watch(trimmedQuery, (query) => {
     <div v-if="!trimmedQuery" class="search-results-view__empty">
       Enter a search query to begin.
     </div>
-    <div v-else-if="loading" class="search-results-view__loading">Loading search results...</div>
+    <div v-else-if="loading" class="search-results-view__loading inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading search results...</span>
+    </div>
     <div v-else-if="error" class="search-results-view__error">{{ error }}</div>
     <div v-else-if="results" class="search-results-view__content">
       <div v-if="!hasAnyMatches && !hasAnyWarnings" class="search-results-view__empty">

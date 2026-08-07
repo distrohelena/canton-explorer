@@ -207,6 +207,12 @@ const isSelectedNodeLoading = computed(() => {
   return loadingActiveNodeId.value === selectedNodeId.value;
 });
 
+const resultsLoadingLabel = computed(() =>
+  isAllNodesSelected.value
+    ? 'Loading parties across selected nodes'
+    : 'Loading parties for this node',
+);
+
 function syncSelectedNode(preferredNodeId: string | null = selectedNodeId.value): void {
   if (preferredNodeId === ALL_NODES_ID && hasAllNodesOption.value) {
     selectedNodeId.value = ALL_NODES_ID;
@@ -512,7 +518,6 @@ onMounted(async () => {
     </header>
 
     <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
-    <p v-else-if="!nodes" class="dashboard__message">Loading parties...</p>
     <div v-else class="parties-page">
       <section class="node-detail__section parties-page__section">
         <div class="parties-page__mode-switch" role="tablist" aria-label="Party source modes">
@@ -545,7 +550,16 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div class="parties-page__node-list" role="tablist" aria-label="Node selectors">
+        <div
+          v-if="!nodes"
+          class="inline-loading"
+          role="status"
+          aria-label="Loading nodes"
+        >
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>Loading nodes...</span>
+        </div>
+        <div v-else class="parties-page__node-list" role="tablist" aria-label="Node selectors">
           <button
             v-if="hasAllNodesOption"
             type="button"
@@ -715,9 +729,15 @@ onMounted(async () => {
           </div>
         </div>
 
-        <p v-if="selectedHeader && isSelectedNodeLoading" class="dashboard__message">
-          {{ isAllNodesSelected ? 'Loading parties across selected nodes...' : 'Loading parties for this node...' }}
-        </p>
+        <div
+          v-if="nodes && selectedHeader && isSelectedNodeLoading"
+          class="inline-loading"
+          role="status"
+          :aria-label="resultsLoadingLabel"
+        >
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>{{ resultsLoadingLabel }}...</span>
+        </div>
 
         <div v-else-if="selectedMode === 'active' && selectedEntries.length > 0" class="package-detail__list">
           <RouterLink

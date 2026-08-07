@@ -57,7 +57,10 @@ const recordTimeLines = computed(() =>
 <template>
   <section class="contract-detail">
     <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="!transferDetail" class="node-detail__message">Loading transfer detail...</p>
+    <p v-else-if="!transferDetail" class="node-detail__message inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading transfer detail...</span>
+    </p>
     <div v-else class="node-page">
       <div class="node-page__rail">
         <RouterLink class="node-detail__back" to="/tokens" aria-label="Back to overview">

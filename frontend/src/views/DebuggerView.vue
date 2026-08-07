@@ -1218,8 +1218,9 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
-      <p v-if="debuggerSessionsLoading" class="debugger-view__session-state">
-        Loading debug sessions...
+      <p v-if="debuggerSessionsLoading" class="debugger-view__session-state inline-loading" role="status">
+        <span class="node-updates__spinner" aria-hidden="true"></span>
+        <span>Loading debug sessions...</span>
       </p>
       <p v-else-if="debuggerSessionsError" class="debugger-view__session-state debugger-view__session-state--error">
         {{ debuggerSessionsError }}
@@ -1294,8 +1295,9 @@ onBeforeUnmount(() => {
       />
     </section>
     <p v-if="error" class="debugger-view__error-state" role="alert">{{ error }}</p>
-    <p v-else-if="loading && !session" class="debugger-view__loading-state">
-      Loading debugger session...
+    <p v-else-if="loading && !session" class="debugger-view__loading-state inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading debugger session...</span>
     </p>
 
     <div

@@ -112,7 +112,10 @@ watch(
       </button>
     </div>
 
-    <p v-if="loading" class="debugger-event-list__empty">Loading ledger events…</p>
+    <p v-if="loading" class="debugger-event-list__empty inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading ledger events…</span>
+    </p>
     <p v-else-if="activeTab === 'real' && realEvents.length === 0" class="debugger-event-list__empty">
       No real ledger events are available for this update.
     </p>

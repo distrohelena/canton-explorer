@@ -393,7 +393,10 @@ function handleSearchKeydown(event: KeyboardEvent) {
               <span v-if="contract.createdRecordTime">{{ contract.createdRecordTime }}</span>
             </span>
           </button>
-          <p v-if="activeContractsLoading" class="debugger-template-picker__state">Loading active contracts...</p>
+          <p v-if="activeContractsLoading" class="debugger-template-picker__state inline-loading" role="status">
+            <span class="node-updates__spinner" aria-hidden="true"></span>
+            <span>Loading active contracts...</span>
+          </p>
           <p v-else-if="activeContractsError" class="debugger-template-picker__state debugger-template-picker__state--error">
             {{ activeContractsError }}
           </p>
@@ -433,7 +436,10 @@ function handleSearchKeydown(event: KeyboardEvent) {
             {{ nodeTemplateOptions.length === 0 ? 'No templates available on this node.' : 'No templates match your search.' }}
           </p>
         </div>
-        <p v-if="!isExerciseExisting && loading" class="debugger-template-picker__state">Loading available templates...</p>
+        <p v-if="!isExerciseExisting && loading" class="debugger-template-picker__state inline-loading" role="status">
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>Loading available templates...</span>
+        </p>
         <p v-else-if="!isExerciseExisting && error" class="debugger-template-picker__state debugger-template-picker__state--error">{{ error }}</p>
       </section>
     <section
@@ -449,7 +455,10 @@ function handleSearchKeydown(event: KeyboardEvent) {
           <p>{{ constructorSchema ? 'Fill in the values for the selected template.' : 'Choose a template first.' }}</p>
         </div>
       </header>
-      <p v-if="constructorLoading" class="debugger-template-picker__state">Loading template schema...</p>
+      <p v-if="constructorLoading" class="debugger-template-picker__state inline-loading" role="status">
+        <span class="node-updates__spinner" aria-hidden="true"></span>
+        <span>Loading template schema...</span>
+      </p>
       <p v-else-if="constructorError" class="debugger-template-picker__state debugger-template-picker__state--error">{{ constructorError }}</p>
       <DebuggerValueForm
         v-else-if="constructorSchema"

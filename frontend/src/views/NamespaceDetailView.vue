@@ -294,8 +294,9 @@ watch(
     >
       {{ detailError }}
     </p>
-    <p v-else-if="!namespaceDetail" class="node-detail__message">
-      Loading namespace detail...
+    <p v-else-if="!namespaceDetail" class="node-detail__message inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading namespace detail...</span>
     </p>
     <div v-else class="node-page">
       <div class="node-page__rail">
@@ -410,9 +411,11 @@ watch(
                   partiesLoading &&
                   (namespaceParties?.parties.length ?? 0) === 0
                 "
-                class="update-detail__empty"
+                class="update-detail__empty inline-loading"
+                role="status"
               >
-                Loading observed parties...
+                <span class="node-updates__spinner" aria-hidden="true"></span>
+                <span>Loading observed parties...</span>
               </p>
               <p
                 v-else-if="(namespaceParties?.parties.length ?? 0) === 0"

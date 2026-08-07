@@ -178,7 +178,10 @@ const contractDataEntries = computed(() => {
 <template>
   <section class="contract-detail">
     <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="!contractDetail" class="node-detail__message">Loading contract detail...</p>
+    <p v-else-if="!contractDetail" class="node-detail__message inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading contract detail...</span>
+    </p>
     <div v-else class="node-page">
       <div class="node-page__rail">
         <RouterLink class="node-detail__back" to="/contracts" aria-label="Back to overview">

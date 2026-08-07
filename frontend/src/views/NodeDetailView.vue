@@ -96,7 +96,10 @@ function formatSynchronizerHealth(value: string) {
 
 <template>
   <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-  <p v-else-if="!node" class="node-detail__message">Loading node detail...</p>
+  <p v-else-if="!node" class="node-detail__message inline-loading" role="status">
+    <span class="node-updates__spinner" aria-hidden="true"></span>
+    <span>Loading node detail...</span>
+  </p>
   <div v-else class="node-page">
     <div class="node-page__rail">
       <RouterLink class="node-detail__back" to="/nodes" aria-label="Back to overview">←</RouterLink>
@@ -113,7 +116,7 @@ function formatSynchronizerHealth(value: string) {
       <div class="node-detail__sections">
         <section class="node-detail__section node-detail__section--full">
           <h3>Service Health</h3>
-          <dl class="detail-grid">
+          <dl class="detail-grid detail-grid--fixed-two-col">
             <div>
               <dt>Mode</dt>
               <dd>{{ modeLabel }}</dd>
@@ -125,10 +128,6 @@ function formatSynchronizerHealth(value: string) {
                   ? 'Not configured'
                   : node.serviceInfo.servingStatus ?? 'Health check unavailable'
               }}</dd>
-            </div>
-            <div>
-              <dt>gRPC target</dt>
-              <dd>{{ grpcNotConfigured ? 'Not configured' : node.serviceInfo.target ?? 'Not configured' }}</dd>
             </div>
             <div>
               <dt>Health probe</dt>
@@ -143,6 +142,10 @@ function formatSynchronizerHealth(value: string) {
             <div>
               <dt>Ledger version</dt>
               <dd>{{ grpcNotConfigured ? 'Not configured' : node.serviceInfo.ledgerApiVersion ?? 'n/a' }}</dd>
+            </div>
+            <div class="detail-grid__item--full-row">
+              <dt>gRPC target</dt>
+              <dd>{{ grpcNotConfigured ? 'Not configured' : node.serviceInfo.target ?? 'Not configured' }}</dd>
             </div>
           </dl>
         </section>

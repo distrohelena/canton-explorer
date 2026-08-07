@@ -327,7 +327,10 @@ watch(
         @remove-issuer-filter="removeIssuerFilter"
       />
 
-      <p v-if="!tokensResponse && loadingTokens" class="dashboard__message">Loading tokens...</p>
+      <p v-if="!tokensResponse && loadingTokens" class="dashboard__message inline-loading" role="status">
+        <span class="node-updates__spinner" aria-hidden="true"></span>
+        <span>Loading tokens...</span>
+      </p>
       <p v-else-if="tokensError" class="dashboard__message dashboard__message--error">
         {{ tokensError }}
       </p>

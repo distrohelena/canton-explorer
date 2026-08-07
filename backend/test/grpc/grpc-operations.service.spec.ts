@@ -133,7 +133,7 @@ describe('GrpcOperationsService', () => {
     expect(result.ledgerApiVersion).toBeNull();
   });
 
-  it('reads traffic state for every connected synchronizer', async () => {
+  it('reads traffic state for every connected synchronizer, using the logical synchronizer id', async () => {
     const trafficControlStateAsync = jest.fn().mockResolvedValue({
       trafficState: {
         extraTrafficPurchased: '1000000',
@@ -148,10 +148,13 @@ describe('GrpcOperationsService', () => {
       create: () => ({
         participantStatusService: {
           getParticipantStatusAsync: jest.fn().mockResolvedValue({
-            status: {
-              connectedSynchronizers: [
-                { physicalSynchronizerId: 'global-sync', health: 'healthy' },
-              ],
+            kind: {
+              oneofKind: 'status',
+              status: {
+                connectedSynchronizers: [
+                  { physicalSynchronizerId: 'global-sync::1220abc::35-0', health: 'healthy' },
+                ],
+              },
             },
           }),
         },
@@ -159,9 +162,13 @@ describe('GrpcOperationsService', () => {
       }),
     } as never);
 
+    // TrafficControlService.TrafficControlState rejects the physical synchronizer id (with its
+    // trailing ::<protocolVersion>-<serial> segment) with a deserialization error; it needs the
+    // logical id underneath. The response still reports the original physical id, since that's
+    // what identifies the connected synchronizer everywhere else in the app.
     await expect(service.fetchTrafficStates(grpcNode)).resolves.toEqual([
       {
-        synchronizerId: 'global-sync',
+        synchronizerId: 'global-sync::1220abc::35-0',
         extraTrafficPurchased: '1000000',
         extraTrafficConsumed: '250000',
         baseTrafficRemainder: '50000',
@@ -171,7 +178,7 @@ describe('GrpcOperationsService', () => {
       },
     ]);
     expect(trafficControlStateAsync).toHaveBeenCalledWith({
-      synchronizerId: 'global-sync',
+      synchronizerId: 'global-sync::1220abc',
     });
   });
 
@@ -213,6 +220,49 @@ describe('GrpcOperationsService', () => {
     });
 
     expect(result).toEqual(['Alice', 'Carol']);
+    expect(disposeAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('lists known party fingerprints with an explicit filter/limit request shape', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const listPartiesAsync = jest.fn().mockResolvedValue({
+      results: [{ party: 'Alice::1220abc' }],
+    });
+    const listKnownPartiesAsync = jest.fn().mockResolvedValue({
+      partyDetails: [{ party: 'Bob::1220def', isLocal: true }],
+    });
+    const service = new GrpcOperationsService({
+      create: () => ({
+        topologyAggregationService: { listPartiesAsync },
+        partyManagementService: { listKnownPartiesAsync },
+        disposeAsync,
+      }),
+    } as never);
+
+    const result = await service.listKnownPartyFingerprints({
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      grpc: {
+        ledgerTarget: 'localhost:5012',
+        ledgerAdminTarget: 'localhost:5013',
+        participantAdminTarget: 'localhost:5014',
+        useTls: false,
+        connectTimeoutMs: 5000,
+      },
+    });
+
+    // See the comment in "fetches party topology mappings..." above: filterParty/filterParticipant/
+    // limit must always be set explicitly or Canton rejects the request outright.
+    expect(listPartiesAsync).toHaveBeenCalledWith({
+      filterParty: '',
+      filterParticipant: '',
+      synchronizerIds: [],
+      limit: expect.any(Number),
+    });
+    expect(result).toEqual(['1220abc', '1220def']);
     expect(disposeAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -991,15 +1041,22 @@ describe('GrpcOperationsService', () => {
       }
     ).fetchPartyTopology(grpcNode, 'Alice');
 
-    expect(listPartiesAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ filterParty: 'Alice', synchronizerIds: [] }),
-    );
-    expect(listKeyOwnersAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filterKeyOwnerUid: 'Alice',
-        synchronizerIds: [],
-      }),
-    );
+    // filterParticipant/filterKeyOwnerType/limit must always be set explicitly: the gRPC transport
+    // serializes these plain request objects without applying protobuf defaults for omitted fields,
+    // so a missing scalar produces bytes Canton's server rejects with "Request message serialization
+    // failure" instead of the intended empty-filter/unbounded-limit behavior.
+    expect(listPartiesAsync).toHaveBeenCalledWith({
+      filterParty: 'Alice',
+      filterParticipant: '',
+      synchronizerIds: [],
+      limit: expect.any(Number),
+    });
+    expect(listKeyOwnersAsync).toHaveBeenCalledWith({
+      filterKeyOwnerType: '',
+      filterKeyOwnerUid: 'Alice',
+      limit: expect.any(Number),
+      synchronizerIds: [],
+    });
     expect(result).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -1321,38 +1378,41 @@ describe('GrpcOperationsService', () => {
       create: () => ({
         participantStatusService: {
           getParticipantStatusAsync: jest.fn().mockResolvedValue({
-            status: {
-              uid: 'participant-1::1220abc',
-              uptime: { seconds: '3600', nanos: 0 },
-              ports: {
-                admin: 5012,
-                ledger: 5011,
+            kind: {
+              oneofKind: 'status',
+              status: {
+                uid: 'participant-1::1220abc',
+                uptime: { seconds: '3600', nanos: 0 },
+                ports: {
+                  admin: 5012,
+                  ledger: 5011,
+                },
+                active: true,
+                topologyQueues: {
+                  manager: 1,
+                  dispatcher: 2,
+                  clients: 3,
+                },
+                components: [
+                  {
+                    name: 'sync-service',
+                    kind: 'ok',
+                    description: 'running',
+                  },
+                ],
+                version: '3.4.0',
+                connectedSynchronizers: [
+                  {
+                    physicalSynchronizerId: 'physical::1220def',
+                    health: 'healthy',
+                  },
+                  {
+                    physicalSynchronizerId: '',
+                    health: 'unhealthy',
+                  },
+                ],
+                supportedProtocolVersions: [30, 31],
               },
-              active: true,
-              topologyQueues: {
-                manager: 1,
-                dispatcher: 2,
-                clients: 3,
-              },
-              components: [
-                {
-                  name: 'sync-service',
-                  kind: 'ok',
-                  description: 'running',
-                },
-              ],
-              version: '3.4.0',
-              connectedSynchronizers: [
-                {
-                  physicalSynchronizerId: 'physical::1220def',
-                  health: 'healthy',
-                },
-                {
-                  physicalSynchronizerId: '',
-                  health: 'unhealthy',
-                },
-              ],
-              supportedProtocolVersions: [30, 31],
             },
           }),
         },
@@ -1408,10 +1468,13 @@ describe('GrpcOperationsService', () => {
       create: () => ({
         participantStatusService: {
           getParticipantStatusAsync: jest.fn().mockResolvedValue({
-            notInitialized: {
-              active: false,
-              waitingForExternalInput: 'nodeTopology',
-              version: '3.4.0',
+            kind: {
+              oneofKind: 'notInitialized',
+              notInitialized: {
+                active: false,
+                waitingForExternalInput: 'nodeTopology',
+                version: '3.4.0',
+              },
             },
           }),
         },
@@ -1440,6 +1503,32 @@ describe('GrpcOperationsService', () => {
         active: false,
         waitingForExternalInput: 'node_topology',
         version: '3.4.0',
+      },
+    });
+    expect(disposeAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to a default not-initialized status when the response carries neither oneof branch', async () => {
+    const disposeAsync = jest.fn().mockResolvedValue(undefined);
+    const service = new GrpcOperationsService({
+      create: () => ({
+        participantStatusService: {
+          getParticipantStatusAsync: jest.fn().mockResolvedValue({
+            kind: { oneofKind: undefined },
+          }),
+        },
+        disposeAsync,
+      }),
+    } as never);
+
+    const result = await service.fetchParticipantStatus(grpcNode);
+
+    expect(result).toEqual({
+      participantStatus: null,
+      notInitialized: {
+        active: false,
+        waitingForExternalInput: 'unspecified',
+        version: null,
       },
     });
     expect(disposeAsync).toHaveBeenCalledTimes(1);

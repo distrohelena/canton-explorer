@@ -64,6 +64,7 @@ export interface GrpcTokenHolderObservation {
 const HOLDING_V2_INTERFACE_MODULE = 'Splice.Api.Token.HoldingV2';
 const HOLDING_V2_INTERFACE_ENTITY = 'Holding';
 const HOLDING_V2_PAGE_SIZE = 500;
+const TOPOLOGY_LIST_PARTIES_LIMIT = 1000;
 const CANTON_COIN_TOKEN_ID = 'canton-coin';
 const CANTON_COIN_TOKEN_NAME = 'Canton Coin';
 const NATIVE_AMULET_INTRINSIC_ID = 'Amulet';
@@ -280,7 +281,10 @@ export class GrpcOperationsService {
     return this.withClient(node, 'listKnownPartyFingerprints', async (client) => {
       const [partyTopologyResponse, localParties] = await Promise.all([
         client.topologyAggregationService.listPartiesAsync({
+          filterParty: '',
+          filterParticipant: '',
           synchronizerIds: [],
+          limit: TOPOLOGY_LIST_PARTIES_LIMIT,
         }),
         this.listLocalPartiesWithClient(client),
       ]);
@@ -382,10 +386,14 @@ export class GrpcOperationsService {
           await Promise.all([
             client.topologyAggregationService.listPartiesAsync({
               filterParty: partyId,
+              filterParticipant: '',
               synchronizerIds: [],
+              limit: TOPOLOGY_LIST_PARTIES_LIMIT,
             }),
             client.topologyAggregationService.listKeyOwnersAsync({
+              filterKeyOwnerType: '',
               filterKeyOwnerUid: partyId,
+              limit: TOPOLOGY_LIST_PARTIES_LIMIT,
               synchronizerIds: [],
             }),
             this.tryListRawPartyToParticipant(client, partyId),
@@ -527,9 +535,11 @@ export class GrpcOperationsService {
 
     return this.withClient(node, 'fetchParticipantStatus', async (client) => {
       const response = await client.participantStatusService.getParticipantStatusAsync({});
-      const status = response.status;
+      const { kind } = response;
 
-      if (status) {
+      if (kind.oneofKind === 'status') {
+        const { status } = kind;
+
         return {
           participantStatus: {
             uid: this.nullIfEmptyString(status.uid),
@@ -558,18 +568,22 @@ export class GrpcOperationsService {
         };
       }
 
-      if (response.notInitialized) {
+      if (kind.oneofKind === 'notInitialized') {
         return {
           participantStatus: null,
           notInitialized: {
-            active: response.notInitialized.active,
+            active: kind.notInitialized.active,
             waitingForExternalInput: this.mapWaitingForExternalInput(
-              response.notInitialized.waitingForExternalInput,
+              kind.notInitialized.waitingForExternalInput,
             ),
-            version: this.nullIfEmptyString(response.notInitialized.version),
+            version: this.nullIfEmptyString(kind.notInitialized.version),
           },
         };
       }
+
+      appLogger.warn(
+        `[grpc] node=${node.id} op=fetchParticipantStatus unmapped response kind raw=${JSON.stringify(kind)}`,
+      );
 
       return {
         participantStatus: null,
@@ -589,12 +603,13 @@ export class GrpcOperationsService {
 
     return this.withClient(node, 'fetchTrafficStates', async (client) => {
       const response = await client.participantStatusService.getParticipantStatusAsync({});
-      const synchronizers = response.status?.connectedSynchronizers ?? [];
+      const synchronizers =
+        response.kind.oneofKind === 'status' ? response.kind.status.connectedSynchronizers : [];
 
       return Promise.all(
         synchronizers.map(async (synchronizer) => {
           const stateResponse = await client.trafficControlService.trafficControlStateAsync({
-            synchronizerId: synchronizer.physicalSynchronizerId,
+            synchronizerId: this.toLogicalSynchronizerId(synchronizer.physicalSynchronizerId),
           });
           const state = stateResponse.trafficState;
 
@@ -1331,6 +1346,21 @@ export class GrpcOperationsService {
 
     const fingerprint = normalizedPartyId.slice(separatorIndex + 2).trim();
     return fingerprint.length > 0 ? fingerprint : null;
+  }
+
+  /**
+   * Physical synchronizer ids carry a trailing `::<protocolVersion>-<serial>` segment
+   * (e.g. `global-domain::<fingerprint>::35-0`). TrafficControlService.TrafficControlState
+   * takes the logical synchronizer id and rejects the physical form with a deserialization
+   * error, so this strips that suffix when present.
+   */
+  private toLogicalSynchronizerId(synchronizerId: string): string {
+    const segments = synchronizerId.split('::');
+    const lastSegment = segments[segments.length - 1];
+
+    return segments.length > 1 && /^\d+-\d+$/.test(lastSegment)
+      ? segments.slice(0, -1).join('::')
+      : synchronizerId;
   }
 
   private extractRawTopologySynchronizerId(

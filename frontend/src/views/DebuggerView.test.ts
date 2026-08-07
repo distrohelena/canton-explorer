@@ -629,7 +629,7 @@ describe('DebuggerView', () => {
 
     await renderAt('/debugger?updateId=update-64');
 
-    const loading = await screen.findByText('Loading debugger session...');
+    const loading = (await screen.findByText('Loading debugger session...')).closest('p');
 
     expect(loading).toHaveClass('debugger-view__loading-state');
     expect(loading).not.toHaveClass('node-detail__message');

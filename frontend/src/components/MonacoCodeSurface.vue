@@ -327,9 +327,11 @@ onBeforeUnmount(() => {
   <div class="monaco-surface">
     <div
       v-if="loading"
-      class="monaco-surface__state monaco-surface__state--loading"
+      class="monaco-surface__state monaco-surface__state--loading inline-loading"
+      role="status"
     >
-      Loading editor...
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading editor...</span>
     </div>
     <div
       v-else-if="loadError"

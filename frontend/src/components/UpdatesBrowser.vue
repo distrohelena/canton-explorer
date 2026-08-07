@@ -679,26 +679,23 @@ function partyLink(party: string): string {
       />
     </div>
 
-    <p v-if="!updatesResponse && loading" class="dashboard__message">
-      {{ loadingMessage }}
-    </p>
-    <p v-else-if="error" class="dashboard__message dashboard__message--error">
+    <p v-if="error" class="dashboard__message dashboard__message--error">
       {{ error }}
     </p>
     <p
-      v-else-if="updatesResponse && renderedUpdates.length === 0"
+      v-else-if="updatesResponse && renderedUpdates.length === 0 && !loading"
       class="dashboard__message"
     >
       {{ emptyMessage }}
     </p>
 
     <section
-      v-if="updatesResponse && renderedUpdates.length > 0"
+      v-if="!error && (loading || renderedUpdates.length > 0)"
       class="node-updates__section"
       :aria-busy="loading ? 'true' : 'false'"
     >
       <div
-        v-if="loading"
+        v-if="loading && renderedUpdates.length > 0"
         class="node-updates__overlay"
         role="status"
         :aria-label="spinnerLabel"
@@ -708,7 +705,7 @@ function partyLink(party: string): string {
 
       <div
         class="node-updates__table"
-        :class="{ 'node-updates__table--loading': loading }"
+        :class="{ 'node-updates__table--loading': loading && renderedUpdates.length > 0 }"
         role="table"
         :aria-label="tableAriaLabel"
       >
@@ -722,6 +719,15 @@ function partyLink(party: string): string {
           <span role="columnheader">Record Time</span>
           <span role="columnheader">Parties</span>
           <span role="columnheader">Est. USD</span>
+        </div>
+
+        <div
+          v-if="loading && renderedUpdates.length === 0"
+          class="node-updates__row node-updates__row--loading"
+          role="row"
+        >
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>{{ loadingMessage }}</span>
         </div>
 
         <div

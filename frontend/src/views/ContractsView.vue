@@ -19,7 +19,10 @@ onMounted(async () => {
 <template>
   <section class="dashboard">
     <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
-    <p v-else-if="!nodes" class="dashboard__message">Loading contracts...</p>
+    <p v-else-if="!nodes" class="dashboard__message inline-loading" role="status">
+      <span class="node-updates__spinner" aria-hidden="true"></span>
+      <span>Loading contracts...</span>
+    </p>
     <div v-else class="contracts-page">
       <section class="activity-home__updates-section">
         <ContractsBrowser

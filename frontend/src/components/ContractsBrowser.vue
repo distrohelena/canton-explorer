@@ -629,19 +629,21 @@ async function setNodeFilters(nodeIds: string[]) {
       />
     </div>
 
-    <p v-if="!contractsResponse && loading" class="dashboard__message">{{ loadingMessage }}</p>
-    <p v-else-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
-    <p v-else-if="contractsResponse && renderedContracts.length === 0" class="dashboard__message">
+    <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
+    <p
+      v-else-if="contractsResponse && renderedContracts.length === 0 && !loading"
+      class="dashboard__message"
+    >
       {{ emptyMessage }}
     </p>
 
     <section
-      v-if="contractsResponse && renderedContracts.length > 0"
+      v-if="!error && (loading || renderedContracts.length > 0)"
       class="node-updates__section"
       :aria-busy="loading ? 'true' : 'false'"
     >
       <div
-        v-if="loading"
+        v-if="loading && renderedContracts.length > 0"
         class="node-updates__overlay"
         role="status"
         :aria-label="spinnerLabel"
@@ -650,10 +652,12 @@ async function setNodeFilters(nodeIds: string[]) {
       </div>
 
       <ContractsTable
-        :class="{ 'node-updates__table--loading': loading }"
+        :class="{ 'node-updates__table--loading': loading && renderedContracts.length > 0 }"
         :contracts="renderedContracts"
         :show-node-column="showNodeColumn"
         :aria-label="tableAriaLabel"
+        :loading="loading"
+        :loading-message="loadingMessage"
       />
     </section>
   </section>
