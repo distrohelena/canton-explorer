@@ -8,7 +8,7 @@ Update all user-facing pagination defaults and selector options from `10/25/50/1
 
 - Set the shared frontend pagination default to `15`.
 - Set the shared frontend page-size options to `15`, `30`, `50`, `100`, and `200`.
-- Update backend and frontend API method defaults that currently use `25` so direct callers receive the same default page size of `15`.
+- Update backend and frontend API method defaults that currently use `25` to `30`, matching the requested `25` to `30` migration.
 - Update pagination-specific tests and documentation so their expected defaults and option values match the new contract.
 - Preserve explicit non-default limits and unrelated numeric constants; this is not a blanket replacement of every `10` or `25` in the repository.
 - Preserve existing URL behavior: the default page size is omitted from query parameters, while selected non-default sizes are serialized.
