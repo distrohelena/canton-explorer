@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchActiveParties,
   fetchActivityHistory,
+  fetchBranding,
   fetchLocalParties,
   fetchTokenDetail,
   fetchTokenHolders,
@@ -556,6 +557,25 @@ describe('fetchNodes', () => {
     expect(resolveApiBaseUrl('', false, '8080', 'example.com')).toBe('/api');
     expect(resolveApiBaseUrl('', false, '46000', 'localhost')).toBe('/api');
     expect(resolveApiBaseUrl('', true, '46000', 'localhost')).toBe('http://localhost:4600/api');
+  });
+
+  it('loads the configured branding from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        applicationTitle: 'Configured App',
+        headerTitle: 'Configured Header',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchBranding();
+
+    expect(result).toEqual({
+      applicationTitle: 'Configured App',
+      headerTitle: 'Configured Header',
+    });
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/branding');
   });
 
   it('loads node summaries from the backend API', async () => {

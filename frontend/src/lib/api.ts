@@ -4,6 +4,7 @@ import type {
   PartyFingerprintsResponse,
 } from '../types/active-parties';
 import type { ActivityHistoryResponse } from '../types/activity';
+import type { BrandingConfig } from '../types/branding';
 import type { CantonCoinHistoryResponse } from '../types/market';
 import type {
   GlobalContractsResponse,
@@ -107,6 +108,10 @@ async function postJson<T>(path: string, body?: unknown): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+export function fetchBranding(): Promise<BrandingConfig> {
+  return fetchJson<BrandingConfig>('/branding');
 }
 
 export function fetchNodes(): Promise<NodeSnapshot[]> {
