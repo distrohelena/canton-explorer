@@ -61,6 +61,7 @@ describe('styles.css', () => {
     expect(copyButtonStyles).toContain('width: 32px;');
     expect(copyButtonStyles).toContain('height: 32px;');
     expect(copyButtonStyles).toContain('border: none;');
+    expect(copyButtonStyles).toContain('background: transparent;');
   });
 
   it('keeps update party copy controls aligned at the right edge of each row', () => {
