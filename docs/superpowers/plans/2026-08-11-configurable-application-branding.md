@@ -269,7 +269,7 @@ Expected: the existing hard-coded header remains “Canton Explorer” and `docu
 
 - [ ] **Step 3: Load and apply the branding in `App.vue`.**
 
-Import `fetchBranding` and the `BrandingConfig` type. Define the independent default object, store it in a `ref`, and add an async startup loader that catches request errors and retains the defaults. Use a watcher with `immediate: true` (or equivalent setup logic) to set `document.title` to `branding.applicationTitle`, and start the request from `onMounted`.
+Import `fetchBranding` and the `BrandingConfig` type. Define the independent default object, store it in a `ref`, and add an async startup loader that catches request errors and retains the defaults. Use a watcher with `immediate: true` (or equivalent setup logic) to set `document.title` to `branding.applicationTitle`, and start the request from `onMounted`. Because the existing `onMounted` callback returns from its modern `addEventListener` branch, start the branding loader before that return or in a separate `onMounted` callback so it always runs in normal browsers and legacy listener environments.
 
 Replace the hard-coded header text in the existing `.app-brand__title` element with `branding.headerTitle`. Do not alter navigation labels, route titles, or the static `frontend/index.html` fallback.
 
@@ -311,9 +311,10 @@ Run:
 
 ```bash
 rtk npm run build --workspace frontend
+rtk npm run build --workspace backend
 ```
 
-Expected: `vue-tsc -b` and the Vite production build complete successfully.
+Expected: the frontend `vue-tsc -b`/Vite production build and the backend Nest build complete successfully.
 
 - [ ] **Step 3: Check the diff and final branch state.**
 
