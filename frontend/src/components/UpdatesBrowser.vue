@@ -733,7 +733,7 @@ function partyLink(party: string): string {
           role="row"
         >
           <span v-if="showNodeColumn" role="columnheader">Node</span>
-          <span role="columnheader">Event Offset</span>
+          <span role="columnheader">Offset</span>
           <span role="columnheader">Record Time</span>
           <span role="columnheader">Parties</span>
           <span class="contracts-table__record-time-header" role="columnheader">

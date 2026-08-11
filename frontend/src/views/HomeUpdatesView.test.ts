@@ -58,6 +58,8 @@ describe('HomeUpdatesView', () => {
     expect(screen.queryByRole('heading', { name: 'Latest Updates' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     expect(screen.queryByText('Show')).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Offset' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Event Offset' })).not.toBeInTheDocument();
     const filterButton = screen.getByRole('button', { name: 'Advanced Filter' });
     expect(filterButton).toHaveAttribute('title', 'Advanced Filter');
     expect(filterButton).toHaveClass('node-updates__filter-button');
