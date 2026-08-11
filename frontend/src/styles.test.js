@@ -7,6 +7,8 @@ describe('styles.css', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const homeDashboardStyles =
       styles.match(/\.home-dashboard \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const homeCardStyles =
+      styles.match(/\.home-dashboard__card \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(homeDashboardStyles).toContain('display: grid;');
     expect(homeDashboardStyles).toContain(
@@ -17,6 +19,9 @@ describe('styles.css', () => {
     expect(styles).toContain('.home-dashboard__view-all-row');
     expect(styles).toContain('@media (max-width: 720px)');
     expect(styles).toContain('.home-dashboard {\n    grid-template-columns: 1fr;');
+    expect(homeCardStyles).toContain('border: none;');
+    expect(homeCardStyles).toContain('background: transparent;');
+    expect(homeCardStyles).toContain('padding: 0;');
   });
 
   it('highlights the search input with only a bottom line when focused', () => {

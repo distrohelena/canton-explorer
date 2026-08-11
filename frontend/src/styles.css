@@ -2673,10 +2673,9 @@ h3 {
 
 .home-dashboard__card {
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  background: var(--surface-muted);
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 .home-dashboard__card .node-detail__section {
