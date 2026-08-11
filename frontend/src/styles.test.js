@@ -43,6 +43,10 @@ describe('styles.css', () => {
     expect(styles).toContain(
       '.home-dashboard__card .tokens-page__table--compact > .tokens-page__row.node-updates__row--link',
     );
+    expect(styles).toContain(
+      '.home-dashboard__card .node-updates__table--compact .node-updates__row--compact > *:not(:last-child)::after',
+    );
+    expect(styles).toContain('display: none;');
     expect(viewAllRowStyles).toContain('justify-content: center;');
   });
 
