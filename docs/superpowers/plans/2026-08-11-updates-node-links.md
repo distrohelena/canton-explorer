@@ -21,7 +21,7 @@ Use a hoisted `push` spy for the mocked `useRouter`, and set the fixture node ID
 
 - [ ] **Step 2: Add assertions for the node link and navigation isolation**
 
-Assert that the global Updates section contains exactly one node link named `Participant 1`, has the existing Updates content-link class, and points to `/nodes/participant%2F1`. Click that link and assert the router push spy has not been called for the update route. Then click the surrounding update row and assert the update route is pushed. Add mandatory Enter and Space assertions for the node link and row to verify link events cannot bubble into row navigation.
+Assert that the global Updates section contains two node links named `Participant 1`, each has the existing Updates content-link class, and each points to `/nodes/participant%2F1`. Click the first node link and assert the router push spy has not been called for the update route. Then click the surrounding update row and assert the update route is pushed. Add mandatory Enter and Space assertions for a node link and the row to verify link events cannot bubble into row navigation.
 
 - [ ] **Step 3: Run the focused test to verify it fails for the missing node link**
 
