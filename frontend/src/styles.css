@@ -2139,12 +2139,12 @@ body {
 }
 
 .app-search-form {
-  flex: 0 1 250px;
+  flex: 0 1 300px;
   min-width: 0;
 }
 
 .app-search {
-  width: min(250px, 100%);
+  width: min(300px, 100%);
   min-width: 220px;
   border: 0;
   border-bottom: 2px solid transparent;

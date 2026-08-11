@@ -13,8 +13,8 @@ describe('styles.css', () => {
     const searchFocusVisibleStyles = styles.match(/\.app-search:focus-visible \{([\s\S]*?)\n\}/)?.[1];
 
     expect(searchStyles).toContain('background: transparent;');
-    expect(searchStyles).toContain('width: min(250px, 100%);');
-    expect(searchFormStyles).toContain('flex: 0 1 250px;');
+    expect(searchStyles).toContain('width: min(300px, 100%);');
+    expect(searchFormStyles).toContain('flex: 0 1 300px;');
     expect(searchFormStyles).toContain('min-width: 0;');
     expect(searchStyles).toContain('border-bottom: 2px solid transparent;');
     expect(searchHoverStyles).toContain('border-bottom-color: var(--line-soft);');
