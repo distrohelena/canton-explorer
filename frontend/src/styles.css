@@ -2138,6 +2138,11 @@ body {
   }
 }
 
+.app-search-form {
+  flex: 1 1 608px;
+  min-width: 0;
+}
+
 .app-search {
   width: min(608px, 100%);
   min-width: 220px;

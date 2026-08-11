@@ -6,12 +6,16 @@ describe('styles.css', () => {
   it('highlights the search input with only a bottom line when focused', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];
+    const searchFormStyles =
+      styles.match(/\.app-search-form \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const searchHoverStyles = styles.match(/\.app-search:hover \{([\s\S]*?)\n\}/)?.[1];
     const searchFocusStyles = styles.match(/\.app-search:focus \{([\s\S]*?)\n\}/)?.[1];
     const searchFocusVisibleStyles = styles.match(/\.app-search:focus-visible \{([\s\S]*?)\n\}/)?.[1];
 
     expect(searchStyles).toContain('background: transparent;');
     expect(searchStyles).toContain('width: min(608px, 100%);');
+    expect(searchFormStyles).toContain('flex: 1 1 608px;');
+    expect(searchFormStyles).toContain('min-width: 0;');
     expect(searchStyles).toContain('border-bottom: 2px solid transparent;');
     expect(searchHoverStyles).toContain('border-bottom-color: var(--line-soft);');
     expect(searchFocusStyles).toContain('background: transparent;');
