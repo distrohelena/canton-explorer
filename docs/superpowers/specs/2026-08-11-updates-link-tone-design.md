@@ -6,11 +6,11 @@ Make content links feel less visually dominant while keeping them recognizable a
 
 ## Scope
 
-This first preview is limited to the global Updates page rendered by `HomeUpdatesView`. It affects content links rendered inside `.activity-home__updates-section`, including update offsets and party links, without changing party-detail Updates views, navigation links, toolbar controls, or the shared link styling used elsewhere in the application.
+This first preview is limited to the global Updates page rendered by `HomeUpdatesView`. It affects content links rendered inside `.activity-home__updates-section--global-updates`, including update offsets and party links, without changing party-detail Updates views, Contracts or Purchases views, navigation links, toolbar controls, or the shared link styling used elsewhere in the application.
 
 ## Design
 
-Keep the existing link affordance and interaction behavior, including the hover underline and keyboard focus treatment. Add an Updates-only selector for `.activity-home__updates-section .contract-detail__link` with this declaration:
+Keep the existing link affordance and interaction behavior, including the hover underline and keyboard focus treatment. Add an Updates-only selector for `.activity-home__updates-section--global-updates .contract-detail__link` with this declaration:
 
 ```css
 color: var(--blue-500);

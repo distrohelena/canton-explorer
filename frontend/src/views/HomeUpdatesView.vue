@@ -4,7 +4,7 @@ import UpdatesBrowser from '../components/UpdatesBrowser.vue';
 
 <template>
   <section class="activity-home">
-    <section class="activity-home__updates-section">
+    <section class="activity-home__updates-section activity-home__updates-section--global-updates">
       <UpdatesBrowser
         scope="global"
         path="/"
