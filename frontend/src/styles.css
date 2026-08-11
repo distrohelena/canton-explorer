@@ -2911,6 +2911,13 @@ h3 {
   gap: 8px;
 }
 
+.node-updates__subtitle {
+  margin: 4px 0 0;
+  color: var(--text-500);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
 .node-updates__content {
   display: flex;
   flex-direction: column;

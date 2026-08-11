@@ -56,6 +56,15 @@ describe('styles.css', () => {
     expect(footerStyles).toContain('max-width: 1398px;');
   });
 
+  it('styles the Updates offset range subtitle below the title', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const subtitleStyles =
+      styles.match(/\.node-updates__subtitle \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(subtitleStyles).toContain('margin: 4px 0 0;');
+    expect(subtitleStyles).toContain('color: var(--text-500);');
+  });
+
   it('keeps the Contracts PQS pill beside the Created Time header', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const headerStyles = styles.match(/\.contracts-table__record-time-header \{([\s\S]*?)\n\}/)?.[1] ?? '';

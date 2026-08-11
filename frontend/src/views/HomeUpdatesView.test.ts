@@ -11,11 +11,20 @@ vi.mock('../lib/api', () => ({
       {
         nodeId: 'participant-1',
         label: 'Participant 1',
-        eventOffset: '1',
-        updateId: 'update-1',
+        eventOffset: '2',
+        updateId: 'update-2',
         recordTime: '2026-07-01T12:00:00.000Z',
         parties: ['Alice'],
         estimatedTrafficUsd: '12.34',
+      },
+      {
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        eventOffset: '1',
+        updateId: 'update-0',
+        recordTime: '2026-07-01T11:59:00.000Z',
+        parties: ['Alice'],
+        estimatedTrafficUsd: '10.00',
       },
     ],
   }),
@@ -44,6 +53,7 @@ describe('HomeUpdatesView', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByText('From 1 to 2 offset')).toBeInTheDocument();
     expect(screen.queryByText('Updates', { selector: '.activity-home__eyebrow' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Latest Updates' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();

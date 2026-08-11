@@ -298,6 +298,21 @@ const headingText = computed(() => {
   return props.title;
 });
 
+const offsetRange = computed(() => {
+  const offsets = renderedUpdates.value
+    .map((update) => update.eventOffset.trim())
+    .filter((offset) => offset.length > 0);
+
+  if (offsets.length === 0) {
+    return null;
+  }
+
+  return {
+    from: offsets[offsets.length - 1] ?? offsets[0],
+    to: offsets[0],
+  };
+});
+
 async function loadTemplateOptions() {
   if (templatesLoaded.value) {
     return;
@@ -640,6 +655,9 @@ function partyLink(party: string): string {
     <header class="node-detail__hero">
       <div v-if="showTitle">
         <component :is="headingTag">{{ headingText }}</component>
+        <p v-if="offsetRange" class="node-updates__subtitle">
+          From {{ offsetRange.from }} to {{ offsetRange.to }} offset
+        </p>
       </div>
       <UpdatesToolbar
         :advanced-filter-expanded="showAdvancedFilter"
