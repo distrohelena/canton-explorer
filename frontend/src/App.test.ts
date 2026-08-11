@@ -256,6 +256,23 @@ describe('App', () => {
     expect(exploreButton).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('opens and closes the Explore menu when hovering over its area', async () => {
+    const { container } = await renderAt('/');
+
+    const exploreArea = container.querySelector('.app-explore');
+    expect(exploreArea).not.toBeNull();
+
+    await fireEvent.pointerEnter(exploreArea!);
+
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Updates' })).toHaveAttribute('aria-expanded', 'true');
+
+    await fireEvent.pointerLeave(exploreArea!);
+
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Updates' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('updates the Explore label to the selected page title', async () => {
     const { router } = await renderAt('/');
 

@@ -111,6 +111,10 @@ function toggleExploreMenu() {
   exploreMenuOpen.value = !exploreMenuOpen.value;
 }
 
+function openExploreMenu() {
+  exploreMenuOpen.value = true;
+}
+
 function closeExploreMenu() {
   exploreMenuOpen.value = false;
 }
@@ -227,7 +231,11 @@ onBeforeUnmount(() => {
             <h1 class="app-brand__title">{{ branding.headerTitle }}</h1>
           </RouterLink>
           <div class="app-toolbar">
-            <div class="app-explore">
+            <div
+              class="app-explore"
+              @pointerenter="openExploreMenu"
+              @pointerleave="closeExploreMenu"
+            >
               <button
                 id="explore-menu-button"
                 type="button"
