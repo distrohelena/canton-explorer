@@ -29,6 +29,14 @@ describe('styles.css', () => {
     expect(styles).toContain('.home-dashboard__card .node-updates__section');
     expect(styles).toContain('flex: 1;');
     expect(styles).toContain('min-height: 24px;');
+    expect(styles).toContain('.home-dashboard__card .node-updates__table');
+    expect(styles).toContain('flex: 1 1 0;');
+    expect(styles).toContain(
+      '.home-dashboard__card .node-updates__table--compact > .node-updates__row--link',
+    );
+    expect(styles).toContain(
+      '.home-dashboard__card .tokens-page__table--compact > .tokens-page__row.node-updates__row--link',
+    );
   });
 
   it('highlights the search input with only a bottom line when focused', () => {
