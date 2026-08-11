@@ -598,7 +598,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  min-height: 72px;
+  min-height: 58px;
 }
 
 .monaco-surface {

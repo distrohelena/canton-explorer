@@ -212,6 +212,13 @@ describe('styles.css', () => {
     expect(footerStyles).toContain('max-width: 1398px;');
   });
 
+  it('uses the compact shared application header height', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const titlebarStyles = styles.match(/\.app-titlebar \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(titlebarStyles).toContain('min-height: 58px;');
+  });
+
   it('reduces shared table body text by five percent', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const tableBodyRule = styles.match(
