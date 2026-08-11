@@ -2139,7 +2139,7 @@ body {
 }
 
 .app-search {
-  width: min(468px, 100%);
+  width: min(608px, 100%);
   min-width: 220px;
   border: 0;
   border-bottom: 2px solid transparent;
