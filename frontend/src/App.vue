@@ -18,6 +18,7 @@ const branding = ref<BrandingConfig>({
   applicationTitle: DEFAULT_APPLICATION_TITLE,
   headerTitle: DEFAULT_HEADER_TITLE,
 });
+const previousDocumentTitle = document.title;
 const themePreference = ref<ThemePreference>('system');
 const systemPrefersDark = ref(false);
 const exploreMenuOpen = ref(false);
@@ -212,6 +213,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleDocumentClick);
   removeSystemThemeListener?.();
+  document.title = previousDocumentTitle;
 });
 </script>
 

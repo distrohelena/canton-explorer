@@ -165,14 +165,34 @@ describe('App', () => {
   });
 
   it('keeps independent defaults when branding loading is rejected', async () => {
-    fetchBrandingMock.mockRejectedValueOnce(new Error('branding unavailable'));
+    const brandingRequest = Promise.reject(new Error('branding unavailable'));
+    fetchBrandingMock.mockReturnValueOnce(brandingRequest);
 
     await renderAt('/');
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
-      expect(document.title).toBe('Canton Explorer');
+    await expect(brandingRequest).rejects.toThrow('branding unavailable');
+    expect(fetchBrandingMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
+    expect(document.title).toBe('Canton Explorer');
+  });
+
+  it('restores the previous document title when the shell unmounts', async () => {
+    const previousTitle = 'Previous Page';
+    document.title = previousTitle;
+    fetchBrandingMock.mockResolvedValueOnce({
+      applicationTitle: 'Configured App',
+      headerTitle: 'Configured Header',
     });
+
+    const { unmount } = await renderAt('/');
+
+    await waitFor(() => {
+      expect(document.title).toBe('Configured App');
+    });
+
+    unmount();
+
+    expect(document.title).toBe(previousTitle);
   });
 
   it('renders home and the available navigation on the home route', async () => {
