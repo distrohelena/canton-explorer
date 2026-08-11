@@ -3559,10 +3559,15 @@ h3 {
   text-overflow: ellipsis;
 }
 
-.node-updates__row--with-node,
-.node-updates__row.activity-home__updates-row {
+.node-updates__row--with-node {
   grid-template-columns:
     minmax(120px, 0.8fr) minmax(52px, 0.34fr) minmax(110px, 0.55fr)
+    minmax(300px, 2fr) minmax(90px, 0.45fr);
+}
+
+.node-updates__row.activity-home__updates-row {
+  grid-template-columns:
+    minmax(84px, 0.56fr) minmax(52px, 0.34fr) minmax(110px, 0.55fr)
     minmax(300px, 2fr) minmax(90px, 0.45fr);
 }
 
@@ -5565,6 +5570,10 @@ h3 {
   .node-updates__row {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .activity-home__updates-section--global-updates .node-updates__row.activity-home__updates-row {
+    grid-template-columns: 1fr;
   }
 
   .node-page {

@@ -648,6 +648,10 @@ function navigateToUpdate(update: (typeof renderedUpdates.value)[number]) {
 function partyLink(party: string): string {
   return `/parties/${encodeURIComponent(party)}`;
 }
+
+function nodeLink(nodeId: string): string {
+  return `/nodes/${encodeURIComponent(nodeId)}`;
+}
 </script>
 
 <template>
@@ -767,7 +771,17 @@ function partyLink(party: string): string {
             class="activity-home__updates-node"
             role="cell"
           >
-            {{ update.label ?? "Unknown node" }}
+            <RouterLink
+              v-if="sourceTag === 'updates' && update.nodeId"
+              class="activity-home__updates-node contract-detail__link"
+              :to="nodeLink(update.nodeId)"
+              @click.stop
+              @keydown.enter.stop
+              @keydown.space.stop
+            >
+              {{ update.label ?? update.nodeId }}
+            </RouterLink>
+            <template v-else>{{ update.label ?? "Unknown node" }}</template>
           </span>
           <span class="node-updates__id" role="cell">
             <RouterLink

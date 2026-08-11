@@ -1,6 +1,8 @@
-import { cleanup, render, screen, within } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import HomeUpdatesView from './HomeUpdatesView.vue';
+
+const routerPush = vi.hoisted(() => vi.fn());
 
 vi.mock('../lib/api', () => ({
   fetchLatestUpdates: vi.fn().mockResolvedValue({
@@ -9,7 +11,7 @@ vi.mock('../lib/api', () => ({
     nextAfter: null,
     updates: [
       {
-        nodeId: 'participant-1',
+        nodeId: 'participant/1',
         label: 'Participant 1',
         eventOffset: '2',
         updateId: 'update-2',
@@ -18,7 +20,7 @@ vi.mock('../lib/api', () => ({
         estimatedTrafficUsd: '12.34',
       },
       {
-        nodeId: 'participant-1',
+        nodeId: 'participant/1',
         label: 'Participant 1',
         eventOffset: '1',
         updateId: 'update-0',
@@ -32,7 +34,7 @@ vi.mock('../lib/api', () => ({
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ fullPath: '/', query: {} }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPush }),
 }));
 
 describe('HomeUpdatesView', () => {
@@ -74,12 +76,34 @@ describe('HomeUpdatesView', () => {
     expect(filterButton).not.toHaveTextContent('Advanced Filter');
     const updatesTable = await screen.findByRole('table', { name: 'Latest updates across all nodes' });
     expect(container.querySelector('.activity-home__updates-section--global-updates')).toBeInTheDocument();
+    const nodeLinks = within(updatesTable).getAllByRole('link', { name: 'Participant 1' });
+    expect(nodeLinks).toHaveLength(2);
+    for (const nodeLink of nodeLinks) {
+      expect(nodeLink).toHaveClass('activity-home__updates-node', 'contract-detail__link');
+      expect(nodeLink).toHaveAttribute('href', '/nodes/participant%2F1');
+    }
     expect(within(updatesTable).getByRole('link', { name: '2' })).toHaveClass('contract-detail__link');
     const partyLinks = within(updatesTable).getAllByRole('link', { name: 'Alice' });
     expect(partyLinks).toHaveLength(2);
     for (const partyLink of partyLinks) {
       expect(partyLink).toHaveClass('contract-detail__link');
     }
+    const firstUpdateRow = within(updatesTable).getAllByRole('row')[1];
+    routerPush.mockClear();
+    await fireEvent.click(nodeLinks[0]);
+    expect(routerPush).not.toHaveBeenCalled();
+    await fireEvent.keyDown(nodeLinks[0], { key: 'Enter', code: 'Enter' });
+    expect(routerPush).not.toHaveBeenCalled();
+    await fireEvent.keyDown(nodeLinks[0], { key: ' ', code: 'Space' });
+    expect(routerPush).not.toHaveBeenCalled();
+    await fireEvent.click(firstUpdateRow);
+    expect(routerPush).toHaveBeenCalledTimes(1);
+    routerPush.mockClear();
+    await fireEvent.keyDown(firstUpdateRow, { key: 'Enter', code: 'Enter' });
+    expect(routerPush).toHaveBeenCalledTimes(1);
+    routerPush.mockClear();
+    await fireEvent.keyDown(firstUpdateRow, { key: ' ', code: 'Space' });
+    expect(routerPush).toHaveBeenCalledTimes(1);
     expect(screen.getByText('$12.34')).toBeInTheDocument();
     const estimateHeader = screen.getByText('Est. USD');
     const sourcePill = screen.getByText('PQS');
