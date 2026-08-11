@@ -52,7 +52,29 @@ onBeforeUnmount(() => {
     :title="`${copied ? 'Copied' : 'Copy'} ${label}`"
     @click.stop="copyValue"
   >
+    <span
+      v-if="copied"
+      class="copy-to-clipboard-button__feedback"
+      aria-hidden="true"
+    >Copied!</span>
     <svg
+      v-if="copied"
+      class="copy-to-clipboard-button__icon copy-to-clipboard-button__icon--copied"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M5 12.5 9.5 17 19 7.5"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+      />
+    </svg>
+    <svg
+      v-else
       class="copy-to-clipboard-button__icon"
       viewBox="0 0 24 24"
       aria-hidden="true"

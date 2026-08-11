@@ -4734,6 +4734,7 @@ h3 {
 }
 
 .copy-to-clipboard-button {
+  position: relative;
   display: inline-flex;
   flex: 0 0 32px;
   align-items: center;
@@ -4760,12 +4761,29 @@ h3 {
 .copy-to-clipboard-button--copied,
 .copy-to-clipboard-button--copied:hover,
 .copy-to-clipboard-button--copied:focus-visible {
-  color: var(--green-600);
+  color: var(--accent-600);
 }
 
 .copy-to-clipboard-button__icon {
   width: 17px;
   height: 17px;
+}
+
+.copy-to-clipboard-button__feedback {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--surface-muted);
+  color: var(--accent-600);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .parties-page__results {
