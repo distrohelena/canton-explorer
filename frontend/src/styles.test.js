@@ -45,6 +45,109 @@ describe('styles.css', () => {
     expect(labelStyles).toContain('color: var(--text-500);');
   });
 
+  it('defines the approved dark grape palette without changing light mode', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const lightRoot = styles.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? '';
+    const darkRoot =
+      styles.match(/^:root\[data-theme="dark"\] \{([\s\S]*?)^\}/m)?.[1] ?? '';
+
+    const darkTokens = {
+      '--text-900': '#f7f0ff',
+      '--text-800': '#e9ddf6',
+      '--text-700': '#d0c0e0',
+      '--text-600': '#b5a1c8',
+      '--text-500': '#9b87ae',
+      '--muted-text': '#a491b9',
+      '--surface-0': '#160f20',
+      '--surface-2': '#382342',
+      '--surface-page': '#1d1428',
+      '--surface-card': '#2a1b37',
+      '--surface-muted': '#24162f',
+      '--line-soft': '#4b315d',
+      '--line-strong': '#674276',
+      '--accent-600': '#a978f2',
+      '--blue-500': '#c09aff',
+      '--blue-600': '#a978f2',
+      '--blue-700': '#eddfff',
+      '--blue-50': '#3a234d',
+      '--shadow-soft': '0 16px 28px rgba(7, 2, 15, 0.35)',
+      '--nav-active-border': '#795099',
+      '--nav-active-bg': '#3b2450',
+      '--nav-active-text': '#f7f0ff',
+      '--panel-border': '#5f3c70',
+      '--panel-gradient-start': '#2a1b37',
+      '--panel-gradient-end': '#2a1b37',
+      '--chart-gradient-start': '#24162f',
+      '--chart-gradient-end': '#24162f',
+      '--chart-guide': 'rgba(192, 154, 255, 0.16)',
+      '--chart-line': '#c09aff',
+      '--panel-divider': '#4b315d',
+      '--filter-active-border': '#8a5ab1',
+      '--filter-active-bg': '#452956',
+      '--filter-chip-border': '#68447c',
+      '--filter-chip-bg': '#33203f',
+      '--back-button-border': '#6c467f',
+      '--back-button-bg': '#33203f',
+      '--back-button-shadow': '0 12px 22px rgba(45, 14, 64, 0.28)',
+      '--editor-surface': '#2a1b37',
+      '--editor-tab-surface': '#160f20',
+      '--editor-divider': '#4b315d',
+      '--editor-hover-surface': '#24162f',
+      '--editor-active-border': '#c09aff',
+      '--editor-summary-glow': '#c09aff',
+      '--editor-summary-surface': '#160f20',
+      '--editor-column-surface': '#1d1428',
+      '--editor-header-surface': '#160f20',
+      '--editor-signal-accent': '#a978f2',
+      '--editor-signal-surface': '#160f20',
+      '--editor-signal-text': '#eddfff',
+      '--editor-status-surface': '#24162f',
+      '--editor-control-surface': '#160f20',
+      '--editor-control-button': '#24162f',
+      '--editor-control-hover-border': '#c09aff',
+      '--editor-control-hover-surface': '#382342',
+      '--editor-tree-surface': '#160f20',
+      '--editor-tabs-surface': '#1d1428',
+      '--editor-tab-active-border': '#c09aff',
+      '--editor-event-active-surface': '#382342',
+      '--editor-event-active-accent': '#c09aff',
+      '--editor-event-expanded-surface': '#24162f',
+      '--editor-event-details-surface': '#1d1428',
+      '--editor-code-surface': '#160f20',
+      '--editor-workspace-shadow': '0 16px 28px rgba(7, 2, 15, 0.35)',
+      '--editor-control-shadow': '0 14px 32px rgba(7, 2, 15, 0.35)',
+      '--metadata-surface': '#160f20',
+      '--metadata-text': '#eddfff',
+      '--explore-divider': '#4b315d',
+    };
+
+    for (const [name, value] of Object.entries(darkTokens)) {
+      expect(darkRoot).toContain(`${name}: ${value};`);
+    }
+
+    expect(darkRoot).toContain('--green-600: #79e6cc;');
+    expect(darkRoot).toContain('--amber-600: #ffbe78;');
+    expect(darkRoot).toContain('--red-600: #ffa1c1;');
+    expect(darkRoot).toContain('--danger-600: #ffa1c1;');
+    expect(darkRoot).toContain('--status-healthy-bg: #21403d;');
+    expect(darkRoot).toContain('--status-degraded-bg: #4a392a;');
+    expect(darkRoot).toContain('--status-down-bg: #4d3140;');
+
+    expect(lightRoot).toContain('--surface-page: #f6f8fb;');
+    expect(lightRoot).toContain('--surface-card: #ffffff;');
+    expect(lightRoot).toContain('--blue-600: #1f6feb;');
+    expect(lightRoot).toContain('--chart-gradient-start: #f6f8fb;');
+    expect(lightRoot).toContain('--chart-gradient-end: #f6f8fb;');
+
+    expect(styles).toContain('background: var(--editor-surface, #252845);');
+    expect(styles).toContain('background: color-mix(in srgb, var(--editor-tab-surface, #1a1f37) 92%, black 8%);');
+    expect(styles).toContain('var(--editor-summary-surface, #14182c) 96%, black 4%');
+    expect(styles).toContain('box-shadow: var(--editor-workspace-shadow, 0 18px 44px rgba(9, 11, 22, 0.22));');
+    expect(styles).toContain('box-shadow: var(--editor-control-shadow, 0 14px 32px rgba(8, 10, 20, 0.34));');
+    expect(styles).toContain('background: var(--metadata-surface, #0f172a);');
+    expect(styles).toContain('color: var(--metadata-text, #dbe7ff);');
+  });
+
   it('uses the adjusted wider shared central content frame', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const appFrameStyles = styles.match(/\.app-frame \{([\s\S]*?)\n\}/)?.[1] ?? '';

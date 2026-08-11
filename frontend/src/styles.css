@@ -425,47 +425,77 @@
 }
 
 :root[data-theme="dark"] {
-  --text-900: #f3efff;
-  --text-800: #e1daf6;
-  --text-700: #cbc1e7;
-  --text-600: #aea3cf;
-  --text-500: #9085b4;
-  --muted-text: #a194c0;
-  --surface-0: #262344;
-  --surface-2: #39335d;
-  --surface-page: #1a1730;
-  --surface-card: #2a2648;
-  --surface-muted: #242040;
-  --line-soft: #514a78;
-  --line-strong: #6a6297;
-  --accent-600: #9a88ff;
-  --blue-500: #b18dff;
-  --blue-600: #9f79ff;
-  --blue-700: #f0e9ff;
-  --blue-50: #39345e;
+  --text-900: #f7f0ff;
+  --text-800: #e9ddf6;
+  --text-700: #d0c0e0;
+  --text-600: #b5a1c8;
+  --text-500: #9b87ae;
+  --muted-text: #a491b9;
+  --surface-0: #160f20;
+  --surface-2: #382342;
+  --surface-page: #1d1428;
+  --surface-card: #2a1b37;
+  --surface-muted: #24162f;
+  --line-soft: #4b315d;
+  --line-strong: #674276;
+  --accent-600: #a978f2;
+  --blue-500: #c09aff;
+  --blue-600: #a978f2;
+  --blue-700: #eddfff;
+  --blue-50: #3a234d;
   --green-600: #79e6cc;
   --amber-600: #ffbe78;
   --red-600: #ffa1c1;
   --danger-600: #ffa1c1;
-  --shadow-soft: 0 16px 28px rgba(5, 8, 18, 0.22);
-  --nav-active-border: #7565b1;
-  --nav-active-bg: #3a345f;
-  --nav-active-text: #f6f2ff;
-  --panel-border: #554d80;
-  --panel-gradient-start: #2a2648;
-  --panel-gradient-end: #2a2648;
-  --chart-gradient-start: #242040;
-  --chart-gradient-end: #242040;
-  --chart-guide: rgba(177, 141, 255, 0.16);
-  --chart-line: #b993ff;
-  --panel-divider: #4d4675;
-  --filter-active-border: #7d6ab9;
-  --filter-active-bg: #3d3664;
-  --filter-chip-border: #655a96;
-  --filter-chip-bg: #302a53;
-  --back-button-border: #685d9a;
-  --back-button-bg: #302a53;
-  --back-button-shadow: 0 12px 22px rgba(6, 9, 18, 0.2);
+  --shadow-soft: 0 16px 28px rgba(7, 2, 15, 0.35);
+  --nav-active-border: #795099;
+  --nav-active-bg: #3b2450;
+  --nav-active-text: #f7f0ff;
+  --panel-border: #5f3c70;
+  --panel-gradient-start: #2a1b37;
+  --panel-gradient-end: #2a1b37;
+  --chart-gradient-start: #24162f;
+  --chart-gradient-end: #24162f;
+  --chart-guide: rgba(192, 154, 255, 0.16);
+  --chart-line: #c09aff;
+  --panel-divider: #4b315d;
+  --filter-active-border: #8a5ab1;
+  --filter-active-bg: #452956;
+  --filter-chip-border: #68447c;
+  --filter-chip-bg: #33203f;
+  --back-button-border: #6c467f;
+  --back-button-bg: #33203f;
+  --back-button-shadow: 0 12px 22px rgba(45, 14, 64, 0.28);
+  --editor-surface: #2a1b37;
+  --editor-tab-surface: #160f20;
+  --editor-divider: #4b315d;
+  --editor-hover-surface: #24162f;
+  --editor-active-border: #c09aff;
+  --editor-summary-glow: #c09aff;
+  --editor-summary-surface: #160f20;
+  --editor-column-surface: #1d1428;
+  --editor-header-surface: #160f20;
+  --editor-signal-accent: #a978f2;
+  --editor-signal-surface: #160f20;
+  --editor-signal-text: #eddfff;
+  --editor-status-surface: #24162f;
+  --editor-control-surface: #160f20;
+  --editor-control-button: #24162f;
+  --editor-control-hover-border: #c09aff;
+  --editor-control-hover-surface: #382342;
+  --editor-tree-surface: #160f20;
+  --editor-tabs-surface: #1d1428;
+  --editor-tab-active-border: #c09aff;
+  --editor-event-active-surface: #382342;
+  --editor-event-active-accent: #c09aff;
+  --editor-event-expanded-surface: #24162f;
+  --editor-event-details-surface: #1d1428;
+  --editor-code-surface: #160f20;
+  --editor-workspace-shadow: 0 16px 28px rgba(7, 2, 15, 0.35);
+  --editor-control-shadow: 0 14px 32px rgba(7, 2, 15, 0.35);
+  --metadata-surface: #160f20;
+  --metadata-text: #eddfff;
+  --explore-divider: #4b315d;
   --error-border: #88566b;
   --status-healthy-bg: #21403d;
   --status-healthy-border: #44716c;
@@ -578,7 +608,7 @@ body {
   min-height: 0;
   border-radius: 18px;
   overflow: hidden;
-  background: #252845;
+  background: var(--editor-surface, #252845);
   border: 1px solid var(--panel-border);
 }
 
@@ -1176,7 +1206,7 @@ body {
   align-items: stretch;
   border: 1px solid color-mix(in srgb, var(--line-soft) 88%, transparent);
   background: color-mix(in srgb, var(--surface-page) 94%, black 6%);
-  box-shadow: 0 18px 44px rgba(9, 11, 22, 0.22);
+  box-shadow: var(--editor-workspace-shadow, 0 18px 44px rgba(9, 11, 22, 0.22));
 }
 
 .debugger-view__summary-grid {
@@ -1215,7 +1245,7 @@ body {
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  background: #252845;
+  background: var(--editor-surface, #252845);
 }
 
 .debugger-view__editor-tabs {
@@ -1224,7 +1254,7 @@ body {
   gap: 0;
   min-height: 38px;
   border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 84%, transparent);
-  background: color-mix(in srgb, #1a1f37 92%, black 8%);
+  background: color-mix(in srgb, var(--editor-tab-surface, #1a1f37) 92%, black 8%);
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -1234,9 +1264,9 @@ body {
   min-width: 0;
   max-width: 220px;
   border-top: 0;
-  border-right: 1px solid color-mix(in srgb, #5b527d 45%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--editor-divider, #5b527d) 45%, transparent);
   border-bottom: 0;
-  border-left: 1px solid color-mix(in srgb, #5b527d 45%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--editor-divider, #5b527d) 45%, transparent);
   border-right: 1px solid color-mix(in srgb, var(--line-soft) 72%, transparent);
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -1252,13 +1282,13 @@ body {
 }
 
 .debugger-view__editor-tab:hover {
-  background: color-mix(in srgb, #222947 84%, transparent);
+  background: color-mix(in srgb, var(--editor-hover-surface, #222947) 84%, transparent);
   color: var(--text-900);
 }
 
 .debugger-view__editor-tab--active {
-  background: color-mix(in srgb, #252845 96%, black 4%);
-  border-bottom-color: color-mix(in srgb, #9eadff 78%, transparent);
+  background: color-mix(in srgb, var(--editor-surface, #252845) 96%, black 4%);
+  border-bottom-color: color-mix(in srgb, var(--editor-active-border, #9eadff) 78%, transparent);
   color: var(--text-900);
 }
 
@@ -1310,10 +1340,10 @@ body {
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, #9f8cff 4%, transparent),
+      color-mix(in srgb, var(--editor-summary-glow, #9f8cff) 4%, transparent),
       transparent 18%
     ),
-    color-mix(in srgb, #14182c 96%, black 4%);
+    color-mix(in srgb, var(--editor-summary-surface, #14182c) 96%, black 4%);
   overflow: hidden;
   border-left: 1px solid color-mix(in srgb, var(--line-soft) 82%, transparent);
 }
@@ -1336,7 +1366,7 @@ body {
 .debugger-view__summary-column {
   min-height: 0;
   overflow: auto;
-  background: color-mix(in srgb, #18203a 92%, black 8%);
+  background: color-mix(in srgb, var(--editor-column-surface, #18203a) 92%, black 8%);
 }
 
 .debugger-view__summary-column + .debugger-view__summary-column {
@@ -1361,7 +1391,7 @@ body {
       color-mix(in srgb, white 3%, transparent),
       transparent
     ),
-    color-mix(in srgb, #101526 92%, black 8%);
+    color-mix(in srgb, var(--editor-header-surface, #101526) 92%, black 8%);
 }
 
 .debugger-view__summary-section {
@@ -1400,12 +1430,16 @@ body {
 }
 
 .debugger-view__signal {
-  background: color-mix(in srgb, #5f7dff 18%, #0f1528);
-  color: color-mix(in srgb, #d8e1ff 90%, white 10%);
+  background: color-mix(
+    in srgb,
+    var(--editor-signal-accent, #5f7dff) 18%,
+    var(--editor-signal-surface, #0f1528)
+  );
+  color: color-mix(in srgb, var(--editor-signal-text, #d8e1ff) 90%, white 10%);
 }
 
 .debugger-view__status {
-  background: color-mix(in srgb, #1f2844 92%, black 8%);
+  background: color-mix(in srgb, var(--editor-status-surface, #1f2844) 92%, black 8%);
   color: var(--text-700);
 }
 
@@ -1436,8 +1470,8 @@ body {
       color-mix(in srgb, white 4%, transparent),
       transparent 26%
     ),
-    color-mix(in srgb, #12172a 94%, black 6%);
-  box-shadow: 0 14px 32px rgba(8, 10, 20, 0.34);
+    color-mix(in srgb, var(--editor-control-surface, #12172a) 94%, black 6%);
+  box-shadow: var(--editor-control-shadow, 0 14px 32px rgba(8, 10, 20, 0.34));
 }
 
 .debugger-control-panel__handle {
@@ -1475,7 +1509,7 @@ body {
   min-height: 34px;
   border: 1px solid color-mix(in srgb, var(--line-soft) 86%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, #1c2440 90%, black 10%);
+  background: color-mix(in srgb, var(--editor-control-button, #1c2440) 90%, black 10%);
   color: var(--text-700);
   padding: 7px 11px;
   font: inherit;
@@ -1489,8 +1523,8 @@ body {
 }
 
 .debugger-control-panel__button:hover {
-  border-color: color-mix(in srgb, #7e96ff 44%, var(--line-soft));
-  background: color-mix(in srgb, #243056 90%, black 10%);
+  border-color: color-mix(in srgb, var(--editor-control-hover-border, #7e96ff) 44%, var(--line-soft));
+  background: color-mix(in srgb, var(--editor-control-hover-surface, #243056) 90%, black 10%);
   color: var(--text-900);
 }
 
@@ -1514,7 +1548,7 @@ body {
   min-height: 0;
   border: 0;
   border-radius: 0;
-  background: #252845;
+  background: var(--editor-surface, #252845);
 }
 
 .debugger-scope-panel,
@@ -1534,7 +1568,7 @@ body {
   min-height: 40px;
   padding: 12px 18px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 78%, transparent);
-  background: color-mix(in srgb, #101526 90%, black 10%);
+  background: color-mix(in srgb, var(--editor-header-surface, #101526) 90%, black 10%);
 }
 
 .debugger-scope-panel__header h3,
@@ -1690,7 +1724,7 @@ body {
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--line-soft) 70%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, #11172a 92%, black 8%);
+  background: color-mix(in srgb, var(--editor-tree-surface, #11172a) 92%, black 8%);
 }
 
 .debugger-value-tree__entry {
@@ -1750,7 +1784,7 @@ body {
   margin: 0;
   padding: 0 18px;
   border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 78%, transparent);
-  background: color-mix(in srgb, #13192d 92%, black 8%);
+  background: color-mix(in srgb, var(--editor-tabs-surface, #13192d) 92%, black 8%);
 }
 
 .debugger-event-list__tab {
@@ -1769,7 +1803,7 @@ body {
 
 .debugger-event-list__tab--active {
   background: transparent;
-  border-color: color-mix(in srgb, #8c9fff 76%, transparent);
+  border-color: color-mix(in srgb, var(--editor-tab-active-border, #8c9fff) 76%, transparent);
   color: var(--text-900);
 }
 
@@ -1798,12 +1832,13 @@ body {
 }
 
 .debugger-event-list__button--active {
-  background: color-mix(in srgb, #27365f 74%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, #95a4ff 84%, transparent);
+  background: color-mix(in srgb, var(--editor-event-active-surface, #27365f) 74%, transparent);
+  box-shadow: inset 2px 0 0
+    color-mix(in srgb, var(--editor-event-active-accent, #95a4ff) 84%, transparent);
 }
 
 .debugger-event-list__button--expanded {
-  background: color-mix(in srgb, #202944 84%, transparent);
+  background: color-mix(in srgb, var(--editor-event-expanded-surface, #202944) 84%, transparent);
 }
 
 .debugger-event-list__summary {
@@ -1816,7 +1851,7 @@ body {
   margin-top: 0;
   padding: 14px 18px 16px;
   border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 72%, transparent);
-  background: color-mix(in srgb, #171f36 90%, black 10%);
+  background: color-mix(in srgb, var(--editor-event-details-surface, #171f36) 90%, black 10%);
 }
 
 .debugger-event-list__detail-grid {
@@ -1858,7 +1893,7 @@ body {
   padding: 12px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--line-soft) 76%, transparent);
-  background: color-mix(in srgb, #0f1424 94%, black 6%);
+  background: color-mix(in srgb, var(--editor-code-surface, #0f1424) 94%, black 6%);
   color: var(--text-900);
   font-family:
     ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono",
@@ -1944,9 +1979,9 @@ body {
   overflow: hidden;
   gap: 12px;
   border-top: 0;
-  border-right: 1px solid color-mix(in srgb, #5b527d 45%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--explore-divider, #5b527d) 45%, transparent);
   border-bottom: 0;
-  border-left: 1px solid color-mix(in srgb, #5b527d 45%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--explore-divider, #5b527d) 45%, transparent);
   border-radius: 0;
   background: transparent;
   color: var(--text-700);
@@ -2778,8 +2813,8 @@ h3 {
 }
 
 .activity-panel__connection[data-mode="pqs_only"] {
-  border-color: color-mix(in srgb, #5b527d 28%, var(--line-soft));
-  color: #5b527d;
+  border-color: color-mix(in srgb, var(--explore-divider, #5b527d) 28%, var(--line-soft));
+  color: var(--explore-divider, #5b527d);
 }
 
 .activity-panel__status {
@@ -3692,8 +3727,8 @@ h3 {
   margin: 0;
   padding: 16px;
   border-radius: 10px;
-  background: #0f172a;
-  color: #dbe7ff;
+  background: var(--metadata-surface, #0f172a);
+  color: var(--metadata-text, #dbe7ff);
   font-size: 0.88rem;
   line-height: 1.6;
   overflow-x: auto;
