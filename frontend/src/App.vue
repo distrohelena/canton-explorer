@@ -25,24 +25,40 @@ const resolvedTheme = computed<ResolvedTheme>(() =>
 );
 const isDebuggerRoute = computed(() => route.path === '/debugger');
 const exploreLabel = computed(() => {
-  if (route.path === '/' || route.path.startsWith('/contracts')) {
-    return 'Ledger';
+  if (route.path === '/') {
+    return 'Updates';
   }
 
-  if (route.path.startsWith('/nodes') || route.path.startsWith('/parties')) {
-    return 'Network';
+  if (route.path.startsWith('/contracts')) {
+    return 'Contracts';
   }
 
-  if (route.path.startsWith('/tokens') || route.path === '/canton-coin') {
-    return 'Assets';
+  if (route.path.startsWith('/nodes')) {
+    return 'Nodes';
+  }
+
+  if (route.path.startsWith('/parties')) {
+    return 'Parties';
+  }
+
+  if (route.path.startsWith('/tokens')) {
+    return 'Tokens';
+  }
+
+  if (route.path === '/canton-coin') {
+    return 'Canton Coin';
   }
 
   if (route.path.startsWith('/traffic')) {
-    return 'Traffic';
+    return 'Traffic Purchases';
   }
 
-  if (route.path === '/debugger' || route.path === '/settings') {
-    return 'Tools';
+  if (route.path === '/debugger') {
+    return 'Debugger';
+  }
+
+  if (route.path === '/settings') {
+    return 'Settings';
   }
 
   return 'Explore';
