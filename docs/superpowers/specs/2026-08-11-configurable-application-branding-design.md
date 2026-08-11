@@ -22,6 +22,16 @@ Both fields are optional, must be non-empty strings when provided, and default
 independently to `Canton Explorer`. Existing configuration files without a
 `branding` object remain valid.
 
+Values are trimmed before validation and storage, so whitespace-only values are
+invalid. The endpoint returns exactly:
+
+```json
+{
+  "applicationTitle": "My Explorer",
+  "headerTitle": "My Explorer"
+}
+```
+
 ## Architecture and data flow
 
 `NodeConfigService` owns the parsed branding values alongside the existing
@@ -43,10 +53,10 @@ layer and follows the current JSON response conventions.
 
 - Extend node configuration schema tests for absent, partial, valid, and
   invalid branding values.
-- Test the branding service accessor and API response, including that only
-  branding fields are returned.
+- Test the branding service accessor with a parsed config and the API response,
+  including that only branding fields are returned.
 - Add frontend API and `App.vue` tests for independent application/header
-  values, defaults, and the browser `document.title`.
+  values, defaults, failed requests, and the browser `document.title`.
 - Run the focused tests, the full test suites, type-check/build, and diff
   checks before implementation is considered complete.
 

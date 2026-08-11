@@ -32,22 +32,23 @@
 - Modify: `backend/src/config/node-config.schema.ts`
 - Modify: `backend/src/config/node-config.service.ts`
 - Test: `backend/test/config/node-config.spec.ts`
+- Create: `backend/test/config/node-config.service.spec.ts`
 - Modify: `backend/config/nodes.example.json`
 - Modify: `backend/README.md`
 
 - [ ] **Step 1: Write failing schema tests.**
 
-Add tests to `backend/test/config/node-config.spec.ts` that assert:
+Add a local `createValidNodeConfig()` helper in `backend/test/config/node-config.spec.ts` that returns the minimal valid `pqs_only` participant object used by the branding cases. Add tests that assert:
 
 ```ts
-expect(parseNodeConfigFile({ nodes: validNodes }).branding).toEqual({
+expect(parseNodeConfigFile({ nodes: [createValidNodeConfig()] }).branding).toEqual({
   applicationTitle: 'Canton Explorer',
   headerTitle: 'Canton Explorer',
 });
 
 expect(parseNodeConfigFile({
   branding: { applicationTitle: 'Ledger', headerTitle: 'Ledger UI' },
-  nodes: validNodes,
+  nodes: [createValidNodeConfig()],
 }).branding).toEqual({
   applicationTitle: 'Ledger',
   headerTitle: 'Ledger UI',
@@ -55,7 +56,7 @@ expect(parseNodeConfigFile({
 
 expect(parseNodeConfigFile({
   branding: { applicationTitle: 'Ledger' },
-  nodes: validNodes,
+  nodes: [createValidNodeConfig()],
 }).branding).toEqual({
   applicationTitle: 'Ledger',
   headerTitle: 'Canton Explorer',
@@ -63,11 +64,11 @@ expect(parseNodeConfigFile({
 
 expect(() => parseNodeConfigFile({
   branding: { applicationTitle: '   ' },
-  nodes: validNodes,
+  nodes: [createValidNodeConfig()],
 })).toThrow();
 ```
 
-Use the existing valid participant fixture/helper in the test file rather than duplicating a second node shape.
+Also assert that surrounding whitespace is trimmed from accepted title values.
 
 - [ ] **Step 2: Run the focused backend test and verify it fails.**
 
@@ -79,7 +80,11 @@ rtk npm run test --workspace backend -- --runInBand backend/test/config/node-con
 
 Expected: the new branding assertions fail because the schema has no branding field/defaults yet.
 
-- [ ] **Step 3: Implement the schema and service accessor.**
+- [ ] **Step 3: Add the service parsing regression test.**
+
+Create `backend/test/config/node-config.service.spec.ts`. For each test, create a temporary JSON config file containing a minimal node and custom branding, set `NODE_CONFIG_PATH` to that file, instantiate `NodeConfigService`, and restore the environment/remove the temporary file in `finally`. Assert `getBranding()` returns the parsed custom values and does not expose `nodes`, `debugger`, or `tokenMetadata`.
+
+- [ ] **Step 4: Implement the schema and service accessor.**
 
 In `node-config.schema.ts`, add:
 
@@ -97,19 +102,20 @@ const brandingSchema = z.object({
 
 Add `branding: brandingSchema` to the top-level config schema, export `BrandingConfig`, and make `NodeConfigService.getBranding()` return `this.config.branding`. Keep the accessor read-only and return only the two branding fields.
 
-- [ ] **Step 4: Update the example and operator documentation.**
+- [ ] **Step 5: Update the example and operator documentation.**
 
 Add an optional top-level `branding` block to `backend/config/nodes.example.json`, and document that `applicationTitle` controls the browser tab while `headerTitle` controls the visible application header. Explain that both default independently to `Canton Explorer` and require a restart after changing the JSON.
 
-- [ ] **Step 5: Run the schema tests and commit.**
+- [ ] **Step 6: Run the schema and service tests and commit.**
 
 Run:
 
 ```bash
 rtk npm run test --workspace backend -- --runInBand backend/test/config/node-config.spec.ts
+rtk npm run test --workspace backend -- --runInBand backend/test/config/node-config.service.spec.ts
 ```
 
-Expected: all tests in the config suite pass.
+Expected: both focused config test files pass.
 
 Commit:
 
@@ -135,7 +141,7 @@ Extend the controller test’s `NodeConfigService` mock with a `getBranding` spy
 }
 ```
 
-Also assert the method calls `getBranding()` once and does not return any node, debugger, token, or connection configuration.
+Also assert the method calls `getBranding()` once and does not return any node, debugger, token, or connection configuration. The service parsing behavior is covered separately by `node-config.service.spec.ts`.
 
 - [ ] **Step 2: Run the focused controller test and verify it fails.**
 
@@ -242,14 +248,14 @@ rtk git commit -m "feat: add frontend branding client"
 
 - [ ] **Step 1: Add failing App tests and a default API mock.**
 
-Mock `./lib/api` in `App.test.ts` with `fetchBranding`. Keep the default mock response as the two `Canton Explorer` values so existing navigation tests remain deterministic. Add a test that changes the mock to `{ applicationTitle: 'Configured App', headerTitle: 'Configured Header' }`, renders the app, waits for the branding request, and asserts:
+Mock `./lib/api` in `App.test.ts` with `fetchBranding`. Keep the default mock response as the two `Canton Explorer` values so existing navigation tests remain deterministic. Add a default test that asserts the existing header and browser title remain `Canton Explorer`. Add a custom test that changes the mock to `{ applicationTitle: 'Configured App', headerTitle: 'Configured Header' }`, renders the app, waits for the branding request, and asserts:
 
 ```ts
 expect(screen.getByRole('heading', { name: 'Configured Header' })).toBeInTheDocument();
 expect(document.title).toBe('Configured App');
 ```
 
-Add a partial-value/default test if needed to prove the two displayed targets are not coupled in the frontend.
+Add an explicit rejected-request test that makes `fetchBranding()` reject and asserts the header and browser title retain their independent `Canton Explorer` defaults. The custom test must use different application/header strings to prove the targets are not coupled.
 
 - [ ] **Step 2: Run the focused App test and verify the new assertions fail.**
 
