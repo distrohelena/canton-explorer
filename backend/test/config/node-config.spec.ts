@@ -2,6 +2,14 @@ import { describe, expect, it } from '@jest/globals';
 import type { PackageDetailResponse } from '../../src/domain/node.types';
 import { parseNodeConfigFile } from '../../src/config/node-config.schema';
 
+const createValidNodeConfig = () => ({
+  id: 'participant-1',
+  label: 'Participant 1',
+  role: 'participant' as const,
+  mode: 'pqs_only' as const,
+  pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+});
+
 const notAvailablePackageDetailFixture = {
   packageId: 'splice-amulet',
   name: 'splice-amulet',
@@ -19,6 +27,66 @@ const notAvailablePackageDetailFixture = {
 } satisfies PackageDetailResponse;
 
 describe('parseNodeConfigFile', () => {
+  it('defaults branding when omitted', () => {
+    const result = parseNodeConfigFile({ nodes: [createValidNodeConfig()] });
+
+    expect(result.branding).toEqual({
+      applicationTitle: 'Canton Explorer',
+      headerTitle: 'Canton Explorer',
+    });
+  });
+
+  it('parses custom branding values', () => {
+    const result = parseNodeConfigFile({
+      branding: {
+        applicationTitle: 'Canton Operations',
+        headerTitle: 'Operations Console',
+      },
+      nodes: [createValidNodeConfig()],
+    });
+
+    expect(result.branding).toEqual({
+      applicationTitle: 'Canton Operations',
+      headerTitle: 'Operations Console',
+    });
+  });
+
+  it('defaults the header title independently when only the application title is provided', () => {
+    const result = parseNodeConfigFile({
+      branding: { applicationTitle: 'Canton Operations' },
+      nodes: [createValidNodeConfig()],
+    });
+
+    expect(result.branding).toEqual({
+      applicationTitle: 'Canton Operations',
+      headerTitle: 'Canton Explorer',
+    });
+  });
+
+  it('rejects a whitespace-only application title', () => {
+    expect(() =>
+      parseNodeConfigFile({
+        branding: { applicationTitle: '   ' },
+        nodes: [createValidNodeConfig()],
+      }),
+    ).toThrow(/applicationTitle/i);
+  });
+
+  it('trims surrounding whitespace from branding values', () => {
+    const result = parseNodeConfigFile({
+      branding: {
+        applicationTitle: '  Canton Operations  ',
+        headerTitle: '\tOperations Console\n',
+      },
+      nodes: [createValidNodeConfig()],
+    });
+
+    expect(result.branding).toEqual({
+      applicationTitle: 'Canton Operations',
+      headerTitle: 'Operations Console',
+    });
+  });
+
   it('parses a valid participant-node config', () => {
     const result = parseNodeConfigFile({
       tokenMetadata: {

@@ -5,6 +5,11 @@ export const DEFAULT_TOKEN_METADATA_CONFIG = {
   symbolKeys: ['symbol'],
 } as const;
 
+export const DEFAULT_BRANDING_CONFIG = {
+  applicationTitle: 'Canton Explorer',
+  headerTitle: 'Canton Explorer',
+} as const;
+
 const nodeBaseSchema = {
   id: z.string().min(1),
   label: z.string().min(1),
@@ -81,6 +86,25 @@ const debuggerConfigSchema = z
   .strict()
   .default({});
 
+const brandingSchema = z
+  .object({
+    applicationTitle: z
+      .string()
+      .trim()
+      .min(1)
+      .default(DEFAULT_BRANDING_CONFIG.applicationTitle),
+    headerTitle: z
+      .string()
+      .trim()
+      .min(1)
+      .default(DEFAULT_BRANDING_CONFIG.headerTitle),
+  })
+  .strict()
+  .default({
+    applicationTitle: DEFAULT_BRANDING_CONFIG.applicationTitle,
+    headerTitle: DEFAULT_BRANDING_CONFIG.headerTitle,
+  });
+
 const nodeSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -98,6 +122,7 @@ const nodeSchema = z.discriminatedUnion('mode', [
 ]);
 
 const configSchema = z.object({
+  branding: brandingSchema,
   debugger: debuggerConfigSchema,
   tokenMetadata: tokenMetadataSchema.default({
     nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
@@ -110,6 +135,7 @@ export type NodeConfigFile = z.infer<typeof configSchema>;
 export type NodeConfig = z.infer<typeof nodeSchema>;
 export type TokenMetadataConfig = z.infer<typeof tokenMetadataSchema>;
 export type DebuggerConfig = z.infer<typeof debuggerConfigSchema>;
+export type BrandingConfig = z.infer<typeof brandingSchema>;
 
 export function parseNodeConfigFile(input: unknown): NodeConfigFile {
   return configSchema.parse(input);

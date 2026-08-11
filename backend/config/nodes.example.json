@@ -1,4 +1,8 @@
 {
+  "branding": {
+    "applicationTitle": "Canton Explorer",
+    "headerTitle": "Canton Explorer"
+  },
   "debugger": {
     "localDarDirectory": "./debug-dars"
   },

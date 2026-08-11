@@ -38,6 +38,15 @@ Create `./config/nodes.local.json` in the directory where you run the command. U
 The explorer also expects the PQS PostgreSQL connection strings referenced by
 `connectionUriEnv` to be available in the environment.
 
+The optional `branding` block controls the explorer's labels:
+
+- `applicationTitle` controls the browser tab title.
+- `headerTitle` controls the visible header title.
+
+Both values default independently to `Canton Explorer` when omitted, so setting
+one does not change the other. Changes to the JSON configuration require a
+backend restart to take effect.
+
 For self-signed ES256 gRPC authentication, set the environment variable named
 by `privateKeyEnv` to the base64url encoding of the JSON private P-256 JWK. The
 auth configuration uses `sub`, `aud`, and `privateKeyEnv`; see

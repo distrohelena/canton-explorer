@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  type BrandingConfig,
   type DebuggerConfig,
   type NodeConfig,
   type NodeConfigFile,
@@ -22,6 +23,10 @@ export class NodeConfigService {
 
   list(): NodeConfig[] {
     return this.config.nodes;
+  }
+
+  getBranding(): BrandingConfig {
+    return this.config.branding;
   }
 
   getTokenMetadataConfig(): TokenMetadataConfig {
