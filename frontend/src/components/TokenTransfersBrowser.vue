@@ -10,12 +10,15 @@ import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import type { TokenTransfersResponse } from '../types/tokens';
 
 type TokenTransferScope = 'global' | 'token';
+const COMPACT_PREVIEW_LIMIT = 6;
 
 const props = withDefaults(
   defineProps<{
     scope: TokenTransferScope;
     path: string;
     title: string;
+    compact?: boolean;
+    viewAllTo?: string;
     eyebrow?: string;
     tokenId?: string;
     queryPrefix?: string;
@@ -28,6 +31,8 @@ const props = withDefaults(
   }>(),
   {
     eyebrow: 'Transfers',
+    compact: false,
+    viewAllTo: '',
     queryPrefix: '',
     advancedFilterId: 'token-transfers-advanced-filter',
     loadingMessage: 'Loading latest token transfers...',
@@ -101,7 +106,11 @@ const activeMovementTypeFilters = computed(() =>
 );
 const activeAmountGt = computed(() => readQueryCursor(route.query[queryKey('amountGt')]) ?? '');
 const activeAmountLt = computed(() => readQueryCursor(route.query[queryKey('amountLt')]) ?? '');
-const activePageSize = computed(() => normalizePageSize(route.query[queryKey('limit')]));
+const activePageSize = computed(() =>
+  props.compact
+    ? COMPACT_PREVIEW_LIMIT
+    : normalizePageSize(route.query[queryKey('limit')]),
+);
 
 function hasAdvancedFilterQuery(): boolean {
   return (
@@ -496,7 +505,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
       <div>
         <h3>{{ title }}</h3>
       </div>
-      <div class="results-header__actions">
+      <div v-if="!compact" class="results-header__actions">
         <UpdatesToolbar
           :advanced-filter-expanded="showAdvancedFilter"
           :advanced-filter-controls="advancedFilterId"
@@ -512,7 +521,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
       </div>
     </header>
 
-    <Transition name="filter-expand">
+    <Transition v-if="!compact" name="filter-expand">
       <TokenTransfersAdvancedFilter
         v-if="showAdvancedFilter"
         :id="advancedFilterId"
@@ -559,22 +568,27 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
 
       <div
         class="node-updates__table"
-        :class="{ 'node-updates__table--loading': loadingTransfers && renderedTransfers.length > 0 }"
+        :class="{
+          'node-updates__table--loading': loadingTransfers && renderedTransfers.length > 0,
+          'tokens-page__table--compact': compact,
+        }"
         role="table"
         :aria-label="tableAriaLabel"
       >
         <div class="tokens-page__row tokens-page__row--head" role="row">
-          <span role="columnheader">Nodes</span>
+          <span v-if="!compact" role="columnheader">Nodes</span>
           <span role="columnheader">{{ transferColumnLabel() }}</span>
           <span role="columnheader">Amount</span>
-          <span role="columnheader">From</span>
-          <span role="columnheader">To</span>
+          <span v-if="compact" role="columnheader">From → To</span>
+          <span v-else role="columnheader">From</span>
+          <span v-if="!compact" role="columnheader">To</span>
           <span role="columnheader">Record Time</span>
         </div>
 
         <div
           v-if="loadingTransfers && renderedTransfers.length === 0"
           class="node-updates__row node-updates__row--loading"
+          :class="{ 'tokens-page__row--compact': compact }"
           role="row"
         >
           <span class="node-updates__spinner" aria-hidden="true"></span>
@@ -591,7 +605,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
           @keydown.enter.prevent="openTransferDetail(transfer.rowId ?? transfer.updateId)"
           @keydown.space.prevent="openTransferDetail(transfer.rowId ?? transfer.updateId)"
         >
-          <span class="tokens-page__cell tokens-page__nodes" role="cell">
+          <span v-if="!compact" class="tokens-page__cell tokens-page__nodes" role="cell">
             <span
               v-for="node in transfer.nodes"
               :key="`${node.nodeId}:${node.eventOffset}`"
@@ -618,7 +632,27 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
             </span>
           </span>
           <span class="tokens-page__cell" role="cell">{{ transfer.amount ?? 'n/a' }}</span>
-          <span class="tokens-page__cell" role="cell">
+          <span v-if="compact" class="tokens-page__cell tokens-page__parties" role="cell">
+            <RouterLink
+              v-if="transfer.sender"
+              class="contract-detail__link"
+              :to="partyLink(transfer.sender)"
+              @click.stop
+            >
+              {{ transfer.sender }}
+            </RouterLink>
+            <span aria-hidden="true"> → </span>
+            <RouterLink
+              v-if="transfer.receiver"
+              class="contract-detail__link"
+              :to="partyLink(transfer.receiver)"
+              @click.stop
+            >
+              {{ transfer.receiver }}
+            </RouterLink>
+            <template v-if="!transfer.sender && !transfer.receiver">n/a</template>
+          </span>
+          <span v-else class="tokens-page__cell" role="cell">
             <RouterLink
               v-if="transfer.sender"
               class="contract-detail__link"
@@ -629,7 +663,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
             </RouterLink>
             <template v-else>n/a</template>
           </span>
-          <span class="tokens-page__cell" role="cell">
+          <span v-if="!compact" class="tokens-page__cell" role="cell">
             <RouterLink
               v-if="transfer.receiver"
               class="contract-detail__link"
@@ -646,6 +680,12 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
               <span class="node-updates__time-clock">{{ transfer.recordTimeLines.time }}</span>
             </template>
             <template v-else>n/a</template>
+          </span>
+        </div>
+
+        <div v-if="compact && viewAllTo" class="tokens-page__row home-dashboard__view-all-row" role="row">
+          <span role="cell">
+            <RouterLink class="home-dashboard__view-all" :to="viewAllTo">View all</RouterLink>
           </span>
         </div>
       </div>

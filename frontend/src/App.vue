@@ -35,6 +35,10 @@ const resolvedTheme = computed<ResolvedTheme>(() =>
 const isDebuggerRoute = computed(() => route.path === '/debugger');
 const exploreLabel = computed(() => {
   if (route.path === '/') {
+    return 'Home';
+  }
+
+  if (route.path === '/updates') {
     return 'Updates';
   }
 
@@ -270,7 +274,7 @@ onBeforeUnmount(() => {
               >
                 <div class="app-explore__group" aria-labelledby="ledger-menu-label">
                   <span id="ledger-menu-label" class="app-explore__group-label">Ledger</span>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/" @click="closeExploreMenu">
+                  <RouterLink class="app-explore__link app-explore__group-link" to="/updates" @click="closeExploreMenu">
                     Updates
                   </RouterLink>
                   <RouterLink class="app-explore__link app-explore__group-link" to="/contracts" @click="closeExploreMenu">

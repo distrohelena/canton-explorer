@@ -3,6 +3,22 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('styles.css', () => {
+  it('lays out the home dashboard previews side by side and stacks them on mobile', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const homeDashboardStyles =
+      styles.match(/\.home-dashboard \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(homeDashboardStyles).toContain('display: grid;');
+    expect(homeDashboardStyles).toContain(
+      'grid-template-columns: repeat(2, minmax(0, 1fr));',
+    );
+    expect(styles).toContain('.node-updates__row--compact');
+    expect(styles).toContain('.tokens-page__table--compact .tokens-page__row');
+    expect(styles).toContain('.home-dashboard__view-all-row');
+    expect(styles).toContain('@media (max-width: 720px)');
+    expect(styles).toContain('.home-dashboard {\n    grid-template-columns: 1fr;');
+  });
+
   it('highlights the search input with only a bottom line when focused', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];

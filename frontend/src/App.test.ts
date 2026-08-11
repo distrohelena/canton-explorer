@@ -19,7 +19,11 @@ const defaultBranding = {
 };
 
 const HomeStub = defineComponent({
-  template: '<div>Home Activity View</div>',
+  template: '<div>Home Dashboard View</div>',
+});
+
+const UpdatesStub = defineComponent({
+  template: '<div>Updates View</div>',
 });
 
 const ActivityStub = defineComponent({
@@ -83,6 +87,7 @@ async function renderAt(path: string) {
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: HomeStub },
+      { path: '/updates', component: UpdatesStub },
       { path: '/nodes', component: ActivityStub },
       { path: '/parties', component: PartiesStub },
       { path: '/contracts', component: ContractsStub },
@@ -205,7 +210,7 @@ describe('App', () => {
     expect(screen.queryByRole('link', { name: 'Parties' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Contracts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Tokens' })).not.toBeInTheDocument();
-    const exploreButton = screen.getByRole('button', { name: 'Updates' });
+    const exploreButton = screen.getByRole('button', { name: 'Home' });
     expect(exploreButton).toHaveAttribute('aria-expanded', 'false');
     expect(container.querySelector('svg.app-explore__arrow')).not.toBeNull();
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
@@ -214,7 +219,7 @@ describe('App', () => {
     await fireEvent.click(exploreButton);
     expect(exploreButton).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
-    expect(screen.getByRole('link', { name: 'Updates' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Updates' })).toHaveAttribute('href', '/updates');
     expect(screen.queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nodes' })).toHaveAttribute('href', '/nodes');
     expect(screen.getByText('Traffic', { selector: '.app-explore__group-label' })).toBeInTheDocument();
@@ -227,7 +232,7 @@ describe('App', () => {
     expect(
       screen.getByPlaceholderText('Search'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Home Activity View')).toBeInTheDocument();
+    expect(screen.getByText('Home Dashboard View')).toBeInTheDocument();
     expect(screen.queryByText('Canton Operations')).not.toBeInTheDocument();
     expect(
       screen.queryByText('Operational clarity for connected Canton environments.'),
@@ -246,7 +251,7 @@ describe('App', () => {
   it('closes the Explore menu when clicking outside it', async () => {
     await renderAt('/');
 
-    const exploreButton = screen.getByRole('button', { name: 'Updates' });
+    const exploreButton = screen.getByRole('button', { name: 'Home' });
     await fireEvent.click(exploreButton);
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
 
@@ -265,16 +270,25 @@ describe('App', () => {
     await fireEvent.pointerEnter(exploreArea!);
 
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Updates' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-expanded', 'true');
 
     await fireEvent.pointerLeave(exploreArea!);
 
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Updates' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('updates the Explore label to the selected page title', async () => {
     const { router } = await renderAt('/');
+
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
+
+    await router.push('/updates');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Updates' })).toBeInTheDocument();
+      expect(screen.getByText('Updates View')).toBeInTheDocument();
+    });
 
     await router.push('/nodes/participant-1');
 
@@ -386,7 +400,7 @@ describe('App', () => {
 
     await fireEvent.click(brandLink);
 
-    expect(await screen.findByText('Home Activity View')).toBeInTheDocument();
+    expect(await screen.findByText('Home Dashboard View')).toBeInTheDocument();
   });
 
   it('routes titlebar search input to the search page on submit', async () => {
@@ -417,7 +431,7 @@ describe('App', () => {
     await fireEvent.update(searchInput, '   ');
     await fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
 
-    expect(screen.getByText('Home Activity View')).toBeInTheDocument();
+    expect(screen.getByText('Home Dashboard View')).toBeInTheDocument();
     expect(screen.queryByText('Search Results View')).not.toBeInTheDocument();
   });
 

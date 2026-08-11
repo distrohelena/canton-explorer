@@ -7,7 +7,7 @@ import UpdatesBrowser from '../components/UpdatesBrowser.vue';
     <section class="activity-home__updates-section activity-home__updates-section--global-updates">
       <UpdatesBrowser
         scope="global"
-        path="/"
+        path="/updates"
         title="Updates"
         eyebrow="Updates"
         show-node-column

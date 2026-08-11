@@ -26,12 +26,15 @@ type UpdateScope = "global" | "node" | "party";
 type HeadingTag = "h2" | "h3";
 type UpdatesResponse = GlobalUpdatesResponse | NodeUpdatesResponse;
 type UpdatesEntry = GlobalUpdateEntry | NodeUpdateEntry;
+const COMPACT_PREVIEW_LIMIT = 6;
 
 const props = withDefaults(
   defineProps<{
     scope: UpdateScope;
     path: string;
     title: string;
+    compact?: boolean;
+    viewAllTo?: string;
     showTitle?: boolean;
     eyebrow?: string;
     headingTag?: HeadingTag;
@@ -52,6 +55,8 @@ const props = withDefaults(
   {
     eyebrow: "Updates",
     showTitle: true,
+    compact: false,
+    viewAllTo: "",
     headingTag: "h3",
     queryPrefix: "",
     showNodeColumn: false,
@@ -152,7 +157,9 @@ const activeHideSplice = computed(() =>
   readHideSplice(route.query[queryKey("hideSplice")]),
 );
 const activePageSize = computed(() =>
-  normalizePageSize(route.query[queryKey("limit")]),
+  props.compact
+    ? COMPACT_PREVIEW_LIMIT
+    : normalizePageSize(route.query[queryKey("limit")]),
 );
 
 function hasAdvancedFilterQuery(): boolean {
@@ -284,6 +291,7 @@ const renderedUpdates = computed(() =>
 const rowClassList = computed(() => [
   props.rowClass,
   props.showNodeColumn ? "node-updates__row--with-node" : "",
+  props.compact ? "node-updates__row--compact" : "",
 ]);
 
 const headingText = computed(() => {
@@ -660,11 +668,12 @@ function nodeLink(nodeId: string): string {
     <header class="node-detail__hero">
       <div v-if="showTitle">
         <component :is="headingTag">{{ headingText }}</component>
-        <p v-if="recordTimeRange" class="node-updates__subtitle">
+        <p v-if="recordTimeRange && !compact" class="node-updates__subtitle">
           From {{ recordTimeRange.from }} to {{ recordTimeRange.to }}
         </p>
       </div>
       <UpdatesToolbar
+        v-if="!compact"
         :advanced-filter-expanded="showAdvancedFilter"
         :advanced-filter-controls="advancedFilterId"
         :newer-disabled="!updatesResponse?.nextAfter || loading"
@@ -678,6 +687,7 @@ function nodeLink(nodeId: string): string {
     </header>
 
     <div
+      v-if="!compact"
       class="node-updates-filter-shell"
       :class="{ 'node-updates-filter-shell--open': showAdvancedFilter }"
       :aria-hidden="!showAdvancedFilter"
@@ -728,7 +738,10 @@ function nodeLink(nodeId: string): string {
 
       <div
         class="node-updates__table"
-        :class="{ 'node-updates__table--loading': loading && renderedUpdates.length > 0 }"
+        :class="{
+          'node-updates__table--loading': loading && renderedUpdates.length > 0,
+          'node-updates__table--compact': compact,
+        }"
         role="table"
         :aria-label="tableAriaLabel"
       >
@@ -741,7 +754,7 @@ function nodeLink(nodeId: string): string {
           <span role="columnheader">Offset</span>
           <span role="columnheader">Record Time</span>
           <span role="columnheader">Parties</span>
-          <span class="contracts-table__record-time-header" role="columnheader">
+          <span v-if="!compact" class="contracts-table__record-time-header" role="columnheader">
             <span>Est. USD</span>
             <QuerySourcePill class="contracts-table__source-pill" source="pqs" />
           </span>
@@ -750,6 +763,7 @@ function nodeLink(nodeId: string): string {
         <div
           v-if="loading && renderedUpdates.length === 0"
           class="node-updates__row node-updates__row--loading"
+          :class="rowClassList"
           role="row"
         >
           <span class="node-updates__spinner" aria-hidden="true"></span>
@@ -831,7 +845,7 @@ function nodeLink(nodeId: string): string {
             </template>
             <template v-else>No parties</template>
           </span>
-          <span class="node-updates__estimate" role="cell">
+          <span v-if="!compact" class="node-updates__estimate" role="cell">
             {{
               formatEstimatedTrafficUsd(
                 update.estimatedTrafficUsd,
@@ -840,11 +854,17 @@ function nodeLink(nodeId: string): string {
             }}
           </span>
         </div>
+
+        <div v-if="compact && viewAllTo" class="node-updates__row home-dashboard__view-all-row" role="row">
+          <span role="cell">
+            <RouterLink class="home-dashboard__view-all" :to="viewAllTo">View all</RouterLink>
+          </span>
+        </div>
       </div>
     </section>
 
     <div
-      v-if="!error && (loading || renderedUpdates.length > 0)"
+      v-if="!compact && !error && (loading || renderedUpdates.length > 0)"
       class="node-updates__pager node-updates__pager--bottom"
       role="group"
       aria-label="Bottom updates pagination"

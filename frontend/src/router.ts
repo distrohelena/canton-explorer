@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeActivityView from './views/HomeActivityView.vue';
+import HomeView from './views/HomeView.vue';
 import HomeUpdatesView from './views/HomeUpdatesView.vue';
 import PartiesView from './views/PartiesView.vue';
 import ContractsView from './views/ContractsView.vue';
@@ -22,7 +23,8 @@ import TrafficPurchasesView from './views/TrafficPurchasesView.vue';
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: HomeUpdatesView },
+    { path: '/', component: HomeView },
+    { path: '/updates', component: HomeUpdatesView },
     { path: '/nodes', component: HomeActivityView },
     { path: '/parties', component: PartiesView },
     { path: '/contracts', component: ContractsView },
