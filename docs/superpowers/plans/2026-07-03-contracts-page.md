@@ -58,7 +58,7 @@
 
 - [ ] Write failing page tests for first-node lazy loading, node switching, and pagination
 - [ ] Run the page tests and confirm failure
-- [ ] Implement the `Contracts` page with node buttons and 25-row ACS pagination
+- [ ] Implement the `Contracts` page with node buttons and 30-row ACS pagination
 - [ ] Re-run the page tests and confirm pass
 
 ### Task 5: Verify end-to-end

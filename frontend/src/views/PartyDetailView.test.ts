@@ -164,7 +164,7 @@ describe('PartyDetailView', () => {
       (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
         .fetchPartyUpdates,
     ).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: 'cursor-update-1',
       nextAfter: null,
       updates: [
@@ -197,7 +197,7 @@ describe('PartyDetailView', () => {
         typedOptions?.hideSplice === true
       ) {
         return {
-          limit: 25,
+          limit: 30,
           nextBefore: null,
           nextAfter: 'cursor-contract-0',
           contracts: [
@@ -216,7 +216,7 @@ describe('PartyDetailView', () => {
       }
 
       return {
-        limit: 25,
+        limit: 30,
         nextBefore: 'cursor-contract-1',
         nextAfter: null,
         contracts: [
@@ -267,10 +267,10 @@ describe('PartyDetailView', () => {
     expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Observed Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Recent Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Recent Contracts' })).toBeInTheDocument();
-    expect(api.fetchPartyUpdates).toHaveBeenCalledWith('Alice', { limit: 10 });
-    expect(api.fetchPartyContracts).toHaveBeenCalledWith('Alice', { limit: 10 });
+    expect(screen.getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Contracts' })).toBeInTheDocument();
+    expect(api.fetchPartyUpdates).toHaveBeenCalledWith('Alice', { limit: 15 });
+    expect(api.fetchPartyContracts).toHaveBeenCalledWith('Alice', { limit: 15 });
     expect(screen.getAllByText('2')).toHaveLength(3);
     expect(screen.getByRole('link', { name: 'Participant 1' })).toHaveAttribute(
       'href',
@@ -350,9 +350,9 @@ describe('PartyDetailView', () => {
     ).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00abc"]')).not.toBeNull();
 
-    const updatesSection = screen.getByRole('heading', { name: 'Recent Updates' }).closest('section');
+    const updatesSection = screen.getByRole('heading', { name: 'Updates' }).closest('section');
     const contractsSection = screen
-      .getByRole('heading', { name: 'Recent Contracts' })
+      .getByRole('heading', { name: 'Contracts' })
       .closest('section');
 
     expect(updatesSection).not.toBeNull();
@@ -376,7 +376,7 @@ describe('PartyDetailView', () => {
       expect(api.fetchPartyContracts).toHaveBeenLastCalledWith('Alice', {
         templates: ['Main:Asset'],
         hideSplice: true,
-        limit: 10,
+        limit: 15,
       }),
     );
 
@@ -387,7 +387,7 @@ describe('PartyDetailView', () => {
         before: 'cursor-contract-1',
         templates: ['Main:Asset'],
         hideSplice: true,
-        limit: 10,
+        limit: 15,
       }),
     );
     expect(await screen.findByRole('link', { name: '00def' })).toHaveAttribute(
@@ -437,7 +437,7 @@ describe('PartyDetailView', () => {
       (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
         .fetchPartyUpdates,
     ).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [],
@@ -446,7 +446,7 @@ describe('PartyDetailView', () => {
       (api as { fetchPartyContracts: (partyId: string, options?: unknown) => Promise<unknown> })
         .fetchPartyContracts,
     ).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       contracts: [],

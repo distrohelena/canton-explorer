@@ -14,6 +14,7 @@ describe('UpdatesAdvancedFilter', () => {
         templateOptions: [],
         filterMode: 'or',
         hideSplice: false,
+        showPartyFilters: true,
       },
     });
 
@@ -35,5 +36,24 @@ describe('UpdatesAdvancedFilter', () => {
     expect(templateRow?.contains(hideSpliceToggle)).toBe(
       true,
     );
+  });
+
+  it('marks the Party ID field for the shared Template ID width', () => {
+    render(UpdatesAdvancedFilter, {
+      props: {
+        id: 'advanced-filter',
+        partyDraft: '',
+        templateDraft: '',
+        activeParties: [],
+        activeTemplates: [],
+        templateOptions: [],
+        filterMode: 'or',
+        hideSplice: false,
+      },
+    });
+
+    expect(
+      screen.getByText('Party ID').closest('.node-updates__advanced-filter-field'),
+    ).toHaveClass('node-updates__advanced-filter-field--party-id');
   });
 });

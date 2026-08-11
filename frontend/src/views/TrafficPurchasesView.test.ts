@@ -51,7 +51,7 @@ const secondNode: NodeSnapshot = {
 };
 
 const traffic: GlobalTrafficPurchasesResponse = {
-  limit: 10,
+  limit: 15,
   nextBefore: null,
   nextAfter: null,
   purchases: [
@@ -143,7 +143,7 @@ describe('TrafficPurchasesView', () => {
     expect(screen.getByText('2,000,000 bytes')).toBeInTheDocument();
     expect(screen.getByText(/12\.5000000000 CC/)).toBeInTheDocument();
     expect(screen.queryByText('healthy')).not.toBeInTheDocument();
-    expect(fetchTrafficPurchases).toHaveBeenCalledWith({ limit: 10 });
+    expect(fetchTrafficPurchases).toHaveBeenCalledWith({ limit: 15 });
   });
 
   it('shows all node checkboxes checked inside Advanced Search', async () => {
@@ -169,13 +169,13 @@ describe('TrafficPurchasesView', () => {
 
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
     await waitFor(() => expect(fetchTrafficPurchases).toHaveBeenLastCalledWith({
-      limit: 10,
+      limit: 15,
       nodeIds: ['participant-2'],
     }));
 
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 2' }));
     await waitFor(() => expect(fetchTrafficPurchases).toHaveBeenLastCalledWith({
-      limit: 10,
+      limit: 15,
       nodeIds: [],
     }));
     expect(screen.getByText('No traffic purchases recorded.')).toBeInTheDocument();
@@ -191,7 +191,7 @@ describe('TrafficPurchasesView', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Advanced Search' }));
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
     await waitFor(() => expect(fetchTrafficPurchases).toHaveBeenLastCalledWith({
-      limit: 10,
+      limit: 15,
       nodeIds: ['participant-2'],
     }));
 
@@ -200,7 +200,7 @@ describe('TrafficPurchasesView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
 
     await waitFor(() => expect(fetchTrafficPurchases).toHaveBeenLastCalledWith({
-      limit: 10,
+      limit: 15,
       nodeIds: ['participant-2'],
       minDate: '2026-07-01',
       paidMax: '20',

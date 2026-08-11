@@ -128,7 +128,7 @@ const typedNamespaceDetailFixture = {
 const typedNamespacePartiesFixture = {
   namespaceId: '1220abcd',
   partyCount: 2,
-  limit: 10,
+  limit: 15,
   nextBefore: null,
   nextAfter: null,
   parties: [
@@ -167,7 +167,7 @@ const typedContractDetailFixture = {
 const typedNodeContractsFixture = {
   nodeId: 'participant-1',
   label: 'Participant 1',
-  limit: 25,
+  limit: 30,
   nextBefore: '000000000000000099',
   nextAfter: null,
   contracts: [
@@ -398,7 +398,7 @@ const typedActivePartiesFixture = {
 } satisfies ActivePartiesResponse;
 
 const typedTokensFixture = {
-  limit: 25,
+  limit: 30,
   nextBefore: null,
   nextAfter: null,
   tokens: [
@@ -413,7 +413,7 @@ const typedTokensFixture = {
 } satisfies TokensResponse;
 
 const typedTokenTransfersFixture = {
-  limit: 25,
+  limit: 30,
   nextBefore: 'cursor-token-1',
   nextAfter: null,
   transfers: [
@@ -465,7 +465,7 @@ const typedTokenDetailFixture = {
 } satisfies TokenDetailResponse;
 
 const typedScopedTokenTransfersFixture = {
-  limit: 25,
+  limit: 30,
   nextBefore: 'token-cursor-before-2',
   nextAfter: 'token-cursor-after-2',
   transfers: [
@@ -490,7 +490,7 @@ const typedScopedTokenTransfersFixture = {
 
 const typedTokenHoldersFixture = {
   tokenId: 'canton-coin',
-  limit: 25,
+  limit: 30,
   nextBefore: null,
   nextAfter: null,
   holders: [
@@ -668,7 +668,7 @@ describe('fetchNodes', () => {
         label: 'Participant 2',
         mode: 'pqs_with_grpc',
         source: 'grpc',
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         fingerprints: ['1220abc'],
@@ -720,7 +720,7 @@ describe('fetchNodes', () => {
         label: 'Participant 2',
         mode: 'pqs_with_grpc',
         source: 'grpc',
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         fingerprints: ['1220abc'],
@@ -733,11 +733,11 @@ describe('fetchNodes', () => {
       encoding: 'hex',
       keyFormat: 'derX509SubjectPublicKeyInfo',
       keyType: 'ed25519',
-      limit: 10,
+      limit: 15,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-2/parties/fingerprints?limit=10&publicKey=302a300506032b6570032100abc&encoding=hex&keyFormat=derX509SubjectPublicKeyInfo&keyType=ed25519',
+      'http://localhost:4600/api/nodes/participant-2/parties/fingerprints?limit=15&publicKey=302a300506032b6570032100abc&encoding=hex&keyFormat=derX509SubjectPublicKeyInfo&keyType=ed25519',
     );
   });
 
@@ -746,7 +746,7 @@ describe('fetchNodes', () => {
       ok: true,
       json: async () => ({
         source: 'pqs',
-        limit: 25,
+        limit: 30,
         nextBefore: '1220ccc',
         nextAfter: null,
         fingerprints: ['1220aaa', '1220bbb'],
@@ -754,11 +754,11 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchPartyFingerprints({ limit: 25, after: '1220999' });
+    const result = await fetchPartyFingerprints({ limit: 30, after: '1220999' });
 
     expect(result.source).toBe('pqs');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/fingerprints?after=1220999&limit=25',
+      'http://localhost:4600/api/parties/fingerprints?after=1220999&limit=30',
     );
   });
 
@@ -817,12 +817,12 @@ describe('fetchNodes', () => {
       names: ['Vault'],
       excludeNames: ['Beta'],
       issuers: ['Issuer-A'],
-      limit: 25,
+      limit: 30,
     });
 
     expect(result.tokens[0]?.tokenId).toBe('canton-coin');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens?name=Vault&excludeName=Beta&issuer=Issuer-A&limit=25',
+      'http://localhost:4600/api/tokens?name=Vault&excludeName=Beta&issuer=Issuer-A&limit=30',
     );
   });
 
@@ -833,11 +833,11 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchLatestTokenTransfers(25, { before: 'cursor-token-0' });
+    const result = await fetchLatestTokenTransfers(30, { before: 'cursor-token-0' });
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?before=cursor-token-0&limit=25',
+      'http://localhost:4600/api/tokens/transfers?before=cursor-token-0&limit=30',
     );
   });
 
@@ -848,14 +848,14 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchLatestTokenTransfers(25, {
+    const result = await fetchLatestTokenTransfers(30, {
       fromParties: ['Alice', 'Carol'],
       toParties: ['Bob'],
     });
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?fromParty=Alice&fromParty=Carol&toParty=Bob&limit=25',
+      'http://localhost:4600/api/tokens/transfers?fromParty=Alice&fromParty=Carol&toParty=Bob&limit=30',
     );
   });
 
@@ -866,14 +866,14 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchLatestTokenTransfers(25, {
+    const result = await fetchLatestTokenTransfers(30, {
       amountGt: '10.5',
       amountLt: '100.0',
     });
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?amountGt=10.5&amountLt=100.0&limit=25',
+      'http://localhost:4600/api/tokens/transfers?amountGt=10.5&amountLt=100.0&limit=30',
     );
   });
 
@@ -884,13 +884,13 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchLatestTokenTransfers(25, {
+    const result = await fetchLatestTokenTransfers(30, {
       movementTypes: ['Create', 'Mint'],
     });
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?movementType=Create&movementType=Mint&limit=25',
+      'http://localhost:4600/api/tokens/transfers?movementType=Create&movementType=Mint&limit=30',
     );
   });
 
@@ -917,7 +917,7 @@ describe('fetchNodes', () => {
     const result = await fetchTokenHolders('canton-coin');
 
     expect(result.holders[0]?.partyId).toBe('Alice');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/tokens/canton-coin/holders?limit=25');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/tokens/canton-coin/holders?limit=30');
   });
 
   it('loads token holders by token id with cursor pagination from the backend API', async () => {
@@ -927,11 +927,11 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokenHolders('canton-coin', 25, { before: 'holders-cursor-1' });
+    const result = await fetchTokenHolders('canton-coin', 30, { before: 'holders-cursor-1' });
 
     expect(result.holders[0]?.partyId).toBe('Alice');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/canton-coin/holders?before=holders-cursor-1&limit=25',
+      'http://localhost:4600/api/tokens/canton-coin/holders?before=holders-cursor-1&limit=30',
     );
   });
 
@@ -942,11 +942,11 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokenTransfers('validator-license', 25, { before: 'token-cursor-before-2' });
+    const result = await fetchTokenTransfers('validator-license', 30, { before: 'token-cursor-before-2' });
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?before=token-cursor-before-2&limit=25',
+      'http://localhost:4600/api/tokens/validator-license/transfers?before=token-cursor-before-2&limit=30',
     );
   });
 
@@ -957,14 +957,14 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokenTransfers('validator-license', 25, {
+    const result = await fetchTokenTransfers('validator-license', 30, {
       fromParties: ['Issuer'],
       toParties: ['Alice', 'Bob'],
     });
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?fromParty=Issuer&toParty=Alice&toParty=Bob&limit=25',
+      'http://localhost:4600/api/tokens/validator-license/transfers?fromParty=Issuer&toParty=Alice&toParty=Bob&limit=30',
     );
   });
 
@@ -975,14 +975,14 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokenTransfers('validator-license', 25, {
+    const result = await fetchTokenTransfers('validator-license', 30, {
       amountGt: '20',
       amountLt: '50',
     });
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?amountGt=20&amountLt=50&limit=25',
+      'http://localhost:4600/api/tokens/validator-license/transfers?amountGt=20&amountLt=50&limit=30',
     );
   });
 
@@ -993,13 +993,13 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokenTransfers('validator-license', 25, {
+    const result = await fetchTokenTransfers('validator-license', 30, {
       movementTypes: ['Transfer', 'Mint'],
     });
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?movementType=Transfer&movementType=Mint&limit=25',
+      'http://localhost:4600/api/tokens/validator-license/transfers?movementType=Transfer&movementType=Mint&limit=30',
     );
   });
 
@@ -1058,27 +1058,27 @@ describe('fetchNodes', () => {
   it('loads global contracts with repeated node filters from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ limit: 10, nextBefore: null, nextAfter: null, contracts: [] }),
+      json: async () => ({ limit: 15, nextBefore: null, nextAfter: null, contracts: [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await fetchLatestContracts(10, { nodeIds: ['participant-1', 'participant-2'] });
+    await fetchLatestContracts(15, { nodeIds: ['participant-1', 'participant-2'] });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/contracts?node=participant-1&node=participant-2&limit=10',
+      'http://localhost:4600/api/contracts?node=participant-1&node=participant-2&limit=15',
     );
   });
 
   it('loads no global contracts with an explicit empty node selection', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ limit: 10, nextBefore: null, nextAfter: null, contracts: [] }),
+      json: async () => ({ limit: 15, nextBefore: null, nextAfter: null, contracts: [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await fetchLatestContracts(10, { nodeIds: [] });
+    await fetchLatestContracts(15, { nodeIds: [] });
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/contracts?node=&limit=10');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/contracts?node=&limit=15');
   });
 
   it('loads recent updates for a node from the backend API', async () => {
@@ -1087,7 +1087,7 @@ describe('fetchNodes', () => {
       json: async () => ({
         nodeId: 'participant-1',
         label: 'Participant 1',
-        limit: 25,
+        limit: 30,
         nextBefore: '000000000000000001',
         nextAfter: null,
         updates: [
@@ -1111,7 +1111,7 @@ describe('fetchNodes', () => {
     });
 
     expect(updates.nodeId).toBe('participant-1');
-    expect(updates.limit).toBe(25);
+    expect(updates.limit).toBe(30);
     expect(updates.nextBefore).toBe('000000000000000001');
     expect(updates.nextAfter).toBeNull();
     expect(updates.updates[0].eventOffset).toBe('000000000000000001');
@@ -1129,7 +1129,7 @@ describe('fetchNodes', () => {
         json: async () => ({
           nodeId: 'participant-1',
           label: 'Participant 1',
-          limit: 25,
+          limit: 30,
           nextBefore: null,
           nextAfter: null,
           updates: [
@@ -1147,7 +1147,7 @@ describe('fetchNodes', () => {
     const updates = await fetchNodeUpdates('participant-1');
 
     expect(updates.nodeId).toBe('participant-1');
-    expect(updates.limit).toBe(25);
+    expect(updates.limit).toBe(30);
     expect(updates.updates[0].eventOffset).toBe('000000000000000001');
     expect(updates.updates[0].updateId).toBe('00000000000000000000000000000001');
   });
@@ -1156,7 +1156,7 @@ describe('fetchNodes', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         updates: [
@@ -1198,7 +1198,7 @@ describe('fetchNodes', () => {
     const updates = await apiModule.fetchLatestUpdates?.();
 
     expect(updates).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [
@@ -1212,14 +1212,14 @@ describe('fetchNodes', () => {
         },
       ],
     });
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/updates?limit=25');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/updates?limit=30');
   });
 
   it('loads globally merged recent updates with cursor params from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        limit: 25,
+        limit: 30,
         nextBefore: '000000000000000010',
         nextAfter: '000000000000000020',
         updates: [],
@@ -1240,19 +1240,19 @@ describe('fetchNodes', () => {
           updates: unknown[];
         }>;
       }
-    ).fetchLatestUpdates?.(25, {
+    ).fetchLatestUpdates?.(30, {
       before: '000000000000000010',
       after: '000000000000000020',
     });
 
     expect(updates).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: '000000000000000010',
       nextAfter: '000000000000000020',
       updates: [],
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/updates?before=000000000000000010&after=000000000000000020&limit=25',
+      'http://localhost:4600/api/updates?before=000000000000000010&after=000000000000000020&limit=30',
     );
   });
 
@@ -1260,7 +1260,7 @@ describe('fetchNodes', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         updates: [],
@@ -1288,7 +1288,7 @@ describe('fetchNodes', () => {
           updates: unknown[];
         }>;
       }
-    ).fetchLatestUpdates?.(25, {
+    ).fetchLatestUpdates?.(30, {
       parties: ['Alice', 'Bob'],
       templates: ['Main:Asset', 'Main:Wallet'],
       partyMode: 'and',
@@ -1296,13 +1296,13 @@ describe('fetchNodes', () => {
     });
 
     expect(updates).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [],
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/updates?party=Alice&party=Bob&template=Main%3AAsset&template=Main%3AWallet&partyMode=and&hideSplice=true&limit=25',
+      'http://localhost:4600/api/updates?party=Alice&party=Bob&template=Main%3AAsset&template=Main%3AWallet&partyMode=and&hideSplice=true&limit=30',
     );
   });
 
@@ -1553,12 +1553,12 @@ describe('fetchNodes', () => {
 
     const namespaceParties = await fetchNamespaceParties?.('1220abcd', {
       before: 'Bob::1220abcd',
-      limit: 25,
+      limit: 30,
     });
 
     expect(namespaceParties).toEqual(typedNamespacePartiesFixture);
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:4600/api/namespaces/1220abcd/parties?before=Bob%3A%3A1220abcd&limit=25',
+      'http://localhost:4600/api/namespaces/1220abcd/parties?before=Bob%3A%3A1220abcd&limit=30',
     );
   });
 
@@ -1566,7 +1566,7 @@ describe('fetchNodes', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        limit: 25,
+        limit: 30,
         nextBefore: 'cursor-before-1',
         nextAfter: null,
         updates: [
@@ -1606,10 +1606,10 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/Alice/updates?before=cursor-before-0&template=Main%3AAsset&hideSplice=true&limit=25',
+      'http://localhost:4600/api/parties/Alice/updates?before=cursor-before-0&template=Main%3AAsset&hideSplice=true&limit=30',
     );
     expect(updates).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: 'cursor-before-1',
       nextAfter: null,
       updates: [
@@ -1629,7 +1629,7 @@ describe('fetchNodes', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        limit: 25,
+        limit: 30,
         nextBefore: 'cursor-contract-1',
         nextAfter: null,
         contracts: [
@@ -1668,10 +1668,10 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/Alice/contracts?before=cursor-contract-0&limit=25',
+      'http://localhost:4600/api/parties/Alice/contracts?before=cursor-contract-0&limit=30',
     );
     expect(contracts).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: 'cursor-contract-1',
       nextAfter: null,
       contracts: [
@@ -1693,7 +1693,7 @@ describe('fetchNodes', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         contracts: [],
@@ -1723,7 +1723,7 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/Alice/contracts?before=cursor-contract-0&template=Main%3AAsset&hideSplice=true&limit=25',
+      'http://localhost:4600/api/parties/Alice/contracts?before=cursor-contract-0&template=Main%3AAsset&hideSplice=true&limit=30',
     );
   });
 
@@ -1830,7 +1830,7 @@ describe('fetchNodes', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         purchases: [],
@@ -1849,7 +1849,7 @@ describe('fetchNodes', () => {
     expect(fetchTrafficPurchases).toBeTypeOf('function');
 
     await fetchTrafficPurchases?.({
-      limit: 10,
+      limit: 15,
       nodeIds: ['participant-1', 'participant-2'],
       minDate: '2026-07-01',
       maxDate: '2026-07-31',
@@ -1858,7 +1858,7 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/traffic-purchases?limit=10&node=participant-1&node=participant-2&minDate=2026-07-01&maxDate=2026-07-31&purchasedMin=100&paidMax=20',
+      'http://localhost:4600/api/traffic-purchases?limit=15&node=participant-1&node=participant-2&minDate=2026-07-01&maxDate=2026-07-31&purchasedMin=100&paidMax=20',
     );
 
     fetchMock.mockClear();

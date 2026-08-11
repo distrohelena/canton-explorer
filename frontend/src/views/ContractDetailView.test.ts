@@ -93,13 +93,13 @@ describe('ContractDetailView', () => {
     );
     expect(screen.getByText('Created Event')).toBeInTheDocument();
     expect(screen.getByText('Archived Event')).toBeInTheDocument();
-    expect(screen.getByText('Created Record Time')).toBeInTheDocument();
+    expect(screen.getByText('Created Time')).toBeInTheDocument();
     expect(screen.getByText('Archived Record Time')).toBeInTheDocument();
     const createdSummaryPair = container.querySelector('.contract-detail__summary-pair--created');
     expect(createdSummaryPair).not.toBeNull();
     expect(createdSummaryPair?.querySelectorAll('.contract-detail__summary-subitem')).toHaveLength(2);
     expect(screen.getByText('Created Event').closest('.contract-detail__summary-pair')).toBe(createdSummaryPair);
-    expect(screen.getByText('Created Record Time').closest('.contract-detail__summary-pair')).toBe(
+    expect(screen.getByText('Created Time').closest('.contract-detail__summary-pair')).toBe(
       createdSummaryPair,
     );
     const archivedSummaryPair = container.querySelector('.contract-detail__summary-pair--archived');

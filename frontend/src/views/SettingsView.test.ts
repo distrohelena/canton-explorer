@@ -72,7 +72,7 @@ const healthyTraffic: NodeTrafficPurchasesResponse = {
   },
   history: {
     status: 'ok',
-    limit: 25,
+    limit: 30,
     nextBefore: null,
     nextAfter: null,
     purchases: [

@@ -15,7 +15,7 @@ function makeTokensResponse(
   overrides?: Partial<Omit<TokensResponse, 'tokens'>>,
 ): TokensResponse {
   return {
-    limit: 10,
+    limit: 15,
     nextBefore: null,
     nextAfter: null,
     tokens,
@@ -87,7 +87,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: 'cursor-token-0',
       nextAfter: null,
       transfers: [
@@ -137,7 +137,7 @@ describe('TokensView', () => {
     expect(transfersBrowserSection.closest('.node-detail__section')).toBeNull();
     expect(within(transfersBrowserSection).getByRole('button', { name: 'Older' })).not.toBeDisabled();
     expect(within(transfersBrowserSection).getByRole('button', { name: 'Newer' })).toBeDisabled();
-    expect(fetchLatestTokenTransfers).toHaveBeenCalledWith(10, {});
+    expect(fetchLatestTokenTransfers).toHaveBeenCalledWith(15, {});
   });
 
   it('prefers token symbols over verbose names in known token cards', async () => {
@@ -151,7 +151,7 @@ describe('TokensView', () => {
       },
     ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -176,7 +176,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -220,7 +220,7 @@ describe('TokensView', () => {
       ]));
     vi.mocked(fetchLatestTokenTransfers)
       .mockResolvedValueOnce({
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         transfers: [],
@@ -278,7 +278,7 @@ describe('TokensView', () => {
         ),
       );
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -290,7 +290,7 @@ describe('TokensView', () => {
     expect(fetchTokens).toHaveBeenNthCalledWith(1, {
       before: undefined,
       after: undefined,
-      limit: 10,
+      limit: 15,
       names: [],
       excludeNames: [],
       issuers: [],
@@ -304,7 +304,7 @@ describe('TokensView', () => {
       expect(fetchTokens).toHaveBeenNthCalledWith(2, {
         before: 'tokens-cursor-before-1',
         after: undefined,
-        limit: 10,
+        limit: 15,
         names: [],
         excludeNames: [],
         issuers: [],
@@ -319,7 +319,7 @@ describe('TokensView', () => {
       expect(fetchTokens).toHaveBeenNthCalledWith(3, {
         before: undefined,
         after: 'tokens-cursor-after-1',
-        limit: 10,
+        limit: 15,
         names: [],
         excludeNames: [],
         issuers: [],
@@ -339,7 +339,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -364,7 +364,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -408,7 +408,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -459,7 +459,7 @@ describe('TokensView', () => {
       ]));
     vi.mocked(fetchLatestTokenTransfers)
       .mockResolvedValueOnce({
-        limit: 25,
+        limit: 30,
         nextBefore: 'cursor-token-0',
         nextAfter: null,
         transfers: [
@@ -482,7 +482,7 @@ describe('TokensView', () => {
         ],
       })
       .mockResolvedValueOnce({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: 'cursor-token-1',
         transfers: [
@@ -505,7 +505,7 @@ describe('TokensView', () => {
         ],
       })
       .mockResolvedValueOnce({
-        limit: 25,
+        limit: 30,
         nextBefore: 'cursor-token-0',
         nextAfter: null,
         transfers: [
@@ -538,7 +538,7 @@ describe('TokensView', () => {
     await fireEvent.click(within(transfersBrowserSection).getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
-      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(2, 10, { before: 'cursor-token-0' }),
+      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(2, 15, { before: 'cursor-token-0' }),
     );
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?before=cursor-token-0'));
     expect(await screen.findByText('Participant 1')).toBeInTheDocument();
@@ -547,7 +547,7 @@ describe('TokensView', () => {
     await fireEvent.click(within(transfersBrowserSection).getByRole('button', { name: 'Newer' }));
 
     await waitFor(() =>
-      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(3, 10, { after: 'cursor-token-1' }),
+      expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(3, 15, { after: 'cursor-token-1' }),
     );
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?after=cursor-token-1'));
     expect(await screen.findByText('Participant 2')).toBeInTheDocument();
@@ -564,7 +564,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -611,7 +611,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -639,7 +639,7 @@ describe('TokensView', () => {
     expect((await screen.findAllByText('Canton Coin')).length).toBeGreaterThan(0);
 
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
-    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 15, {
       fromParties: ['Alice'],
       toParties: ['Bob'],
     });
@@ -662,7 +662,7 @@ describe('TokensView', () => {
         },
       ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -690,7 +690,7 @@ describe('TokensView', () => {
     expect((await screen.findAllByText('Canton Coin')).length).toBeGreaterThan(0);
 
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
-    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 15, {
       amountGt: '10',
       amountLt: '100',
     });
@@ -712,7 +712,7 @@ describe('TokensView', () => {
       },
     ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -742,7 +742,7 @@ describe('TokensView', () => {
     expect((await screen.findAllByText('Canton Coin')).length).toBeGreaterThan(0);
 
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
-    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 10, {
+    expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(1, 15, {
       movementTypes: ['Create', 'Mint'],
     });
     expect(
@@ -764,7 +764,7 @@ describe('TokensView', () => {
       },
     ]));
     vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -778,7 +778,7 @@ describe('TokensView', () => {
     expect(fetchTokens).toHaveBeenNthCalledWith(1, {
       before: undefined,
       after: undefined,
-      limit: 10,
+      limit: 15,
       names: ['Vault'],
       excludeNames: ['Beta'],
       issuers: ['Issuer-A'],

@@ -52,11 +52,11 @@ export class NodesController {
     @Query('mode') mode?: string,
     @Query('hideSplice') hideSplice?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return this.pqsSummaryService.fetchGlobalRecentUpdates(
       this.configService.list(),
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       {
         before,
         after,
@@ -80,11 +80,11 @@ export class NodesController {
     @Query('mode') mode?: string,
     @Query('hideSplice') hideSplice?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return this.pqsSummaryService.fetchGlobalContracts(
       this.configService.list(),
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       {
         before,
         after,
@@ -110,11 +110,11 @@ export class NodesController {
     @Query('paidMin') paidMin?: string,
     @Query('paidMax') paidMax?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return this.pqsSummaryService.fetchGlobalTrafficPurchases(
       this.configService.list(),
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       {
         before,
         after,
@@ -138,7 +138,7 @@ export class NodesController {
     @Query('excludeName') excludeName?: string | string[],
     @Query('issuer') issuer?: string | string[],
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return (
       this.pqsSummaryService as PqsSummaryService & {
@@ -156,7 +156,7 @@ export class NodesController {
       }
     ).fetchTokens(
       this.configService.list(),
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       {
         before,
         after,
@@ -182,7 +182,7 @@ export class NodesController {
     @Query('amountGt') amountGt?: string,
     @Query('amountLt') amountLt?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return (
       this.pqsSummaryService as PqsSummaryService & {
@@ -202,7 +202,7 @@ export class NodesController {
       }
     ).fetchLatestTokenTransfers(
       this.configService.list(),
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       {
         before,
         after,
@@ -251,7 +251,7 @@ export class NodesController {
     @Query('amountGt') amountGt?: string,
     @Query('amountLt') amountLt?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     try {
       return await (
@@ -274,7 +274,7 @@ export class NodesController {
       ).fetchTokenTransfers(
         this.configService.list(),
         tokenId,
-        Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+        Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
         {
           before,
           after,
@@ -325,7 +325,7 @@ export class NodesController {
     @Query('before') before?: string,
     @Query('after') after?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     try {
       return await (
@@ -340,7 +340,7 @@ export class NodesController {
       ).fetchTokenHolders(
         this.configService.list(),
         tokenId,
-        Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+        Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
         {
           before,
           after,
@@ -408,9 +408,9 @@ export class NodesController {
     @Query('paidMax') paidMax?: string,
   ) {
     const node = this.getNodeConfig(id);
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
     const historyLimit =
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 25;
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 30;
 
     const [currentResult, historyResult] = await Promise.allSettled([
       node.mode === 'pqs_with_grpc'
@@ -492,10 +492,10 @@ export class NodesController {
     @Query('hideSplice') hideSplice?: string,
   ) {
     const node = this.getNodeConfig(id);
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return this.pqsSummaryService.fetchNodeContracts(node, {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       before,
       after,
       parties: Array.isArray(party) ? party : party ? [party] : undefined,
@@ -530,9 +530,9 @@ export class NodesController {
     @Query('keyType') keyType?: string,
   ) {
     const node = this.getNodeConfig(id);
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 15;
     return this.buildPartyFingerprintsEntry(node, {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 10,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 15,
       before,
       after,
       namespacePublicKey: publicKey,
@@ -556,10 +556,10 @@ export class NodesController {
   ) {
     const node = this.getNodeConfig(id);
 
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return this.pqsSummaryService.fetchRecentUpdates(node, {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       before,
       after,
       parties: Array.isArray(party) ? party : party ? [party] : undefined,
@@ -628,9 +628,9 @@ export class NodesController {
     @Query('keyFormat') keyFormat?: string,
     @Query('keyType') keyType?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 15;
     return this.buildGlobalPartyFingerprintsEntry(this.configService.list(), {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 10,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 15,
       before,
       after,
       namespacePublicKey: publicKey,
@@ -676,14 +676,14 @@ export class NodesController {
     @Query('before') before?: string,
     @Query('after') after?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     try {
       return await this.pqsSummaryService.fetchNamespaceParties(
         this.configService.list(),
         namespaceId,
         {
-          limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+          limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
           before,
           after,
         },
@@ -708,10 +708,10 @@ export class NodesController {
     @Query('mode') mode?: string,
     @Query('hideSplice') hideSplice?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return this.pqsSummaryService.fetchPartyUpdates(this.configService.list(), partyId, {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       before,
       after,
       templates: Array.isArray(template) ? template : template ? [template] : undefined,
@@ -729,10 +729,10 @@ export class NodesController {
     @Query('template') template?: string | string[],
     @Query('hideSplice') hideSplice?: string,
   ) {
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 25;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
     return this.pqsSummaryService.fetchPartyContracts(this.configService.list(), partyId, {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 25,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
       before,
       after,
       templates: Array.isArray(template) ? template : template ? [template] : undefined,

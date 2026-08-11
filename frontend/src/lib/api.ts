@@ -240,7 +240,7 @@ export function fetchNodeContracts(
 }
 
 export function fetchLatestContracts(
-  limit = 25,
+  limit = 30,
   options?: {
     before?: string;
     after?: string;
@@ -517,7 +517,7 @@ export function fetchTokenDetail(tokenId: string): Promise<TokenDetailResponse> 
 
 export function fetchTokenHolders(
   tokenId: string,
-  limit = 25,
+  limit = 30,
   options?: {
     before?: string;
     after?: string;
@@ -538,7 +538,7 @@ export function fetchTokenHolders(
 }
 
 export function fetchLatestTokenTransfers(
-  limit = 25,
+  limit = 30,
   options?: {
     before?: string;
     after?: string;
@@ -584,7 +584,7 @@ export function fetchLatestTokenTransfers(
 
 export function fetchTokenTransfers(
   tokenId: string,
-  limit = 25,
+  limit = 30,
   options?: {
     before?: string;
     after?: string;
@@ -637,7 +637,7 @@ export function fetchTokenTransferDetail(updateId: string): Promise<TokenTransfe
 }
 
 export function fetchLatestUpdates(
-  limit = 25,
+  limit = 30,
   options?: {
     before?: string;
     after?: string;
@@ -802,7 +802,7 @@ export function fetchPartyUpdates(
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
   }
-  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 25))));
+  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 30))));
 
   return fetchJson<GlobalUpdatesResponse>(
     `/parties/${encodeURIComponent(partyId)}/updates?${params.toString()}`,
@@ -834,7 +834,7 @@ export function fetchPartyContracts(
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
   }
-  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 25))));
+  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 30))));
 
   return fetchJson<PartyContractsResponse>(
     `/parties/${encodeURIComponent(partyId)}/contracts?${params.toString()}`,

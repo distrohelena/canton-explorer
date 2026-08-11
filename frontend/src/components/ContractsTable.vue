@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
+import QuerySourcePill from './QuerySourcePill.vue';
 
 interface ContractRow {
   nodeId: string;
@@ -76,6 +78,16 @@ const renderedContracts = computed(() =>
     recordTimeLines: formatRecordTime(contract.createdRecordTime ?? contract.recordTime ?? null),
   })),
 );
+
+const router = useRouter();
+
+function contractLink(contract: ContractRow): string {
+  return `/nodes/${contract.nodeId}/contracts/${contract.contractId}`;
+}
+
+function navigateToContract(contract: ContractRow): void {
+  void router.push(contractLink(contract));
+}
 </script>
 
 <template>
@@ -87,7 +99,10 @@ const renderedContracts = computed(() =>
       <span v-if="showNodeColumn" role="columnheader">Node</span>
       <span role="columnheader">Contract ID</span>
       <span role="columnheader">Template ID</span>
-      <span role="columnheader">Created Record Time</span>
+      <span class="contracts-table__record-time-header" role="columnheader">
+        <span>Created Time</span>
+        <QuerySourcePill class="contracts-table__source-pill" source="pqs" />
+      </span>
     </div>
 
     <div
@@ -102,18 +117,26 @@ const renderedContracts = computed(() =>
       <div
         v-for="contract in renderedContracts"
         :key="`${contract.nodeId}-${contract.contractId}`"
-        class="node-updates__row contracts-table__row"
+        class="node-updates__row node-updates__row--link contracts-table__row"
         :class="{ 'contracts-table__row--with-node': showNodeColumn }"
+        role="row"
+        tabindex="0"
+        @click="navigateToContract(contract)"
+        @keydown.enter.prevent="navigateToContract(contract)"
+        @keydown.space.prevent="navigateToContract(contract)"
       >
-        <span v-if="showNodeColumn" class="contracts-table__cell">{{ contract.label }}</span>
-        <RouterLink
-          class="node-updates__id contracts-table__contract-id contract-detail__link"
-          :to="`/nodes/${contract.nodeId}/contracts/${contract.contractId}`"
-          :title="contract.contractId"
-        >
-          {{ contract.contractId }}
-        </RouterLink>
-        <span class="contracts-table__cell contracts-table__template">
+        <span v-if="showNodeColumn" class="contracts-table__cell" role="cell">{{ contract.label }}</span>
+        <span class="node-updates__id contracts-table__contract-id" role="cell">
+          <RouterLink
+            class="contract-detail__link"
+            :to="contractLink(contract)"
+            :title="contract.contractId"
+            @click.stop
+          >
+            {{ contract.contractId }}
+          </RouterLink>
+        </span>
+        <span class="contracts-table__cell contracts-table__template" role="cell">
           <template v-if="contract.templateIdLines">
             <span class="contracts-table__template-namespace">{{ contract.templateIdLines.namespace }}</span>
             <span v-if="contract.templateIdLines.templateName" class="contracts-table__template-name">
@@ -122,7 +145,7 @@ const renderedContracts = computed(() =>
           </template>
           <template v-else>n/a</template>
         </span>
-        <span class="node-updates__time contracts-table__cell">
+        <span class="node-updates__time contracts-table__cell" role="cell">
           <template v-if="contract.recordTimeLines">
             <span class="node-updates__time-date">{{ contract.recordTimeLines.date }}</span>
             <span class="node-updates__time-clock">{{ contract.recordTimeLines.time }}</span>

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the fixed "Latest 25 updates" list with event-offset cursor pagination so node updates can page older/newer by offset instead of page number.
+**Goal:** Replace the fixed "Latest 30 updates" list with event-offset cursor pagination so node updates can page older/newer by offset instead of page number.
 
-**Architecture:** Extend the backend `/api/nodes/:id/updates` contract to accept offset cursors and return pagination metadata, then update the frontend API/types and `NodeUpdatesView` to drive navigation with `before` and `after` query parameters. Keep the existing update detail route untouched and preserve the current 25-row page size as a fixed window.
+**Architecture:** Extend the backend `/api/nodes/:id/updates` contract to accept offset cursors and return pagination metadata, then update the frontend API/types and `NodeUpdatesView` to drive navigation with `before` and `after` query parameters. Keep the existing update detail route untouched and preserve the current 30-row page size as a fixed window.
 
 **Tech Stack:** NestJS, TypeScript, PostgreSQL PQS queries, Vue 3, Vue Router, Vitest, Jest
 
@@ -77,7 +77,7 @@ Expected: PASS
 - [ ] **Step 1: Write the failing view test**
 
 Add expectations for:
-- no `Latest 25 updates` label
+- no `Latest 30 updates` label
 - `Older` / `Newer` controls
 - loading the next window from cursor query params
 

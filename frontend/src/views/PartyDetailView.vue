@@ -443,8 +443,8 @@ watch(
               scope="party"
               :path="`/parties/${encodeURIComponent(props.partyId)}`"
               :party-id="props.partyId"
-              title="Recent Updates"
-              eyebrow="Updates"
+              title="Updates"
+              eyebrow=""
               show-node-column
               :show-party-filters="false"
               source-tag="party"
@@ -462,8 +462,8 @@ watch(
               scope="party"
               :path="`/parties/${encodeURIComponent(props.partyId)}`"
               :party-id="props.partyId"
-              title="Recent Contracts"
-              eyebrow="Contracts"
+              title="Contracts"
+              eyebrow=""
               query-prefix="contracts"
               show-node-column
               :show-party-filters="false"

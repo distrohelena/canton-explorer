@@ -2,13 +2,20 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ContractsView from './ContractsView.vue';
-import { fetchLatestContracts, fetchNodeContracts, fetchNodeTemplates, fetchNodes } from '../lib/api';
+import {
+  fetchLatestContracts,
+  fetchNodeContracts,
+  fetchNodeTemplates,
+  fetchNodes,
+  fetchTemplates,
+} from '../lib/api';
 
 vi.mock('../lib/api', () => ({
   fetchLatestContracts: vi.fn(),
   fetchNodes: vi.fn(),
   fetchNodeContracts: vi.fn(),
   fetchNodeTemplates: vi.fn(),
+  fetchTemplates: vi.fn(),
 }));
 
 async function renderAt(path: string) {
@@ -88,7 +95,7 @@ describe('ContractsView', () => {
       { id: 'participant-2', label: 'Participant 2' },
     ] as never);
     vi.mocked(fetchLatestContracts).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [],
@@ -107,11 +114,11 @@ describe('ContractsView', () => {
 
     await fireEvent.click(participantOne);
     await waitFor(() =>
-      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, { nodeIds: ['participant-2'] }),
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, { nodeIds: ['participant-2'] }),
     );
 
     await fireEvent.click(participantTwo);
-    await waitFor(() => expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, { nodeIds: [] }));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, { nodeIds: [] }));
   });
 
   it('renders the global contracts browser across all nodes by default', async () => {
@@ -180,7 +187,7 @@ describe('ContractsView', () => {
       },
     ]);
     vi.mocked(fetchLatestContracts).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       contracts: [
@@ -194,7 +201,7 @@ describe('ContractsView', () => {
       ],
     });
     vi.mocked(fetchLatestContracts).mockResolvedValue({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       contracts: [
@@ -210,7 +217,7 @@ describe('ContractsView', () => {
 
     const { container } = await renderAt('/contracts');
 
-    await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledWith(10, {}));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledWith(15, {}));
     expect(screen.queryByRole('tablist', { name: 'Node selectors' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Contracts', level: 2 })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Contracts', level: 3 })).toBeInTheDocument();
@@ -294,6 +301,13 @@ describe('ContractsView', () => {
           ? [{ templateId: 'Main:Wallet' }, { templateId: 'Splice.Amulet:Amulet' }]
           : [{ templateId: 'Main:Asset' }, { templateId: 'Splice.Amulet:Amulet' }],
     }));
+    vi.mocked(fetchTemplates).mockResolvedValue({
+      templates: [
+        { templateId: 'Splice.Amulet:ValidatorRight', packageId: 'pkg-v1' },
+        { templateId: 'Splice.Amulet:ValidatorRight', packageId: 'pkg-v2' },
+        { templateId: 'Main:Asset', packageId: 'pkg-main' },
+      ],
+    });
     vi.mocked(fetchNodeContracts).mockImplementation(async (id: string, options) => {
       if (
         id === 'participant-2' &&
@@ -306,7 +320,7 @@ describe('ContractsView', () => {
         return {
           nodeId: 'participant-2',
           label: 'Participant 2',
-          limit: 25,
+          limit: 30,
           nextBefore: null,
           nextAfter: '200',
           contracts: [
@@ -329,7 +343,7 @@ describe('ContractsView', () => {
         return {
           nodeId: 'participant-2',
           label: 'Participant 2',
-          limit: 25,
+          limit: 30,
           nextBefore: '199',
           nextAfter: null,
           contracts: [
@@ -352,7 +366,7 @@ describe('ContractsView', () => {
         return {
           nodeId: 'participant-1',
           label: 'Participant 1',
-          limit: 25,
+          limit: 30,
           nextBefore: null,
           nextAfter: null,
           contracts: [
@@ -368,7 +382,7 @@ describe('ContractsView', () => {
       return {
         nodeId: id,
         label: id === 'participant-2' ? 'Participant 2' : 'Participant 1',
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         contracts: [
@@ -382,7 +396,7 @@ describe('ContractsView', () => {
     });
 
     vi.mocked(fetchLatestContracts).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: '199',
       nextAfter: null,
       contracts: [
@@ -408,12 +422,18 @@ describe('ContractsView', () => {
     const { container } = await renderAt('/contracts');
 
     expect(await screen.findByRole('heading', { name: 'Contracts' })).toBeInTheDocument();
-    expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 10, {});
+    expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 15, {});
     expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
 
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
+    await fireEvent.focus(screen.getByRole('combobox', { name: 'Template ID' }));
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('option', { name: 'Splice.Amulet:ValidatorRight' }),
+      ).toHaveLength(1),
+    );
     expect(screen.getByText('Hide Splice Templates')).toBeInTheDocument();
 
     await fireEvent.update(screen.getByPlaceholderText('Party ID'), 'Alice');
@@ -425,7 +445,7 @@ describe('ContractsView', () => {
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Hide Splice Templates' }));
 
     await waitFor(() =>
-      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, {
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, {
         parties: ['Alice'],
         templates: ['Main:Asset'],
         partyMode: 'and',
@@ -440,7 +460,7 @@ describe('ContractsView', () => {
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
 
     await waitFor(() =>
-      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, {
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, {
         nodeIds: ['participant-2'],
         parties: ['Alice'],
         templates: ['Main:Asset'],
@@ -458,7 +478,7 @@ describe('ContractsView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
-      expect(fetchLatestContracts).toHaveBeenLastCalledWith(10, {
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, {
         before: '199',
         nodeIds: ['participant-2'],
         parties: ['Alice'],
@@ -542,7 +562,7 @@ describe('ContractsView', () => {
     vi.mocked(fetchNodeContracts).mockResolvedValue({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [
@@ -555,7 +575,7 @@ describe('ContractsView', () => {
     });
     vi.mocked(fetchLatestContracts)
       .mockResolvedValueOnce({
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         contracts: [
@@ -585,7 +605,7 @@ describe('ContractsView', () => {
 
     const { router } = await renderAt('/contracts');
 
-    await waitFor(() => expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 10, {}));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 15, {}));
 
     await fireEvent.update(screen.getByRole('combobox', { name: 'Items per page' }), '50');
 
@@ -637,7 +657,7 @@ describe('ContractsView', () => {
     vi.mocked(fetchNodeContracts).mockResolvedValue({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       contracts: [
@@ -652,7 +672,7 @@ describe('ContractsView', () => {
     await renderAt('/contracts?party=Alice&hideSplice=true');
 
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
-    expect(fetchLatestContracts).toHaveBeenCalledWith(10, {
+    expect(fetchLatestContracts).toHaveBeenCalledWith(15, {
       parties: ['Alice'],
       partyMode: 'or',
       hideSplice: true,

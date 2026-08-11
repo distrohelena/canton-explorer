@@ -86,6 +86,23 @@ function displaySamples(
 
   const bucketMs = displayBucketMs(days);
   const filledSamples: ActivitySample[] = [];
+  const firstSample = visibleSamples[0];
+  const firstSampleTimestamp = Date.parse(firstSample?.timestamp ?? '');
+
+  // The selected overview represents the complete window, including known empty
+  // buckets before the first activity bucket.
+  if (
+    firstSample &&
+    Number.isFinite(firstSampleTimestamp) &&
+    firstSampleTimestamp > domain.startMs
+  ) {
+    filledSamples.push({
+      timestamp: new Date(domain.startMs).toISOString(),
+      activityValue: 0,
+      activeContractCount: firstSample.activeContractCount,
+      latestOffset: firstSample.latestOffset,
+    });
+  }
 
   for (const sample of visibleSamples) {
     const sampleTimestamp = Date.parse(sample.timestamp);

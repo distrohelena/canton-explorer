@@ -132,7 +132,7 @@ describe('NamespaceDetailView', () => {
     vi.mocked(api.fetchNamespaceParties).mockResolvedValue({
       namespaceId: '1220abcd',
       partyCount: 2,
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       parties: [
@@ -145,13 +145,13 @@ describe('NamespaceDetailView', () => {
       ],
     });
     vi.mocked(api.fetchLatestUpdates).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       updates: [],
     });
     vi.mocked(api.fetchLatestContracts).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [],
@@ -163,7 +163,7 @@ describe('NamespaceDetailView', () => {
     await waitFor(() => {
       expect(api.fetchNamespaceDetail).toHaveBeenCalledWith('1220abcd');
     });
-    expect(api.fetchNamespaceParties).toHaveBeenCalledWith('1220abcd', { limit: 10 });
+    expect(api.fetchNamespaceParties).toHaveBeenCalledWith('1220abcd', { limit: 15 });
 
     expect(await screen.findByText('1220abcd Namespace')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute('href', '/parties');
@@ -194,7 +194,7 @@ describe('NamespaceDetailView', () => {
       .mockResolvedValueOnce({
         namespaceId: '1220abcd',
         partyCount: 12,
-        limit: 10,
+        limit: 15,
         nextBefore: 'Party 10::1220abcd',
         nextAfter: null,
         parties: Array.from({ length: 10 }, (_, index) => ({
@@ -204,7 +204,7 @@ describe('NamespaceDetailView', () => {
       .mockResolvedValueOnce({
         namespaceId: '1220abcd',
         partyCount: 12,
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: 'Party 11::1220abcd',
         parties: [
@@ -213,13 +213,13 @@ describe('NamespaceDetailView', () => {
         ],
       });
     vi.mocked(api.fetchLatestUpdates).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       updates: [],
     });
     vi.mocked(api.fetchLatestContracts).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [],
@@ -236,7 +236,7 @@ describe('NamespaceDetailView', () => {
     expect(await screen.findByRole('link', { name: 'Party 11::1220abcd' })).toBeInTheDocument();
     expect(vi.mocked(api.fetchNamespaceParties)).toHaveBeenLastCalledWith('1220abcd', {
       before: 'Party 10::1220abcd',
-      limit: 10,
+      limit: 15,
     });
   });
 });

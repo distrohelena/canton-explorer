@@ -68,7 +68,7 @@ describe('TokenDetailView', () => {
     });
     vi.mocked(fetchTokenHolders).mockResolvedValue({
       tokenId: 'Issuer::validator-license',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       holders: [
@@ -96,7 +96,7 @@ describe('TokenDetailView', () => {
     });
     vi.mocked(fetchTokenTransfers)
       .mockResolvedValueOnce({
-        limit: 10,
+        limit: 15,
         nextBefore: 'cursor-token-0',
         nextAfter: null,
         transfers: [
@@ -124,7 +124,7 @@ describe('TokenDetailView', () => {
         ],
       })
       .mockResolvedValueOnce({
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: 'cursor-token-1',
         transfers: [
@@ -182,7 +182,7 @@ describe('TokenDetailView', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
 
     await waitFor(() =>
-      expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'Issuer::validator-license', 10, {}),
+      expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'Issuer::validator-license', 15, {}),
     );
 
     const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
@@ -225,13 +225,13 @@ describe('TokenDetailView', () => {
     });
     vi.mocked(fetchTokenHolders).mockResolvedValue({
       tokenId: 'Issuer::validator-license',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       holders: [],
     });
     vi.mocked(fetchTokenTransfers).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       transfers: [
@@ -262,7 +262,7 @@ describe('TokenDetailView', () => {
 
     expect(await screen.findByRole('heading', { name: 'Validator License' })).toBeInTheDocument();
     await waitFor(() =>
-      expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'Issuer::validator-license', 10, {
+      expect(fetchTokenTransfers).toHaveBeenNthCalledWith(1, 'Issuer::validator-license', 15, {
         movementTypes: ['Create', 'Mint'],
       }),
     );
@@ -283,13 +283,13 @@ describe('TokenDetailView', () => {
     });
     vi.mocked(fetchTokenHolders).mockResolvedValue({
       tokenId: 'vUSDCx-SHARE',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       holders: [],
     });
     vi.mocked(fetchTokenTransfers).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -315,7 +315,7 @@ describe('TokenDetailView', () => {
     vi.mocked(fetchTokenHolders)
       .mockResolvedValueOnce({
         tokenId: 'canton-coin',
-        limit: 10,
+        limit: 15,
         nextBefore: 'holders-cursor-before-1',
         nextAfter: null,
         holders: [
@@ -328,7 +328,7 @@ describe('TokenDetailView', () => {
       })
       .mockResolvedValueOnce({
         tokenId: 'canton-coin',
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: 'holders-cursor-after-1',
         holders: [
@@ -341,7 +341,7 @@ describe('TokenDetailView', () => {
       })
       .mockResolvedValueOnce({
         tokenId: 'canton-coin',
-        limit: 10,
+        limit: 15,
         nextBefore: 'holders-cursor-before-1',
         nextAfter: null,
         holders: [
@@ -353,7 +353,7 @@ describe('TokenDetailView', () => {
         ],
       });
     vi.mocked(fetchTokenTransfers).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -366,7 +366,7 @@ describe('TokenDetailView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     await waitFor(() =>
-      expect(fetchTokenHolders).toHaveBeenNthCalledWith(2, 'canton-coin', 10, {
+      expect(fetchTokenHolders).toHaveBeenNthCalledWith(2, 'canton-coin', 15, {
         before: 'holders-cursor-before-1',
       }),
     );
@@ -379,7 +379,7 @@ describe('TokenDetailView', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
 
     await waitFor(() =>
-      expect(fetchTokenHolders).toHaveBeenNthCalledWith(3, 'canton-coin', 10, {
+      expect(fetchTokenHolders).toHaveBeenNthCalledWith(3, 'canton-coin', 15, {
         after: 'holders-cursor-after-1',
       }),
     );
@@ -402,7 +402,7 @@ describe('TokenDetailView', () => {
     vi.mocked(fetchTokenHolders)
       .mockResolvedValueOnce({
         tokenId: 'canton-coin',
-        limit: 10,
+        limit: 15,
         nextBefore: 'holders-cursor-before-1',
         nextAfter: null,
         holders: [
@@ -427,7 +427,7 @@ describe('TokenDetailView', () => {
         ],
       });
     vi.mocked(fetchTokenTransfers).mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       transfers: [],

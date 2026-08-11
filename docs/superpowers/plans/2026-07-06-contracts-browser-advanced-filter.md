@@ -150,7 +150,7 @@ Update the contracts query helper in `backend/src/pqs/pqs-summary.service.ts` so
 
 Implementation rule:
 
-- do not filter the already-trimmed 25-row result set in memory
+- do not filter the already-trimmed 30-row result set in memory
 - keep cursor calculation based on the filtered, ordered result set
 
 If witness data is not already present in the current ACS query, extend the query with the minimum additional join/aggregation needed to support party filtering.

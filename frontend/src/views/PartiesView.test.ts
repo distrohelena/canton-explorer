@@ -179,7 +179,7 @@ describe('PartiesView', () => {
       label: 'Participant 2',
       mode: 'pqs_with_grpc',
       source: 'grpc',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       fingerprints: ['1220carol'],
@@ -344,14 +344,14 @@ describe('PartiesView', () => {
         label: 'Participant 1',
         mode: 'pqs_only',
         source: 'pqs',
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         fingerprints: ['1220shared', '1220alice'],
       });
     vi.mocked(fetchPartyFingerprints).mockResolvedValue({
       source: 'pqs',
-      limit: 10,
+      limit: 15,
       nextBefore: '1220carol',
       nextAfter: null,
       fingerprints: ['1220alice', '1220carol'],
@@ -446,7 +446,7 @@ describe('PartiesView', () => {
         label: 'Participant 1',
         mode: 'pqs_only',
         source: 'pqs',
-        limit: 10,
+        limit: 15,
         nextBefore: '1220j',
         nextAfter: null,
         fingerprints: ['1220a', '1220b'],
@@ -456,7 +456,7 @@ describe('PartiesView', () => {
         label: 'Participant 1',
         mode: 'pqs_only',
         source: 'pqs',
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: '1220k',
         fingerprints: ['1220k', '1220l'],
@@ -466,7 +466,7 @@ describe('PartiesView', () => {
         label: 'Participant 1',
         mode: 'pqs_only',
         source: 'pqs',
-        limit: 10,
+        limit: 15,
         nextBefore: '1220j',
         nextAfter: null,
         fingerprints: ['1220a', '1220b'],
@@ -494,7 +494,7 @@ describe('PartiesView', () => {
     expect(await screen.findByText('1220k')).toBeInTheDocument();
     expect(fetchNodePartyFingerprints).toHaveBeenLastCalledWith('participant-1', {
       before: '1220j',
-      limit: 10,
+      limit: 15,
     });
     expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
@@ -504,7 +504,7 @@ describe('PartiesView', () => {
     expect(await screen.findByText('1220a')).toBeInTheDocument();
     expect(fetchNodePartyFingerprints).toHaveBeenLastCalledWith('participant-1', {
       after: '1220k',
-      limit: 10,
+      limit: 15,
     });
   });
 
@@ -553,7 +553,7 @@ describe('PartiesView', () => {
       label: 'Participant 1',
       mode: 'pqs_with_grpc',
       source: 'grpc',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       fingerprints: ['1220abcd'],
@@ -628,7 +628,7 @@ describe('PartiesView', () => {
         label: 'Participant 1',
         mode: 'pqs_only',
         source: 'pqs',
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         fingerprints: ['1220a', '1220b'],
@@ -638,7 +638,7 @@ describe('PartiesView', () => {
         label: 'Participant 1',
         mode: 'pqs_only',
         source: 'pqs',
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         fingerprints: ['1220a'],
@@ -668,7 +668,7 @@ describe('PartiesView', () => {
 
     expect(await screen.findByText('1220a')).toBeInTheDocument();
     expect(fetchNodePartyFingerprints).toHaveBeenLastCalledWith('participant-1', {
-      limit: 10,
+      limit: 15,
       publicKey: '302a300506032b6570032100010203',
       encoding: 'hex',
       keyFormat: 'derX509SubjectPublicKeyInfo',
@@ -714,13 +714,13 @@ describe('PartiesView', () => {
       nodeId: 'participant-1',
       label: 'Participant 1',
       mode: 'pqs_with_grpc',
-      parties: Array.from({ length: 12 }, (_, index) => `Active ${String(index + 1).padStart(2, '0')}`),
+      parties: Array.from({ length: 18 }, (_, index) => `Active ${String(index + 1).padStart(2, '0')}`),
     });
     vi.mocked(fetchNodeLocalParties).mockResolvedValue({
       nodeId: 'participant-1',
       label: 'Participant 1',
       mode: 'pqs_with_grpc',
-      parties: Array.from({ length: 12 }, (_, index) => `Local ${String(index + 1).padStart(2, '0')}`),
+      parties: Array.from({ length: 18 }, (_, index) => `Local ${String(index + 1).padStart(2, '0')}`),
       localPartiesStatus: 'ok',
       localPartiesError: null,
       localPartiesErrorCode: null,
@@ -740,26 +740,26 @@ describe('PartiesView', () => {
     });
 
     expect(await screen.findByRole('link', { name: 'Active 01' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Active 11' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Active 16' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
 
-    expect(await screen.findByRole('link', { name: 'Active 11' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Active 16' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
 
     await fireEvent.click(screen.getByRole('button', { name: 'All Parties' }));
 
     expect(await screen.findByRole('link', { name: 'Local 01' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Local 11' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Local 16' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
 
-    expect(await screen.findByRole('link', { name: 'Local 11' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Local 16' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
   });

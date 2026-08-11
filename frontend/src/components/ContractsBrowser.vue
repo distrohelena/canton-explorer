@@ -13,7 +13,6 @@ import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import type { GlobalContractsResponse, NodeContractsResponse } from '../types/contracts';
 import type { PartyContractsResponse } from '../types/parties';
 import ContractsTable from './ContractsTable.vue';
-import QuerySourcePill from './QuerySourcePill.vue';
 import UpdatesAdvancedFilter from './UpdatesAdvancedFilter.vue';
 import UpdatesToolbar from './UpdatesToolbar.vue';
 
@@ -249,7 +248,9 @@ async function loadTemplateOptions() {
   try {
     const response =
       props.scope === 'node' && props.nodeId ? await fetchNodeTemplates(props.nodeId) : await fetchTemplates();
-    templateOptions.value = response.templates.map((template) => template.templateId);
+    templateOptions.value = uniqueValues(
+      response.templates.map((template) => template.templateId),
+    );
   } catch {
     templateOptions.value = [];
   } finally {
@@ -581,7 +582,7 @@ async function setNodeFilters(nodeIds: string[]) {
   <section class="node-updates">
     <header class="node-detail__hero">
       <div>
-        <p class="activity-home__eyebrow">{{ eyebrow }}</p>
+        <p v-if="eyebrow" class="activity-home__eyebrow">{{ eyebrow }}</p>
         <h3>{{ title }}</h3>
       </div>
       <div class="results-header__actions">
@@ -596,7 +597,6 @@ async function setNodeFilters(nodeIds: string[]) {
           @newer="showNewer"
           @older="showOlder"
         />
-        <QuerySourcePill source="pqs" />
       </div>
     </header>
 

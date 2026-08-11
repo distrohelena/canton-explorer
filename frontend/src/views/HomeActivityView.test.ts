@@ -242,10 +242,10 @@ describe('HomeActivityView', () => {
     expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toContain(' ');
   });
 
-  it('keeps empty leading time visible when cached history is shorter than the selected window', () => {
+  it('fills leading daily buckets with zero activity in the 7 day view', () => {
     history.value = {
-      generatedAt: '2026-07-01T12:00:00.000Z',
-      windowMinutes: 43200,
+      generatedAt: '2026-07-03T12:00:00.000Z',
+      windowMinutes: 10080,
       nodes: [
         {
           nodeId: 'participant-1',
@@ -254,22 +254,16 @@ describe('HomeActivityView', () => {
           latestActiveContractCount: 15,
           samples: [
             {
-              timestamp: '2026-07-01T11:55:00.000Z',
-              activityValue: 1,
+              timestamp: '2026-07-01T00:00:00.000Z',
+              activityValue: 8,
               activeContractCount: 13,
               latestOffset: '10',
-            },
-            {
-              timestamp: '2026-07-01T12:00:00.000Z',
-              activityValue: 3,
-              activeContractCount: 15,
-              latestOffset: '11',
             },
           ],
         },
       ],
     };
-    selectedDays.value = 30;
+    selectedDays.value = 7;
 
     const { container } = render(HomeActivityView, {
       global: {
@@ -282,8 +276,64 @@ describe('HomeActivityView', () => {
       },
     });
 
-    expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).not.toMatch(
-      /^0,/,
+    expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toBe(
+      '0,91 22.857142857142854,91 68.57142857142857,91 114.28571428571429,91 160,91 205.71428571428572,5 251.42857142857142,91 320,91',
+    );
+  });
+
+  it.each([
+    {
+      days: 1 as const,
+      windowMinutes: 1440,
+      timestamp: '2026-07-03T00:00:00.000Z',
+    },
+    {
+      days: 30 as const,
+      windowMinutes: 43200,
+      timestamp: '2026-06-20T00:00:00.000Z',
+    },
+  ])('fills leading buckets with zero activity in the $days day view', ({ days, windowMinutes, timestamp }) => {
+    history.value = {
+      generatedAt: '2026-07-03T12:00:00.000Z',
+      windowMinutes,
+      nodes: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          status: 'healthy',
+          latestActiveContractCount: 15,
+          samples: [
+            {
+              timestamp,
+              activityValue: 8,
+              activeContractCount: 13,
+              latestOffset: '10',
+            },
+          ],
+        },
+      ],
+    };
+    selectedDays.value = days;
+
+    const { container } = render(HomeActivityView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    const points = container.querySelector('.activity-panel__line')?.getAttribute('points') ?? '';
+    const pointValues = points.split(' ');
+    const firstActivityIndex = pointValues.findIndex((point) => point.endsWith(',5'));
+
+    expect(pointValues[0]).toBe('0,91');
+    expect(firstActivityIndex).toBeGreaterThan(0);
+    expect(pointValues.slice(1, firstActivityIndex).every((point) => point.endsWith(',91'))).toBe(
+      true,
     );
   });
 
@@ -420,7 +470,7 @@ describe('HomeActivityView', () => {
     });
 
     expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toBe(
-      '205.71428571428572,5 251.42857142857142,91 320,91',
+      '0,91 22.857142857142854,91 68.57142857142857,91 114.28571428571429,91 160,91 205.71428571428572,5 251.42857142857142,91 320,91',
     );
     expect(container.querySelector('.activity-panel__axis-label--end')?.textContent).toBe('Jul 3');
   });
@@ -459,8 +509,8 @@ describe('HomeActivityView', () => {
       },
     });
 
-    expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toBe(
-      '316.6666666666667,5 320,5',
+    expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toMatch(
+      /316\.6666666666667,5 320,5$/,
     );
   });
 
@@ -505,7 +555,7 @@ describe('HomeActivityView', () => {
     });
 
     expect(container.querySelector('.activity-panel__line')?.getAttribute('points')).toBe(
-      '266.6666666666667,5 280,91 293.3333333333333,91 306.6666666666667,91 320,48',
+      '0,91 13.333333333333332,91 26.666666666666664,91 40,91 53.33333333333333,91 66.66666666666667,91 80,91 93.33333333333334,91 106.66666666666666,91 120,91 133.33333333333334,91 146.66666666666666,91 160,91 173.33333333333331,91 186.66666666666669,91 200,91 213.33333333333331,91 226.66666666666669,91 240,91 253.33333333333331,91 266.6666666666667,5 280,91 293.3333333333333,91 306.6666666666667,91 320,48',
     );
   });
 });

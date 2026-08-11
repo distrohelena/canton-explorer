@@ -99,7 +99,7 @@ function handleNodeChange(nodeId: string, event: Event) {
 
       <div
         v-if="showPartyFilters !== false"
-        class="node-updates__advanced-filter-field node-updates__advanced-filter-field--party"
+        class="node-updates__advanced-filter-field node-updates__advanced-filter-field--party node-updates__advanced-filter-field--party-id"
       >
         <span>Party ID</span>
         <div class="node-updates__advanced-filter-input-row">

@@ -248,7 +248,7 @@ const contractDataEntries = computed(() => {
                     <dd v-else>n/a</dd>
                   </div>
                   <div class="contract-detail__summary-subitem">
-                    <dt>Created Record Time</dt>
+                    <dt>Created Time</dt>
                     <dd v-if="createdRecordTime" class="update-detail__time">
                       <span class="update-detail__time-date">{{ createdRecordTime.date }}</span>
                       <span class="update-detail__time-clock">{{ createdRecordTime.time }}</span>

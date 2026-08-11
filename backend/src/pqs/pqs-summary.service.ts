@@ -2190,7 +2190,7 @@ export class PqsSummaryService {
       paidMax?: string;
     } = {},
   ): Promise<NodeTrafficPurchasesResponse> {
-    const limit = Math.min(Math.max(options.limit ?? 25, 1), 100);
+    const limit = Math.min(Math.max(options.limit ?? 30, 1), 100);
     const client = await this.managerFactory.getRawExecutor(node);
     const useAfterCursor = Boolean(options.after && !options.before);
     const normalizedFilters: TrafficPurchaseQueryFilters = {
@@ -2275,7 +2275,7 @@ export class PqsSummaryService {
 
   async fetchGlobalTrafficPurchases(
     nodes: NodeConfig[],
-    limit = 25,
+    limit = 30,
     options: {
       before?: string;
       after?: string;
@@ -2291,7 +2291,7 @@ export class PqsSummaryService {
     const normalizedLimit =
       typeof limit === 'number' && Number.isFinite(limit) && limit > 0
         ? Math.trunc(limit)
-        : 25;
+        : 30;
     const beforeCursor = decodeGlobalTrafficCursor(options.before);
     const afterCursor =
       beforeCursor === null ? decodeGlobalTrafficCursor(options.after) : null;
@@ -2566,17 +2566,17 @@ export class PqsSummaryService {
           partyMode?: string;
           mode?: string;
           hideSplice?: boolean;
-        } = 25,
+        } = 30,
   ): Promise<NodeRecentUpdatesResponse> {
     const client = await this.managerFactory.getRawExecutor(node);
     const normalizedLimit =
       typeof options === 'number'
         ? Number.isFinite(options) && options > 0
           ? Math.trunc(options)
-          : 25
+          : 30
         : Number.isFinite(options.limit) && Number(options.limit) > 0
           ? Math.trunc(Number(options.limit))
-          : 25;
+          : 30;
     const before = typeof options === 'object' ? options.before : undefined;
     const after = typeof options === 'object' ? options.after : undefined;
     const parties = typeof options === 'object' ? options.parties : undefined;
@@ -2674,7 +2674,7 @@ export class PqsSummaryService {
 
   async fetchGlobalRecentUpdates(
     nodes: NodeConfig[],
-    limit = 25,
+    limit = 30,
     options?: {
       before?: string;
       after?: string;
@@ -2688,7 +2688,7 @@ export class PqsSummaryService {
     const normalizedLimit =
       Number.isFinite(limit) && Number(limit) > 0
         ? Math.trunc(Number(limit))
-        : 25;
+        : 30;
     const beforeCursor = decodeGlobalUpdateCursor(options?.before);
     const afterCursor =
       beforeCursor === null ? decodeGlobalUpdateCursor(options?.after) : null;
@@ -3261,7 +3261,7 @@ export class PqsSummaryService {
       Number.isFinite(options.limit) &&
       options.limit > 0
         ? Math.trunc(options.limit)
-        : 25;
+        : 30;
     const before = options?.before;
     const after = options?.after;
     const parties = options?.parties;
@@ -3549,7 +3549,7 @@ export class PqsSummaryService {
           updates: await this.fetchPartyRecentUpdatesForNode(
             node,
             normalizedPartyId,
-            10,
+            15,
           ),
         })),
       )
@@ -3572,7 +3572,7 @@ export class PqsSummaryService {
           contracts: await this.fetchPartyRecentContractsForNode(
             node,
             normalizedPartyId,
-            10,
+            15,
           ),
         })),
       )
@@ -3685,7 +3685,7 @@ export class PqsSummaryService {
           Date.parse(right.recordTime ?? '') -
           Date.parse(left.recordTime ?? ''),
       )
-      .slice(0, 10);
+      .slice(0, 15);
     const recentContracts = recentContractsByNode
       .flatMap(({ contracts }) => contracts)
       .sort(
@@ -3693,7 +3693,7 @@ export class PqsSummaryService {
           Date.parse(right.recordTime ?? '') -
           Date.parse(left.recordTime ?? ''),
       )
-      .slice(0, 10);
+      .slice(0, 15);
     const observedNodes = Array.from(nodesById.values()).sort((left, right) =>
       left.label.localeCompare(right.label),
     );
@@ -3837,13 +3837,13 @@ export class PqsSummaryService {
 
     const recentUpdatesResponse = await this.fetchGlobalRecentUpdates(
       nodes,
-      10,
+      15,
       {
         parties: matchingParties,
         partyMode: 'or',
       },
     );
-    const recentContractsResponse = await this.fetchGlobalContracts(nodes, 10, {
+    const recentContractsResponse = await this.fetchGlobalContracts(nodes, 15, {
       parties: matchingParties,
       partyMode: 'or',
     });
@@ -3979,7 +3979,7 @@ export class PqsSummaryService {
       Number.isFinite(options.limit) &&
       options.limit > 0
         ? Math.trunc(options.limit)
-        : 25;
+        : 30;
 
     const pagedParties = this.paginateNamespacePartyIds(orderedParties, {
       limit: normalizedLimit,
@@ -4011,7 +4011,7 @@ export class PqsSummaryService {
       hideSplice?: boolean;
     },
   ): Promise<GlobalRecentUpdatesResponse> {
-    return this.fetchGlobalRecentUpdates(nodes, options?.limit ?? 25, {
+    return this.fetchGlobalRecentUpdates(nodes, options?.limit ?? 30, {
       before: options?.before,
       after: options?.after,
       parties: [this.normalizePartyIdentifier(partyId)],
@@ -4023,7 +4023,7 @@ export class PqsSummaryService {
 
   async fetchGlobalContracts(
     nodes: NodeConfig[],
-    limit = 25,
+    limit = 30,
     options?: {
       before?: string;
       after?: string;
@@ -4037,7 +4037,7 @@ export class PqsSummaryService {
     const normalizedLimit =
       typeof limit === 'number' && Number.isFinite(limit) && limit > 0
         ? Math.trunc(limit)
-        : 25;
+        : 30;
     const beforeCursor = decodeGlobalContractCursor(options?.before);
     const afterCursor =
       beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
@@ -4217,7 +4217,7 @@ export class PqsSummaryService {
       Number.isFinite(options.limit) &&
       options.limit > 0
         ? Math.trunc(options.limit)
-        : 25;
+        : 30;
     const beforeCursor = decodeGlobalContractCursor(options?.before);
     const afterCursor =
       beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
@@ -4364,7 +4364,7 @@ export class PqsSummaryService {
 
   async fetchTokens(
     nodes: NodeConfig[],
-    limit = 25,
+    limit = 30,
     options?: {
       before?: string;
       after?: string;
@@ -4421,7 +4421,7 @@ export class PqsSummaryService {
 
   async fetchLatestTokenTransfers(
     nodes: NodeConfig[],
-    limit = 25,
+    limit = 30,
     options?: {
       before?: string;
       after?: string;
@@ -4443,7 +4443,7 @@ export class PqsSummaryService {
   async fetchTokenTransfers(
     nodes: NodeConfig[],
     tokenId: string,
-    limit = 25,
+    limit = 30,
     options?: {
       before?: string;
       after?: string;
@@ -4508,7 +4508,7 @@ export class PqsSummaryService {
     const transfersResponse = await this.fetchTokenTransfers(
       nodes,
       normalizedTokenId,
-      25,
+      30,
     );
 
     return {
@@ -4520,7 +4520,7 @@ export class PqsSummaryService {
   async fetchTokenHolders(
     nodes: NodeConfig[],
     tokenId: string,
-    limit = 25,
+    limit = 30,
     options?: { before?: string; after?: string },
   ): Promise<TokenHoldersResponse> {
     const normalizedTokenId = this.normalizeTokenId(tokenId);
@@ -4564,13 +4564,13 @@ export class PqsSummaryService {
   private paginateTokenHolders(
     tokenId: string,
     holders: TokenHolderSummary[],
-    limit = 25,
+    limit = 30,
     options?: { before?: string; after?: string },
   ): TokenHoldersResponse {
     const normalizedLimit =
       Number.isFinite(limit) && Number(limit) > 0
         ? Math.trunc(Number(limit))
-        : 25;
+        : 30;
     const beforeCursor = decodeGlobalTokenHolderCursor(options?.before);
     const afterCursor =
       beforeCursor === null
@@ -4614,13 +4614,13 @@ export class PqsSummaryService {
 
   private paginateTokens(
     tokens: TokenSummary[],
-    limit = 25,
+    limit = 30,
     options?: { before?: string; after?: string },
   ): TokensResponse {
     const normalizedLimit =
       Number.isFinite(limit) && Number(limit) > 0
         ? Math.trunc(Number(limit))
-        : 25;
+        : 30;
     const beforeCursor = decodeGlobalTokenCursor(options?.before);
     const afterCursor =
       beforeCursor === null ? decodeGlobalTokenCursor(options?.after) : null;
@@ -4854,7 +4854,7 @@ export class PqsSummaryService {
 
   private paginateTokenTransfers(
     transfers: TokenTransferSummary[],
-    limit = 25,
+    limit = 30,
     options?: {
       before?: string;
       after?: string;
@@ -4867,7 +4867,7 @@ export class PqsSummaryService {
     const normalizedLimit =
       Number.isFinite(limit) && Number(limit) > 0
         ? Math.trunc(Number(limit))
-        : 25;
+        : 30;
     const beforeCursor = decodeGlobalTokenTransferCursor(options?.before);
     const afterCursor =
       beforeCursor === null
@@ -5184,7 +5184,7 @@ export class PqsSummaryService {
       Number.isFinite(options.limit) &&
       options.limit > 0
         ? Math.trunc(options.limit)
-        : 25;
+        : 30;
     const before = options?.before;
     const after = options?.after;
     const useAfterCursor = Boolean(after && !before);

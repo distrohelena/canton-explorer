@@ -363,7 +363,7 @@ Add `frontend/src/views/TokensView.test.ts` coverage for:
 
 - loading state
 - `Known Tokens` section renders `Canton Coin`
-- `Latest Transfers` renders the latest 25 rows
+- `Latest Transfers` renders the latest 30 rows
 - rows show:
   - node
   - token

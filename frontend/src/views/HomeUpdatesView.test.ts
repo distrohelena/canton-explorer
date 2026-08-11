@@ -4,7 +4,7 @@ import HomeUpdatesView from './HomeUpdatesView.vue';
 
 vi.mock('../lib/api', () => ({
   fetchLatestUpdates: vi.fn().mockResolvedValue({
-    limit: 10,
+    limit: 15,
     nextBefore: null,
     nextAfter: null,
     updates: [

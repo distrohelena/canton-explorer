@@ -11,7 +11,7 @@ This slice adds:
 - a new top-header `Contracts` navigation item after `Parties`
 - a new `/contracts` route
 - a node-scoped ACS list with lazy loading, one node at a time
-- server-side pagination at 25 rows per page
+- server-side pagination at 30 rows per page
 - minimal ACS row metadata:
   - `Contract ID`
   - `Template ID`

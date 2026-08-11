@@ -493,7 +493,7 @@ const typedNamespaceDetailFixture = {
 const typedNamespacePartiesFixture = {
   namespaceId: '1220abcd',
   partyCount: 2,
-  limit: 10,
+  limit: 15,
   nextBefore: null,
   nextAfter: null,
   parties: [
@@ -1743,13 +1743,13 @@ describe('PqsSummaryService', () => {
         'Carol::1220eeee',
       ]);
     (service as any).fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       updates: typedNamespaceDetailFixture.recentUpdates,
     });
     (service as any).fetchGlobalContracts = jest.fn().mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: typedNamespaceDetailFixture.recentContracts,
@@ -1838,7 +1838,7 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce(['Alice::1220abcd'])
       .mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:5542'));
     (service as any).fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       updates: [
@@ -1854,7 +1854,7 @@ describe('PqsSummaryService', () => {
       ],
     });
     (service as any).fetchGlobalContracts = jest.fn().mockResolvedValue({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [
@@ -2004,7 +2004,7 @@ describe('PqsSummaryService', () => {
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ],
         '1220abcd',
-        { limit: 10 },
+        { limit: 15 },
       ),
     ).resolves.toEqual(typedNamespacePartiesFixture);
   });
@@ -2044,12 +2044,12 @@ describe('PqsSummaryService', () => {
           { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
         ],
         '1220abcd',
-        { limit: 10 },
+        { limit: 15 },
       ),
     ).resolves.toEqual({
       namespaceId: '1220abcd',
       partyCount: 1,
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       parties: [
@@ -2737,7 +2737,7 @@ describe('PqsSummaryService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('limit 26'),
+      expect.stringContaining('limit 31'),
     );
     expect(query).toHaveBeenNthCalledWith(
       2,
@@ -2750,7 +2750,7 @@ describe('PqsSummaryService', () => {
     expect(updates).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [
@@ -2813,7 +2813,7 @@ describe('PqsSummaryService', () => {
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
         {
-          limit: 25,
+          limit: 30,
           parties: ['Alice'],
           mode: 'and',
         },
@@ -2821,7 +2821,7 @@ describe('PqsSummaryService', () => {
     ).resolves.toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [
@@ -2900,7 +2900,7 @@ describe('PqsSummaryService', () => {
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
         {
-          limit: 25,
+          limit: 30,
           templates: ['Splice.DsoRules:DsoRules'],
         },
       ),
@@ -2975,14 +2975,14 @@ describe('PqsSummaryService', () => {
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
         {
-          limit: 25,
+          limit: 30,
           hideSplice: true,
         },
       ),
     ).resolves.toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [
@@ -3233,7 +3233,7 @@ describe('PqsSummaryService', () => {
         return {
           nodeId: node.id,
           label: node.label,
-          limit: 25,
+          limit: 30,
           nextBefore: null,
           nextAfter: null,
           updates: [
@@ -3254,10 +3254,10 @@ describe('PqsSummaryService', () => {
           { id: 'participant-1', label: 'Participant 1' },
           { id: 'participant-2', label: 'Participant 2' },
         ] as never,
-        10,
+        15,
       ),
     ).resolves.toEqual({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       updates: [
@@ -3339,7 +3339,7 @@ describe('PqsSummaryService', () => {
         return {
           nodeId: node.id,
           label: node.label,
-          limit: 25,
+          limit: 30,
           nextBefore: null,
           nextAfter: null,
           contracts: [
@@ -3359,10 +3359,10 @@ describe('PqsSummaryService', () => {
           { id: 'participant-1', label: 'Participant 1' },
           { id: 'participant-2', label: 'Participant 2' },
         ] as never,
-        10,
+        15,
       ),
     ).resolves.toEqual({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [
@@ -3389,7 +3389,7 @@ describe('PqsSummaryService', () => {
       async (node: { id: string; label: string }) => ({
         nodeId: node.id,
         label: node.label,
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         contracts: [
@@ -3408,7 +3408,7 @@ describe('PqsSummaryService', () => {
           { id: 'participant-1', label: 'Participant 1' },
           { id: 'participant-2', label: 'Participant 2' },
         ] as never,
-        10,
+        15,
         { nodeIds: ['participant-2'] },
       ),
     ).resolves.toMatchObject({
@@ -3435,11 +3435,11 @@ describe('PqsSummaryService', () => {
     await expect(
       service.fetchGlobalContracts(
         [{ id: 'participant-1', label: 'Participant 1' }] as never,
-        10,
+        15,
         { nodeIds: [] },
       ),
     ).resolves.toEqual({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [],
@@ -3465,7 +3465,7 @@ describe('PqsSummaryService', () => {
         return {
           nodeId: node.id,
           label: node.label,
-          limit: 25,
+          limit: 30,
           nextBefore: null,
           nextAfter: null,
           contracts: [
@@ -3491,10 +3491,10 @@ describe('PqsSummaryService', () => {
           { id: 'participant-2', label: 'Participant 2' },
         ] as never,
         'Alice',
-        { limit: 10 },
+        { limit: 15 },
       ),
     ).resolves.toEqual({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       contracts: [
@@ -3605,7 +3605,7 @@ describe('PqsSummaryService', () => {
         ledgerLabel: 'Retail Ledger',
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
-      { limit: 25, templates: ['Main:Asset'], hideSplice: true },
+      { limit: 30, templates: ['Main:Asset'], hideSplice: true },
     );
 
     expect(query).toHaveBeenCalledWith(
@@ -3641,7 +3641,7 @@ describe('PqsSummaryService', () => {
         ledgerLabel: 'Retail Ledger',
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
-      { limit: 25, parties: ['Alice', 'Bob'] },
+      { limit: 30, parties: ['Alice', 'Bob'] },
     );
 
     expect(query).toHaveBeenCalledWith(
@@ -3682,7 +3682,7 @@ describe('PqsSummaryService', () => {
         ledgerLabel: 'Retail Ledger',
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
-      { limit: 25, parties: ['Alice'] },
+      { limit: 30, parties: ['Alice'] },
     );
 
     expect(query).toHaveBeenCalledWith(
@@ -3717,7 +3717,7 @@ describe('PqsSummaryService', () => {
         ledgerLabel: 'Retail Ledger',
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
-      { limit: 25, parties: ['Alice', 'Bob'], partyMode: 'and' },
+      { limit: 30, parties: ['Alice', 'Bob'], partyMode: 'and' },
     );
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining('\n      and '));
@@ -3742,7 +3742,7 @@ describe('PqsSummaryService', () => {
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
       {
-        limit: 25,
+        limit: 30,
         parties: ['Alice', 'Bob'],
         mode: 'and',
       },
@@ -3769,7 +3769,7 @@ describe('PqsSummaryService', () => {
     expect(updates).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [],
@@ -4908,7 +4908,7 @@ describe('PqsSummaryService', () => {
     ]);
 
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       tokens: [
@@ -4992,7 +4992,7 @@ describe('PqsSummaryService', () => {
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       tokens: [
@@ -5062,7 +5062,7 @@ describe('PqsSummaryService', () => {
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       tokens: [
@@ -5097,7 +5097,7 @@ describe('PqsSummaryService', () => {
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       tokens: [
@@ -5258,7 +5258,7 @@ describe('PqsSummaryService', () => {
       'vault-base-package',
     );
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       tokens: [
@@ -5526,7 +5526,7 @@ describe('PqsSummaryService', () => {
     ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
 
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       tokens: [
@@ -5815,14 +5815,14 @@ describe('PqsSummaryService', () => {
           },
         ) => Promise<TokensResponse>;
       }
-    ).fetchTokens(nodes, 25, {
+    ).fetchTokens(nodes, 30, {
       names: ['vault'],
       excludeNames: ['gamma'],
       issuers: ['Issuer-A'],
     });
 
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       tokens: [
@@ -6041,7 +6041,7 @@ describe('PqsSummaryService', () => {
       }
     ).fetchLatestTokenTransfers(
       [{ id: 'cnqs-sv', label: 'CNQS Super Validator' }],
-      25,
+      30,
     );
 
     expect(response.transfers).toEqual([
@@ -6090,10 +6090,10 @@ describe('PqsSummaryService', () => {
           limit?: number,
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25);
+    ).fetchLatestTokenTransfers(nodes, 30);
 
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       transfers: [],
@@ -6171,7 +6171,7 @@ describe('PqsSummaryService', () => {
       }
     ).fetchLatestTokenTransfers(
       [{ id: 'participant-1', label: 'Participant 1' }],
-      25,
+      30,
     );
 
     expect(response.transfers).toEqual([
@@ -6273,7 +6273,7 @@ describe('PqsSummaryService', () => {
         { id: 'participant-1', label: 'CNQS App Provider' },
         { id: 'participant-2', label: 'CNQS Super Validator' },
       ],
-      25,
+      30,
     );
 
     expect(response.transfers).toEqual([
@@ -6392,7 +6392,7 @@ describe('PqsSummaryService', () => {
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25, {
+    ).fetchLatestTokenTransfers(nodes, 30, {
       fromParties: ['Alice', 'Mallory'],
       toParties: ['Bob'],
     });
@@ -6506,7 +6506,7 @@ describe('PqsSummaryService', () => {
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25, {
+    ).fetchLatestTokenTransfers(nodes, 30, {
       amountGt: '20',
       amountLt: '50',
     });
@@ -6619,7 +6619,7 @@ describe('PqsSummaryService', () => {
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25, {
+    ).fetchLatestTokenTransfers(nodes, 30, {
       movementTypes: ['Transfer', 'Mint'],
     });
 
@@ -7123,7 +7123,7 @@ describe('PqsSummaryService', () => {
           limit?: number,
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25);
+    ).fetchLatestTokenTransfers(nodes, 30);
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('join "public"."__contracts" contract_row'),
@@ -7311,7 +7311,7 @@ describe('PqsSummaryService', () => {
           limit?: number,
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25);
+    ).fetchLatestTokenTransfers(nodes, 30);
 
     expect(response.transfers).toEqual([
       {
@@ -7637,7 +7637,7 @@ describe('PqsSummaryService', () => {
           limit?: number,
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25);
+    ).fetchLatestTokenTransfers(nodes, 30);
 
     expect(response.transfers).toEqual([
       {
@@ -7798,7 +7798,7 @@ describe('PqsSummaryService', () => {
           limit?: number,
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25);
+    ).fetchLatestTokenTransfers(nodes, 30);
 
     expect(response.transfers).toEqual([
       {
@@ -7960,7 +7960,7 @@ describe('PqsSummaryService', () => {
           options?: { movementTypes?: string[] },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchLatestTokenTransfers(nodes, 25, {
+    ).fetchLatestTokenTransfers(nodes, 30, {
       movementTypes: ['Create', 'Mint'],
     });
 
@@ -8339,7 +8339,7 @@ describe('PqsSummaryService', () => {
       }
     ).fetchLatestTokenTransfers(
       [{ id: 'cnqs-extra-1', label: 'CNQS Extra 1' }],
-      25,
+      30,
     );
 
     expect(
@@ -8720,7 +8720,7 @@ describe('PqsSummaryService', () => {
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 25, {
+    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 30, {
       fromParties: ['Issuer'],
       toParties: ['Alice'],
     });
@@ -8880,7 +8880,7 @@ describe('PqsSummaryService', () => {
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 25, {
+    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 30, {
       amountGt: '20',
       amountLt: '50',
     });
@@ -9039,7 +9039,7 @@ describe('PqsSummaryService', () => {
           },
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 25, {
+    ).fetchTokenTransfers(nodes, 'Issuer::validator-license', 30, {
       movementType: 'Transfer',
     });
 
@@ -9238,7 +9238,7 @@ describe('PqsSummaryService', () => {
           limit?: number,
         ) => Promise<TokenTransfersResponse>;
       }
-    ).fetchTokenTransfers(nodes, 'RegistryAdmin::USDCx-SHARE', 25);
+    ).fetchTokenTransfers(nodes, 'RegistryAdmin::USDCx-SHARE', 30);
 
     expect(response.transfers).toEqual([
       {
@@ -9411,7 +9411,7 @@ describe('PqsSummaryService', () => {
 
     expect(response).toEqual({
       tokenId: 'Issuer::validator-license',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       holders: [
@@ -9510,7 +9510,7 @@ describe('PqsSummaryService', () => {
     );
     expect(response).toEqual({
       tokenId: 'VaultAdmin::vault-1:share',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       holders: [
@@ -9630,7 +9630,7 @@ describe('PqsSummaryService', () => {
     ).toHaveBeenCalledWith(expect.objectContaining({ id: 'cnqs-extra-1' }));
     expect(response).toEqual({
       tokenId: 'RegistryAdmin::USDCx-SHARE',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       holders: [
@@ -9866,7 +9866,7 @@ describe('PqsSummaryService', () => {
 
     expect(response).toEqual({
       tokenId: 'canton-coin',
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       holders: [
@@ -10096,12 +10096,12 @@ describe('PqsSummaryService', () => {
           mode: 'pqs_only',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
-        { limit: 10 },
+        { limit: 15 },
       ),
     ).resolves.toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       purchases: [
@@ -10195,7 +10195,7 @@ describe('PqsSummaryService', () => {
         pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
       },
       {
-        limit: 10,
+        limit: 15,
         minDate: '2026-07-01',
         maxDate: '2026-07-31',
         purchasedMin: '500000',
@@ -10280,11 +10280,11 @@ describe('PqsSummaryService', () => {
             mode: 'pqs_only',
           },
         ] as never,
-        10,
+        15,
         { nodeIds: ['participant-1', 'participant-2'] },
       ),
     ).resolves.toMatchObject({
-      limit: 10,
+      limit: 15,
       purchases: [
         {
           nodeId: 'participant-2',

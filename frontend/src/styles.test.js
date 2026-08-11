@@ -29,6 +29,45 @@ describe('styles.css', () => {
     expect(arrowStyles).toContain('transform-origin: center;');
   });
 
+  it('uses theme tokens for the Explore menu in both color modes', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const menuStyles = styles.match(/\.app-explore__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const linkStyles = styles.match(/\.app-explore__link \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const hoverStyles = styles.match(/\.app-explore__link:hover,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const labelStyles = styles.match(/\.app-explore__group-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(menuStyles).toContain('border: 1px solid var(--line-soft);');
+    expect(menuStyles).toContain('background: var(--surface-card);');
+    expect(menuStyles).toContain('box-shadow: var(--shadow-soft);');
+    expect(linkStyles).toContain('color: var(--text-700);');
+    expect(hoverStyles).toContain('background: var(--blue-50);');
+    expect(hoverStyles).toContain('color: var(--text-900);');
+    expect(labelStyles).toContain('color: var(--text-500);');
+  });
+
+  it('keeps the Contracts PQS pill beside the Created Time header', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const headerStyles = styles.match(/\.contracts-table__record-time-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const pillStyles = styles.match(/\.contracts-table__source-pill \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(headerStyles).toContain('display: flex;');
+    expect(headerStyles).toContain('align-items: center;');
+    expect(headerStyles).toContain('justify-content: space-between;');
+    expect(headerStyles).toContain('gap: 12px;');
+    expect(pillStyles).toContain('flex: 0 0 auto;');
+    expect(pillStyles).not.toContain('position: absolute;');
+  });
+
+  it('lets the open advanced filter show its combobox menu', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const openFilterStyles =
+      styles.match(/\.node-updates-filter-shell--open \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(openFilterStyles).toContain('overflow: visible;');
+    expect(openFilterStyles).toContain('position: relative;');
+    expect(openFilterStyles).toContain('z-index: 3;');
+  });
+
   it('themes the advanced filter checkbox to match the form surfaces', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
 
@@ -54,6 +93,14 @@ describe('styles.css', () => {
     expect(styles).toContain('box-sizing: border-box;');
     expect(styles).toContain('.node-updates__advanced-filter-add {');
     expect(styles).toContain('flex: 0 0 40px;');
+  });
+
+  it('gives the Party ID field the Template ID width', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const partyIdStyles =
+      styles.match(/\.node-updates__advanced-filter-field--party-id \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(partyIdStyles).toContain('max-width: 720px;');
   });
 
   it('allows the template combobox menu to escape the advanced filter card', () => {

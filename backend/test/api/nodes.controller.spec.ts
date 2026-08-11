@@ -131,7 +131,7 @@ const typedNodePackagesFixture = {
 const typedNodeContractsFixture = {
   nodeId: 'participant-1',
   label: 'Participant 1',
-  limit: 25,
+  limit: 30,
   nextBefore: '000000000000000099',
   nextAfter: null,
   contracts: [
@@ -343,7 +343,7 @@ const typedNamespaceDetailFixture = {
 const typedNamespacePartiesFixture = {
   namespaceId: '1220abcd',
   partyCount: 2,
-  limit: 10,
+  limit: 15,
   nextBefore: null,
   nextAfter: null,
   parties: [
@@ -397,7 +397,7 @@ const typedLocalPartiesFixture = {
 };
 
 const typedTokensFixture = {
-  limit: 25,
+  limit: 30,
   nextBefore: null,
   nextAfter: null,
   tokens: [
@@ -412,7 +412,7 @@ const typedTokensFixture = {
 } satisfies TokensResponse;
 
 const typedTokenTransfersFixture = {
-  limit: 25,
+  limit: 30,
   nextBefore: 'token-cursor-before-1',
   nextAfter: null,
   transfers: [
@@ -436,7 +436,7 @@ const typedTokenTransfersFixture = {
 } satisfies TokenTransfersResponse;
 
 const typedScopedTokenTransfersFixture = {
-  limit: 25,
+  limit: 30,
   nextBefore: 'token-cursor-before-2',
   nextAfter: 'token-cursor-after-2',
   transfers: [
@@ -506,7 +506,7 @@ const typedTokenDetailFixture = {
 
 const typedTokenHoldersFixture = {
   tokenId: 'Issuer::validator-license',
-  limit: 25,
+  limit: 30,
   nextBefore: null,
   nextAfter: null,
   holders: [
@@ -573,7 +573,7 @@ describe('NodesController', () => {
       fetchTokenDetail: jest.fn().mockResolvedValue(typedTokenDetailFixture),
       fetchTokenHolders: jest.fn().mockResolvedValue(typedTokenHoldersFixture),
       fetchGlobalRecentUpdates: jest.fn().mockResolvedValue({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         updates: [
@@ -596,7 +596,7 @@ describe('NodesController', () => {
         ],
       }),
       fetchGlobalContracts: jest.fn().mockResolvedValue({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         contracts: [],
@@ -604,7 +604,7 @@ describe('NodesController', () => {
       fetchRecentUpdates: jest.fn().mockResolvedValue({
         nodeId: 'participant-1',
         label: 'Participant 1',
-        limit: 25,
+        limit: 30,
         nextBefore: '000000000000000001',
         nextAfter: null,
         updates: [
@@ -712,13 +712,13 @@ describe('NodesController', () => {
       fetchNamespaceDetail: jest.fn().mockResolvedValue(typedNamespaceDetailFixture),
       fetchNamespaceParties: jest.fn().mockResolvedValue(typedNamespacePartiesFixture),
       fetchPartyUpdates: jest.fn().mockResolvedValue({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         updates: typedPartyDetailFixture.recentUpdates,
       }),
       fetchPartyContracts: jest.fn().mockResolvedValue({
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         nextAfter: null,
         contracts: typedPartyDetailFixture.recentContracts,
@@ -726,12 +726,12 @@ describe('NodesController', () => {
       fetchTrafficPurchases: jest.fn().mockResolvedValue({
         nodeId: 'participant-2',
         label: 'Participant 2',
-        limit: 25,
+        limit: 30,
         nextBefore: null,
         purchases: [],
       }),
       fetchGlobalTrafficPurchases: jest.fn().mockResolvedValue({
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         nextAfter: null,
         purchases: [],
@@ -939,7 +939,7 @@ describe('NodesController', () => {
     expect(pqsSummaryService.fetchNodeContracts).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'participant-1', label: 'Participant 1' }),
       {
-        limit: 25,
+        limit: 30,
         before: undefined,
         after: undefined,
       },
@@ -948,14 +948,14 @@ describe('NodesController', () => {
   });
 
   it('passes selected global contract nodes through to the PQS summary service', async () => {
-    await controller.listGlobalContracts('10', undefined, undefined, ['participant-2']);
+    await controller.listGlobalContracts('15', undefined, undefined, ['participant-2']);
 
     expect(pqsSummaryService.fetchGlobalContracts).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      10,
+      15,
       {
         before: undefined,
         after: undefined,
@@ -987,7 +987,7 @@ describe('NodesController', () => {
 
     const response = await maybeController.listNodeContracts!(
       'participant-1',
-      '25',
+      '30',
       'cursor-1',
       undefined,
       ['Alice', 'Bob'],
@@ -1000,7 +1000,7 @@ describe('NodesController', () => {
     expect(pqsSummaryService.fetchNodeContracts).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'participant-1', label: 'Participant 1' }),
       {
-        limit: 25,
+        limit: 30,
         before: 'cursor-1',
         after: undefined,
         parties: ['Alice', 'Bob'],
@@ -1036,7 +1036,7 @@ describe('NodesController', () => {
     pqsSummaryService.fetchTrafficPurchases.mockResolvedValueOnce({
       nodeId: 'participant-2',
       label: 'Participant 2',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       purchases: [
         {
@@ -1053,7 +1053,7 @@ describe('NodesController', () => {
       controller as unknown as {
         getNodeTrafficPurchases: (id: string, limit?: string, before?: string) => Promise<unknown>;
       }
-    ).getNodeTrafficPurchases('participant-2', '10');
+    ).getNodeTrafficPurchases('participant-2', '15');
 
     expect(response).toEqual({
       nodeId: 'participant-2',
@@ -1076,7 +1076,7 @@ describe('NodesController', () => {
       },
       history: {
         status: 'ok',
-        limit: 10,
+        limit: 15,
         nextBefore: null,
         purchases: [
           {
@@ -1095,7 +1095,7 @@ describe('NodesController', () => {
     );
     expect(pqsSummaryService.fetchTrafficPurchases).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'participant-2' }),
-      { limit: 10, before: undefined },
+      { limit: 15, before: undefined },
     );
   });
 
@@ -1105,7 +1105,7 @@ describe('NodesController', () => {
         listGlobalTrafficPurchases: (...args: unknown[]) => Promise<unknown>;
       }
     ).listGlobalTrafficPurchases(
-      '10',
+      '15',
       'before-cursor',
       undefined,
       ['participant-1', 'participant-2'],
@@ -1122,7 +1122,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      10,
+      15,
       {
         before: 'before-cursor',
         after: undefined,
@@ -1136,7 +1136,7 @@ describe('NodesController', () => {
       },
     );
     expect(response).toEqual({
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       purchases: [],
@@ -1300,7 +1300,7 @@ describe('NodesController', () => {
       }>;
     };
 
-    const response = await maybeController.listNodePartyFingerprints?.('participant-2', '10');
+    const response = await maybeController.listNodePartyFingerprints?.('participant-2', '15');
 
     expect(grpcOperationsService.listKnownPartyFingerprints).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'participant-2' }),
@@ -1310,7 +1310,7 @@ describe('NodesController', () => {
       label: 'Participant 2',
       mode: 'pqs_with_grpc',
       source: 'grpc',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       fingerprints: ['1220alice', '1220bob'],
@@ -1350,7 +1350,7 @@ describe('NodesController', () => {
       }>;
     };
 
-    const response = await maybeController.listNodePartyFingerprints?.('participant-2', '10');
+    const response = await maybeController.listNodePartyFingerprints?.('participant-2', '15');
 
     expect(pqsSummaryService.fetchActiveParties).toHaveBeenCalledWith([
       expect.objectContaining({ id: 'participant-2' }),
@@ -1360,7 +1360,7 @@ describe('NodesController', () => {
       label: 'Participant 2',
       mode: 'pqs_with_grpc',
       source: 'pqs',
-      limit: 10,
+      limit: 15,
       nextBefore: null,
       nextAfter: null,
       fingerprints: ['1220alice', '1220bob'],
@@ -1392,7 +1392,7 @@ describe('NodesController', () => {
 
     const response = await maybeController.listNodePartyFingerprints?.(
       'participant-2',
-      '10',
+      '15',
       undefined,
       undefined,
       '302a300506032b65700321000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20',
@@ -1498,13 +1498,13 @@ describe('NodesController', () => {
           after?: string,
         ) => Promise<NamespacePartiesResponse>;
       }
-    ).listNamespaceParties?.('1220abcd', '25', 'Bob::1220abcd', undefined);
+    ).listNamespaceParties?.('1220abcd', '30', 'Bob::1220abcd', undefined);
 
     expect(pqsSummaryService.fetchNamespaceParties).toHaveBeenCalledWith(
       expect.any(Array),
       '1220abcd',
       {
-        limit: 25,
+        limit: 30,
         before: 'Bob::1220abcd',
         after: undefined,
       },
@@ -1528,7 +1528,7 @@ describe('NodesController', () => {
       }
     ).listPartyUpdates(
       'Alice',
-      '25',
+      '30',
       'cursor-before-0',
       undefined,
       ['Main:Asset'],
@@ -1538,7 +1538,7 @@ describe('NodesController', () => {
     );
 
     expect(pqsSummaryService.fetchPartyUpdates).toHaveBeenCalledWith(expect.any(Array), 'Alice', {
-      limit: 25,
+      limit: 30,
       before: 'cursor-before-0',
       after: undefined,
       templates: ['Main:Asset'],
@@ -1559,10 +1559,10 @@ describe('NodesController', () => {
           hideSplice?: string,
         ) => Promise<unknown>;
       }
-    ).listPartyContracts('Alice', '25', 'cursor-contract-0', undefined, 'Main:Asset', 'true');
+    ).listPartyContracts('Alice', '30', 'cursor-contract-0', undefined, 'Main:Asset', 'true');
 
     expect(pqsSummaryService.fetchPartyContracts).toHaveBeenCalledWith(expect.any(Array), 'Alice', {
-      limit: 25,
+      limit: 30,
       before: 'cursor-contract-0',
       after: undefined,
       templates: ['Main:Asset'],
@@ -1722,7 +1722,7 @@ describe('NodesController', () => {
         label: 'Participant 1',
       }),
       {
-        limit: 25,
+        limit: 30,
         before: undefined,
         after: undefined,
         parties: undefined,
@@ -1732,7 +1732,7 @@ describe('NodesController', () => {
     expect(response).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
-      limit: 25,
+      limit: 30,
       nextBefore: '000000000000000001',
       nextAfter: null,
       updates: [
@@ -1762,14 +1762,14 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
       },
     );
     expect(response).toEqual({
-      limit: 25,
+      limit: 30,
       nextBefore: null,
       nextAfter: null,
       updates: [
@@ -1802,14 +1802,14 @@ describe('NodesController', () => {
           after?: string,
         ) => Promise<unknown>;
       }
-    ).listGlobalRecentUpdates('25', '000000000000000099', '000000000000000120');
+    ).listGlobalRecentUpdates('30', '000000000000000099', '000000000000000120');
 
     expect(pqsSummaryService.fetchGlobalRecentUpdates).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: '000000000000000099',
         after: '000000000000000120',
@@ -1819,7 +1819,7 @@ describe('NodesController', () => {
 
   it('passes global update filters through to the PQS summary service', async () => {
     await controller.listGlobalRecentUpdates(
-      '25',
+      '30',
       undefined,
       undefined,
       ['Alice', 'Bob'],
@@ -1834,7 +1834,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -1858,7 +1858,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -1902,14 +1902,14 @@ describe('NodesController', () => {
       controller as unknown as {
         listTokenTransfers: (limit?: string, before?: string, after?: string) => Promise<unknown>;
       }
-    ).listTokenTransfers('25', 'token-cursor-before-1', 'token-cursor-after-1');
+    ).listTokenTransfers('30', 'token-cursor-before-1', 'token-cursor-after-1');
 
     expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: 'token-cursor-before-1',
         after: 'token-cursor-after-1',
@@ -1928,14 +1928,14 @@ describe('NodesController', () => {
           toParty?: string | string[],
         ) => Promise<unknown>;
       }
-    ).listTokenTransfers('25', undefined, undefined, ['Alice', 'Carol'], 'Bob');
+    ).listTokenTransfers('30', undefined, undefined, ['Alice', 'Carol'], 'Bob');
 
     expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -1960,7 +1960,7 @@ describe('NodesController', () => {
         ) => Promise<unknown>;
       }
     ).listTokenTransfers(
-      '25',
+      '30',
       undefined,
       undefined,
       undefined,
@@ -1975,7 +1975,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -1999,14 +1999,14 @@ describe('NodesController', () => {
           movementType?: string | string[],
         ) => Promise<unknown>;
       }
-    ).listTokenTransfers('25', undefined, undefined, undefined, undefined, ['Create', 'Mint']);
+    ).listTokenTransfers('30', undefined, undefined, undefined, undefined, ['Create', 'Mint']);
 
     expect(pqsSummaryService.fetchLatestTokenTransfers).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: 'participant-1' }),
         expect.objectContaining({ id: 'participant-2' }),
       ]),
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -2048,7 +2048,7 @@ describe('NodesController', () => {
       }
     ).listTransfersByToken(
       'validator-license',
-      '25',
+      '30',
       'token-cursor-before-2',
       'token-cursor-after-2',
     );
@@ -2059,7 +2059,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
-      25,
+      30,
       {
         before: 'token-cursor-before-2',
         after: 'token-cursor-after-2',
@@ -2080,7 +2080,7 @@ describe('NodesController', () => {
           toParty?: string | string[],
         ) => Promise<unknown>;
       }
-    ).listTransfersByToken('validator-license', '25', undefined, undefined, 'Issuer', [
+    ).listTransfersByToken('validator-license', '30', undefined, undefined, 'Issuer', [
       'Alice',
       'Bob',
     ]);
@@ -2091,7 +2091,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -2119,7 +2119,7 @@ describe('NodesController', () => {
       }
     ).listTransfersByToken(
       'validator-license',
-      '25',
+      '30',
       undefined,
       undefined,
       undefined,
@@ -2135,7 +2135,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -2161,7 +2161,7 @@ describe('NodesController', () => {
           movementType?: string | string[],
         ) => Promise<unknown>;
       }
-    ).listTransfersByToken('validator-license', '25', undefined, undefined, undefined, undefined, [
+    ).listTransfersByToken('validator-license', '30', undefined, undefined, undefined, undefined, [
       'Transfer',
       'Mint',
     ]);
@@ -2172,7 +2172,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -2221,7 +2221,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
-      25,
+      30,
       {
         before: undefined,
         after: undefined,
@@ -2240,7 +2240,7 @@ describe('NodesController', () => {
           after?: string,
         ) => Promise<unknown>;
       }
-    ).listTokenHolders('validator-license', '25', 'holders-before-1', 'holders-after-1');
+    ).listTokenHolders('validator-license', '30', 'holders-before-1', 'holders-after-1');
 
     expect(pqsSummaryService.fetchTokenHolders).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -2248,7 +2248,7 @@ describe('NodesController', () => {
         expect.objectContaining({ id: 'participant-2' }),
       ]),
       'validator-license',
-      25,
+      30,
       {
         before: 'holders-before-1',
         after: 'holders-after-1',
@@ -2259,7 +2259,7 @@ describe('NodesController', () => {
   it('passes through offset cursors for updates pagination', async () => {
     await controller.listNodeUpdates(
       'participant-1',
-      '25',
+      '30',
       '000000000000000100',
       undefined,
       undefined,
@@ -2271,7 +2271,7 @@ describe('NodesController', () => {
         id: 'participant-1',
       }),
       {
-        limit: 25,
+        limit: 30,
         before: '000000000000000100',
         after: undefined,
         parties: undefined,
@@ -2283,7 +2283,7 @@ describe('NodesController', () => {
   it('passes through repeated party filters and party mode for updates pagination', async () => {
     await controller.listNodeUpdates(
       'participant-1',
-      '25',
+      '30',
       undefined,
       undefined,
       ['Alice', 'Bob'],
@@ -2296,7 +2296,7 @@ describe('NodesController', () => {
         id: 'participant-1',
       }),
       {
-        limit: 25,
+        limit: 30,
         before: undefined,
         after: undefined,
         parties: ['Alice', 'Bob'],
@@ -2309,7 +2309,7 @@ describe('NodesController', () => {
   it('passes through the hide Splice flag for updates pagination', async () => {
     await controller.listNodeUpdates(
       'participant-1',
-      '25',
+      '30',
       undefined,
       undefined,
       undefined,
@@ -2324,7 +2324,7 @@ describe('NodesController', () => {
         id: 'participant-1',
       }),
       {
-        limit: 25,
+        limit: 30,
         before: undefined,
         after: undefined,
         parties: undefined,

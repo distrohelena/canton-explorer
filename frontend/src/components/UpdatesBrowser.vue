@@ -307,8 +307,8 @@ async function loadTemplateOptions() {
       props.scope === "node" && props.nodeId
         ? await fetchNodeTemplates(props.nodeId)
         : await fetchTemplates();
-    templateOptions.value = response.templates.map(
-      (template) => template.templateId,
+    templateOptions.value = uniqueValues(
+      response.templates.map((template) => template.templateId),
     );
   } catch {
     templateOptions.value = [];
@@ -638,7 +638,7 @@ function partyLink(party: string): string {
   <section class="node-updates">
     <header class="node-detail__hero">
       <div v-if="showTitle">
-        <p class="activity-home__eyebrow">{{ eyebrow }}</p>
+        <p v-if="eyebrow" class="activity-home__eyebrow">{{ eyebrow }}</p>
         <component :is="headingTag">{{ headingText }}</component>
       </div>
       <UpdatesToolbar
