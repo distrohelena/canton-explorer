@@ -1,7 +1,11 @@
-import { render, screen } from '@testing-library/vue';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/vue';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import NodeDetailView from './NodeDetailView.vue';
 import { fetchNode, fetchNodePackages, fetchNodeParticipantStatus } from '../lib/api';
+
+const routeQuery = vi.hoisted(() => ({
+  from: undefined as string | undefined,
+}));
 
 vi.mock('../lib/api', () => ({
   fetchNode: vi.fn().mockResolvedValue({
@@ -93,6 +97,10 @@ vi.mock('../lib/api', () => ({
   }),
 }));
 
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery }),
+}));
+
 function renderView() {
   return render(NodeDetailView, {
     props: { id: 'participant-1' },
@@ -108,6 +116,11 @@ function renderView() {
 }
 
 describe('NodeDetailView', () => {
+  afterEach(() => {
+    cleanup();
+    routeQuery.from = undefined;
+  });
+
   it('renders a not-configured participant status state for pqs-only nodes', async () => {
     renderView();
 
@@ -153,6 +166,15 @@ describe('NodeDetailView', () => {
       'href',
       '/packages/main-package-v2',
     );
+  });
+
+  it('returns to global updates when opened from the Updates page', async () => {
+    routeQuery.from = 'updates';
+
+    renderView();
+
+    expect(await screen.findByText('Node Participant 1')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute('href', '/');
   });
 
   it('renders participant status data for grpc-enabled nodes', async () => {

@@ -80,7 +80,7 @@ describe('HomeUpdatesView', () => {
     expect(nodeLinks).toHaveLength(2);
     for (const nodeLink of nodeLinks) {
       expect(nodeLink).toHaveClass('activity-home__updates-node', 'contract-detail__link');
-      expect(nodeLink).toHaveAttribute('href', '/nodes/participant%2F1');
+      expect(nodeLink).toHaveAttribute('href', '/nodes/participant%2F1?from=updates');
     }
     expect(within(updatesTable).getByRole('link', { name: '2' })).toHaveClass('contract-detail__link');
     const partyLinks = within(updatesTable).getAllByRole('link', { name: 'Alice' });

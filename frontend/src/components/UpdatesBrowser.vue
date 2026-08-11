@@ -650,7 +650,7 @@ function partyLink(party: string): string {
 }
 
 function nodeLink(nodeId: string): string {
-  return `/nodes/${encodeURIComponent(nodeId)}`;
+  return `/nodes/${encodeURIComponent(nodeId)}?from=updates`;
 }
 </script>
 
