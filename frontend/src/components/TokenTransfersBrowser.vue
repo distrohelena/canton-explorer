@@ -683,11 +683,16 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
           </span>
         </div>
 
-        <div v-if="compact && viewAllTo" class="tokens-page__row home-dashboard__view-all-row" role="row">
+        <RouterLink
+          v-if="compact && viewAllTo"
+          class="tokens-page__row tokens-page__known-row--link home-dashboard__view-all-row"
+          :to="viewAllTo"
+          role="row"
+        >
           <span role="cell">
-            <RouterLink class="home-dashboard__view-all" :to="viewAllTo">View all</RouterLink>
+            <span class="home-dashboard__view-all">View all</span>
           </span>
-        </div>
+        </RouterLink>
       </div>
     </section>
   </section>

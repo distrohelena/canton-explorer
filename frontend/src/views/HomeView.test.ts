@@ -98,8 +98,12 @@ describe('HomeView', () => {
       'From → To',
       'Record Time',
     ]);
-    expect(within(updatesTable).getByRole('link', { name: 'View all' })).toHaveAttribute('href', '/updates');
-    expect(within(tradesTable).getByRole('link', { name: 'View all' })).toHaveAttribute('href', '/tokens');
+    const updatesViewAllRow = within(updatesTable).getByRole('row', { name: 'View all' });
+    const tradesViewAllRow = within(tradesTable).getByRole('row', { name: 'View all' });
+    expect(updatesViewAllRow).toHaveAttribute('href', '/updates');
+    expect(updatesViewAllRow).toHaveClass('node-updates__row--link');
+    expect(tradesViewAllRow).toHaveAttribute('href', '/tokens');
+    expect(tradesViewAllRow).toHaveClass('tokens-page__known-row--link');
     expect(within(updatesTable).queryByText('Est. USD')).not.toBeInTheDocument();
     expect(within(tradesTable).queryByRole('columnheader', { name: 'Nodes' })).not.toBeInTheDocument();
     expect(fetchLatestUpdatesMock).toHaveBeenCalledWith(6, {});

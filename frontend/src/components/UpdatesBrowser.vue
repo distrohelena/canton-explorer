@@ -855,11 +855,16 @@ function nodeLink(nodeId: string): string {
           </span>
         </div>
 
-        <div v-if="compact && viewAllTo" class="node-updates__row home-dashboard__view-all-row" role="row">
+        <RouterLink
+          v-if="compact && viewAllTo"
+          class="node-updates__row node-updates__row--link home-dashboard__view-all-row"
+          :to="viewAllTo"
+          role="row"
+        >
           <span role="cell">
-            <RouterLink class="home-dashboard__view-all" :to="viewAllTo">View all</RouterLink>
+            <span class="home-dashboard__view-all">View all</span>
           </span>
-        </div>
+        </RouterLink>
       </div>
     </section>
 
