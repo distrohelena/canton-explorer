@@ -81,6 +81,16 @@ describe('styles.css', () => {
     expect(updateRowStyles).toContain('padding: 6px 20px;');
   });
 
+  it('aligns update node and offset copy controls to the right edge', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const cellStyles =
+      styles.match(/\.node-updates__cell-with-copy \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(cellStyles).toContain('display: grid;');
+    expect(cellStyles).toContain('grid-template-columns: minmax(0, 1fr) auto;');
+    expect(cellStyles).toContain('width: 100%;');
+  });
+
   it('defines the approved dark grape palette without changing light mode', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const lightRoot = styles.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? '';

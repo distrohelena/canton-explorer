@@ -769,7 +769,7 @@ function nodeLink(nodeId: string): string {
         >
           <span
             v-if="showNodeColumn"
-            class="activity-home__updates-node"
+            class="node-updates__cell-with-copy activity-home__updates-node"
             role="cell"
           >
             <RouterLink
@@ -783,8 +783,13 @@ function nodeLink(nodeId: string): string {
               {{ update.label ?? update.nodeId }}
             </RouterLink>
             <template v-else>{{ update.label ?? "Unknown node" }}</template>
+            <CopyToClipboardButton
+              v-if="sourceTag === 'updates' && update.nodeId"
+              :value="update.label ?? update.nodeId"
+              label="node name"
+            />
           </span>
-          <span class="node-updates__id" role="cell">
+          <span class="node-updates__cell-with-copy node-updates__id" role="cell">
             <RouterLink
               v-if="updateLink(update)"
               class="contract-detail__link"
@@ -794,6 +799,7 @@ function nodeLink(nodeId: string): string {
               {{ update.eventOffset }}
             </RouterLink>
             <template v-else>{{ update.eventOffset }}</template>
+            <CopyToClipboardButton :value="update.eventOffset" label="offset" />
           </span>
           <span class="node-updates__time" role="cell">
             <template v-if="update.recordTimeLines">

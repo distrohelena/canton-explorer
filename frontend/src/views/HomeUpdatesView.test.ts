@@ -82,7 +82,16 @@ describe('HomeUpdatesView', () => {
       expect(nodeLink).toHaveClass('activity-home__updates-node', 'contract-detail__link');
       expect(nodeLink).toHaveAttribute('href', '/nodes/participant%2F1?from=updates');
     }
+    const nodeCopyButtons = within(updatesTable).getAllByRole('button', {
+      name: 'Copy node name Participant 1',
+    });
+    expect(nodeCopyButtons).toHaveLength(2);
     expect(within(updatesTable).getByRole('link', { name: '2' })).toHaveClass('contract-detail__link');
+    const offsetCopyButtons = within(updatesTable).getAllByRole('button', {
+      name: 'Copy offset 2',
+    });
+    expect(offsetCopyButtons).toHaveLength(1);
+    expect(within(updatesTable).getByRole('button', { name: 'Copy offset 1' })).toBeInTheDocument();
     const partyLinks = within(updatesTable).getAllByRole('link', { name: 'Alice' });
     expect(partyLinks).toHaveLength(2);
     for (const partyLink of partyLinks) {
