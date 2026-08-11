@@ -1,15 +1,23 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
+import { fetchBranding } from './lib/api';
+import type { BrandingConfig } from './types/branding';
 
 const router = useRouter();
 const route = useRoute();
 const searchTerm = ref('');
 const explorerVersion = __CANTON_EXPLORER_VERSION__;
 const THEME_STORAGE_KEY = 'canton-explorer-theme';
+const DEFAULT_APPLICATION_TITLE = 'Canton Explorer';
+const DEFAULT_HEADER_TITLE = 'Canton Explorer';
 type ThemePreference = 'system' | 'light' | 'dark';
 type ResolvedTheme = 'light' | 'dark';
 
+const branding = ref<BrandingConfig>({
+  applicationTitle: DEFAULT_APPLICATION_TITLE,
+  headerTitle: DEFAULT_HEADER_TITLE,
+});
 const themePreference = ref<ThemePreference>('system');
 const systemPrefersDark = ref(false);
 const exploreMenuOpen = ref(false);
@@ -115,6 +123,14 @@ function handleDocumentClick(event: MouseEvent) {
   closeExploreMenu();
 }
 
+async function loadBranding() {
+  try {
+    branding.value = await fetchBranding();
+  } catch {
+    // Keep the independent defaults when configured branding is unavailable.
+  }
+}
+
 watch(themePreference, (preference) => {
   if (preference === 'system') {
     window.localStorage.removeItem(THEME_STORAGE_KEY);
@@ -151,6 +167,18 @@ watch(
   },
   { immediate: true },
 );
+
+watch(
+  () => branding.value.applicationTitle,
+  (applicationTitle) => {
+    document.title = applicationTitle;
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  void loadBranding();
+});
 
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick);
@@ -194,7 +222,7 @@ onBeforeUnmount(() => {
         <div class="app-titlebar">
           <RouterLink class="app-brand" to="/">
             <img class="app-brand__logo" src="/cantonexplorer.png" alt="" />
-            <h1 class="app-brand__title">Canton Explorer</h1>
+            <h1 class="app-brand__title">{{ branding.headerTitle }}</h1>
           </RouterLink>
           <div class="app-toolbar">
             <div class="app-explore">

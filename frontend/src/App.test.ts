@@ -2,7 +2,21 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vu
 import { defineComponent } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fetchBranding } from './lib/api';
 import App from './App.vue';
+
+vi.mock('./lib/api', () => ({
+  fetchBranding: vi.fn().mockResolvedValue({
+    applicationTitle: 'Canton Explorer',
+    headerTitle: 'Canton Explorer',
+  }),
+}));
+
+const fetchBrandingMock = vi.mocked(fetchBranding);
+const defaultBranding = {
+  applicationTitle: 'Canton Explorer',
+  headerTitle: 'Canton Explorer',
+};
 
 const HomeStub = defineComponent({
   template: '<div>Home Activity View</div>',
@@ -105,9 +119,12 @@ describe('App', () => {
 
   beforeEach(() => {
     document.body.innerHTML = '';
+    document.title = defaultBranding.applicationTitle;
     window.localStorage.clear();
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.style.colorScheme = '';
+    fetchBrandingMock.mockReset();
+    fetchBrandingMock.mockResolvedValue(defaultBranding);
     themePreference.matches = false;
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -121,6 +138,40 @@ describe('App', () => {
         removeListener: vi.fn(),
         dispatchEvent: vi.fn(),
       })),
+    });
+  });
+
+  it('keeps the default header and document title', async () => {
+    await renderAt('/');
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
+      expect(document.title).toBe('Canton Explorer');
+    });
+  });
+
+  it('applies configured header and application titles after loading branding', async () => {
+    fetchBrandingMock.mockResolvedValueOnce({
+      applicationTitle: 'Configured App',
+      headerTitle: 'Configured Header',
+    });
+
+    await renderAt('/');
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Configured Header' })).toBeInTheDocument();
+      expect(document.title).toBe('Configured App');
+    });
+  });
+
+  it('keeps independent defaults when branding loading is rejected', async () => {
+    fetchBrandingMock.mockRejectedValueOnce(new Error('branding unavailable'));
+
+    await renderAt('/');
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
+      expect(document.title).toBe('Canton Explorer');
     });
   });
 
