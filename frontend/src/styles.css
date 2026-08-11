@@ -2684,6 +2684,27 @@ h3 {
   background: transparent;
 }
 
+.home-dashboard__card > .node-updates,
+.home-dashboard__card > .node-detail__section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+
+.home-dashboard__card .node-detail__hero h3 {
+  margin-bottom: 0;
+}
+
+.home-dashboard__card .node-detail__hero {
+  min-height: 24px;
+}
+
+.home-dashboard__card .node-updates__section {
+  flex: 1;
+  min-height: 0;
+}
+
 .home-dashboard__view-all-row {
   grid-template-columns: 1fr;
 }

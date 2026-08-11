@@ -22,6 +22,13 @@ describe('styles.css', () => {
     expect(homeCardStyles).toContain('border: none;');
     expect(homeCardStyles).toContain('background: transparent;');
     expect(homeCardStyles).toContain('padding: 0;');
+    expect(styles).toContain(
+      '.home-dashboard__card > .node-updates,\n.home-dashboard__card > .node-detail__section',
+    );
+    expect(styles).toContain('height: 100%;');
+    expect(styles).toContain('.home-dashboard__card .node-updates__section');
+    expect(styles).toContain('flex: 1;');
+    expect(styles).toContain('min-height: 24px;');
   });
 
   it('highlights the search input with only a bottom line when focused', () => {
