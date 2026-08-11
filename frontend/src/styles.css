@@ -2731,7 +2731,7 @@ h3 {
 .home-dashboard__view-all-row > span {
   display: flex;
   grid-column: 1 / -1;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .home-dashboard__view-all {

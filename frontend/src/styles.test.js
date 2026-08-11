@@ -9,6 +9,8 @@ describe('styles.css', () => {
       styles.match(/\.home-dashboard \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const homeCardStyles =
       styles.match(/\.home-dashboard__card \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const viewAllRowStyles =
+      styles.match(/\.home-dashboard__view-all-row > span \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(homeDashboardStyles).toContain('display: grid;');
     expect(homeDashboardStyles).toContain(
@@ -37,6 +39,7 @@ describe('styles.css', () => {
     expect(styles).toContain(
       '.home-dashboard__card .tokens-page__table--compact > .tokens-page__row.node-updates__row--link',
     );
+    expect(viewAllRowStyles).toContain('justify-content: center;');
   });
 
   it('highlights the search input with only a bottom line when focused', () => {
