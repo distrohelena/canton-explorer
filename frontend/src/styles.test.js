@@ -105,6 +105,21 @@ describe('styles.css', () => {
     expect(cellStyles).toContain('width: 100%;');
   });
 
+  it('adds centered desktop separators between update columns', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const separatorStyles =
+      styles.match(/\.node-updates__row:not\(\.node-updates__row--loading\):not\(\.node-updates__row--head\) > \*:not\(:last-child\)::after \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(styles).toContain('@media (min-width: 721px) {');
+    expect(styles).toContain('align-self: stretch;');
+    expect(separatorStyles).toContain('top: 15%;');
+    expect(separatorStyles).toContain('right: -8px;');
+    expect(separatorStyles).toContain('height: 70%;');
+    expect(separatorStyles).toContain(
+      'background: color-mix(in srgb, var(--line-soft) 50%, transparent);',
+    );
+  });
+
   it('defines the approved dark grape palette without changing light mode', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const lightRoot = styles.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? '';
