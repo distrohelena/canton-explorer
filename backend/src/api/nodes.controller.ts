@@ -16,6 +16,11 @@ export class NodesController {
     private readonly pqsSummaryService: PqsSummaryService,
   ) {}
 
+  @Get('/branding')
+  getBranding() {
+    return this.configService.getBranding();
+  }
+
   @Get('/nodes')
   listNodes() {
     return this.cacheService.list();

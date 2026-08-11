@@ -526,6 +526,9 @@ const typedTokenHoldersFixture = {
 describe('NodesController', () => {
   let controller: NodesController;
   let cache: NodeCacheService;
+  let configService: {
+    getBranding: jest.Mock;
+  };
   let pqsSummaryService: {
     fetchTokens: jest.Mock;
     fetchLatestTokenTransfers: jest.Mock;
@@ -751,6 +754,12 @@ describe('NodesController', () => {
     namespaceFingerprintService = {
       computeFromInput: jest.fn().mockResolvedValue('1220alice'),
     };
+    configService = {
+      getBranding: jest.fn().mockReturnValue({
+        applicationTitle: 'Configured App',
+        headerTitle: 'Configured Header',
+      }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [NodesController],
@@ -759,6 +768,7 @@ describe('NodesController', () => {
         {
           provide: NodeConfigService,
           useValue: {
+            getBranding: configService.getBranding,
             list: () => [
               {
                 id: 'participant-1',
@@ -852,6 +862,24 @@ describe('NodesController', () => {
 
     expect(response).toHaveLength(1);
     expect(response[0].id).toBe('participant-1');
+  });
+
+  it('returns only the configured branding', () => {
+    const response = controller.getBranding();
+
+    expect(response).toEqual({
+      applicationTitle: 'Configured App',
+      headerTitle: 'Configured Header',
+    });
+    expect(configService.getBranding).toHaveBeenCalledTimes(1);
+    expect(Object.keys(response)).toEqual(['applicationTitle', 'headerTitle']);
+    expect(response).not.toHaveProperty('nodes');
+    expect(response).not.toHaveProperty('debugger');
+    expect(response).not.toHaveProperty('tokenMetadata');
+    expect(response).not.toHaveProperty('connectionUri');
+    expect(response).not.toHaveProperty('connectionUriEnv');
+    expect(response).not.toHaveProperty('pqs');
+    expect(response).not.toHaveProperty('grpc');
   });
 
   it('keeps the package detail fixture in sync with the response contract', () => {
