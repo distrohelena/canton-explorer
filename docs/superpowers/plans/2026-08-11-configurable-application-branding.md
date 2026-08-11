@@ -16,6 +16,7 @@
 - Modify `backend/src/config/node-config.service.ts`: expose sanitized branding to API consumers.
 - Modify `backend/src/api/nodes.controller.ts`: add the public `GET /api/branding` response.
 - Modify `backend/test/config/node-config.spec.ts`: cover branding defaults, partial values, and validation.
+- Create `backend/test/config/node-config.service.spec.ts`: verify the accessor reads parsed branding and exposes no other config.
 - Modify `backend/test/api/nodes.controller.spec.ts`: cover the branding endpoint and response isolation.
 - Modify `backend/config/nodes.example.json`: document the optional JSON shape.
 - Modify `backend/README.md`: explain the branding keys and their separate targets.
