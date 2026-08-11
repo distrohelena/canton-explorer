@@ -2694,6 +2694,8 @@ h3 {
 
 .home-dashboard__card .node-detail__hero h3 {
   margin-bottom: 0;
+  font-size: 1.2rem;
+  line-height: 1.2;
 }
 
 .home-dashboard__card .node-detail__hero {

@@ -11,6 +11,8 @@ describe('styles.css', () => {
       styles.match(/\.home-dashboard__card \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const viewAllRowStyles =
       styles.match(/\.home-dashboard__view-all-row > span \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const homeHeadingStyles =
+      styles.match(/\.home-dashboard__card \.node-detail__hero h3 \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(homeDashboardStyles).toContain('display: grid;');
     expect(homeDashboardStyles).toContain(
@@ -31,6 +33,8 @@ describe('styles.css', () => {
     expect(styles).toContain('.home-dashboard__card .node-updates__section');
     expect(styles).toContain('flex: 1;');
     expect(styles).toContain('min-height: 24px;');
+    expect(homeHeadingStyles).toContain('font-size: 1.2rem;');
+    expect(homeHeadingStyles).toContain('line-height: 1.2;');
     expect(styles).toContain('.home-dashboard__card .node-updates__table');
     expect(styles).toContain('flex: 1 1 0;');
     expect(styles).toContain(
