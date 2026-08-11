@@ -60,6 +60,7 @@ describe('styles.css', () => {
     expect(copyButtonStyles).toContain('flex: 0 0 32px;');
     expect(copyButtonStyles).toContain('width: 32px;');
     expect(copyButtonStyles).toContain('height: 32px;');
+    expect(copyButtonStyles).toContain('border: none;');
   });
 
   it('keeps update party copy controls aligned at the right edge of each row', () => {

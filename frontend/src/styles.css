@@ -4736,20 +4736,18 @@ h3 {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--line-soft);
+  border: none;
   border-radius: 8px;
   background: var(--surface-muted);
   color: var(--text-600);
   cursor: pointer;
   transition:
-    border-color 160ms ease,
     color 160ms ease,
     background-color 160ms ease;
 }
 
 .copy-to-clipboard-button:hover,
 .copy-to-clipboard-button:focus-visible {
-  border-color: var(--accent-600);
   background: var(--blue-50);
   color: var(--blue-600);
   outline: none;
