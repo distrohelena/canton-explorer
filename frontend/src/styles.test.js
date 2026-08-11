@@ -51,6 +51,8 @@ describe('styles.css', () => {
       styles.match(/\.parties-page__party-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const copyButtonStyles =
       styles.match(/\.copy-to-clipboard-button \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const copyButtonInteractionStyles =
+      styles.match(/\.copy-to-clipboard-button:hover,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(partyRowStyles).toContain('display: grid;');
     expect(partyRowStyles).toContain('grid-template-columns: minmax(0, 1fr) auto;');
@@ -62,6 +64,7 @@ describe('styles.css', () => {
     expect(copyButtonStyles).toContain('height: 32px;');
     expect(copyButtonStyles).toContain('border: none;');
     expect(copyButtonStyles).toContain('background: transparent;');
+    expect(copyButtonInteractionStyles).toContain('background: var(--blue-50);');
   });
 
   it('keeps update party copy controls aligned at the right edge of each row', () => {
