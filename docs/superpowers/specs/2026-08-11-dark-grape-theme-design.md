@@ -51,6 +51,8 @@ Keep the existing dark green, amber, red, danger, error, and status background/b
 | `--editor-event-expanded-surface` | `#202944 → #24162f` |
 | `--editor-event-details-surface` | `#171f36 → #1d1428` |
 | `--editor-code-surface` | `#0f1424 → #160f20` |
+| `--editor-workspace-shadow` | `0 18px 44px rgba(9, 11, 22, 0.22) → 0 16px 28px rgba(7, 2, 15, 0.35)` |
+| `--editor-control-shadow` | `0 14px 32px rgba(8, 10, 20, 0.34) → 0 14px 32px rgba(7, 2, 15, 0.35)` |
 | `--metadata-surface` | `#0f172a → #160f20` |
 | `--metadata-text` | `#dbe7ff → #eddfff` |
 | `--explore-divider` | `#5b527d → #4b315d` |
@@ -63,7 +65,7 @@ Apply the palette through shared variables so menus, links, tables, cards, filte
 
 ## Validation
 
-- Add a focused stylesheet assertion for the complete approved dark-token map, chart tokens, dark-only aliases, replacement of the targeted raw editor/debugger declarations, and unchanged light root values.
+- Add a focused stylesheet assertion for the complete approved dark-token map, chart tokens, dark-only aliases, replacement of the targeted raw editor/debugger color and shadow declarations, and unchanged light root values.
 - Run the focused styles test.
 - Run the full workspace test suite and `git diff --check`.
 - Confirm light-mode variables remain unchanged and the worktree is clean after committing.
