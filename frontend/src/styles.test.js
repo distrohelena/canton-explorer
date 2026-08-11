@@ -73,6 +73,14 @@ describe('styles.css', () => {
     expect(partyRowStyles).toContain('width: 100%;');
   });
 
+  it('uses compact vertical padding for update rows', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const updateRowStyles =
+      styles.match(/\.node-updates__row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(updateRowStyles).toContain('padding: 6px 20px;');
+  });
+
   it('defines the approved dark grape palette without changing light mode', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const lightRoot = styles.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? '';

@@ -3516,7 +3516,7 @@ h3 {
     minmax(52px, 0.34fr) minmax(90px, 0.55fr) minmax(300px, 3.01fr)
     minmax(90px, 0.45fr);
   gap: 16px;
-  padding: 16px 20px;
+  padding: 6px 20px;
   border-top: 1px solid var(--line-soft);
   align-items: center;
 }
