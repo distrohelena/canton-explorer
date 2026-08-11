@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
 import ContractsBrowser from '../components/ContractsBrowser.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
 import UpdatesBrowser from '../components/UpdatesBrowser.vue';
@@ -175,8 +176,9 @@ watch(
 
       <div class="node-page__main node-detail__content">
         <header class="node-detail__hero">
-          <div>
+          <div class="party-detail__heading">
             <h2 class="party-detail__title">{{ props.partyId }}</h2>
+            <CopyToClipboardButton :value="props.partyId" />
           </div>
         </header>
 

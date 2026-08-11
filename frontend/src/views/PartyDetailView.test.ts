@@ -52,6 +52,7 @@ describe('PartyDetailView', () => {
     await renderAt('/parties/Alice');
 
     expect(screen.getByRole('heading', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy party ID Alice' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Observed Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();

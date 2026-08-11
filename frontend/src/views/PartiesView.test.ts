@@ -215,6 +215,8 @@ describe('PartiesView', () => {
     );
     expect(screen.getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
     expect(screen.getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
+    expect(screen.getByRole('button', { name: 'Copy party ID Alice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy party ID Bob' })).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Participant 2' }));
 

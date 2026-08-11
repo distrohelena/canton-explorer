@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../lib/pagination';
+import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
 import {
   fetchNodeActiveParties,
@@ -739,14 +740,19 @@ onMounted(async () => {
         </div>
 
         <div v-else-if="selectedMode === 'active' && selectedEntries.length > 0" class="package-detail__list">
-          <RouterLink
+          <div
             v-for="party in paginatedSelectedParties.items"
             :key="party"
-            class="package-detail__list-row contract-detail__link parties-page__party-link"
-            :to="`/parties/${party}`"
+            class="package-detail__list-row parties-page__party-row"
           >
-            {{ party }}
-          </RouterLink>
+            <RouterLink
+              class="contract-detail__link parties-page__party-link"
+              :to="`/parties/${party}`"
+            >
+              {{ party }}
+            </RouterLink>
+            <CopyToClipboardButton :value="party" />
+          </div>
           <p
             v-if="selectedActiveNodeStatus === 'pqs_error'"
             class="update-detail__empty"
@@ -768,14 +774,19 @@ onMounted(async () => {
         </div>
 
         <div v-else-if="selectedMode === 'all' && selectedEntries.length > 0" class="package-detail__list">
-          <RouterLink
+          <div
             v-for="party in paginatedSelectedParties.items"
             :key="party"
-            class="package-detail__list-row contract-detail__link parties-page__party-link"
-            :to="`/parties/${party}`"
+            class="package-detail__list-row parties-page__party-row"
           >
-            {{ party }}
-          </RouterLink>
+            <RouterLink
+              class="contract-detail__link parties-page__party-link"
+              :to="`/parties/${party}`"
+            >
+              {{ party }}
+            </RouterLink>
+            <CopyToClipboardButton :value="party" />
+          </div>
           <p
             v-if="selectedLocalNodeStatus === 'grpc_error'"
             class="update-detail__empty"
