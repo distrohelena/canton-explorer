@@ -11,6 +11,12 @@ describe('styles.css', () => {
       styles.match(/\.home-dashboard__card \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const viewAllRowStyles =
       styles.match(/\.home-dashboard__view-all-row > span \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const viewAllLayoutStyles =
+      styles.match(/\n\.home-dashboard__view-all-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const compactViewAllRowStyles =
+      styles.match(
+        /\.node-updates__table--compact \.home-dashboard__view-all-row,\n\.tokens-page__table--compact \.home-dashboard__view-all-row \{([\s\S]*?)\n\}/,
+      )?.[1] ?? '';
     const homeHeadingStyles =
       styles.match(/\.home-dashboard__card \.node-detail__hero h3 \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
@@ -48,6 +54,8 @@ describe('styles.css', () => {
     );
     expect(styles).toContain('display: none;');
     expect(viewAllRowStyles).toContain('justify-content: center;');
+    expect(viewAllLayoutStyles).toContain('padding: 6px 20px;');
+    expect(compactViewAllRowStyles).toContain('padding: 6px 20px;');
   });
 
   it('highlights the search input with only a bottom line when focused', () => {

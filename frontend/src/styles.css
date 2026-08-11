@@ -2728,6 +2728,7 @@ h3 {
 
 .home-dashboard__view-all-row {
   grid-template-columns: 1fr;
+  padding: 6px 20px;
 }
 
 .home-dashboard__view-all-row > span {
@@ -3768,6 +3769,7 @@ h3 {
 .node-updates__table--compact .home-dashboard__view-all-row,
 .tokens-page__table--compact .home-dashboard__view-all-row {
   grid-template-columns: 1fr;
+  padding: 6px 20px;
 }
 
 .home-dashboard__card .node-updates__table--compact .node-updates__row--compact > *:not(:last-child)::after {
