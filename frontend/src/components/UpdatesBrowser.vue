@@ -656,7 +656,7 @@ function partyLink(party: string): string {
       <div v-if="showTitle">
         <component :is="headingTag">{{ headingText }}</component>
         <p v-if="offsetRange" class="node-updates__subtitle">
-          From {{ offsetRange.from }} to {{ offsetRange.to }} offset
+          From offset {{ offsetRange.from }} to {{ offsetRange.to }}
         </p>
       </div>
       <UpdatesToolbar

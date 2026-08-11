@@ -53,7 +53,7 @@ describe('HomeUpdatesView', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByText('From 1 to 2 offset')).toBeInTheDocument();
+    expect(screen.getByText('From offset 1 to 2')).toBeInTheDocument();
     expect(screen.queryByText('Updates', { selector: '.activity-home__eyebrow' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Latest Updates' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
