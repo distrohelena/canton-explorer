@@ -41,7 +41,7 @@ describe('HomeUpdatesView', () => {
   });
 
   it('renders the updates table with the Contracts-style header', async () => {
-    render(HomeUpdatesView, {
+    const { container } = render(HomeUpdatesView, {
       global: {
         stubs: {
           RouterLink: {
@@ -72,7 +72,14 @@ describe('HomeUpdatesView', () => {
       'M2 4h20l-8 8v6l-4 2v-8L2 4Z',
     );
     expect(filterButton).not.toHaveTextContent('Advanced Filter');
-    expect(await screen.findByRole('table', { name: 'Latest updates across all nodes' })).toBeInTheDocument();
+    const updatesTable = await screen.findByRole('table', { name: 'Latest updates across all nodes' });
+    expect(container.querySelector('.activity-home__updates-section--global-updates')).toBeInTheDocument();
+    expect(within(updatesTable).getByRole('link', { name: '2' })).toHaveClass('contract-detail__link');
+    const partyLinks = within(updatesTable).getAllByRole('link', { name: 'Alice' });
+    expect(partyLinks).toHaveLength(2);
+    for (const partyLink of partyLinks) {
+      expect(partyLink).toHaveClass('contract-detail__link');
+    }
     expect(screen.getByText('$12.34')).toBeInTheDocument();
     const estimateHeader = screen.getByText('Est. USD');
     const sourcePill = screen.getByText('PQS');

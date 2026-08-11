@@ -4412,6 +4412,11 @@ h3 {
   text-decoration: underline;
 }
 
+.activity-home__updates-section--global-updates .contract-detail__link {
+  color: var(--blue-500);
+  color: color-mix(in srgb, var(--blue-600) 70%, var(--text-600));
+}
+
 .update-detail__witness {
   display: block;
   white-space: nowrap;
