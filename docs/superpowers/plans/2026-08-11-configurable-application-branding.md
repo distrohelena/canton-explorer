@@ -4,7 +4,7 @@
 
 **Goal:** Load independent browser-tab and header titles from the runtime node JSON configuration.
 
-**Architecture:** Extend the existing parsed node configuration with a validated optional `branding` object. Expose only the sanitized branding values through `GET /api/branding`; the Vue application fetches those values during startup, updates `document.title` from `applicationTitle`, and renders `headerTitle` in the shared header. Missing configuration, whitespace-only values, or a failed branding request use the independent `Canton Explorer` defaults.
+**Architecture:** Extend the existing parsed node configuration with a validated optional `branding` object. Expose only the sanitized branding values through `GET /api/branding`; the Vue application fetches those values during startup, updates `document.title` from `applicationTitle`, and renders `headerTitle` in the shared header. Missing configuration and failed frontend branding requests use the independent `Canton Explorer` defaults; whitespace-only configured values are rejected by backend validation.
 
 **Tech Stack:** NestJS, Zod, Jest, Vue 3, TypeScript, Vitest, Vite.
 
