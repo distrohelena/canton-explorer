@@ -406,6 +406,12 @@
     transform 140ms ease;
 }
 
+.search-results-row,
+.node-updates__row:not(.node-updates__row--head),
+.tokens-page__row:not(.tokens-page__row--head) {
+  font-size: 0.95rem;
+}
+
 .search-results-row:hover {
   background: color-mix(in srgb, var(--blue-50) 92%, transparent);
   transform: translateY(-1px);

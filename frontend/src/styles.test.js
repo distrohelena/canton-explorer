@@ -56,6 +56,15 @@ describe('styles.css', () => {
     expect(footerStyles).toContain('max-width: 1398px;');
   });
 
+  it('reduces shared table body text by five percent', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const tableBodyRule = styles.match(
+      /\.search-results-row,[\s\S]*?\.tokens-page__row:not\(\.tokens-page__row--head\) \{([\s\S]*?)\n\}/,
+    )?.[1] ?? '';
+
+    expect(tableBodyRule).toContain('font-size: 0.95rem;');
+  });
+
   it('styles the Updates offset range subtitle below the title', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const subtitleStyles =
