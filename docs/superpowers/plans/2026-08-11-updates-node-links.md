@@ -21,7 +21,7 @@ Use a hoisted `push` spy for the mocked `useRouter`, and set the fixture node ID
 
 - [ ] **Step 2: Add assertions for the node link and navigation isolation**
 
-Assert that the global Updates section contains a node link named `Participant 1`, has the existing Updates content-link class, and points to `/nodes/participant%2F1`. Click that link and assert the router push spy has not been called for the update route. Then click the surrounding update row and assert the update route is pushed. Add keyboard assertions for Enter and Space on the row/link as needed to verify link events cannot bubble into row navigation.
+Assert that the global Updates section contains exactly one node link named `Participant 1`, has the existing Updates content-link class, and points to `/nodes/participant%2F1`. Click that link and assert the router push spy has not been called for the update route. Then click the surrounding update row and assert the update route is pushed. Add mandatory Enter and Space assertions for the node link and row to verify link events cannot bubble into row navigation.
 
 - [ ] **Step 3: Run the focused test to verify it fails for the missing node link**
 
@@ -45,11 +45,13 @@ Add a small helper beside the existing `updateLink` and `partyLink` helpers that
 
 - [ ] **Step 2: Render the node label as a RouterLink**
 
-In the `showNodeColumn` cell, render a `RouterLink` for updates with a node ID. Apply `activity-home__updates-node contract-detail__link`, use the encoded node route, and add `@click.stop`, `@keydown.enter.stop`, and `@keydown.space.stop`. Keep the current `Unknown node` span when no node ID exists.
+In the `showNodeColumn` cell, render a `RouterLink` only when `showNodeColumn && sourceTag === "updates" && update.nodeId` is truthy. Apply `activity-home__updates-node contract-detail__link`, use the encoded node route, and add `@click.stop`, `@keydown.enter.stop`, and `@keydown.space.stop`. Keep the current plain node label behavior for other `UpdatesBrowser` instances and keep `Unknown node` as non-link text when no node ID exists.
 
 - [ ] **Step 3: Add the global Updates grid overrides**
 
 Keep the existing shared `.node-updates__row--with-node` grid at `minmax(120px, 0.8fr)`. Add the global Updates row override with the first track changed to `minmax(84px, 0.56fr)`. In the existing mobile media query, add the more-specific global Updates selector with `grid-template-columns: 1fr`.
+
+Verify the mobile override is present in the stylesheet and does not alter the shared node-column rule.
 
 - [ ] **Step 4: Run the focused test to verify it passes**
 
