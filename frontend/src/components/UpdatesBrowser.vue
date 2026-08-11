@@ -16,6 +16,7 @@ import type {
   NodeUpdateEntry,
   NodeUpdatesResponse,
 } from "../types/updates";
+import QuerySourcePill from "./QuerySourcePill.vue";
 import UpdatesAdvancedFilter from "./UpdatesAdvancedFilter.vue";
 import UpdatesToolbar from "./UpdatesToolbar.vue";
 
@@ -638,7 +639,6 @@ function partyLink(party: string): string {
   <section class="node-updates">
     <header class="node-detail__hero">
       <div v-if="showTitle">
-        <p v-if="eyebrow" class="activity-home__eyebrow">{{ eyebrow }}</p>
         <component :is="headingTag">{{ headingText }}</component>
       </div>
       <UpdatesToolbar
@@ -718,7 +718,10 @@ function partyLink(party: string): string {
           <span role="columnheader">Event Offset</span>
           <span role="columnheader">Record Time</span>
           <span role="columnheader">Parties</span>
-          <span role="columnheader">Est. USD</span>
+          <span class="contracts-table__record-time-header" role="columnheader">
+            <span>Est. USD</span>
+            <QuerySourcePill class="contracts-table__source-pill" source="pqs" />
+          </span>
         </div>
 
         <div
@@ -795,5 +798,61 @@ function partyLink(party: string): string {
         </div>
       </div>
     </section>
+
+    <div
+      v-if="!error && (loading || renderedUpdates.length > 0)"
+      class="node-updates__pager node-updates__pager--bottom"
+      role="group"
+      aria-label="Bottom updates pagination"
+    >
+      <button
+        type="button"
+        class="dashboard__refresh"
+        :disabled="!updatesResponse?.nextAfter || loading"
+        aria-label="Newer"
+        title="Newer"
+        @click="showNewer"
+      >
+        <svg
+          class="node-updates__pagination-icon node-updates__pagination-icon--newer"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M15 5l-7 7 7 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.75"
+          />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="dashboard__refresh"
+        :disabled="!updatesResponse?.nextBefore || loading"
+        aria-label="Older"
+        title="Older"
+        @click="showOlder"
+      >
+        <svg
+          class="node-updates__pagination-icon node-updates__pagination-icon--older"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M9 5l7 7-7 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.75"
+          />
+        </svg>
+      </button>
+    </div>
   </section>
 </template>

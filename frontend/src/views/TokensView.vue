@@ -282,7 +282,6 @@ watch(
   <section class="dashboard tokens-page">
     <header class="dashboard__hero">
       <div class="dashboard__hero-copy">
-        <p class="activity-home__eyebrow">Tokens</p>
         <h2>Tokens</h2>
       </div>
     </header>
@@ -290,7 +289,6 @@ watch(
     <section class="tokens-page__table-section">
       <header class="node-detail__hero">
         <div>
-          <p class="activity-home__eyebrow">Inventory</p>
           <h3>Known Tokens</h3>
         </div>
         <div v-if="tokensResponse" class="results-header__actions">

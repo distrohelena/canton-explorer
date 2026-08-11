@@ -1210,7 +1210,6 @@ onBeforeUnmount(() => {
     >
       <header class="node-detail__hero debugger-view__template-catalog-header">
         <div>
-          <p class="activity-home__eyebrow">TOOLS</p>
           <h2 class="party-detail__title">Debugger</h2>
         </div>
         <button type="button" class="debugger-view__new-simulation" @click="startNewSimulation">
@@ -1263,7 +1262,6 @@ onBeforeUnmount(() => {
     >
       <header class="node-detail__hero debugger-view__template-catalog-header">
         <div>
-          <p class="activity-home__eyebrow">TOOLS</p>
           <h2 class="party-detail__title">Debugger</h2>
         </div>
         <button type="button" class="debugger-view__back-to-sessions" @click="returnToSessions">

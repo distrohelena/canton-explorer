@@ -494,7 +494,6 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
   <section :class="bare ? 'tokens-page__table-section' : 'node-detail__section tokens-page__section'">
     <header class="node-detail__hero">
       <div>
-        <p class="activity-home__eyebrow">{{ eyebrow }}</p>
         <h3>{{ title }}</h3>
       </div>
       <div class="results-header__actions">

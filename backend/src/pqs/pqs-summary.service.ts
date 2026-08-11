@@ -2705,6 +2705,7 @@ export class PqsSummaryService {
     const nodeStates = nodes.map((node) => ({
       node,
       nextBefore: undefined as string | undefined,
+      oldestFetched: null as GlobalUpdateCursor | null,
       exhausted: false,
     }));
     const mergedUpdatesByKey = new Map<string, GlobalMergedUpdate>();
@@ -2779,6 +2780,22 @@ export class PqsSummaryService {
 
       successfulResponses.forEach(({ response, state }) => {
         for (const update of response.updates) {
+          const cursor: GlobalUpdateCursor = {
+            recordTime: update.recordTime,
+            nodeId: state.node.id,
+            eventOffset: update.eventOffset,
+            updateId: update.updateId,
+          };
+
+          if (
+            state.oldestFetched === null ||
+            compareGlobalMergedUpdates(cursor, state.oldestFetched) > 0
+          ) {
+            state.oldestFetched = cursor;
+          }
+        }
+
+        for (const update of response.updates) {
           mergedUpdatesByKey.set(
             `${state.node.id}:${update.eventOffset}:${update.updateId}`,
             {
@@ -2809,12 +2826,28 @@ export class PqsSummaryService {
       filteredUpdates = filterUpdates(sortedUpdates);
       hasMoreInDirection = filteredUpdates.length > normalizedLimit;
 
-      if (hasMoreInDirection || nodeStates.every((state) => state.exhausted)) {
+      const reachedAfterCursor =
+        useAfterCursor &&
+        afterCursor !== null &&
+        nodeStates.every(
+          (state) =>
+            state.exhausted ||
+            (state.oldestFetched !== null &&
+              compareGlobalMergedUpdates(state.oldestFetched, afterCursor) >=
+                0),
+        );
+
+      if (
+        (useAfterCursor ? reachedAfterCursor : hasMoreInDirection) ||
+        nodeStates.every((state) => state.exhausted)
+      ) {
         break;
       }
     }
 
-    const updates = filteredUpdates.slice(0, normalizedLimit);
+    const updates = useAfterCursor
+      ? filteredUpdates.slice(-normalizedLimit)
+      : filteredUpdates.slice(0, normalizedLimit);
 
     return {
       limit: normalizedLimit,

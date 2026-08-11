@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/vue';
+import { cleanup, render, screen, within } from '@testing-library/vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import HomeUpdatesView from './HomeUpdatesView.vue';
 
@@ -44,11 +44,45 @@ describe('HomeUpdatesView', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByText('Updates', { selector: '.activity-home__eyebrow' })).toBeInTheDocument();
+    expect(screen.queryByText('Updates', { selector: '.activity-home__eyebrow' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Latest Updates' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Show')).not.toBeInTheDocument();
+    const filterButton = screen.getByRole('button', { name: 'Advanced Filter' });
+    expect(filterButton).toHaveAttribute('title', 'Advanced Filter');
+    expect(filterButton).toHaveClass('node-updates__filter-button');
+    expect(filterButton.querySelector('svg.node-updates__filter-icon')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+    expect(filterButton.querySelector('.node-updates__filter-icon path')).toHaveAttribute(
+      'd',
+      'M2 4h20l-8 8v6l-4 2v-8L2 4Z',
+    );
+    expect(filterButton).not.toHaveTextContent('Advanced Filter');
     expect(await screen.findByRole('table', { name: 'Latest updates across all nodes' })).toBeInTheDocument();
     expect(screen.getByText('$12.34')).toBeInTheDocument();
+    const estimateHeader = screen.getByText('Est. USD');
+    const sourcePill = screen.getByText('PQS');
+    expect(sourcePill).toHaveClass('contracts-table__source-pill');
+    expect(sourcePill.closest('.contracts-table__record-time-header')).toBe(
+      estimateHeader.closest('.contracts-table__record-time-header'),
+    );
+    const bottomPager = screen.getByRole('group', { name: 'Bottom updates pagination' });
+    expect(within(bottomPager).getByRole('button', { name: 'Newer' })).toBeDisabled();
+    expect(within(bottomPager).getByRole('button', { name: 'Older' })).toBeDisabled();
+    const newerButtons = screen.getAllByRole('button', { name: 'Newer' });
+    const olderButtons = screen.getAllByRole('button', { name: 'Older' });
+    expect(newerButtons).toHaveLength(2);
+    expect(olderButtons).toHaveLength(2);
+    for (const button of newerButtons) {
+      expect(button).toHaveAttribute('title', 'Newer');
+      expect(button.querySelector('svg.node-updates__pagination-icon--newer')).toBeInTheDocument();
+    }
+    for (const button of olderButtons) {
+      expect(button).toHaveAttribute('title', 'Older');
+      expect(button.querySelector('svg.node-updates__pagination-icon--older')).toBeInTheDocument();
+    }
     expect(screen.queryByRole('heading', { name: 'Latest Contracts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Nodes' })).not.toBeInTheDocument();
   });

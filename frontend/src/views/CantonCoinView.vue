@@ -180,7 +180,6 @@ onMounted(() => {
   <section class="canton-coin-page" aria-labelledby="canton-coin-heading">
     <header class="canton-coin-page__header">
       <div>
-        <p class="eyebrow">Assets</p>
         <h2 id="canton-coin-heading">Canton Coin</h2>
       </div>
     </header>
@@ -226,7 +225,6 @@ onMounted(() => {
         >
           <header class="canton-coin-page__section-heading">
             <div>
-              <p class="eyebrow">Market history</p>
               <h3 id="canton-coin-chart-heading">Daily close</h3>
             </div>
             <div class="canton-coin-page__chart-actions">
@@ -340,7 +338,6 @@ onMounted(() => {
       >
         <header class="canton-coin-page__section-heading">
           <div>
-            <p class="eyebrow">Sources</p>
             <h3 id="canton-coin-sources-heading">Venue coverage</h3>
           </div>
         </header>

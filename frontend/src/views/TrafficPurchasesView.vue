@@ -225,7 +225,6 @@ onMounted(() => {
   <section class="traffic-page" aria-labelledby="traffic-purchases-heading">
     <header class="traffic-page__header">
       <div>
-        <p class="eyebrow">Traffic</p>
         <h2 id="traffic-purchases-heading">Traffic Purchases</h2>
       </div>
     </header>
@@ -248,7 +247,6 @@ onMounted(() => {
     <section v-else class="traffic-page__section activity-home__updates-section">
       <header class="node-detail__hero">
         <div>
-          <p class="activity-home__eyebrow">Traffic</p>
           <h3>Purchases</h3>
         </div>
         <div class="results-header__actions">

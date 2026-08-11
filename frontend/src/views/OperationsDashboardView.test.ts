@@ -67,7 +67,7 @@ describe('OperationsDashboardView', () => {
     expect(
       screen.getByRole('heading', { name: 'Connected Nodes' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Nodes')).toBeInTheDocument();
+    expect(screen.queryByText('Nodes')).not.toBeInTheDocument();
     expect(
       screen.queryByText('Nodes currently reachable from this explorer.'),
     ).not.toBeInTheDocument();

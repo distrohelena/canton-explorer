@@ -69,7 +69,6 @@ const packages = computed(() =>
       <div class="node-page__main package-detail__content">
         <header class="node-detail__hero">
           <div>
-            <p class="activity-home__eyebrow">Packages</p>
             <h2>{{ packageFamily.name }} Packages</h2>
             <p class="package-family__subtitle">Known versions of {{ packageFamily.name }}</p>
           </div>

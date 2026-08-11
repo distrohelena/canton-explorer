@@ -512,7 +512,6 @@ onMounted(async () => {
   <section class="dashboard">
     <header class="dashboard__hero parties-page__hero">
       <div class="dashboard__hero-copy">
-        <p class="activity-home__eyebrow">Parties</p>
         <h2>Parties</h2>
       </div>
     </header>

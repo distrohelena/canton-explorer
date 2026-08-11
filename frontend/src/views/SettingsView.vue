@@ -126,7 +126,6 @@ onBeforeUnmount(() => {
   <section class="settings-page" aria-labelledby="settings-heading">
     <header class="settings-page__header">
       <div>
-        <p class="eyebrow">Operational view</p>
         <h2 id="settings-heading">Settings</h2>
       </div>
       <p v-if="lastRefreshAt" class="settings-page__refresh" :data-refreshing="isRefreshing">
@@ -137,7 +136,6 @@ onBeforeUnmount(() => {
     <section class="settings-section" aria-labelledby="indexing-status-heading">
       <div class="settings-section__header">
         <div>
-          <p class="eyebrow">Node observability</p>
           <h3 id="indexing-status-heading">Indexing status</h3>
         </div>
         <span v-if="isRefreshing" class="settings-section__refreshing">Refreshing…</span>
@@ -173,7 +171,6 @@ onBeforeUnmount(() => {
           >
             <header class="settings-node-card__header">
               <div>
-                <p class="eyebrow">{{ node.ledgerLabel }}</p>
                 <RouterLink class="settings-node-card__title" :to="`/nodes/${node.id}`">
                   {{ node.label }}
                 </RouterLink>
@@ -210,7 +207,6 @@ onBeforeUnmount(() => {
 
             <section class="settings-node-card__traffic" aria-label="Traffic Purchases">
               <div class="settings-node-card__traffic-header">
-                <p class="eyebrow">Traffic Purchases</p>
                 <span
                   v-if="trafficForNode(node.id)?.current.status === 'grpc_error' || trafficForNode(node.id)?.history.status === 'pqs_error'"
                   class="settings-node-card__traffic-status"

@@ -377,7 +377,6 @@ function getExerciseEntries(
       <div class="node-page__main update-detail__content">
         <header class="node-detail__hero">
           <div>
-            <p class="activity-home__eyebrow">Recent Activity</p>
             <h2>{{ updateDetail.label }} Update</h2>
           </div>
         </header>

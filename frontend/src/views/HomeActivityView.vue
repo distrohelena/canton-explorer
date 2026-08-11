@@ -343,7 +343,6 @@ function verticalScaleLabels(
   <section class="activity-home">
     <div class="activity-home__hero">
       <div class="activity-home__copy">
-        <p class="activity-home__eyebrow">Overview</p>
         <h2>Nodes</h2>
       </div>
       <div class="activity-home__controls">

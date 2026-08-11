@@ -3216,6 +3216,98 @@ describe('PqsSummaryService', () => {
     expect(olderPage.nextBefore).toEqual(expect.any(String));
   });
 
+  it('round-trips two older and two newer pages without returning an empty page', async () => {
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query: jest.fn() }),
+    } as never);
+    const updates = [
+      {
+        eventOffset: '106',
+        updateId: 'update-106',
+        recordTime: '2026-07-01T12:06:00.000Z',
+      },
+      {
+        eventOffset: '105',
+        updateId: 'update-105',
+        recordTime: '2026-07-01T12:05:00.000Z',
+      },
+      {
+        eventOffset: '104',
+        updateId: 'update-104',
+        recordTime: '2026-07-01T12:04:00.000Z',
+      },
+      {
+        eventOffset: '103',
+        updateId: 'update-103',
+        recordTime: '2026-07-01T12:03:00.000Z',
+      },
+      {
+        eventOffset: '102',
+        updateId: 'update-102',
+        recordTime: '2026-07-01T12:02:00.000Z',
+      },
+      {
+        eventOffset: '101',
+        updateId: 'update-101',
+        recordTime: '2026-07-01T12:01:00.000Z',
+      },
+    ];
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchRecentUpdates: jest.Mock;
+    };
+
+    serviceWithFetch.fetchRecentUpdates = jest.fn(async (node, options) => {
+      const limit = typeof options === 'number' ? options : (options.limit ?? 30);
+      const before = typeof options === 'number' ? undefined : options.before;
+      const beforeIndex = before
+        ? updates.findIndex((update) => update.eventOffset === before)
+        : -1;
+      const pageStart = beforeIndex >= 0 ? beforeIndex + 1 : 0;
+      const rows = updates.slice(pageStart, pageStart + limit + 1);
+      const page = rows.slice(0, limit);
+
+      return {
+        nodeId: node.id,
+        label: node.label,
+        limit,
+        nextBefore:
+          rows.length > limit ? (page[page.length - 1]?.eventOffset ?? null) : null,
+        nextAfter: null,
+        updates: page.map((update) => ({
+          ...update,
+          parties: [],
+        })),
+      };
+    });
+
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant' as const,
+      mode: 'pqs_only' as const,
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    };
+    const firstPage = await service.fetchGlobalRecentUpdates([node], 2);
+    const firstOlderPage = await service.fetchGlobalRecentUpdates([node], 2, {
+      before: firstPage.nextBefore ?? undefined,
+    });
+    const secondOlderPage = await service.fetchGlobalRecentUpdates([node], 2, {
+      before: firstOlderPage.nextBefore ?? undefined,
+    });
+    const firstNewerPage = await service.fetchGlobalRecentUpdates([node], 2, {
+      after: secondOlderPage.nextAfter ?? undefined,
+    });
+    const secondNewerPage = await service.fetchGlobalRecentUpdates([node], 2, {
+      after: firstNewerPage.nextAfter ?? undefined,
+    });
+
+    expect(secondNewerPage.updates.map((update) => update.eventOffset)).toEqual(
+      firstPage.updates.map((update) => update.eventOffset),
+    );
+    expect(secondNewerPage.updates).toHaveLength(2);
+  });
+
   it('returns global recent updates from healthy nodes when another node PQS is unavailable', async () => {
     const service = new PqsSummaryService({
       getRawExecutor: jest.fn(),

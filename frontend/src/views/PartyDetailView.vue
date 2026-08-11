@@ -176,7 +176,6 @@ watch(
       <div class="node-page__main node-detail__content">
         <header class="node-detail__hero">
           <div>
-            <p class="activity-home__eyebrow">Parties</p>
             <h2 class="party-detail__title">{{ props.partyId }}</h2>
           </div>
         </header>

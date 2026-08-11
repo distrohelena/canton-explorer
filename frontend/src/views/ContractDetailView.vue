@@ -192,7 +192,6 @@ const contractDataEntries = computed(() => {
       <div class="node-page__main contract-detail__content">
         <header class="node-detail__hero">
           <div>
-            <p class="activity-home__eyebrow">Contracts</p>
             <h2>{{ contractDetail.label }} Contract</h2>
           </div>
         </header>

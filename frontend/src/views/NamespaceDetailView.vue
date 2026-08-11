@@ -311,7 +311,6 @@ watch(
       <div class="node-page__main node-detail__content">
         <header class="node-detail__hero">
           <div>
-            <p class="activity-home__eyebrow">Namespaces</p>
             <h2 class="party-detail__title">
               {{ namespaceDetail.namespaceId }} Namespace
             </h2>

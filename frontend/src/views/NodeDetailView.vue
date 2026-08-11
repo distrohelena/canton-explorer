@@ -108,7 +108,6 @@ function formatSynchronizerHealth(value: string) {
     <div class="node-page__main node-detail__content">
       <header class="node-detail__hero">
         <div>
-          <p class="activity-home__eyebrow">Nodes</p>
           <h2 class="party-detail__title">Node {{ node.label }}</h2>
         </div>
       </header>

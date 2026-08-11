@@ -40,15 +40,30 @@ function handlePageSizeChange(event: Event) {
   <div class="node-updates__pager">
     <button
       type="button"
-      class="dashboard__refresh"
+      class="dashboard__refresh node-updates__filter-button"
+      :aria-label="props.advancedFilterLabel"
       :aria-expanded="advancedFilterExpanded"
       :aria-controls="advancedFilterControls"
+      :title="props.advancedFilterLabel"
       @click="$emit('toggleAdvancedFilter')"
     >
-      {{ props.advancedFilterLabel }}
+      <svg
+        class="node-updates__filter-icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M2 4h20l-8 8v6l-4 2v-8L2 4Z"
+          fill="none"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.75"
+        />
+      </svg>
     </button>
     <label class="node-updates__page-size">
-      <span class="node-updates__page-size-label">Show</span>
       <select
         class="node-updates__page-size-select"
         :value="props.pageSize"
@@ -68,17 +83,49 @@ function handlePageSizeChange(event: Event) {
       type="button"
       class="dashboard__refresh"
       :disabled="newerDisabled"
+      aria-label="Newer"
+      title="Newer"
       @click="$emit('newer')"
     >
-      Newer
+      <svg
+        class="node-updates__pagination-icon node-updates__pagination-icon--newer"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M15 5l-7 7 7 7"
+          fill="none"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.75"
+        />
+      </svg>
     </button>
     <button
       type="button"
       class="dashboard__refresh"
       :disabled="olderDisabled"
+      aria-label="Older"
+      title="Older"
       @click="$emit('older')"
     >
-      Older
+      <svg
+        class="node-updates__pagination-icon node-updates__pagination-icon--older"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M9 5l7 7-7 7"
+          fill="none"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.75"
+        />
+      </svg>
     </button>
   </div>
 </template>

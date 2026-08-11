@@ -186,7 +186,6 @@ watch(
       <div class="node-page__main contract-detail__content">
         <header class="node-detail__hero">
           <div>
-            <p class="activity-home__eyebrow">Tokens</p>
             <h2>{{ displayTokenTitle(tokenDetail.token) }}</h2>
           </div>
           <QuerySourcePill :source="tokenDetail.token.source" />
@@ -224,7 +223,6 @@ watch(
           <section class="node-detail__section token-detail__section">
             <header class="node-detail__hero">
               <div>
-                <p class="activity-home__eyebrow">Balances</p>
                 <h3>Top Holders</h3>
               </div>
               <div class="results-header__actions">

@@ -582,7 +582,6 @@ async function setNodeFilters(nodeIds: string[]) {
   <section class="node-updates">
     <header class="node-detail__hero">
       <div>
-        <p v-if="eyebrow" class="activity-home__eyebrow">{{ eyebrow }}</p>
         <h3>{{ title }}</h3>
       </div>
       <div class="results-header__actions">

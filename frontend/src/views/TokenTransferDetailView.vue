@@ -71,7 +71,6 @@ const recordTimeLines = computed(() =>
       <div class="node-page__main contract-detail__content">
         <header class="node-detail__hero">
           <div>
-            <p class="activity-home__eyebrow">Tokens</p>
             <h2>{{ transferDetail.tokenName }} Transfer</h2>
           </div>
         </header>
