@@ -4747,7 +4747,7 @@ h3 {
 
 .copy-to-clipboard-button:hover,
 .copy-to-clipboard-button:focus-visible {
-  background: var(--blue-50);
+  background: var(--surface-muted);
   color: var(--blue-600);
   outline: none;
 }
