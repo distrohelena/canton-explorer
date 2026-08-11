@@ -2024,7 +2024,7 @@ body {
 
 .app-explore__menu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: 100%;
   right: 0;
   z-index: 20;
   display: grid;

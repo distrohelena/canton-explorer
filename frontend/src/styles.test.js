@@ -50,6 +50,14 @@ describe('styles.css', () => {
     expect(labelStyles).toContain('color: var(--text-500);');
   });
 
+  it('keeps the Explore menu attached to its hover trigger', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const menuStyles = styles.match(/\.app-explore__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(menuStyles).toContain('top: 100%;');
+    expect(menuStyles).not.toContain('top: calc(100% + 8px);');
+  });
+
   it('keeps party copy controls aligned at the right edge of each row', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const partyRowStyles =
