@@ -47,6 +47,7 @@ onBeforeUnmount(() => {
   <button
     type="button"
     class="copy-to-clipboard-button"
+    :class="{ 'copy-to-clipboard-button--copied': copied }"
     :aria-label="`${copied ? 'Copied' : 'Copy'} ${label} ${value}`"
     :title="`${copied ? 'Copied' : 'Copy'} ${label}`"
     @click.stop="copyValue"

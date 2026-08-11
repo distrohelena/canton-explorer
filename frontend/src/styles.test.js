@@ -65,6 +65,8 @@ describe('styles.css', () => {
     expect(copyButtonStyles).toContain('border: none;');
     expect(copyButtonStyles).toContain('background: transparent;');
     expect(copyButtonInteractionStyles).toContain('background: var(--surface-muted);');
+    expect(styles).toContain('.copy-to-clipboard-button--copied');
+    expect(styles).toContain('color: var(--green-600);');
   });
 
   it('keeps update party copy controls aligned at the right edge of each row', () => {

@@ -4752,6 +4752,12 @@ h3 {
   outline: none;
 }
 
+.copy-to-clipboard-button--copied,
+.copy-to-clipboard-button--copied:hover,
+.copy-to-clipboard-button--copied:focus-visible {
+  color: var(--green-600);
+}
+
 .copy-to-clipboard-button__icon {
   width: 17px;
   height: 17px;

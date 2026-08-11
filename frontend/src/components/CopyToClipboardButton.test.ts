@@ -21,5 +21,6 @@ describe('CopyToClipboardButton', () => {
 
     expect(writeText).toHaveBeenCalledWith('Alice::1220abcd');
     expect(button).toHaveAccessibleName('Copied party ID Alice::1220abcd');
+    expect(button).toHaveClass('copy-to-clipboard-button--copied');
   });
 });
