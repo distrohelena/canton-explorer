@@ -88,6 +88,13 @@ describe('HomeUpdatesView', () => {
     for (const partyLink of partyLinks) {
       expect(partyLink).toHaveClass('contract-detail__link');
     }
+    const partyCopyButtons = within(updatesTable).getAllByRole('button', {
+      name: 'Copy party ID Alice',
+    });
+    expect(partyCopyButtons).toHaveLength(2);
+    for (const partyCopyButton of partyCopyButtons) {
+      expect(partyCopyButton).toHaveClass('copy-to-clipboard-button');
+    }
     const firstUpdateRow = within(updatesTable).getAllByRole('row')[1];
     routerPush.mockClear();
     await fireEvent.click(nodeLinks[0]);

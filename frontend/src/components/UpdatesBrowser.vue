@@ -16,6 +16,7 @@ import type {
   NodeUpdateEntry,
   NodeUpdatesResponse,
 } from "../types/updates";
+import CopyToClipboardButton from "./CopyToClipboardButton.vue";
 import QuerySourcePill from "./QuerySourcePill.vue";
 import UpdatesAdvancedFilter from "./UpdatesAdvancedFilter.vue";
 import UpdatesToolbar from "./UpdatesToolbar.vue";
@@ -807,15 +808,20 @@ function nodeLink(nodeId: string): string {
           </span>
           <span class="node-updates__parties" role="cell">
             <template v-if="update.parties.length > 0">
-              <RouterLink
+              <span
                 v-for="party in update.parties"
                 :key="party"
-                class="node-updates__party contract-detail__link"
-                :to="partyLink(party)"
-                @click.stop
+                class="node-updates__party-row"
               >
-                {{ party }}
-              </RouterLink>
+                <RouterLink
+                  class="node-updates__party contract-detail__link"
+                  :to="partyLink(party)"
+                  @click.stop
+                >
+                  {{ party }}
+                </RouterLink>
+                <CopyToClipboardButton :value="party" />
+              </span>
             </template>
             <template v-else>No parties</template>
           </span>

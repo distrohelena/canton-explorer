@@ -62,6 +62,17 @@ describe('styles.css', () => {
     expect(copyButtonStyles).toContain('height: 32px;');
   });
 
+  it('keeps update party copy controls aligned at the right edge of each row', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const partyRowStyles =
+      styles.match(/\.node-updates__party-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(partyRowStyles).toContain('display: grid;');
+    expect(partyRowStyles).toContain('grid-template-columns: minmax(0, 1fr) auto;');
+    expect(partyRowStyles).toContain('align-items: center;');
+    expect(partyRowStyles).toContain('width: 100%;');
+  });
+
   it('defines the approved dark grape palette without changing light mode', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const lightRoot = styles.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? '';
