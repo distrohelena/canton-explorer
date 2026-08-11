@@ -298,18 +298,18 @@ const headingText = computed(() => {
   return props.title;
 });
 
-const offsetRange = computed(() => {
-  const offsets = renderedUpdates.value
-    .map((update) => update.eventOffset.trim())
-    .filter((offset) => offset.length > 0);
+const recordTimeRange = computed(() => {
+  const dates = renderedUpdates.value
+    .map((update) => update.recordTimeLines?.date)
+    .filter((date): date is string => Boolean(date));
 
-  if (offsets.length === 0) {
+  if (dates.length === 0) {
     return null;
   }
 
   return {
-    from: offsets[offsets.length - 1] ?? offsets[0],
-    to: offsets[0],
+    from: dates[dates.length - 1] ?? dates[0],
+    to: dates[0],
   };
 });
 
@@ -659,8 +659,8 @@ function nodeLink(nodeId: string): string {
     <header class="node-detail__hero">
       <div v-if="showTitle">
         <component :is="headingTag">{{ headingText }}</component>
-        <p v-if="offsetRange" class="node-updates__subtitle">
-          From offset {{ offsetRange.to }} to {{ offsetRange.from }}
+        <p v-if="recordTimeRange" class="node-updates__subtitle">
+          From {{ recordTimeRange.from }} to {{ recordTimeRange.to }}
         </p>
       </div>
       <UpdatesToolbar
