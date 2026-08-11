@@ -120,7 +120,7 @@ Expected: both focused config test files pass.
 Commit:
 
 ```bash
-rtk git add backend/src/config/node-config.schema.ts backend/src/config/node-config.service.ts backend/test/config/node-config.spec.ts backend/config/nodes.example.json backend/README.md
+rtk git add backend/src/config/node-config.schema.ts backend/src/config/node-config.service.ts backend/test/config/node-config.spec.ts backend/test/config/node-config.service.spec.ts backend/config/nodes.example.json backend/README.md
 rtk git commit -m "feat: add configurable branding settings"
 ```
 
