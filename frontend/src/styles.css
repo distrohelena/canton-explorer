@@ -5151,6 +5151,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  margin-bottom: 8px;
 }
 
 .parties-page__namespace-filter {

@@ -88,6 +88,14 @@ describe('styles.css', () => {
     expect(tokensTableHeaderStyles).toContain('align-items: flex-end;');
   });
 
+  it('offsets the first party row from its results header', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const partiesResultsHeaderStyles =
+      styles.match(/\.parties-page__results-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(partiesResultsHeaderStyles).toContain('margin-bottom: 8px;');
+  });
+
   it('highlights the search input with only a bottom line when focused', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];
