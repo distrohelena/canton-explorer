@@ -2036,8 +2036,8 @@ body {
   right: 0;
   z-index: 20;
   display: grid;
-  width: max(190px, 100%);
-  min-width: 190px;
+  width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   gap: 4px;
   padding: 8px;
@@ -5763,7 +5763,7 @@ h3 {
   .app-navigation__menu {
     right: auto;
     left: 0;
-    width: min(190px, calc(100vw - 36px));
+    width: 100%;
     min-width: 0;
   }
 

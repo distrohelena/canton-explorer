@@ -108,6 +108,8 @@ describe('styles.css', () => {
     const menuStyles = styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(menuStyles).toContain('top: 100%;');
+    expect(menuStyles).toContain('width: 100%;');
+    expect(menuStyles).toContain('min-width: 0;');
     expect(menuStyles).not.toContain('top: calc(100% + 8px);');
   });
 
@@ -125,7 +127,6 @@ describe('styles.css', () => {
     expect(styles).toContain('@media (min-width: 721px) and (max-width: 960px)');
     expect(styles).toContain('flex: 0 1 calc((100% - 24px) / 3);');
     expect(styles).toContain('flex: 1 1 calc(100% - 54px);');
-    expect(styles).toContain('calc(100vw - 36px)');
     expect(styles).toContain('.app-navigation__button:focus-visible');
     expect(styles).toContain('.app-navigation__link:focus-visible');
   });
