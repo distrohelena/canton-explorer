@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 const editor = { contribution: 'hover' };
 const languages = { registerHoverProvider: vi.fn() };
 
-vi.mock('monaco-editor/esm/vs/editor/editor.main', () => ({
+vi.mock('monaco-editor/editor/editor.main', () => ({
   editor,
   languages,
 }));

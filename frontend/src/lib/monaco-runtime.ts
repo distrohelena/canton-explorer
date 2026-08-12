@@ -1,3 +1,3 @@
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.main';
+import * as monaco from 'monaco-editor/editor/editor.main';
 
 export default monaco;

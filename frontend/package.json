@@ -6,14 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node ../scripts/patch-monaco-dompurify.mjs",
     "build": "vue-tsc -b && vite build",
+    "prebuild:packaged": "node ../scripts/patch-monaco-dompurify.mjs",
     "build:packaged": "vue-tsc -b && vite build --mode packaged",
     "preview": "vite preview",
     "start": "vite preview",
     "test": "vitest"
   },
   "dependencies": {
-    "monaco-editor": "^0.53.0",
+    "monaco-editor": "^0.56.0",
     "vue": "^3.5.39",
     "vue-router": "^5.1.0"
   },
