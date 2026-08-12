@@ -131,6 +131,14 @@ describe('styles.css', () => {
     expect(styles).toContain('.app-navigation__link:focus-visible');
   });
 
+  it('removes side borders from navigation buttons', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const buttonStyles = styles.match(/\.app-navigation__button \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(buttonStyles).toContain('border-left: 0;');
+    expect(buttonStyles).toContain('border-right: 0;');
+  });
+
   it('touches adjacent navigation buttons while preserving other toolbar gaps', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const adjacentStyles =
