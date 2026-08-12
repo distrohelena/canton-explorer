@@ -131,6 +131,18 @@ describe('styles.css', () => {
     expect(styles).toContain('.app-navigation__link:focus-visible');
   });
 
+  it('touches adjacent navigation buttons while preserving other toolbar gaps', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const adjacentStyles =
+      styles.match(/\.app-navigation \+ \.app-navigation \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const mobileStyles = styles.slice(styles.indexOf('@media (max-width: 720px)'));
+
+    expect(adjacentStyles).toContain('margin-left: -12px;');
+    expect(mobileStyles).toContain('.app-navigation + .app-navigation');
+    expect(mobileStyles).toContain('margin-top: -12px;');
+    expect(mobileStyles).toContain('margin-left: 0;');
+  });
+
   it('keeps party copy controls aligned at the right edge of each row', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const partyRowStyles =

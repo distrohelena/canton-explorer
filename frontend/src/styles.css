@@ -1970,6 +1970,10 @@ body {
   max-width: 160px;
 }
 
+.app-navigation + .app-navigation {
+  margin-left: -12px;
+}
+
 .app-navigation__button {
   position: relative;
   display: inline-flex;
@@ -5758,6 +5762,11 @@ h3 {
     width: 100%;
     max-width: none;
     flex: 0 0 auto;
+  }
+
+  .app-navigation + .app-navigation {
+    margin-top: -12px;
+    margin-left: 0;
   }
 
   .app-navigation__menu {
