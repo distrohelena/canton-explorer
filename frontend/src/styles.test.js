@@ -77,6 +77,14 @@ describe('styles.css', () => {
     expect(overviewStateStyles).toContain('box-sizing: border-box;');
   });
 
+  it('keeps Tokens section headings close to their tables', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const tokensTableSectionStyles =
+      styles.match(/\.tokens-page__table-section \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(tokensTableSectionStyles).toContain('gap: 8px;');
+  });
+
   it('highlights the search input with only a bottom line when focused', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];

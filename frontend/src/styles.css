@@ -5226,7 +5226,7 @@ h3 {
 .tokens-page__table-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .tokens-page__table-shell {
