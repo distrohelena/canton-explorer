@@ -81,8 +81,11 @@ describe('styles.css', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const tokensTableSectionStyles =
       styles.match(/\.tokens-page__table-section \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const tokensTableHeaderStyles =
+      styles.match(/\.tokens-page__table-section > \.node-detail__hero \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(tokensTableSectionStyles).toContain('gap: 8px;');
+    expect(tokensTableHeaderStyles).toContain('align-items: flex-end;');
   });
 
   it('highlights the search input with only a bottom line when focused', () => {

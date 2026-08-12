@@ -5229,6 +5229,10 @@ h3 {
   gap: 8px;
 }
 
+.tokens-page__table-section > .node-detail__hero {
+  align-items: flex-end;
+}
+
 .tokens-page__table-shell {
   position: relative;
   border: 1px solid var(--line-soft);
@@ -6160,6 +6164,10 @@ h3 {
 
   .node-detail__hero {
     flex-direction: column;
+  }
+
+  .tokens-page__table-section > .node-detail__hero {
+    align-items: flex-start;
   }
 
   .node-packages__row {
