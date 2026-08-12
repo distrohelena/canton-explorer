@@ -5105,6 +5105,27 @@ h3 {
   white-space: normal;
 }
 
+.tokens-page__cell-with-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.tokens-page__cell-with-copy > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tokens-page__token.tokens-page__cell-with-copy {
+  display: grid;
+  flex-direction: initial;
+  white-space: normal;
+}
+
 .tokens-page__token-link {
   display: flex;
   flex-direction: column;

@@ -165,6 +165,43 @@ describe('TokensView', () => {
     expect(screen.queryByText('USDCx Test Vault deployment Share')).not.toBeInTheDocument();
   });
 
+  it('adds copy controls for the token ID and issuer without navigating', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
+      {
+        tokenId: 'Issuer::validator-license',
+        name: 'Validator License',
+        symbol: 'VAL',
+        issuer: 'Issuer',
+        source: 'pqs',
+      },
+    ]));
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    const { router } = await renderAt('/tokens');
+
+    const knownTokensTable = await screen.findByRole('table', { name: 'Known tokens' });
+    const tokenCopyButton = within(knownTokensTable).getByRole('button', {
+      name: 'Copy token ID Issuer::validator-license',
+    });
+    const issuerCopyButton = within(knownTokensTable).getByRole('button', {
+      name: 'Copy issuer Issuer',
+    });
+
+    await fireEvent.click(tokenCopyButton);
+
+    expect(writeText).toHaveBeenCalledWith('Issuer::validator-license');
+    expect(tokenCopyButton).toHaveAccessibleName('Copied token ID Issuer::validator-license');
+    expect(router.currentRoute.value.fullPath).toBe('/tokens');
+    expect(issuerCopyButton).toBeInTheDocument();
+  });
+
   it('navigates to the party detail page from transfer parties', async () => {
     vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
         {

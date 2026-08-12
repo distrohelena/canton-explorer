@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import type { LocationQueryRaw } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
+import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
 import TokenTransfersBrowser from '../components/TokenTransfersBrowser.vue';
 import TokensAdvancedFilter from '../components/TokensAdvancedFilter.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
@@ -353,10 +354,18 @@ watch(
           class="tokens-page__row tokens-page__known-row tokens-page__known-row--link"
           :to="tokenDetailLink(token.tokenId)"
         >
-          <span class="tokens-page__cell tokens-page__token" role="cell">
+          <span class="tokens-page__cell tokens-page__token tokens-page__cell-with-copy" role="cell">
             <strong>{{ displayTokenTitle(token) }}</strong>
+            <CopyToClipboardButton :value="token.tokenId" label="token ID" />
           </span>
-          <span class="tokens-page__cell" role="cell">{{ token.issuer ?? 'n/a' }}</span>
+          <span class="tokens-page__cell tokens-page__cell-with-copy" role="cell">
+            <span>{{ token.issuer ?? 'n/a' }}</span>
+            <CopyToClipboardButton
+              v-if="token.issuer"
+              :value="token.issuer"
+              label="issuer"
+            />
+          </span>
           <span class="tokens-page__cell" role="cell"><QuerySourcePill :source="token.source" /></span>
         </RouterLink>
       </div>
