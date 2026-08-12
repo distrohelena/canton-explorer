@@ -192,10 +192,22 @@ describe('PartiesView', () => {
     await renderAt();
     await screen.findByRole('link', { name: 'Alice' });
 
-    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    const filterShell = document.querySelector('.parties-page__filter-shell');
+    expect(filterShell).toBeInTheDocument();
+    expect(filterShell).toHaveAttribute('aria-hidden', 'true');
+    expect(filterShell).toHaveAttribute('inert');
+
+    const advancedFilterButton = screen.getByRole('button', { name: 'Advanced Filter' });
+    expect(advancedFilterButton).toHaveClass('node-updates__filter-button');
+    expect(advancedFilterButton).toHaveAttribute('title', 'Advanced Filter');
+    expect(advancedFilterButton.querySelector('.node-updates__filter-icon')).not.toBeNull();
+    expect(advancedFilterButton).toHaveTextContent('');
+    await fireEvent.click(advancedFilterButton);
 
     expect(document.querySelectorAll('section[aria-label="Advanced Filter Parameters"]')).toHaveLength(1);
+    expect(filterShell).toHaveClass('node-updates-filter-shell--open');
+    expect(filterShell).toHaveAttribute('aria-hidden', 'false');
+    expect(filterShell).not.toHaveAttribute('inert');
     expect(screen.getByRole('checkbox', { name: 'Participant 1' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Participant 2' })).toBeChecked();
     expect(screen.queryByLabelText('Public Key')).not.toBeInTheDocument();

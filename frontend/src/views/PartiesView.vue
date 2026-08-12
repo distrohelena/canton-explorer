@@ -663,12 +663,28 @@ onMounted(async () => {
             <div class="node-updates__pager">
               <button
                 type="button"
-                class="dashboard__refresh"
+                class="dashboard__refresh node-updates__filter-button"
+                aria-label="Advanced Filter"
                 :aria-expanded="showAdvancedFilter"
                 aria-controls="parties-advanced-filter"
+                title="Advanced Filter"
                 @click="toggleAdvancedFilter"
               >
-                Advanced Filter
+                <svg
+                  class="node-updates__filter-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M2 4h20l-8 8v6l-4 2v-8L2 4Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                  />
+                </svg>
               </button>
               <label class="node-updates__page-size">
                 <select
@@ -742,8 +758,10 @@ onMounted(async () => {
           </div>
         </div>
         <div
-          v-if="showAdvancedFilter"
-          class="node-updates-filter-shell node-updates-filter-shell--open"
+          class="node-updates-filter-shell parties-page__filter-shell"
+          :class="{ 'node-updates-filter-shell--open': showAdvancedFilter }"
+          :aria-hidden="!showAdvancedFilter"
+          :inert="!showAdvancedFilter"
         >
           <UpdatesAdvancedFilter
             id="parties-advanced-filter"

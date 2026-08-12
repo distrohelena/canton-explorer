@@ -1,9 +1,9 @@
 import type * as MonacoEditor from 'monaco-editor';
-import editorWorker from 'monaco-editor/editor/editor.worker?worker';
-import jsonWorker from 'monaco-editor/language/json/json.worker?worker';
-import cssWorker from 'monaco-editor/language/css/css.worker?worker';
-import htmlWorker from 'monaco-editor/language/html/html.worker?worker';
-import tsWorker from 'monaco-editor/language/typescript/ts.worker?worker';
+import editorWorker from 'monaco-editor/editor/editor.worker.js?worker';
+import jsonWorker from 'monaco-editor/language/json/json.worker.js?worker';
+import cssWorker from 'monaco-editor/language/css/css.worker.js?worker';
+import htmlWorker from 'monaco-editor/language/html/html.worker.js?worker';
+import tsWorker from 'monaco-editor/language/typescript/ts.worker.js?worker';
 
 type MonacoModule = typeof MonacoEditor;
 

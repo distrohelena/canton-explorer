@@ -520,9 +520,14 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
       </div>
     </header>
 
-    <Transition v-if="!compact" name="filter-expand">
+    <div
+      v-if="!compact"
+      class="node-updates-filter-shell tokens-page__filter-shell"
+      :class="{ 'node-updates-filter-shell--open': showAdvancedFilter }"
+      :aria-hidden="!showAdvancedFilter"
+      :inert="!showAdvancedFilter"
+    >
       <TokenTransfersAdvancedFilter
-        v-if="showAdvancedFilter"
         :id="advancedFilterId"
         v-model:from-draft="fromPartyFilterDraft"
         v-model:to-draft="toPartyFilterDraft"
@@ -539,7 +544,7 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
         @remove-to-party-filter="removeToPartyFilter"
         @remove-movement-type-filter="removeMovementTypeFilter"
       />
-    </Transition>
+    </div>
 
     <p v-if="tokenTransfersError" class="dashboard__message dashboard__message--error">
       {{ tokenTransfersError }}

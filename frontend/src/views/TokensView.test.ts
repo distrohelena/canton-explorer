@@ -125,6 +125,12 @@ describe('TokensView', () => {
     expect(screen.getAllByText('PQS').length).toBeGreaterThan(0);
     expect(screen.queryByText('Issuer::validator-license')).not.toBeInTheDocument();
 
+    const knownTokensSection = sectionForHeading('Known Tokens');
+    const knownTokensFilterShell = knownTokensSection.querySelector('.tokens-page__filter-shell');
+    expect(knownTokensFilterShell).toBeInTheDocument();
+    expect(knownTokensFilterShell).toHaveAttribute('aria-hidden', 'true');
+    expect(knownTokensFilterShell).toHaveAttribute('inert');
+
     const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
     expect(within(transfersTable).getByText('Nodes')).toBeInTheDocument();
     expect(within(transfersTable).queryByText('Update')).not.toBeInTheDocument();
@@ -137,6 +143,45 @@ describe('TokensView', () => {
     expect(transfersSourcePill.closest('[role="columnheader"]')?.textContent).toContain('Record Time');
     expect(transfersSourcePill.closest('.results-header__actions')).toBeNull();
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
+    const transfersFilterShell = transfersBrowserSection.querySelector('.tokens-page__filter-shell');
+    expect(transfersFilterShell).toBeInTheDocument();
+    expect(transfersFilterShell).toHaveAttribute('aria-hidden', 'true');
+    expect(transfersFilterShell).toHaveAttribute('inert');
+
+    await fireEvent.click(
+      within(knownTokensSection.querySelector('.node-detail__hero') as HTMLElement).getByRole('button', {
+        name: 'Advanced Filter',
+      }),
+    );
+    expect(knownTokensFilterShell).toHaveClass('node-updates-filter-shell--open');
+    expect(knownTokensFilterShell).toHaveAttribute('aria-hidden', 'false');
+    expect(knownTokensFilterShell).not.toHaveAttribute('inert');
+
+    await fireEvent.click(
+      within(knownTokensSection.querySelector('.node-detail__hero') as HTMLElement).getByRole('button', {
+        name: 'Advanced Filter',
+      }),
+    );
+    expect(knownTokensFilterShell).not.toHaveClass('node-updates-filter-shell--open');
+    expect(knownTokensFilterShell).toHaveAttribute('aria-hidden', 'true');
+
+    await fireEvent.click(
+      within(transfersBrowserSection.querySelector('.node-detail__hero') as HTMLElement).getByRole('button', {
+        name: 'Advanced Filter',
+      }),
+    );
+    expect(transfersFilterShell).toHaveClass('node-updates-filter-shell--open');
+    expect(transfersFilterShell).toHaveAttribute('aria-hidden', 'false');
+    expect(transfersFilterShell).not.toHaveAttribute('inert');
+
+    await fireEvent.click(
+      within(transfersBrowserSection.querySelector('.node-detail__hero') as HTMLElement).getByRole('button', {
+        name: 'Advanced Filter',
+      }),
+    );
+    expect(transfersFilterShell).not.toHaveClass('node-updates-filter-shell--open');
+    expect(transfersFilterShell).toHaveAttribute('aria-hidden', 'true');
+
     expect(transfersBrowserSection.closest('.node-detail__section')).toBeNull();
     const transfersTopPager = within(
       transfersBrowserSection.querySelector('.node-detail__hero') as HTMLElement,

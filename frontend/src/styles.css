@@ -4959,6 +4959,14 @@ h3 {
   gap: 10px;
 }
 
+.parties-page__filter-shell {
+  margin-bottom: 0;
+}
+
+.parties-page__filter-shell.node-updates-filter-shell--open {
+  margin-bottom: 8px;
+}
+
 .inline-loading {
   display: flex;
   align-items: center;
@@ -5175,6 +5183,10 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.tokens-page__filter-shell {
+  margin-bottom: 0;
 }
 
 .tokens-page__table-section > .node-detail__hero {

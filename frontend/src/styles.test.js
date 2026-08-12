@@ -92,8 +92,11 @@ describe('styles.css', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const partiesResultsHeaderStyles =
       styles.match(/\.parties-page__results-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const partiesFilterShellStyles =
+      styles.match(/\.parties-page__filter-shell \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(partiesResultsHeaderStyles).toContain('margin-bottom: 8px;');
+    expect(partiesFilterShellStyles).toContain('margin-bottom: 0;');
   });
 
   it('highlights the search input with only a bottom line when focused', () => {

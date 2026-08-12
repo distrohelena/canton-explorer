@@ -309,22 +309,28 @@ watch(
         </div>
       </header>
 
-      <TokensAdvancedFilter
-        v-if="showAdvancedFilter"
-        :id="tokensAdvancedFilterId"
-        v-model:name-draft="nameFilterDraft"
-        v-model:exclude-name-draft="excludeNameFilterDraft"
-        v-model:issuer-draft="issuerFilterDraft"
-        :active-names="activeNameFilters"
-        :active-excluded-names="activeExcludeNameFilters"
-        :active-issuers="activeIssuerFilters"
-        @add-name-filter="addNameFilter"
-        @add-exclude-name-filter="addExcludeNameFilter"
-        @add-issuer-filter="addIssuerFilter"
-        @remove-name-filter="removeNameFilter"
-        @remove-exclude-name-filter="removeExcludeNameFilter"
-        @remove-issuer-filter="removeIssuerFilter"
-      />
+      <div
+        class="node-updates-filter-shell tokens-page__filter-shell"
+        :class="{ 'node-updates-filter-shell--open': showAdvancedFilter }"
+        :aria-hidden="!showAdvancedFilter"
+        :inert="!showAdvancedFilter"
+      >
+        <TokensAdvancedFilter
+          :id="tokensAdvancedFilterId"
+          v-model:name-draft="nameFilterDraft"
+          v-model:exclude-name-draft="excludeNameFilterDraft"
+          v-model:issuer-draft="issuerFilterDraft"
+          :active-names="activeNameFilters"
+          :active-excluded-names="activeExcludeNameFilters"
+          :active-issuers="activeIssuerFilters"
+          @add-name-filter="addNameFilter"
+          @add-exclude-name-filter="addExcludeNameFilter"
+          @add-issuer-filter="addIssuerFilter"
+          @remove-name-filter="removeNameFilter"
+          @remove-exclude-name-filter="removeExcludeNameFilter"
+          @remove-issuer-filter="removeIssuerFilter"
+        />
+      </div>
 
       <p v-if="!tokensResponse && loadingTokens" class="dashboard__message inline-loading" role="status">
         <span class="node-updates__spinner" aria-hidden="true"></span>
