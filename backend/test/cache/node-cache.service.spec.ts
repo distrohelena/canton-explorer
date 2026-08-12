@@ -46,6 +46,51 @@ describe('NodeCacheService', () => {
     });
   });
 
+  it('supports the 31-day activity window and retention boundary', () => {
+    const cache = new NodeCacheService();
+
+    cache.seedActivityHistory({
+      nodeId: 'participant-1',
+      label: 'Participant 1',
+      status: 'healthy',
+      latestActiveContractCount: 4,
+      lastObservedUpdateCount: 4,
+      samples: [
+        {
+          timestamp: '2026-05-31T12:44:00.000Z',
+          activityValue: 3,
+          activeContractCount: 4,
+          latestOffset: '0',
+        },
+        {
+          timestamp: '2026-06-01T12:45:00.000Z',
+          activityValue: 2,
+          activeContractCount: 4,
+          latestOffset: '1',
+        },
+        {
+          timestamp: '2026-07-02T12:45:00.000Z',
+          activityValue: 1,
+          activeContractCount: 4,
+          latestOffset: '2',
+        },
+      ],
+    });
+
+    expect(cache.listActivityHistory(31)).toMatchObject({
+      windowMinutes: 44640,
+      nodes: [
+        {
+          samples: [
+            expect.objectContaining({ timestamp: '2026-06-01T12:45:00.000Z' }),
+            expect.objectContaining({ timestamp: '2026-07-02T12:45:00.000Z' }),
+          ],
+        },
+      ],
+    });
+    expect(cache.listActivityHistory(30).nodes[0]?.samples).toHaveLength(1);
+  });
+
   it('merges multiple polls in the same 15 minute bucket and starts a new bucket on boundary crossing', () => {
     const cache = new NodeCacheService();
 

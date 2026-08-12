@@ -57,8 +57,8 @@ export interface SeedActivityHistoryInput {
 
 @Injectable()
 export class NodeCacheService {
-  private static readonly supportedWindowDays = [1, 7, 30] as const;
-  private static readonly maxActivityRetentionMs = 30 * 24 * 60 * 60 * 1000;
+  private static readonly supportedWindowDays = [1, 7, 30, 31] as const;
+  private static readonly maxActivityRetentionMs = 31 * 24 * 60 * 60 * 1000;
   private static readonly activityBucketMs = 15 * 60 * 1000;
   private readonly snapshots = new Map<string, NodeSnapshot>();
   private readonly activityHistory = new Map<string, StoredActivitySeries>();
@@ -183,21 +183,21 @@ export class NodeCacheService {
     return [...existingSamples, incomingSample];
   }
 
-  private normalizeWindowDays(requestedDays?: number): 1 | 7 | 30 {
+  private normalizeWindowDays(requestedDays?: number): 1 | 7 | 30 | 31 {
     if (
       requestedDays &&
       Number.isFinite(requestedDays) &&
-      NodeCacheService.supportedWindowDays.includes(requestedDays as 1 | 7 | 30)
+      NodeCacheService.supportedWindowDays.includes(requestedDays as 1 | 7 | 30 | 31)
     ) {
-    return requestedDays as 1 | 7 | 30;
-  }
+      return requestedDays as 1 | 7 | 30 | 31;
+    }
 
     return 1;
   }
 
   private sliceSamplesForWindow(
     samples: NodeActivitySample[],
-    windowDays: 1 | 7 | 30,
+    windowDays: 1 | 7 | 30 | 31,
     generatedAt: string,
   ): NodeActivitySample[] {
     if (samples.length === 0) {
