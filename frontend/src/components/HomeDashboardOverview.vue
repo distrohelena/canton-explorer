@@ -275,7 +275,6 @@ onMounted(() => {
   <section class="home-dashboard-overview" aria-labelledby="home-dashboard-overview-title">
     <div class="home-dashboard-overview__header">
       <div>
-        <p class="home-dashboard-overview__eyebrow">Network overview</p>
         <h2 id="home-dashboard-overview-title">Overview</h2>
       </div>
       <div class="home-dashboard-overview__ranges" aria-label="Overview time range">
@@ -410,7 +409,6 @@ onMounted(() => {
 
     <div class="home-dashboard-overview__metrics-heading">
       <div>
-        <p class="home-dashboard-overview__eyebrow">Network metrics</p>
         <h3 id="home-dashboard-metrics-title">Current snapshot</h3>
       </div>
     </div>

@@ -86,6 +86,8 @@ describe('HomeDashboardOverview', () => {
     const { container } = render(HomeDashboardOverview);
 
     expect(container.querySelector('.home-dashboard-overview__metrics')).toBeNull();
+    expect(screen.queryByText('Network overview')).not.toBeInTheDocument();
+    expect(screen.queryByText('Network metrics')).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Transactions over time' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'CC price over time' })).toBeInTheDocument();
     const activityChart = await screen.findByRole('img', { name: 'Transactions over time chart' });
