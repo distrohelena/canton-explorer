@@ -8,20 +8,26 @@ type NodeFilterOption = {
   label: string;
 };
 
-const props = defineProps<{
-  id: string;
-  partyDraft: string;
-  templateDraft: string;
-  activeParties: string[];
-  activeTemplates: string[];
-  templateOptions: string[];
-  filterMode: FilterMode;
-  hideSplice: boolean;
-  nodeOptions?: NodeFilterOption[];
-  activeNodes?: string[];
-  showPartyFilters?: boolean;
-  hideSpliceLabel?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    id: string;
+    partyDraft: string;
+    templateDraft: string;
+    activeParties: string[];
+    activeTemplates: string[];
+    templateOptions: string[];
+    filterMode: FilterMode;
+    hideSplice: boolean;
+    nodeOptions?: NodeFilterOption[];
+    activeNodes?: string[];
+    showPartyFilters?: boolean;
+    showTemplateFilters?: boolean;
+    hideSpliceLabel?: string;
+  }>(),
+  {
+    showTemplateFilters: true,
+  },
+);
 
 const emit = defineEmits<{
   'update:partyDraft': [value: string];
@@ -97,8 +103,10 @@ function handleNodeChange(nodeId: string, event: Event) {
         </div>
       </div>
 
+      <slot name="additional-fields" />
+
       <div
-        v-if="showPartyFilters !== false"
+        v-if="props.showPartyFilters !== false"
         class="node-updates__advanced-filter-field node-updates__advanced-filter-field--party node-updates__advanced-filter-field--party-id"
       >
         <span>Party ID</span>
@@ -140,7 +148,7 @@ function handleNodeChange(nodeId: string, event: Event) {
       </div>
 
       <div
-        v-if="showPartyFilters !== false && activeParties.length > 0"
+        v-if="props.showPartyFilters !== false && activeParties.length > 0"
         class="node-updates__advanced-filter-chips"
       >
         <div
@@ -160,7 +168,10 @@ function handleNodeChange(nodeId: string, event: Event) {
         </div>
       </div>
 
-      <div class="node-updates__advanced-filter-field node-updates__advanced-filter-field--template">
+      <div
+        v-if="props.showTemplateFilters"
+        class="node-updates__advanced-filter-field node-updates__advanced-filter-field--template"
+      >
         <span>Template ID</span>
         <div class="node-updates__advanced-filter-input-row node-updates__advanced-filter-input-row--template">
           <SearchableCombobox
@@ -192,7 +203,10 @@ function handleNodeChange(nodeId: string, event: Event) {
         </div>
       </div>
 
-      <div v-if="activeTemplates.length > 0" class="node-updates__advanced-filter-chips">
+      <div
+        v-if="props.showTemplateFilters && activeTemplates.length > 0"
+        class="node-updates__advanced-filter-chips"
+      >
         <div
           v-for="templateId in activeTemplates"
           :key="templateId"
