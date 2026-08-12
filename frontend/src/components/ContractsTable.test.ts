@@ -14,6 +14,7 @@ async function renderTable(showNodeColumn = false) {
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<div>Home</div>' } },
+      { path: '/nodes/:id', component: { template: '<div>Node</div>' } },
       { path: '/nodes/:id/contracts/:contractId', component: { template: '<div>Contract</div>' } },
     ],
   });
@@ -115,5 +116,17 @@ describe('ContractsTable', () => {
     await waitFor(() =>
       expect(router.currentRoute.value.fullPath).toBe('/nodes/participant-1/contracts/00abc'),
     );
+  });
+
+  it('links the node cell to the node detail page without triggering the contract row', async () => {
+    const { router } = await renderTable(true);
+
+    const nodeLink = screen.getByRole('link', { name: 'Participant 1' });
+    expect(nodeLink).toHaveClass('contract-detail__link');
+    expect(nodeLink).toHaveAttribute('href', '/nodes/participant-1');
+
+    await fireEvent.click(nodeLink);
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/nodes/participant-1'));
   });
 });

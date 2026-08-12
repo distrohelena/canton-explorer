@@ -273,11 +273,13 @@ describe('PartyDetailView', () => {
     expect(api.fetchPartyUpdates).toHaveBeenCalledWith('Alice', { limit: 15 });
     expect(api.fetchPartyContracts).toHaveBeenCalledWith('Alice', { limit: 15 });
     expect(screen.getAllByText('2')).toHaveLength(3);
-    expect(screen.getByRole('link', { name: 'Participant 1' })).toHaveAttribute(
+    const observedNodesSection = screen.getByRole('heading', { name: 'Observed Nodes' }).closest('section');
+    expect(observedNodesSection).not.toBeNull();
+    expect(within(observedNodesSection as HTMLElement).getByRole('link', { name: 'Participant 1' })).toHaveAttribute(
       'href',
       '/nodes/participant-1',
     );
-    expect(screen.getByRole('link', { name: 'Participant 2' })).toHaveAttribute(
+    expect(within(observedNodesSection as HTMLElement).getByRole('link', { name: 'Participant 2' })).toHaveAttribute(
       'href',
       '/nodes/participant-2',
     );

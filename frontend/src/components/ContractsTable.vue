@@ -86,6 +86,10 @@ function contractLink(contract: ContractRow): string {
   return `/nodes/${contract.nodeId}/contracts/${contract.contractId}`;
 }
 
+function nodeLink(nodeId: string): string {
+  return `/nodes/${encodeURIComponent(nodeId)}`;
+}
+
 function navigateToContract(contract: ContractRow): void {
   void router.push(contractLink(contract));
 }
@@ -127,7 +131,15 @@ function navigateToContract(contract: ContractRow): void {
         @keydown.space.prevent="navigateToContract(contract)"
       >
         <span v-if="showNodeColumn" class="node-updates__cell-with-copy contracts-table__cell" role="cell">
-          <span>{{ contract.label }}</span>
+          <RouterLink
+            class="contract-detail__link"
+            :to="nodeLink(contract.nodeId)"
+            @click.stop
+            @keydown.enter.stop
+            @keydown.space.stop
+          >
+            {{ contract.label }}
+          </RouterLink>
           <CopyToClipboardButton :value="contract.label" label="node name" />
         </span>
         <span class="node-updates__cell-with-copy node-updates__id" role="cell">
