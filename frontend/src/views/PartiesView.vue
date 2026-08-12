@@ -7,7 +7,6 @@ import {
   fetchNodeActiveParties,
   fetchPartyFingerprints,
   fetchNodeLocalParties,
-  fetchNodePartyFingerprints,
   fetchNodes,
 } from '../lib/api';
 import type {
@@ -18,14 +17,12 @@ import type {
 import type { NodeSnapshot } from '../types/nodes';
 
 type PartiesMode = 'active' | 'all' | 'fingerprints';
-const ALL_NODES_ID = '__all_nodes__';
 
 const nodes = ref<NodeSnapshot[] | null>(null);
 const activePartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
 const localPartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
 const error = ref<string | null>(null);
 const selectedMode = ref<PartiesMode>('active');
-const selectedNodeId = ref<string | null>(null);
 const loadingActiveNodeId = ref<string | null>(null);
 const loadingLocalNodeId = ref<string | null>(null);
 const partyPageSize = ref(DEFAULT_PAGE_SIZE);
@@ -49,52 +46,24 @@ const namespaceAfterCursor = ref<string | null>(null);
 const namespacesResponse = ref<NodePartyFingerprintsEntry | PartyFingerprintsResponse | null>(null);
 
 const nodeButtons = computed(() => nodes.value ?? []);
-const hasAllNodesOption = computed(() => nodeButtons.value.length > 1);
 
 const selectableNodes = computed(() =>
   selectedMode.value === 'active' || selectedMode.value === 'fingerprints'
     ? nodeButtons.value
     : nodeButtons.value.filter((node) => node.mode === 'pqs_with_grpc'),
 );
-const isAllNodesSelected = computed(() => selectedNodeId.value === ALL_NODES_ID);
-
-const selectedNodeSnapshot = computed<NodeSnapshot | null>(() => {
-  if (!selectedNodeId.value || isAllNodesSelected.value) {
-    return null;
-  }
-
-  return nodeButtons.value.find((node) => node.id === selectedNodeId.value) ?? null;
-});
-
-const selectedNode = computed<ActivePartiesNodeEntry | null>(() => {
-  if (!selectedNodeId.value) {
-    return null;
-  }
-
-  return selectedMode.value === 'all'
-    ? localPartiesByNodeId.value[selectedNodeId.value] ?? null
-    : activePartiesByNodeId.value[selectedNodeId.value] ?? null;
-});
 
 const selectedNodeSnapshots = computed<NodeSnapshot[]>(() => {
-  if (isAllNodesSelected.value) {
-    return selectableNodes.value;
-  }
-
-  return selectedNodeSnapshot.value ? [selectedNodeSnapshot.value] : [];
+  return selectableNodes.value;
 });
 
 const selectedEntries = computed<ActivePartiesNodeEntry[]>(() => {
-  if (isAllNodesSelected.value) {
-    const source =
-      selectedMode.value === 'all' ? localPartiesByNodeId.value : activePartiesByNodeId.value;
+  const source =
+    selectedMode.value === 'all' ? localPartiesByNodeId.value : activePartiesByNodeId.value;
 
-    return selectedNodeSnapshots.value
-      .map((node) => source[node.id])
-      .filter((entry): entry is ActivePartiesNodeEntry => entry !== undefined);
-  }
-
-  return selectedNode.value ? [selectedNode.value] : [];
+  return selectedNodeSnapshots.value
+    .map((node) => source[node.id])
+    .filter((entry): entry is ActivePartiesNodeEntry => entry !== undefined);
 });
 
 const selectedParties = computed(() =>
@@ -120,11 +89,7 @@ const selectedFingerprintSource = computed<'pqs' | 'grpc' | null>(() => {
 });
 
 const selectedHeader = computed(() => {
-  if (isAllNodesSelected.value) {
-    return selectedNodeSnapshots.value.length > 0 ? 'All Nodes' : null;
-  }
-
-  return selectedNodeSnapshot.value?.label ?? null;
+  return selectedNodeSnapshots.value.length > 0 ? 'All Nodes' : null;
 });
 
 const selectedLocalNodeStatus = computed(() => {
@@ -132,7 +97,8 @@ const selectedLocalNodeStatus = computed(() => {
     return null;
   }
 
-  return selectedNode.value?.localPartiesStatus ?? 'ok';
+  return selectedEntries.value.find((entry) => entry.localPartiesStatus && entry.localPartiesStatus !== 'ok')
+    ?.localPartiesStatus ?? 'ok';
 });
 
 const selectedLocalNodeError = computed(() => {
@@ -140,7 +106,7 @@ const selectedLocalNodeError = computed(() => {
     return null;
   }
 
-  return selectedNode.value?.localPartiesError ?? null;
+  return selectedEntries.value.find((entry) => entry.localPartiesError)?.localPartiesError ?? null;
 });
 
 const selectedLocalNodeErrorCode = computed(() => {
@@ -148,7 +114,7 @@ const selectedLocalNodeErrorCode = computed(() => {
     return null;
   }
 
-  return selectedNode.value?.localPartiesErrorCode ?? null;
+  return selectedEntries.value.find((entry) => entry.localPartiesErrorCode)?.localPartiesErrorCode ?? null;
 });
 
 const selectedLocalNodeErrorDetails = computed(() => {
@@ -156,7 +122,7 @@ const selectedLocalNodeErrorDetails = computed(() => {
     return null;
   }
 
-  return selectedNode.value?.localPartiesErrorDetails ?? null;
+  return selectedEntries.value.find((entry) => entry.localPartiesErrorDetails)?.localPartiesErrorDetails ?? null;
 });
 
 const selectedLocalNodeErrorTid = computed(() => {
@@ -164,7 +130,7 @@ const selectedLocalNodeErrorTid = computed(() => {
     return null;
   }
 
-  return selectedNode.value?.localPartiesErrorTid ?? null;
+  return selectedEntries.value.find((entry) => entry.localPartiesErrorTid)?.localPartiesErrorTid ?? null;
 });
 
 const selectedActiveNodeStatus = computed(() => {
@@ -172,7 +138,8 @@ const selectedActiveNodeStatus = computed(() => {
     return null;
   }
 
-  return selectedNode.value?.activePartiesStatus ?? 'ok';
+  return selectedEntries.value.find((entry) => entry.activePartiesStatus === 'pqs_error')
+    ?.activePartiesStatus ?? 'ok';
 });
 
 const selectedActiveNodeError = computed(() => {
@@ -180,59 +147,24 @@ const selectedActiveNodeError = computed(() => {
     return null;
   }
 
-  return selectedNode.value?.activePartiesError ?? null;
+  return selectedEntries.value.find((entry) => entry.activePartiesError)?.activePartiesError ?? null;
 });
 
 const isSelectedNodeLoading = computed(() => {
-  if (!selectedNodeId.value) {
-    return false;
-  }
-
-  if (isAllNodesSelected.value) {
-    const selectedIds = new Set(selectedNodeSnapshots.value.map((node) => node.id));
-    if (selectedMode.value === 'all') {
-      return loadingLocalNodeId.value !== null && selectedIds.has(loadingLocalNodeId.value);
-    }
-    if (selectedMode.value === 'fingerprints') {
-      return loadingNamespaces.value;
-    }
-    return loadingActiveNodeId.value !== null && selectedIds.has(loadingActiveNodeId.value);
-  }
-
+  const selectedIds = new Set(selectedNodeSnapshots.value.map((node) => node.id));
   if (selectedMode.value === 'all') {
-    return loadingLocalNodeId.value === selectedNodeId.value;
+    return loadingLocalNodeId.value !== null && selectedIds.has(loadingLocalNodeId.value);
   }
   if (selectedMode.value === 'fingerprints') {
     return loadingNamespaces.value;
   }
-  return loadingActiveNodeId.value === selectedNodeId.value;
+  return loadingActiveNodeId.value !== null && selectedIds.has(loadingActiveNodeId.value);
 });
 
-const resultsLoadingLabel = computed(() =>
-  isAllNodesSelected.value
-    ? 'Loading parties across selected nodes'
-    : 'Loading parties for this node',
-);
-
-function syncSelectedNode(preferredNodeId: string | null = selectedNodeId.value): void {
-  if (preferredNodeId === ALL_NODES_ID && hasAllNodesOption.value) {
-    selectedNodeId.value = ALL_NODES_ID;
-    return;
-  }
-
-  const availableNodeIds = new Set(selectableNodes.value.map((node) => node.id));
-
-  if (preferredNodeId && availableNodeIds.has(preferredNodeId)) {
-    selectedNodeId.value = preferredNodeId;
-    return;
-  }
-
-  selectedNodeId.value = selectableNodes.value[0]?.id ?? null;
-}
+const resultsLoadingLabel = 'Loading parties across selected nodes';
 
 function selectMode(mode: PartiesMode): void {
   selectedMode.value = mode;
-  syncSelectedNode(selectedNodeId.value);
   if (mode === 'fingerprints') {
     resetNamespacePagination();
   } else {
@@ -240,34 +172,7 @@ function selectMode(mode: PartiesMode): void {
     showNamespaceAdvancedFilter.value = false;
   }
 
-  if (selectedNodeId.value === ALL_NODES_ID) {
-    void ensureAllNodesPartiesLoaded(mode);
-    return;
-  }
-
-  if (selectedNodeId.value) {
-    void ensureNodePartiesLoaded(mode, selectedNodeId.value);
-  }
-}
-
-function selectNode(nodeId: string): void {
-  selectedNodeId.value = nodeId;
-  if (selectedMode.value === 'fingerprints') {
-    resetNamespacePagination();
-  } else {
-    resetPartyPagination();
-  }
-  void ensureNodePartiesLoaded(selectedMode.value, nodeId);
-}
-
-function selectAllNodes(): void {
-  selectedNodeId.value = ALL_NODES_ID;
-  if (selectedMode.value === 'fingerprints') {
-    resetNamespacePagination();
-  } else {
-    resetPartyPagination();
-  }
-  void ensureAllNodesPartiesLoaded(selectedMode.value);
+  void ensureAllNodesPartiesLoaded(mode);
 }
 
 async function ensureAllNodesPartiesLoaded(mode: PartiesMode): Promise<void> {
@@ -392,9 +297,7 @@ async function loadNamespaces(): Promise<void> {
       keyType: activeNamespaceFilter.value?.keyType,
     };
 
-    namespacesResponse.value = isAllNodesSelected.value
-      ? await fetchPartyFingerprints(options)
-      : await fetchNodePartyFingerprints(selectedNodeId.value ?? '', options);
+    namespacesResponse.value = await fetchPartyFingerprints(options);
     error.value = null;
   } catch (err) {
     namespacesResponse.value = null;
@@ -498,11 +401,7 @@ function setPartyPageSize(event: Event): void {
 onMounted(async () => {
   try {
     nodes.value = await fetchNodes();
-    syncSelectedNode(nodes.value[0]?.id ?? null);
-
-    if (selectedNodeId.value) {
-      await ensureNodePartiesLoaded('active', selectedNodeId.value);
-    }
+    await ensureAllNodesPartiesLoaded('active');
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   }
@@ -519,8 +418,7 @@ onMounted(async () => {
 
     <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
     <div v-else class="parties-page">
-      <section class="node-detail__section parties-page__section">
-        <div class="parties-page__mode-switch" role="tablist" aria-label="Party source modes">
+      <div class="parties-page__mode-switch" role="tablist" aria-label="Party source modes">
           <button
             type="button"
             class="parties-page__mode-button"
@@ -548,53 +446,7 @@ onMounted(async () => {
           >
             Namespaces
           </button>
-        </div>
-
-        <div
-          v-if="!nodes"
-          class="inline-loading"
-          role="status"
-          aria-label="Loading nodes"
-        >
-          <span class="node-updates__spinner" aria-hidden="true"></span>
-          <span>Loading nodes...</span>
-        </div>
-        <div v-else class="parties-page__node-list" role="tablist" aria-label="Node selectors">
-          <button
-            v-if="hasAllNodesOption"
-            type="button"
-            class="parties-page__node-button"
-            :class="{ 'parties-page__node-button--active': isAllNodesSelected }"
-            :aria-pressed="isAllNodesSelected"
-            :disabled="selectedMode === 'all' && selectableNodes.length === 0"
-            @click="selectAllNodes"
-          >
-            <span class="parties-page__node-label">All Nodes</span>
-          </button>
-          <button
-            v-for="node in nodeButtons"
-            :key="node.id"
-            type="button"
-            class="parties-page__node-button"
-            :class="{
-              'parties-page__node-button--active': node.id === selectedNodeId,
-              'parties-page__node-button--disabled':
-                selectedMode === 'all' && node.mode === 'pqs_only',
-            }"
-            :aria-pressed="node.id === selectedNodeId"
-            :disabled="selectedMode === 'all' && node.mode === 'pqs_only'"
-            @click="selectNode(node.id)"
-          >
-            <span class="parties-page__node-label">{{ node.label }}</span>
-            <span
-              v-if="selectedMode === 'all' && node.mode === 'pqs_only'"
-              class="parties-page__node-meta"
-            >
-              No gRPC
-            </span>
-          </button>
-        </div>
-      </section>
+      </div>
 
       <div>
         <div v-if="selectedHeader" class="parties-page__results-header">
@@ -797,7 +649,7 @@ onMounted(async () => {
             v-if="selectedParties.length === 0 && selectedActiveNodeStatus !== 'pqs_error'"
             class="update-detail__empty"
           >
-            {{ isAllNodesSelected ? 'No active parties found across selected nodes.' : 'No active parties found for this node.' }}
+            No active parties found across selected nodes.
           </p>
         </div>
 
@@ -855,7 +707,7 @@ onMounted(async () => {
             v-else-if="selectedParties.length === 0"
             class="update-detail__empty"
           >
-            {{ isAllNodesSelected ? 'No local parties found across selected nodes.' : 'No local parties found for this node.' }}
+            No local parties found across selected nodes.
           </p>
         </div>
 
@@ -869,7 +721,7 @@ onMounted(async () => {
             <span class="parties-page__fingerprint-value">{{ fingerprint }}</span>
           </RouterLink>
           <p v-if="selectedFingerprints.length === 0" class="update-detail__empty">
-            {{ isAllNodesSelected ? 'No known namespaces found across selected nodes.' : 'No known namespaces found for this node.' }}
+            No known namespaces found across selected nodes.
           </p>
         </div>
       </div>
