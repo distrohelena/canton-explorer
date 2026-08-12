@@ -294,15 +294,28 @@ onBeforeUnmount(() => {
                 :aria-label="`${menu.label} navigation`"
                 @keydown.esc.prevent.stop="handleNavigationEscape(menu.id)"
               >
-                <RouterLink
-                  v-for="link in menu.links"
-                  :key="link.to"
-                  class="app-navigation__link"
-                  :to="link.to"
-                  @click="closeNavigationMenu"
+                <div
+                  v-for="(group, groupIndex) in menu.groups"
+                  :key="group.label"
+                  class="app-navigation__group"
+                  :aria-labelledby="`${menu.id}-navigation-group-${groupIndex}`"
                 >
-                  {{ link.label }}
-                </RouterLink>
+                  <span
+                    :id="`${menu.id}-navigation-group-${groupIndex}`"
+                    class="app-navigation__group-label"
+                  >
+                    {{ group.label }}
+                  </span>
+                  <RouterLink
+                    v-for="link in group.links"
+                    :key="link.to"
+                    class="app-navigation__link app-navigation__group-link"
+                    :to="link.to"
+                    @click="closeNavigationMenu"
+                  >
+                    {{ link.label }}
+                  </RouterLink>
+                </div>
               </nav>
             </div>
             <form class="app-search-form" @submit.prevent="submitSearch">

@@ -94,11 +94,18 @@ describe('styles.css', () => {
     const menuStyles = styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const linkStyles = styles.match(/\.app-navigation__link \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const hoverStyles = styles.match(/\.app-navigation__link:hover,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const groupStyles = styles.match(/\.app-navigation__group \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const groupLabelStyles = styles.match(/\.app-navigation__group-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const groupLinkStyles = styles.match(/\.app-navigation__group-link \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(menuStyles).toContain('border: 1px solid var(--line-soft);');
     expect(menuStyles).toContain('background: var(--surface-card);');
     expect(menuStyles).toContain('box-shadow: var(--shadow-soft);');
     expect(linkStyles).toContain('color: var(--text-700);');
+    expect(groupStyles).toContain('display: grid;');
+    expect(groupLabelStyles).toContain('color: var(--text-500);');
+    expect(groupLabelStyles).toContain('text-transform: uppercase;');
+    expect(groupLinkStyles).toContain('padding-left: 20px;');
     expect(hoverStyles).toContain('background: var(--blue-50);');
     expect(hoverStyles).toContain('color: var(--text-900);');
   });

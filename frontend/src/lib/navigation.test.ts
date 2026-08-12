@@ -2,25 +2,48 @@ import { describe, expect, it } from 'vitest';
 import { navigationMenus, resolveNavigationContext } from './navigation';
 
 describe('navigation menus', () => {
-  it('defines the three approved menus and their direct links', () => {
+  it('defines the three approved menus and their categorized links', () => {
     expect(navigationMenus.map((menu) => menu.id)).toEqual(['ledger', 'network', 'system']);
     expect(navigationMenus.map((menu) => menu.label)).toEqual(['Ledger', 'Network', 'System']);
-    expect(navigationMenus.map((menu) => menu.links)).toEqual([
+    expect(navigationMenus.map((menu) => menu.groups)).toEqual([
       [
-        { label: 'Home', to: '/' },
-        { label: 'Updates', to: '/updates' },
-        { label: 'Contracts', to: '/contracts' },
-        { label: 'Tokens', to: '/tokens' },
-        { label: 'Canton Coin', to: '/canton-coin' },
+        {
+          label: 'Ledger',
+          links: [
+            { label: 'Home', to: '/' },
+            { label: 'Updates', to: '/updates' },
+            { label: 'Contracts', to: '/contracts' },
+          ],
+        },
+        {
+          label: 'Assets',
+          links: [
+            { label: 'Tokens', to: '/tokens' },
+            { label: 'Canton Coin', to: '/canton-coin' },
+          ],
+        },
       ],
       [
-        { label: 'Nodes', to: '/nodes' },
-        { label: 'Parties', to: '/parties' },
-        { label: 'Traffic Purchases', to: '/traffic' },
+        {
+          label: 'Network',
+          links: [
+            { label: 'Nodes', to: '/nodes' },
+            { label: 'Parties', to: '/parties' },
+          ],
+        },
+        {
+          label: 'Traffic',
+          links: [{ label: 'Traffic Purchases', to: '/traffic' }],
+        },
       ],
       [
-        { label: 'Debugger', to: '/debugger' },
-        { label: 'Settings', to: '/settings' },
+        {
+          label: 'Tools',
+          links: [
+            { label: 'Debugger', to: '/debugger' },
+            { label: 'Settings', to: '/settings' },
+          ],
+        },
       ],
     ]);
   });

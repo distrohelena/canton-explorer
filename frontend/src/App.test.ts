@@ -244,6 +244,8 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Contracts' })).toHaveAttribute('href', '/contracts');
     expect(screen.getByRole('link', { name: 'Tokens' })).toHaveAttribute('href', '/tokens');
     expect(screen.getByRole('link', { name: 'Canton Coin' })).toHaveAttribute('href', '/canton-coin');
+    expect(screen.getByText('Ledger', { selector: '.app-navigation__group-label' })).toBeInTheDocument();
+    expect(screen.getByText('Assets', { selector: '.app-navigation__group-label' })).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText('Search'),
     ).toBeInTheDocument();
@@ -287,6 +289,29 @@ describe('App', () => {
     ]);
     expect(screen.queryByRole('navigation', { name: 'Network navigation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'System navigation' })).not.toBeInTheDocument();
+  });
+
+  it('keeps category parents inside each navigation menu', async () => {
+    await renderAt('/');
+
+    const expectedGroups = [
+      ['Ledger', 'Assets'],
+      ['Network', 'Traffic'],
+      ['Tools'],
+    ];
+
+    for (const [index, menuId] of ['ledger', 'network', 'system'].entries()) {
+      const trigger = screen.getByRole('button', {
+        name: index === 0 ? 'Home' : index === 1 ? 'Network' : 'System',
+      });
+      await fireEvent.click(trigger);
+      const navigation = screen.getByRole('navigation', { name: `${menuId[0].toUpperCase()}${menuId.slice(1)} navigation` });
+      expect(
+        within(navigation)
+          .getAllByText((_, element) => element?.classList.contains('app-navigation__group-label') ?? false)
+          .map((label) => label.textContent?.trim()),
+      ).toEqual(expectedGroups[index]);
+    }
   });
 
   it('switches menus and supports keyboard dismissal without opening on focus alone', async () => {
@@ -454,12 +479,12 @@ describe('App', () => {
   });
 
   it('renders the Traffic menu and keeps the shared shell on traffic purchases', async () => {
-    const { container, router } = await renderAt('/traffic');
+    const { router } = await renderAt('/traffic');
 
     const networkButton = screen.getByRole('button', { name: 'Traffic Purchases' });
-    expect(container.querySelector('.app-navigation__group-label')).not.toBeInTheDocument();
     await fireEvent.click(networkButton);
     expect(screen.getByRole('navigation', { name: 'Network navigation' })).toBeInTheDocument();
+    expect(screen.getByText('Traffic', { selector: '.app-navigation__group-label' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Traffic Purchases' })).toHaveAttribute('href', '/traffic');
     expect(screen.getByText('Traffic Purchases View')).toBeInTheDocument();
     expect(router.currentRoute.value.path).toBe('/traffic');

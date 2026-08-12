@@ -2093,6 +2093,29 @@ body {
   transform: translateX(2px);
 }
 
+.app-navigation__group {
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+}
+
+.app-navigation__group:first-child {
+  padding-top: 0;
+}
+
+.app-navigation__group-label {
+  color: var(--text-500);
+  padding: 4px 12px 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-navigation__group-link {
+  padding-left: 20px;
+}
+
 @keyframes explore-menu-in {
   from {
     opacity: 0;

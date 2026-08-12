@@ -5,10 +5,15 @@ export interface NavigationLink {
   to: string;
 }
 
+export interface NavigationGroup {
+  label: string;
+  links: readonly NavigationLink[];
+}
+
 export interface NavigationMenu {
   id: NavigationMenuId;
   label: string;
-  links: readonly NavigationLink[];
+  groups: readonly NavigationGroup[];
 }
 
 export interface NavigationContext {
@@ -20,29 +25,52 @@ export const navigationMenus: readonly NavigationMenu[] = [
   {
     id: 'ledger',
     label: 'Ledger',
-    links: [
-      { label: 'Home', to: '/' },
-      { label: 'Updates', to: '/updates' },
-      { label: 'Contracts', to: '/contracts' },
-      { label: 'Tokens', to: '/tokens' },
-      { label: 'Canton Coin', to: '/canton-coin' },
+    groups: [
+      {
+        label: 'Ledger',
+        links: [
+          { label: 'Home', to: '/' },
+          { label: 'Updates', to: '/updates' },
+          { label: 'Contracts', to: '/contracts' },
+        ],
+      },
+      {
+        label: 'Assets',
+        links: [
+          { label: 'Tokens', to: '/tokens' },
+          { label: 'Canton Coin', to: '/canton-coin' },
+        ],
+      },
     ],
   },
   {
     id: 'network',
     label: 'Network',
-    links: [
-      { label: 'Nodes', to: '/nodes' },
-      { label: 'Parties', to: '/parties' },
-      { label: 'Traffic Purchases', to: '/traffic' },
+    groups: [
+      {
+        label: 'Network',
+        links: [
+          { label: 'Nodes', to: '/nodes' },
+          { label: 'Parties', to: '/parties' },
+        ],
+      },
+      {
+        label: 'Traffic',
+        links: [{ label: 'Traffic Purchases', to: '/traffic' }],
+      },
     ],
   },
   {
     id: 'system',
     label: 'System',
-    links: [
-      { label: 'Debugger', to: '/debugger' },
-      { label: 'Settings', to: '/settings' },
+    groups: [
+      {
+        label: 'Tools',
+        links: [
+          { label: 'Debugger', to: '/debugger' },
+          { label: 'Settings', to: '/settings' },
+        ],
+      },
     ],
   },
 ];
