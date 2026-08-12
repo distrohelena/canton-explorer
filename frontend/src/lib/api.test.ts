@@ -804,6 +804,46 @@ describe('fetchNodes', () => {
     );
   });
 
+  it('serializes repeated node filters for global party fingerprints', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        source: 'pqs',
+        limit: 30,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: [],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchPartyFingerprints({ nodeIds: ['participant-2', 'participant-1'], limit: 30 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/parties/fingerprints?node=participant-2&node=participant-1&limit=30',
+    );
+  });
+
+  it('serializes an explicit empty global party fingerprint node filter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        source: 'pqs',
+        limit: 15,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: [],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchPartyFingerprints({ nodeIds: [] });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/parties/fingerprints?node=',
+    );
+  });
+
   it('loads participant status for a single node from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

@@ -111,6 +111,23 @@ async function postJson<T>(path: string, body?: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function appendNodeQueryParams(params: URLSearchParams, nodeIds?: string[]): void {
+  if (nodeIds === undefined) {
+    return;
+  }
+
+  if (nodeIds.length === 0) {
+    params.append('node', '');
+    return;
+  }
+
+  for (const nodeId of nodeIds) {
+    if (nodeId.trim()) {
+      params.append('node', nodeId);
+    }
+  }
+}
+
 export function fetchBranding(): Promise<BrandingConfig> {
   return fetchJson<BrandingConfig>('/branding');
 }
@@ -142,6 +159,7 @@ export function fetchNodeLocalParties(id: string): Promise<ActivePartiesResponse
 export function fetchPartyFingerprints(options?: {
   before?: string;
   after?: string;
+  nodeIds?: string[];
   limit?: number;
   publicKey?: string;
   encoding?: 'auto' | 'hex' | 'base64' | 'pem';
@@ -155,6 +173,7 @@ export function fetchPartyFingerprints(options?: {
   if (options?.after) {
     params.set('after', options.after);
   }
+  appendNodeQueryParams(params, options?.nodeIds);
   if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
@@ -268,17 +287,7 @@ export function fetchLatestContracts(
   if (options?.after) {
     params.set('after', options.after);
   }
-  if (options?.nodeIds !== undefined) {
-    if (options.nodeIds.length === 0) {
-      params.append('node', '');
-    } else {
-      for (const nodeId of options.nodeIds) {
-        if (nodeId.trim()) {
-          params.append('node', nodeId);
-        }
-      }
-    }
-  }
+  appendNodeQueryParams(params, options?.nodeIds);
   for (const party of options?.parties ?? []) {
     if (party.trim()) {
       params.append('party', party);
@@ -386,17 +395,7 @@ export function fetchTrafficPurchases(options?: {
   if (options?.after) {
     params.set('after', options.after);
   }
-  if (options?.nodeIds !== undefined) {
-    if (options.nodeIds.length === 0) {
-      params.append('node', '');
-    } else {
-      for (const nodeId of options.nodeIds) {
-        if (nodeId.trim()) {
-          params.append('node', nodeId);
-        }
-      }
-    }
-  }
+  appendNodeQueryParams(params, options?.nodeIds);
   if (options?.minDate) {
     params.set('minDate', options.minDate);
   }

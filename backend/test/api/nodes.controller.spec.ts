@@ -523,11 +523,31 @@ const typedTokenHoldersFixture = {
   ],
 } satisfies TokenHoldersResponse;
 
+type GlobalPartyFingerprintsResponse = {
+  source: 'pqs' | 'grpc';
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  fingerprints: string[];
+};
+
+type ListGlobalPartyFingerprints = (
+  limit?: string,
+  before?: string,
+  after?: string,
+  node?: string | string[],
+  publicKey?: string,
+  encoding?: string,
+  keyFormat?: string,
+  keyType?: string,
+) => Promise<GlobalPartyFingerprintsResponse>;
+
 describe('NodesController', () => {
   let controller: NodesController;
   let cache: NodeCacheService;
   let configService: {
     getBranding: jest.Mock;
+    list: jest.MockedFunction<NodeConfigService['list']>;
   };
   let pqsSummaryService: {
     fetchTokens: jest.Mock;
@@ -762,11 +782,39 @@ describe('NodesController', () => {
     namespaceFingerprintService = {
       computeFromInput: jest.fn().mockResolvedValue('1220alice'),
     };
+    const configuredNodes = [
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only' as const,
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL', schema: 'public' },
+      },
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant',
+        mode: 'pqs_with_grpc' as const,
+        ledgerLabel: 'Retail Ledger 2',
+        pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL', schema: 'public' },
+        grpc: {
+          ledgerTarget: 'localhost:5012',
+          ledgerAdminTarget: 'localhost:5013',
+          participantAdminTarget: 'localhost:5014',
+          useTls: false,
+          connectTimeoutMs: 5000,
+        },
+      },
+    ] satisfies ReturnType<NodeConfigService['list']>;
     configService = {
       getBranding: jest.fn().mockReturnValue({
         applicationTitle: 'Configured App',
         headerTitle: 'Configured Header',
       }),
+      list: jest
+        .fn<ReturnType<NodeConfigService['list']>, Parameters<NodeConfigService['list']>>()
+        .mockReturnValue(configuredNodes),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -775,34 +823,7 @@ describe('NodesController', () => {
         NodeCacheService,
         {
           provide: NodeConfigService,
-          useValue: {
-            getBranding: configService.getBranding,
-            list: () => [
-              {
-                id: 'participant-1',
-                label: 'Participant 1',
-                role: 'participant',
-                mode: 'pqs_only',
-                ledgerLabel: 'Retail Ledger',
-                pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
-              },
-              {
-                id: 'participant-2',
-                label: 'Participant 2',
-                role: 'participant',
-                mode: 'pqs_with_grpc',
-                ledgerLabel: 'Retail Ledger 2',
-                pqs: { connectionUriEnv: 'PARTICIPANT_2_PQS_URL' },
-                grpc: {
-                  ledgerTarget: 'localhost:5012',
-                  ledgerAdminTarget: 'localhost:5013',
-                  participantAdminTarget: 'localhost:5014',
-                  useTls: false,
-                  connectTimeoutMs: 5000,
-                },
-              },
-            ],
-          },
+          useValue: configService,
         },
         {
           provide: GrpcOperationsService,
@@ -1472,6 +1493,214 @@ describe('NodesController', () => {
       keyType: 'ed25519',
     });
     expect(response?.fingerprints).toEqual(['1220alice']);
+  });
+
+  it('deduplicates valid global fingerprint node filters and preserves sorted pagination', async () => {
+    const configuredNodes = configService.list();
+    const extraGrpcNode = {
+      ...configuredNodes[1],
+      id: 'participant-3',
+      label: 'Participant 3',
+    };
+    configService.list.mockReturnValue([...configuredNodes, extraGrpcNode]);
+    grpcOperationsService.listKnownPartyFingerprints.mockImplementation(
+      (node: { id: string }) =>
+        node.id === 'participant-2' ? ['1220zulu', '1220alice'] : ['1220bob', '1220alice'],
+    );
+
+    const maybeController = controller as unknown as {
+      listPartyFingerprints: ListGlobalPartyFingerprints;
+    };
+    const response = await maybeController.listPartyFingerprints(
+      '2',
+      undefined,
+      undefined,
+      ['participant-3', 'participant-2', 'participant-3', 'missing-node'],
+    );
+
+    expect(grpcOperationsService.listKnownPartyFingerprints).toHaveBeenCalledTimes(2);
+    expect(grpcOperationsService.listKnownPartyFingerprints).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+    );
+    expect(grpcOperationsService.listKnownPartyFingerprints).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-3' }),
+    );
+    expect(response).toEqual({
+      source: 'grpc',
+      limit: 2,
+      nextBefore: '1220bob',
+      nextAfter: null,
+      fingerprints: ['1220alice', '1220bob'],
+    });
+  });
+
+  it('uses all configured nodes when the global fingerprint node filter is omitted', async () => {
+    const configuredNodes = configService.list();
+    const maybeController = controller as unknown as {
+      listPartyFingerprints: ListGlobalPartyFingerprints;
+    };
+
+    const response = await maybeController.listPartyFingerprints(
+      '15',
+      undefined,
+      undefined,
+      undefined,
+    );
+
+    expect(response.source).toBe('pqs');
+    expect(pqsSummaryService.fetchActiveParties).toHaveBeenCalledWith(configuredNodes);
+    expect(grpcOperationsService.listKnownPartyFingerprints).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty PQS response without node work for an empty scalar node filter', async () => {
+    const maybeController = controller as unknown as {
+      listPartyFingerprints: ListGlobalPartyFingerprints;
+    };
+
+    const response = await maybeController.listPartyFingerprints('15', undefined, undefined, '');
+
+    expect(response).toEqual({
+      source: 'pqs',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: [],
+    });
+    expect(grpcOperationsService.listKnownPartyFingerprints).not.toHaveBeenCalled();
+    expect(pqsSummaryService.fetchActiveParties).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty PQS response without node work for an unknown scalar node filter', async () => {
+    const maybeController = controller as unknown as {
+      listPartyFingerprints: ListGlobalPartyFingerprints;
+    };
+
+    const response = await maybeController.listPartyFingerprints(
+      '15',
+      undefined,
+      undefined,
+      'missing-node',
+    );
+
+    expect(response).toEqual({
+      source: 'pqs',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: [],
+    });
+    expect(grpcOperationsService.listKnownPartyFingerprints).not.toHaveBeenCalled();
+    expect(pqsSummaryService.fetchActiveParties).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty PQS fingerprint response without querying nodes for empty selections', async () => {
+    const maybeController = controller as unknown as {
+      listPartyFingerprints: ListGlobalPartyFingerprints;
+    };
+
+    for (const nodeIds of [['missing-node'], []]) {
+      grpcOperationsService.listKnownPartyFingerprints.mockClear();
+      pqsSummaryService.fetchActiveParties.mockClear();
+
+      const response = await maybeController.listPartyFingerprints(
+        '15',
+        undefined,
+        undefined,
+        nodeIds,
+      );
+
+      expect(response).toEqual({
+        source: 'pqs',
+        limit: 15,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: [],
+      });
+      expect(grpcOperationsService.listKnownPartyFingerprints).not.toHaveBeenCalled();
+      expect(pqsSummaryService.fetchActiveParties).not.toHaveBeenCalled();
+    }
+  });
+
+  it('uses PQS for all-PQS and mixed global fingerprint selections', async () => {
+    const maybeController = controller as unknown as {
+      listPartyFingerprints: ListGlobalPartyFingerprints;
+    };
+
+    pqsSummaryService.fetchActiveParties.mockResolvedValueOnce({
+      nodes: [{ nodeId: 'participant-1', parties: ['Alice::1220alice'] }],
+    });
+    const allPqsResponse = await maybeController.listPartyFingerprints(
+      '15',
+      undefined,
+      undefined,
+      ['participant-1'],
+    );
+
+    expect(allPqsResponse.source).toBe('pqs');
+    expect(pqsSummaryService.fetchActiveParties).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id: 'participant-1' }),
+    ]);
+    expect(grpcOperationsService.listKnownPartyFingerprints).not.toHaveBeenCalled();
+
+    grpcOperationsService.listKnownPartyFingerprints.mockClear();
+    pqsSummaryService.fetchActiveParties.mockResolvedValueOnce({
+      nodes: [
+        { nodeId: 'participant-1', parties: ['Alice::1220alice'] },
+        { nodeId: 'participant-2', parties: ['Bob::1220bob'] },
+      ],
+    });
+    const mixedResponse = await maybeController.listPartyFingerprints(
+      '15',
+      undefined,
+      undefined,
+      ['participant-1', 'participant-2'],
+    );
+
+    expect(mixedResponse.source).toBe('pqs');
+    expect(pqsSummaryService.fetchActiveParties).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id: 'participant-1' }),
+      expect.objectContaining({ id: 'participant-2' }),
+    ]);
+    expect(grpcOperationsService.listKnownPartyFingerprints).not.toHaveBeenCalled();
+  });
+
+  it('falls back to PQS for the complete selected global gRPC node set', async () => {
+    const configuredNodes = configService.list();
+    const extraGrpcNode = {
+      ...configuredNodes[1],
+      id: 'participant-3',
+      label: 'Participant 3',
+    };
+    configService.list.mockReturnValue([...configuredNodes, extraGrpcNode]);
+    grpcOperationsService.listKnownPartyFingerprints.mockRejectedValue(new Error('grpc failed'));
+    pqsSummaryService.fetchActiveParties.mockResolvedValueOnce({
+      nodes: [
+        { nodeId: 'participant-2', parties: ['Alice::1220alice'] },
+        { nodeId: 'participant-3', parties: ['Bob::1220bob'] },
+      ],
+    });
+
+    const maybeController = controller as unknown as {
+      listPartyFingerprints: ListGlobalPartyFingerprints;
+    };
+    const response = await maybeController.listPartyFingerprints(
+      '15',
+      undefined,
+      undefined,
+      ['participant-2', 'participant-3'],
+    );
+
+    expect(response).toEqual({
+      source: 'pqs',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220alice', '1220bob'],
+    });
+    expect(pqsSummaryService.fetchActiveParties).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'participant-2' }),
+      expect.objectContaining({ id: 'participant-3' }),
+    ]);
   });
 
   it('returns grpc_not_configured for local-party lookup on a pqs-only node', async () => {

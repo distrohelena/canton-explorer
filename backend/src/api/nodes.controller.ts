@@ -640,13 +640,22 @@ export class NodesController {
     @Query('limit') limit?: string,
     @Query('before') before?: string,
     @Query('after') after?: string,
+    @Query('node') node?: string | string[],
     @Query('publicKey') publicKey?: string,
     @Query('encoding') encoding?: string,
     @Query('keyFormat') keyFormat?: string,
     @Query('keyType') keyType?: string,
   ) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 15;
-    return this.buildGlobalPartyFingerprintsEntry(this.configService.list(), {
+    const configuredNodes = this.configService.list();
+    const requestedNodeIds =
+      node === undefined ? undefined : new Set(Array.isArray(node) ? node : [node]);
+    const selectedNodes =
+      requestedNodeIds === undefined
+        ? configuredNodes
+        : configuredNodes.filter((configuredNode) => requestedNodeIds.has(configuredNode.id));
+
+    return this.buildGlobalPartyFingerprintsEntry(selectedNodes, {
       limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 15,
       before,
       after,
@@ -951,6 +960,13 @@ export class NodesController {
       namespaceKeyType?: string;
     },
   ) {
+    if (nodes.length === 0) {
+      return {
+        source: 'pqs' as const,
+        ...this.paginateFingerprints([], options),
+      };
+    }
+
     const exactFingerprint = await this.resolveNamespaceFilter(options);
 
     const canUseGrpcForAll = nodes.every((node) => node.mode === 'pqs_with_grpc');
