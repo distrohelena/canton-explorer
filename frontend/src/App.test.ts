@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { defineComponent } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -78,6 +78,22 @@ const SearchResultsStub = defineComponent({
   template: '<div>Search Results View</div>',
 });
 
+const CantonCoinStub = defineComponent({
+  template: '<div>Canton Coin View</div>',
+});
+
+const PackageStub = defineComponent({
+  template: '<div>Package View</div>',
+});
+
+const NamespaceStub = defineComponent({
+  template: '<div>Namespace View</div>',
+});
+
+const LegacyTransactionStub = defineComponent({
+  template: '<div>Legacy Transaction View</div>',
+});
+
 const themePreference = {
   matches: false,
 };
@@ -92,10 +108,16 @@ async function renderAt(path: string) {
       { path: '/parties', component: PartiesStub },
       { path: '/contracts', component: ContractsStub },
       { path: '/tokens', component: TokensStub },
+      { path: '/canton-coin', component: CantonCoinStub },
       { path: '/settings', component: SettingsStub },
       { path: '/traffic', component: TrafficStub },
       { path: '/debugger', component: DebuggerStub },
       { path: '/tokens/transfers/:updateId', component: TokenTransferDetailStub, props: true },
+      { path: '/tokens/:tokenId', component: TokensStub, props: true },
+      { path: '/tx/:updateId', component: LegacyTransactionStub, props: true },
+      { path: '/packages/:packageId', component: PackageStub, props: true },
+      { path: '/packages/by-name/:packageName', component: PackageStub, props: true },
+      { path: '/namespaces/:namespaceId', component: NamespaceStub, props: true },
       { path: '/search', component: SearchResultsStub },
       { path: '/nodes/:id/updates/:eventOffset', component: UpdateDetailStub, props: true },
       { path: '/nodes/:id/contracts/:contractId', component: ContractDetailStub, props: true },
@@ -210,25 +232,18 @@ describe('App', () => {
     expect(screen.queryByRole('link', { name: 'Parties' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Contracts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Tokens' })).not.toBeInTheDocument();
-    const exploreButton = screen.getByRole('button', { name: 'Home' });
-    expect(exploreButton).toHaveAttribute('aria-expanded', 'false');
-    expect(container.querySelector('svg.app-explore__arrow')).not.toBeNull();
+    const ledgerButton = screen.getByRole('button', { name: 'Home' });
+    expect(ledgerButton).toHaveAttribute('aria-expanded', 'false');
+    expect(container.querySelectorAll('svg.app-navigation__arrow')).toHaveLength(3);
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Traffic Purchases' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Traffic', { selector: '.app-explore__group-label' })).not.toBeInTheDocument();
-    await fireEvent.click(exploreButton);
-    expect(exploreButton).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
+    expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
+    await fireEvent.click(ledgerButton);
+    expect(ledgerButton).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('link', { name: 'Updates' })).toHaveAttribute('href', '/updates');
-    expect(screen.queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Nodes' })).toHaveAttribute('href', '/nodes');
-    expect(screen.getByText('Traffic', { selector: '.app-explore__group-label' })).toBeInTheDocument();
-    expect(screen.getByText('Ledger', { selector: '.app-explore__group-label' })).toBeInTheDocument();
-    expect(screen.getByText('Network', { selector: '.app-explore__group-label' })).toBeInTheDocument();
-    expect(screen.getByText('Assets', { selector: '.app-explore__group-label' })).toBeInTheDocument();
-    expect(screen.getByText('Tools', { selector: '.app-explore__group-label' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Traffic Purchases' })).toHaveAttribute('href', '/traffic');
-    expect(screen.getByRole('link', { name: 'Debugger' })).toHaveAttribute('href', '/debugger');
+    expect(screen.getByRole('link', { name: 'Contracts' })).toHaveAttribute('href', '/contracts');
+    expect(screen.getByRole('link', { name: 'Tokens' })).toHaveAttribute('href', '/tokens');
+    expect(screen.getByRole('link', { name: 'Canton Coin' })).toHaveAttribute('href', '/canton-coin');
     expect(
       screen.getByPlaceholderText('Search'),
     ).toBeInTheDocument();
@@ -248,33 +263,124 @@ describe('App', () => {
     ).toHaveAttribute('href', 'https://www.npmjs.com/package/@distrohelena/canton-typescript-sdk');
   });
 
-  it('closes the Explore menu when clicking outside it', async () => {
+  it('renders the three navigation menus with exact direct link sets', async () => {
     await renderAt('/');
 
-    const exploreButton = screen.getByRole('button', { name: 'Home' });
-    await fireEvent.click(exploreButton);
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+    const networkTrigger = screen.getByRole('button', { name: 'Network' });
+    const systemTrigger = screen.getByRole('button', { name: 'System' });
+
+    expect(ledgerTrigger).toHaveAttribute('aria-controls', 'app-navigation-menu-ledger');
+    expect(networkTrigger).toHaveAttribute('aria-controls', 'app-navigation-menu-network');
+    expect(systemTrigger).toHaveAttribute('aria-controls', 'app-navigation-menu-system');
+    expect(new Set([ledgerTrigger.id, networkTrigger.id, systemTrigger.id]).size).toBe(3);
+
+    await fireEvent.click(ledgerTrigger);
+
+    const ledgerNavigation = screen.getByRole('navigation', { name: 'Ledger navigation' });
+    expect(within(ledgerNavigation).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
+      'Home',
+      'Updates',
+      'Contracts',
+      'Tokens',
+      'Canton Coin',
+    ]);
+    expect(screen.queryByRole('navigation', { name: 'Network navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'System navigation' })).not.toBeInTheDocument();
+  });
+
+  it('switches menus and supports keyboard dismissal without opening on focus alone', async () => {
+    await renderAt('/');
+
+    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+    const networkTrigger = screen.getByRole('button', { name: 'Network' });
+
+    await fireEvent.focus(ledgerTrigger);
+    expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
+
+    await fireEvent.keyDown(ledgerTrigger, { key: 'Enter', code: 'Enter' });
+    expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
+
+    await fireEvent.click(networkTrigger);
+    expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Network navigation' })).toBeInTheDocument();
+
+    await fireEvent.keyDown(networkTrigger, { key: 'Escape', code: 'Escape' });
+    expect(screen.queryByRole('navigation', { name: 'Network navigation' })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(networkTrigger);
+  });
+
+  it('closes a menu when focus leaves its trigger and menu area', async () => {
+    const { container } = await renderAt('/');
+    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+    const navigationWrapper = container.querySelector('.app-navigation');
+
+    await fireEvent.click(ledgerTrigger);
+    expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
+
+    await fireEvent.focusOut(navigationWrapper!, { relatedTarget: document.body });
+    expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
+  });
+
+  it('uses the owning menu title for deep and utility routes', async () => {
+    const cases = [
+      ['/traffic', 'Network', 'Traffic Purchases'],
+      ['/tokens/Amulet', 'Ledger', 'Tokens'],
+      ['/nodes/participant-1/contracts/00abc', 'Ledger', 'Contracts'],
+      ['/packages/pkg-1', 'Ledger', 'Contracts'],
+      ['/namespaces/ns-1', 'Ledger', 'Contracts'],
+      ['/tx/update-1', 'Ledger', 'Updates'],
+      ['/search', 'Ledger', 'Search'],
+    ] as const;
+
+    for (const [path, section, title] of cases) {
+      cleanup();
+      await renderAt(path);
+      expect(screen.getByRole('button', { name: title })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: section })).not.toBeInTheDocument();
+    }
+  });
+
+  it('closes the active menu when the route changes', async () => {
+    const { router } = await renderAt('/');
+    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+
+    await fireEvent.click(ledgerTrigger);
+    expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
+
+    await router.push('/updates');
+    await waitFor(() => {
+      expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('closes the active menu when clicking outside all navigation wrappers', async () => {
+    await renderAt('/');
+
+    const ledgerButton = screen.getByRole('button', { name: 'Home' });
+    await fireEvent.click(ledgerButton);
+    expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
 
     await fireEvent.click(document.body);
 
-    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
-    expect(exploreButton).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
+    expect(ledgerButton).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('opens and closes the Explore menu when hovering over its area', async () => {
     const { container } = await renderAt('/');
 
-    const exploreArea = container.querySelector('.app-explore');
-    expect(exploreArea).not.toBeNull();
+    const navigationArea = container.querySelector('.app-navigation');
+    expect(navigationArea).not.toBeNull();
 
-    await fireEvent.pointerEnter(exploreArea!);
+    await fireEvent.pointerEnter(navigationArea!);
 
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-expanded', 'true');
 
-    await fireEvent.pointerLeave(exploreArea!);
+    await fireEvent.pointerLeave(navigationArea!);
 
-    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -338,11 +444,10 @@ describe('App', () => {
   it('renders the Traffic menu and keeps the shared shell on traffic purchases', async () => {
     const { container, router } = await renderAt('/traffic');
 
-    const exploreButton = screen.getByRole('button', { name: 'Traffic Purchases' });
-    expect(container.querySelector('.app-explore__group-label')).not.toBeInTheDocument();
-    await fireEvent.click(exploreButton);
-    expect(screen.getByText('Traffic', { selector: '.app-explore__group-label' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Traffic Purchases' })).toBe(exploreButton);
+    const networkButton = screen.getByRole('button', { name: 'Traffic Purchases' });
+    expect(container.querySelector('.app-navigation__group-label')).not.toBeInTheDocument();
+    await fireEvent.click(networkButton);
+    expect(screen.getByRole('navigation', { name: 'Network navigation' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Traffic Purchases' })).toHaveAttribute('href', '/traffic');
     expect(screen.getByText('Traffic Purchases View')).toBeInTheDocument();
     expect(router.currentRoute.value.path).toBe('/traffic');
@@ -380,14 +485,14 @@ describe('App', () => {
       '/nodes/participant-1/updates/1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
     );
 
-    expect(screen.getByRole('button', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByText('Update Detail View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a contract detail route', async () => {
     await renderAt('/nodes/participant-1/contracts/00abc');
 
-    expect(screen.getByRole('button', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Contracts' })).toBeInTheDocument();
     expect(screen.getByText('Contract Detail View')).toBeInTheDocument();
   });
 

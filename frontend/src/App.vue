@@ -2,6 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { fetchBranding } from './lib/api';
+import {
+  navigationMenus,
+  resolveNavigationContext,
+  type NavigationMenu,
+  type NavigationMenuId,
+} from './lib/navigation';
 import type { BrandingConfig } from './types/branding';
 
 const router = useRouter();
@@ -21,7 +27,8 @@ const branding = ref<BrandingConfig>({
 const previousDocumentTitle = document.title;
 const themePreference = ref<ThemePreference>('system');
 const systemPrefersDark = ref(false);
-const exploreMenuOpen = ref(false);
+const openNavigationMenuId = ref<NavigationMenuId | null>(null);
+const navigationMenuTriggers = new Map<NavigationMenuId, HTMLButtonElement>();
 let systemThemeQuery: MediaQueryList | null = null;
 let removeSystemThemeListener: (() => void) | null = null;
 
@@ -33,49 +40,7 @@ const resolvedTheme = computed<ResolvedTheme>(() =>
     : themePreference.value,
 );
 const isDebuggerRoute = computed(() => route.path === '/debugger');
-const exploreLabel = computed(() => {
-  if (route.path === '/') {
-    return 'Home';
-  }
-
-  if (route.path === '/updates') {
-    return 'Updates';
-  }
-
-  if (route.path.startsWith('/contracts')) {
-    return 'Contracts';
-  }
-
-  if (route.path.startsWith('/nodes')) {
-    return 'Nodes';
-  }
-
-  if (route.path.startsWith('/parties')) {
-    return 'Parties';
-  }
-
-  if (route.path.startsWith('/tokens')) {
-    return 'Tokens';
-  }
-
-  if (route.path === '/canton-coin') {
-    return 'Canton Coin';
-  }
-
-  if (route.path.startsWith('/traffic')) {
-    return 'Traffic Purchases';
-  }
-
-  if (route.path === '/debugger') {
-    return 'Debugger';
-  }
-
-  if (route.path === '/settings') {
-    return 'Settings';
-  }
-
-  return 'Explore';
-});
+const navigationContext = computed(() => resolveNavigationContext(route.path));
 const themeToggleLabel = computed(() =>
   resolvedTheme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
 );
@@ -111,25 +76,52 @@ function toggleTheme() {
   themePreference.value = resolvedTheme.value === 'dark' ? 'light' : 'dark';
 }
 
-function toggleExploreMenu() {
-  exploreMenuOpen.value = !exploreMenuOpen.value;
+function displayNavigationLabel(menu: NavigationMenu): string {
+  return navigationContext.value.menuId === menu.id
+    ? navigationContext.value.title
+    : menu.label;
 }
 
-function openExploreMenu() {
-  exploreMenuOpen.value = true;
+function setNavigationMenuTrigger(menuId: NavigationMenuId, element: Element | null) {
+  if (element instanceof HTMLButtonElement) {
+    navigationMenuTriggers.set(menuId, element);
+  } else {
+    navigationMenuTriggers.delete(menuId);
+  }
 }
 
-function closeExploreMenu() {
-  exploreMenuOpen.value = false;
+function openNavigationMenu(menuId: NavigationMenuId) {
+  openNavigationMenuId.value = menuId;
+}
+
+function toggleNavigationMenu(menuId: NavigationMenuId) {
+  openNavigationMenuId.value = openNavigationMenuId.value === menuId ? null : menuId;
+}
+
+function closeNavigationMenu() {
+  openNavigationMenuId.value = null;
+}
+
+function handleNavigationEscape(menuId: NavigationMenuId) {
+  closeNavigationMenu();
+  navigationMenuTriggers.get(menuId)?.focus();
+}
+
+function handleNavigationFocusout(event: FocusEvent) {
+  const wrapper = event.currentTarget;
+  const nextTarget = event.relatedTarget;
+  if (!(wrapper instanceof Element) || !(nextTarget instanceof Node) || !wrapper.contains(nextTarget)) {
+    closeNavigationMenu();
+  }
 }
 
 function handleDocumentClick(event: MouseEvent) {
   const target = event.target;
-  if (target instanceof Element && target.closest('.app-explore')) {
+  if (target instanceof Element && target.closest('.app-navigation')) {
     return;
   }
 
-  closeExploreMenu();
+  closeNavigationMenu();
 }
 
 async function loadBranding() {
@@ -165,7 +157,7 @@ watch(
 watch(
   () => route.path,
   () => {
-    closeExploreMenu();
+    closeNavigationMenu();
   },
 );
 
@@ -236,22 +228,29 @@ onBeforeUnmount(() => {
           </RouterLink>
           <div class="app-toolbar">
             <div
-              class="app-explore"
-              @pointerenter="openExploreMenu"
-              @pointerleave="closeExploreMenu"
+              v-for="menu in navigationMenus"
+              :key="menu.id"
+              class="app-navigation"
+              @pointerenter="openNavigationMenu(menu.id)"
+              @pointerleave="closeNavigationMenu"
+              @focusout="handleNavigationFocusout"
             >
               <button
-                id="explore-menu-button"
+                :id="`app-navigation-trigger-${menu.id}`"
                 type="button"
-                class="app-explore__button"
-                aria-controls="explore-menu"
-                :aria-expanded="exploreMenuOpen"
-                title="Explore"
-                @click="toggleExploreMenu"
+                class="app-navigation__button"
+                :aria-controls="`app-navigation-menu-${menu.id}`"
+                :aria-expanded="openNavigationMenuId === menu.id"
+                :title="displayNavigationLabel(menu)"
+                :ref="(element) => setNavigationMenuTrigger(menu.id, element)"
+                @click="toggleNavigationMenu(menu.id)"
+                @keydown.enter.prevent="toggleNavigationMenu(menu.id)"
+                @keydown.space.prevent="toggleNavigationMenu(menu.id)"
+                @keydown.esc.prevent.stop="handleNavigationEscape(menu.id)"
               >
-                {{ exploreLabel }}
+                <span class="app-navigation__button-label">{{ displayNavigationLabel(menu) }}</span>
                 <svg
-                  class="app-explore__arrow"
+                  class="app-navigation__arrow"
                   viewBox="0 0 16 16"
                   aria-hidden="true"
                   focusable="false"
@@ -267,53 +266,21 @@ onBeforeUnmount(() => {
                 </svg>
               </button>
               <nav
-                v-if="exploreMenuOpen"
-                id="explore-menu"
-                class="app-explore__menu"
-                aria-label="Explore"
+                v-if="openNavigationMenuId === menu.id"
+                :id="`app-navigation-menu-${menu.id}`"
+                class="app-navigation__menu"
+                :aria-label="`${menu.label} navigation`"
+                @keydown.esc.prevent.stop="handleNavigationEscape(menu.id)"
               >
-                <div class="app-explore__group" aria-labelledby="ledger-menu-label">
-                  <span id="ledger-menu-label" class="app-explore__group-label">Ledger</span>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/updates" @click="closeExploreMenu">
-                    Updates
-                  </RouterLink>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/contracts" @click="closeExploreMenu">
-                    Contracts
-                  </RouterLink>
-                </div>
-                <div class="app-explore__group" aria-labelledby="network-menu-label">
-                  <span id="network-menu-label" class="app-explore__group-label">Network</span>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/nodes" @click="closeExploreMenu">
-                    Nodes
-                  </RouterLink>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/parties" @click="closeExploreMenu">
-                    Parties
-                  </RouterLink>
-                </div>
-                <div class="app-explore__group" aria-labelledby="assets-menu-label">
-                  <span id="assets-menu-label" class="app-explore__group-label">Assets</span>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/tokens" @click="closeExploreMenu">
-                    Tokens
-                  </RouterLink>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/canton-coin" @click="closeExploreMenu">
-                    Canton Coin
-                  </RouterLink>
-                </div>
-                <div class="app-explore__group" aria-labelledby="traffic-menu-label">
-                  <span id="traffic-menu-label" class="app-explore__group-label">Traffic</span>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/traffic" @click="closeExploreMenu">
-                    Traffic Purchases
-                  </RouterLink>
-                </div>
-                <div class="app-explore__group" aria-labelledby="tools-menu-label">
-                  <span id="tools-menu-label" class="app-explore__group-label">Tools</span>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/debugger" @click="closeExploreMenu">
-                    Debugger
-                  </RouterLink>
-                  <RouterLink class="app-explore__link app-explore__group-link" to="/settings" @click="closeExploreMenu">
-                    Settings
-                  </RouterLink>
-                </div>
+                <RouterLink
+                  v-for="link in menu.links"
+                  :key="link.to"
+                  class="app-navigation__link"
+                  :to="link.to"
+                  @click="closeNavigationMenu"
+                >
+                  {{ link.label }}
+                </RouterLink>
               </nav>
             </div>
             <form class="app-search-form" @submit.prevent="submitSearch">
