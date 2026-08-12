@@ -4,10 +4,16 @@ import HomeView from './HomeView.vue';
 
 const fetchLatestUpdatesMock = vi.hoisted(() => vi.fn());
 const fetchLatestTokenTransfersMock = vi.hoisted(() => vi.fn());
+const fetchActivityHistoryMock = vi.hoisted(() => vi.fn());
+const fetchCantonCoinHistoryMock = vi.hoisted(() => vi.fn());
+const fetchRecentActivePartiesMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../lib/api', () => ({
   fetchLatestUpdates: fetchLatestUpdatesMock,
   fetchLatestTokenTransfers: fetchLatestTokenTransfersMock,
+  fetchActivityHistory: fetchActivityHistoryMock,
+  fetchCantonCoinHistory: fetchCantonCoinHistoryMock,
+  fetchRecentActiveParties: fetchRecentActivePartiesMock,
   fetchNodeTemplates: vi.fn(),
   fetchNodeUpdates: vi.fn(),
   fetchPartyUpdates: vi.fn(),
@@ -60,6 +66,30 @@ describe('HomeView', () => {
       nextAfter: null,
       transfers: transferEntries,
     });
+    fetchActivityHistoryMock.mockResolvedValue({
+      generatedAt: '2026-07-01T14:00:00.000Z',
+      windowMinutes: 1440,
+      nodes: [],
+    });
+    fetchCantonCoinHistoryMock.mockResolvedValue({
+      asset: {
+        name: 'Canton Coin',
+        symbol: 'CC',
+        canonicalId: 'canton-network',
+        network: 'Canton Network',
+        kind: 'native',
+      },
+      interval: '1D',
+      dataStatus: 'empty',
+      venues: [],
+    });
+    fetchRecentActivePartiesMock.mockResolvedValue({
+      count: 0,
+      windowStart: '2026-06-30T14:00:00.000Z',
+      windowEnd: '2026-07-01T14:00:00.000Z',
+      status: 'ok',
+      error: null,
+    });
   });
 
   afterEach(() => {
@@ -82,6 +112,9 @@ describe('HomeView', () => {
     const updatesTable = await screen.findByRole('table', { name: 'Latest updates' });
     const tradesTable = await screen.findByRole('table', { name: 'Latest trades' });
 
+    expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Transactions over time' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'CC price over time' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Latest Updates' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Latest Trades' })).toBeInTheDocument();
     expect(within(updatesTable).getAllByRole('row')).toHaveLength(8);
@@ -108,5 +141,8 @@ describe('HomeView', () => {
     expect(within(tradesTable).queryByRole('columnheader', { name: 'Nodes' })).not.toBeInTheDocument();
     expect(fetchLatestUpdatesMock).toHaveBeenCalledWith(6, {});
     expect(fetchLatestTokenTransfersMock).toHaveBeenCalledWith(6, {});
+    expect(fetchActivityHistoryMock).toHaveBeenCalledWith(1);
+    expect(fetchCantonCoinHistoryMock).toHaveBeenCalledWith('1D');
+    expect(fetchRecentActivePartiesMock).toHaveBeenCalledWith(24);
   });
 });
