@@ -2916,6 +2916,11 @@ h3 {
   font-size: 10px;
 }
 
+.home-dashboard-overview__y-tick {
+  fill: var(--muted-text);
+  font-size: 10px;
+}
+
 .home-dashboard-overview__state {
   display: grid;
   min-height: 190px;

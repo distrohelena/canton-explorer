@@ -19,12 +19,17 @@ import type { RecentActivePartiesResponse } from '../types/active-parties';
 
 const chartWidth = 520;
 const chartHeight = 180;
-const chartPadding = { top: 14, right: 18, bottom: 30, left: 18 };
+const chartPadding = { top: 14, right: 18, bottom: 30, left: 44 };
+const chartTickRatios = [0, 0.25, 0.5, 0.75, 1] as const;
 const ranges: Array<{ value: HomeDashboardRange; label: string }> = [
   { value: '24h', label: '24h' },
   { value: '7d', label: '7d' },
   { value: '31d', label: '31d' },
 ];
+
+type HomeDashboardChartPoint = HomeDashboardActivityPoint | HomeDashboardPricePoint;
+type HomeDashboardChartKind = 'activity' | 'price';
+type HomeDashboardChartScale = { min: number; max: number; valueRange: number };
 
 const selectedRange = ref<HomeDashboardRange>('24h');
 const activity = ref<ActivityHistoryResponse | null>(null);
@@ -106,19 +111,25 @@ async function selectRange(range: HomeDashboardRange) {
   await refreshActivity();
 }
 
-function chartPoints(
-  points: HomeDashboardActivityPoint[] | HomeDashboardPricePoint[],
-): string {
+function chartValue(point: HomeDashboardChartPoint): number {
+  return 'value' in point ? point.value : point.close;
+}
+
+function chartScale(points: HomeDashboardChartPoint[]): HomeDashboardChartScale {
+  const values = points.map(chartValue);
+  const min = 0;
+  const max = Math.max(...values, 1);
+  return { min, max, valueRange: max - min || 1 };
+}
+
+function chartPoints(points: HomeDashboardChartPoint[]): string {
   if (points.length === 0) {
     return '';
   }
 
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
-  const values = points.map((point) => ('value' in point ? point.value : point.close));
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const valueRange = max - min || 1;
+  const { min, valueRange } = chartScale(points);
   const firstTimestamp = Date.parse(points[0].timestamp);
   const lastTimestamp = Date.parse(points[points.length - 1].timestamp);
   const timeRange = lastTimestamp - firstTimestamp;
@@ -126,7 +137,7 @@ function chartPoints(
   return points
     .map((point) => {
       const timestamp = Date.parse(point.timestamp);
-      const value = 'value' in point ? point.value : point.close;
+      const value = chartValue(point);
       const x =
         points.length === 1 || !Number.isFinite(timeRange)
           ? chartPadding.left + plotWidth / 2
@@ -137,8 +148,32 @@ function chartPoints(
     .join(' ');
 }
 
+function formatChartAxisValue(value: number, kind: HomeDashboardChartKind): string {
+  if (kind === 'activity') {
+    return Math.round(value).toLocaleString('en-US');
+  }
+
+  return value.toLocaleString('en-US', { maximumFractionDigits: 4 });
+}
+
+function chartYAxisTicks(
+  points: HomeDashboardChartPoint[],
+  kind: HomeDashboardChartKind,
+): Array<{ label: string; position: number }> {
+  if (points.length === 0) {
+    return [];
+  }
+
+  const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const { min, valueRange } = chartScale(points);
+  return chartTickRatios.map((ratio) => ({
+    label: formatChartAxisValue(min + valueRange * (1 - ratio), kind),
+    position: chartPadding.top + ratio * plotHeight,
+  }));
+}
+
 function dailyTicks(
-  points: HomeDashboardActivityPoint[] | HomeDashboardPricePoint[],
+  points: HomeDashboardChartPoint[],
 ): Array<{ label: string; position: string }> {
   if (points.length === 0) {
     return [];
@@ -238,6 +273,15 @@ onMounted(() => {
               :y1="chartPadding.top + position * (chartHeight - chartPadding.top - chartPadding.bottom)"
               :y2="chartPadding.top + position * (chartHeight - chartPadding.top - chartPadding.bottom)"
             />
+            <text
+              v-for="tick in chartYAxisTicks(activityPoints, 'activity')"
+              :key="tick.position"
+              class="home-dashboard-overview__y-tick"
+              :x="chartPadding.left - 6"
+              :y="tick.position"
+              text-anchor="end"
+              dominant-baseline="middle"
+            >{{ tick.label }}</text>
             <polyline
               class="home-dashboard-overview__line"
               :points="chartPoints(activityPoints)"
@@ -286,6 +330,15 @@ onMounted(() => {
               :y1="chartPadding.top + position * (chartHeight - chartPadding.top - chartPadding.bottom)"
               :y2="chartPadding.top + position * (chartHeight - chartPadding.top - chartPadding.bottom)"
             />
+            <text
+              v-for="tick in chartYAxisTicks(pricePoints, 'price')"
+              :key="tick.position"
+              class="home-dashboard-overview__y-tick"
+              :x="chartPadding.left - 6"
+              :y="tick.position"
+              text-anchor="end"
+              dominant-baseline="middle"
+            >{{ tick.label }}</text>
             <polyline
               class="home-dashboard-overview__line home-dashboard-overview__line--price"
               :points="chartPoints(pricePoints)"

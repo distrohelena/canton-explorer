@@ -87,6 +87,14 @@ describe('HomeDashboardOverview', () => {
     expect(container.querySelector('.home-dashboard-overview__metrics')).toBeNull();
     expect(await screen.findByRole('heading', { name: 'Transactions over time' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'CC price over time' })).toBeInTheDocument();
+    const activityChart = await screen.findByRole('img', { name: 'Transactions over time chart' });
+    const priceChart = await screen.findByRole('img', { name: 'Canton Coin price over time chart' });
+    expect([...activityChart.querySelectorAll('.home-dashboard-overview__y-tick')].map((tick) => tick.textContent)).toEqual([
+      '6', '5', '3', '2', '0',
+    ]);
+    expect([...priceChart.querySelectorAll('.home-dashboard-overview__y-tick')].map((tick) => tick.textContent)).toEqual([
+      '1.25', '0.9375', '0.625', '0.3125', '0',
+    ]);
     expect(screen.getByRole('heading', { name: 'Latest Canton Coin Price' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Active Parties (24h)' })).toBeInTheDocument();
     expect(await screen.findByText('1.25 USDT')).toBeInTheDocument();
