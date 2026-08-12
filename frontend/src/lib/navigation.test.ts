@@ -33,7 +33,7 @@ describe('navigation menus', () => {
         },
         {
           label: 'Traffic',
-          links: [{ label: 'Traffic Purchases', to: '/traffic' }],
+          links: [{ label: 'Purchases', to: '/traffic' }],
         },
       ],
       [
@@ -60,7 +60,7 @@ describe('navigation menus', () => {
     ['/nodes/participant-1', 'network', 'Nodes'],
     ['/parties', 'network', 'Parties'],
     ['/parties/party-1', 'network', 'Parties'],
-    ['/traffic', 'network', 'Traffic Purchases'],
+    ['/traffic', 'network', 'Purchases'],
     ['/debugger', 'system', 'Debugger'],
     ['/settings', 'system', 'Settings'],
     ['/nodes/participant-1/updates/42', 'ledger', 'Updates'],

@@ -361,7 +361,7 @@ describe('App', () => {
 
   it('uses the owning menu title for deep and utility routes', async () => {
     const cases = [
-      ['/traffic', 'Network', 'Traffic Purchases'],
+      ['/traffic', 'Network', 'Purchases'],
       ['/tokens/Amulet', 'Ledger', 'Tokens'],
       ['/nodes/participant-1/contracts/00abc', 'Ledger', 'Contracts'],
       ['/packages/pkg-1', 'Ledger', 'Contracts'],
@@ -481,11 +481,11 @@ describe('App', () => {
   it('renders the Traffic menu and keeps the shared shell on traffic purchases', async () => {
     const { router } = await renderAt('/traffic');
 
-    const networkButton = screen.getByRole('button', { name: 'Traffic Purchases' });
+    const networkButton = screen.getByRole('button', { name: 'Purchases' });
     await fireEvent.click(networkButton);
     expect(screen.getByRole('navigation', { name: 'Network navigation' })).toBeInTheDocument();
     expect(screen.getByText('Traffic', { selector: '.app-navigation__group-label' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Traffic Purchases' })).toHaveAttribute('href', '/traffic');
+    expect(screen.getByRole('link', { name: 'Purchases' })).toHaveAttribute('href', '/traffic');
     expect(screen.getByText('Traffic Purchases View')).toBeInTheDocument();
     expect(router.currentRoute.value.path).toBe('/traffic');
   });

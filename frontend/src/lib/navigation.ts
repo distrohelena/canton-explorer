@@ -56,7 +56,7 @@ export const navigationMenus: readonly NavigationMenu[] = [
       },
       {
         label: 'Traffic',
-        links: [{ label: 'Traffic Purchases', to: '/traffic' }],
+        links: [{ label: 'Purchases', to: '/traffic' }],
       },
     ],
   },
@@ -111,7 +111,7 @@ const navigationRouteRules: readonly NavigationRouteRule[] = [
   { matches: (path) => matchesPath(path, '/parties'), context: { menuId: 'network', title: 'Parties' } },
   {
     matches: (path) => matchesPath(path, '/traffic'),
-    context: { menuId: 'network', title: 'Traffic Purchases' },
+    context: { menuId: 'network', title: 'Purchases' },
   },
   { matches: (path) => matchesPath(path, '/debugger'), context: { menuId: 'system', title: 'Debugger' } },
   { matches: (path) => matchesPath(path, '/settings'), context: { menuId: 'system', title: 'Settings' } },
