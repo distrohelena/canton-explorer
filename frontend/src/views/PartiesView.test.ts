@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PartiesView from './PartiesView.vue';
+import type { PartyFingerprintsResponse } from '../types/active-parties';
+import type { NodeSnapshot } from '../types/nodes';
 import {
   fetchNodeActiveParties,
   fetchPartyFingerprints,
@@ -15,13 +18,110 @@ vi.mock('../lib/api', () => ({
   fetchNodeLocalParties: vi.fn(),
 }));
 
+async function renderAt(path = '/parties') {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/parties', component: PartiesView }],
+  });
+
+  router.push(path);
+  await router.isReady();
+
+  const rendered = render(
+    {
+      template: '<RouterView />',
+    },
+    {
+      global: {
+        plugins: [router],
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    },
+  );
+
+  return { ...rendered, router };
+}
+
+function makeNode(
+  id: string,
+  mode: 'pqs_only' | 'pqs_with_grpc' = 'pqs_with_grpc',
+) {
+  return {
+    id,
+    label: id === 'participant-1' ? 'Participant 1' : 'Participant 2',
+    role: 'participant' as const,
+    mode,
+    ledgerLabel: id,
+    status: 'healthy' as const,
+    latencyMs: 1,
+    lastSuccessAt: null,
+    lastErrorAt: null,
+    errorSummary: null,
+    serviceInfo: {
+      target: mode === 'pqs_with_grpc' ? `localhost:${id === 'participant-1' ? '5011' : '5012'}` : null,
+      reachable: mode === 'pqs_with_grpc',
+      healthCheckImplemented: mode === 'pqs_with_grpc',
+      servingStatus: mode === 'pqs_with_grpc' ? 'SERVING' : null,
+      ledgerApiVersion: null,
+    },
+    ledgerSummary: {
+      ledgerLabel: id,
+      pqsDatabase: id,
+      activeContractCount: 1,
+      latestOffset: null,
+      latestEventAt: null,
+      totalUpdateCount: 0,
+    },
+    sourceStatus: {
+      pqs: { ok: true, checkedAt: '', latencyMs: 1, message: null },
+      grpc: {
+        ok: mode === 'pqs_with_grpc',
+        checkedAt: '',
+        latencyMs: mode === 'pqs_with_grpc' ? 1 : null,
+        message: null,
+      },
+    },
+  };
+}
+
+function makeActiveEntry(nodeId: string, parties: string[]) {
+  return {
+    nodeId,
+    label: nodeId,
+    mode: 'pqs_with_grpc' as const,
+    parties,
+    localPartiesStatus: 'ok' as const,
+    localPartiesError: null,
+    localPartiesErrorCode: null,
+    localPartiesErrorDetails: null,
+    localPartiesErrorTid: null,
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 describe('PartiesView', () => {
   afterEach(() => {
     cleanup();
     vi.resetAllMocks();
+    vi.restoreAllMocks();
   });
 
-  it('shows a loading state before active parties resolve', () => {
+  it('shows a loading state before active parties resolve', async () => {
     vi.mocked(fetchNodes).mockResolvedValue([
       {
         id: 'participant-1',
@@ -68,21 +168,436 @@ describe('PartiesView', () => {
       localPartiesErrorTid: null,
     });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     expect(screen.getByRole('tablist', { name: 'Party source modes' })).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Party source modes' }).querySelectorAll('button')).toHaveLength(3);
     expect(screen.queryByRole('tablist', { name: 'Node selectors' })).not.toBeInTheDocument();
     expect(screen.queryByText('Loading nodes...')).not.toBeInTheDocument();
+  });
+
+  it('renders one unified advanced filter with all nodes checked by default', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId === 'participant-1' ? 'Alice' : 'Bob']),
+    );
+    vi.mocked(fetchPartyFingerprints).mockResolvedValue({
+      source: 'pqs',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: [],
+    });
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'Alice' });
+
+    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+
+    expect(document.querySelectorAll('section[aria-label="Advanced Filter Parameters"]')).toHaveLength(1);
+    expect(screen.getByRole('checkbox', { name: 'Participant 1' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Participant 2' })).toBeChecked();
+    expect(screen.queryByLabelText('Public Key')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
+
+    expect(await screen.findByLabelText('Public Key')).toBeInTheDocument();
+    expect(document.querySelectorAll('section[aria-label="Advanced Filter Parameters"]')).toHaveLength(1);
+  });
+
+  it.each([
+    ['/parties', ['participant-1', 'participant-2']],
+    ['/parties?node=participant-2&node=participant-2&node=participant-1', ['participant-1', 'participant-2']],
+    ['/parties?node=', []],
+    ['/parties?node=missing-node', []],
+    ['/parties?node=&node=participant-2', ['participant-2']],
+  ])('normalizes node query %s before loading active parties', async (path, expectedNodeIds) => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+
+    await renderAt(path);
+
+    await waitFor(() =>
+      expect(vi.mocked(fetchNodeActiveParties).mock.calls.map(([nodeId]) => nodeId)).toEqual(expectedNodeIds),
+    );
+    if (path.includes('?node=')) {
+      expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
+    } else {
+      await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    }
+
+    const participantOne = screen.getByRole('checkbox', { name: 'Participant 1' });
+    const participantTwo = screen.getByRole('checkbox', { name: 'Participant 2' });
+    if (expectedNodeIds.includes('participant-1')) {
+      expect(participantOne).toBeChecked();
+    } else {
+      expect(participantOne).not.toBeChecked();
+    }
+    if (expectedNodeIds.includes('participant-2')) {
+      expect(participantTwo).toBeChecked();
+    } else {
+      expect(participantTwo).not.toBeChecked();
+    }
+  });
+
+  it('auto-opens explicit node filters, preserves unrelated query keys, and omits all-selected node query', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+
+    const { router } = await renderAt('/parties?view=compact&node=participant-2');
+
+    expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
+    expect(router.currentRoute.value.query.view).toBe('compact');
+    expect(router.currentRoute.value.query.node).toBe('participant-2');
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+    await waitFor(() => expect(router.currentRoute.value.query.node).toBeUndefined());
+    expect(router.currentRoute.value.query.view).toBe('compact');
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 2' }));
+    await waitFor(() => expect(router.currentRoute.value.query.node).toEqual(['participant-1']));
+  });
+
+  it('resynchronizes selected nodes and data for query-only, back, and forward navigation', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+
+    const { router } = await renderAt('/parties?view=compact');
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(2));
+    vi.mocked(fetchNodeActiveParties).mockClear();
+
+    await router.push('/parties?view=compact&node=participant-2');
+    await waitFor(() =>
+      expect(vi.mocked(fetchNodeActiveParties).mock.calls.map(([nodeId]) => nodeId)).toEqual([
+        'participant-2',
+      ]),
+    );
+    expect(screen.getByRole('checkbox', { name: 'Participant 2' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Participant 1' })).not.toBeChecked();
+
+    router.back();
+    await waitFor(() => expect(router.currentRoute.value.query).toEqual({ view: 'compact' }));
+    await waitFor(() =>
+      expect(vi.mocked(fetchNodeActiveParties).mock.calls.slice(-2).map(([nodeId]) => nodeId)).toEqual([
+        'participant-1',
+        'participant-2',
+      ]),
+    );
+    expect(router.currentRoute.value.query).toEqual({ view: 'compact' });
+
+    router.forward();
+    await waitFor(() =>
+      expect(router.currentRoute.value.query).toEqual({ view: 'compact', node: 'participant-2' }),
+    );
+    await waitFor(() =>
+      expect(vi.mocked(fetchNodeActiveParties).mock.calls.at(-1)?.[0]).toBe('participant-2'),
+    );
+    expect(router.currentRoute.value.query).toEqual({ view: 'compact', node: 'participant-2' });
+  });
+
+  it('loads the selected mode after deferred node discovery', async () => {
+    const nodesResponse = deferred<NodeSnapshot[]>();
+    vi.mocked(fetchNodes).mockReturnValue(nodesResponse.promise);
+    vi.mocked(fetchPartyFingerprints).mockResolvedValue({
+      source: 'grpc',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220deferred'],
+    });
+
+    await renderAt();
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
+
+    nodesResponse.resolve([makeNode('participant-1')]);
+
+    expect(await screen.findByText('1220deferred')).toBeInTheDocument();
+    expect(fetchPartyFingerprints).toHaveBeenCalledWith({ limit: 15 });
+    expect(fetchNodeActiveParties).not.toHaveBeenCalled();
+  });
+
+  it('reloads active parties immediately when a node is unchecked', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'participant-1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+
+    await waitFor(() => {
+      expect(fetchNodeActiveParties).toHaveBeenCalledTimes(3);
+      expect(fetchNodeActiveParties).toHaveBeenLastCalledWith('participant-2');
+    });
+  });
+
+  it('restricts All Parties to selected gRPC nodes and makes an empty selection call-free', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      makeNode('participant-1', 'pqs_only'),
+      makeNode('participant-2', 'pqs_with_grpc'),
+    ]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+    vi.mocked(fetchNodeLocalParties).mockResolvedValue(makeActiveEntry('participant-2', ['Local 2']));
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'participant-1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'All Parties (gRPC)' }));
+    await screen.findByRole('link', { name: 'Local 2' });
+    expect(fetchNodeLocalParties).toHaveBeenCalledTimes(1);
+    expect(fetchNodeLocalParties).toHaveBeenCalledWith('participant-2');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 2' }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'No gRPC nodes available' })).toBeInTheDocument());
+    expect(fetchNodeLocalParties).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('checkbox', { name: 'Participant 1' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Participant 2' })).not.toBeChecked();
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'No gRPC nodes available' })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByTitle('Data sourced from gRPC')).not.toBeInTheDocument();
+    expect(screen.getByText('No local parties found across selected nodes.')).toBeInTheDocument();
+    expect(fetchNodeLocalParties).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the local-party empty state for an explicit empty All Parties selection', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1')]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue(makeActiveEntry('participant-1', ['Alice']));
+
+    await renderAt('/parties?node=');
+    await fireEvent.click(screen.getByRole('button', { name: 'All Parties (gRPC)' }));
+
+    expect(screen.getByText('No local parties found across selected nodes.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'No gRPC nodes available' })).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Data sourced from gRPC')).not.toBeInTheDocument();
+    expect(fetchNodeLocalParties).not.toHaveBeenCalled();
+  });
+
+  it('passes namespace node IDs immediately and skips the namespace API for an empty selection', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+    vi.mocked(fetchPartyFingerprints).mockResolvedValue({
+      source: 'pqs',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220all'],
+    });
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'participant-1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
+    await screen.findByText('1220all');
+    expect(fetchPartyFingerprints).toHaveBeenLastCalledWith({ limit: 15 });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+    await waitFor(() =>
+      expect(fetchPartyFingerprints).toHaveBeenLastCalledWith({ limit: 15, nodeIds: ['participant-2'] }),
+    );
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 2' }));
+    await waitFor(() => expect(screen.getByText('No known namespaces found across selected nodes.')).toBeInTheDocument());
+    expect(fetchPartyFingerprints).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves route query keys through pagination, page-size, and mode changes and resets party cursors on selection changes', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(
+        nodeId,
+        nodeId === 'participant-1'
+          ? Array.from({ length: 18 }, (_, index) => `Active ${String(index + 1).padStart(2, '0')}`)
+          : ['Other'],
+      ),
+    );
+    vi.mocked(fetchNodeLocalParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [`Local ${nodeId}`]),
+    );
+
+    const { router } = await renderAt('/parties?view=compact&node=participant-1');
+    await screen.findByRole('link', { name: 'Active 01' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+    await screen.findByRole('link', { name: 'Active 16' });
+    expect(router.currentRoute.value.query).toEqual({ view: 'compact', node: 'participant-1' });
+
+    await fireEvent.update(screen.getByRole('combobox', { name: 'Items per page' }), '30');
+    expect(await screen.findByRole('link', { name: 'Active 01' })).toBeInTheDocument();
+    expect(router.currentRoute.value.query).toEqual({ view: 'compact', node: 'participant-1' });
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 2' }));
+    await waitFor(() => expect(router.currentRoute.value.query.node).toBeUndefined());
+    expect(router.currentRoute.value.query.view).toBe('compact');
+    expect(await screen.findByRole('link', { name: 'Active 01' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'All Parties (gRPC)' }));
+    await screen.findByRole('link', { name: 'Local participant-1' });
+    expect(router.currentRoute.value.query).toEqual({ view: 'compact' });
+  });
+
+  it('keeps concurrent loading active until every selected node settles', async () => {
+    const participantOne = deferred<ReturnType<typeof makeActiveEntry>>();
+    const participantTwo = deferred<ReturnType<typeof makeActiveEntry>>();
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties)
+      .mockReturnValueOnce(participantOne.promise)
+      .mockReturnValueOnce(participantTwo.promise);
+
+    await renderAt();
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('status', { name: 'Loading parties across selected nodes' })).toBeInTheDocument();
+
+    participantOne.resolve(makeActiveEntry('participant-1', ['Alice']));
+    await waitFor(() => expect(screen.getByRole('status', { name: 'Loading parties across selected nodes' })).toBeInTheDocument());
+
+    participantTwo.resolve(makeActiveEntry('participant-2', ['Bob']));
+    expect(await screen.findByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Bob' })).toBeInTheDocument();
+  });
+
+  it('retains successful active party rows when another selected node fails', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties)
+      .mockResolvedValueOnce(makeActiveEntry('participant-1', ['Alice']))
+      .mockRejectedValueOnce(new Error('participant-2 unavailable'));
+
+    await renderAt();
+
+    expect(await screen.findByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.getByText('participant-2 unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
+  });
+
+  it('does not show a stale namespace source pill after leaving Namespaces', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1')]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue(makeActiveEntry('participant-1', ['Alice']));
+    vi.mocked(fetchPartyFingerprints).mockResolvedValue({
+      source: 'grpc',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['1220namespace'],
+    });
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'Alice' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
+    await screen.findByRole('link', { name: '1220namespace' });
+    expect(screen.getByText('gRPC')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Active Parties (PQS)' }));
+    await waitFor(() => expect(screen.queryByText('gRPC')).not.toBeInTheDocument());
+    expect(await screen.findByRole('link', { name: 'Alice' })).toBeInTheDocument();
+  });
+
+  it('suppresses stale active party responses after a node selection changes', async () => {
+    const staleParticipantOne = deferred<ReturnType<typeof makeActiveEntry>>();
+    const staleParticipantTwo = deferred<ReturnType<typeof makeActiveEntry>>();
+    const freshParticipantTwo = deferred<ReturnType<typeof makeActiveEntry>>();
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties)
+      .mockReturnValueOnce(staleParticipantOne.promise)
+      .mockReturnValueOnce(staleParticipantTwo.promise)
+      .mockReturnValueOnce(freshParticipantTwo.promise);
+
+    await renderAt();
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(2));
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(3));
+
+    staleParticipantOne.resolve(makeActiveEntry('participant-1', ['Stale Alice']));
+    staleParticipantTwo.resolve(makeActiveEntry('participant-2', ['Stale Bob']));
+    freshParticipantTwo.resolve(makeActiveEntry('participant-2', ['Fresh Bob']));
+
+    expect(await screen.findByRole('link', { name: 'Fresh Bob' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Stale Alice' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Stale Bob' })).not.toBeInTheDocument();
+  });
+
+  it('suppresses stale local-party responses after a node selection changes', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+    const staleParticipantOne = deferred<ReturnType<typeof makeActiveEntry>>();
+    const staleParticipantTwo = deferred<ReturnType<typeof makeActiveEntry>>();
+    const freshParticipantTwo = deferred<ReturnType<typeof makeActiveEntry>>();
+    vi.mocked(fetchNodeLocalParties)
+      .mockReturnValueOnce(staleParticipantOne.promise)
+      .mockReturnValueOnce(staleParticipantTwo.promise)
+      .mockReturnValueOnce(freshParticipantTwo.promise);
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'participant-1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'All Parties (gRPC)' }));
+    await waitFor(() => expect(fetchNodeLocalParties).toHaveBeenCalledTimes(2));
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+    await waitFor(() => expect(fetchNodeLocalParties).toHaveBeenCalledTimes(3));
+
+    staleParticipantOne.resolve(makeActiveEntry('participant-1', ['Stale Local Alice']));
+    staleParticipantTwo.resolve(makeActiveEntry('participant-2', ['Stale Local Bob']));
+    freshParticipantTwo.resolve(makeActiveEntry('participant-2', ['Fresh Local Bob']));
+
+    expect(await screen.findByRole('link', { name: 'Fresh Local Bob' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Stale Local Alice' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Stale Local Bob' })).not.toBeInTheDocument();
+  });
+
+  it('suppresses stale namespace responses after a node selection changes', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
+      makeActiveEntry(nodeId, [nodeId]),
+    );
+    const staleNamespaces = deferred<PartyFingerprintsResponse>();
+    const freshNamespaces = deferred<PartyFingerprintsResponse>();
+    vi.mocked(fetchPartyFingerprints)
+      .mockReturnValueOnce(staleNamespaces.promise)
+      .mockReturnValueOnce(freshNamespaces.promise);
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'participant-1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
+    await waitFor(() => expect(fetchPartyFingerprints).toHaveBeenCalledTimes(1));
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+    await waitFor(() => expect(fetchPartyFingerprints).toHaveBeenCalledTimes(2));
+
+    staleNamespaces.resolve({
+      source: 'pqs',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['stale-namespace'],
+    });
+    freshNamespaces.resolve({
+      source: 'pqs',
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      fingerprints: ['fresh-namespace'],
+    });
+
+    expect(await screen.findByRole('link', { name: 'fresh-namespace' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'stale-namespace' })).not.toBeInTheDocument();
   });
 
   it('loads active parties across all nodes by default', async () => {
@@ -182,16 +697,7 @@ describe('PartiesView', () => {
       fingerprints: ['1220carol'],
     });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     await screen.findByRole('link', { name: 'Carol' });
 
@@ -339,16 +845,7 @@ describe('PartiesView', () => {
       fingerprints: ['1220alice', '1220carol'],
     });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     await screen.findByRole('link', { name: 'Carol' });
 
@@ -435,16 +932,7 @@ describe('PartiesView', () => {
         fingerprints: ['1220a', '1220b'],
       });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces (gRPC)' }));
 
@@ -519,16 +1007,7 @@ describe('PartiesView', () => {
       fingerprints: ['1220abcd'],
     });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces (gRPC)' }));
 
@@ -598,16 +1077,7 @@ describe('PartiesView', () => {
         fingerprints: ['1220a'],
       });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces (gRPC)' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
@@ -682,16 +1152,7 @@ describe('PartiesView', () => {
       localPartiesErrorTid: null,
     });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     expect(await screen.findByRole('link', { name: 'Active 01' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Active 16' })).not.toBeInTheDocument();
@@ -777,16 +1238,7 @@ describe('PartiesView', () => {
       localPartiesErrorTid: '66f620d5014db408ba2d552b8d78b99f',
     });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'All Parties (gRPC)' }));
 
@@ -853,16 +1305,7 @@ describe('PartiesView', () => {
       localPartiesErrorTid: null,
     });
 
-    render(PartiesView, {
-      global: {
-        stubs: {
-          RouterLink: {
-            props: ['to'],
-            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
-          },
-        },
-      },
-    });
+    await renderAt();
 
     expect(
       await screen.findByText('PQS error while listing active parties for this node.'),

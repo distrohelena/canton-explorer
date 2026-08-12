@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../lib/pagination';
 import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
+import UpdatesAdvancedFilter from '../components/UpdatesAdvancedFilter.vue';
 import {
   fetchNodeActiveParties,
   fetchPartyFingerprints,
@@ -18,18 +20,24 @@ import type { NodeSnapshot } from '../types/nodes';
 
 type PartiesMode = 'active' | 'all' | 'fingerprints';
 
+const route = useRoute();
+const router = useRouter();
 const nodes = ref<NodeSnapshot[] | null>(null);
 const activePartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
 const localPartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
+const activeNodeErrors = ref<Record<string, string | null>>({});
+const localNodeErrors = ref<Record<string, string | null>>({});
 const error = ref<string | null>(null);
 const selectedMode = ref<PartiesMode>('active');
-const loadingActiveNodeId = ref<string | null>(null);
-const loadingLocalNodeId = ref<string | null>(null);
+const activeNodeLoading = ref<Record<string, boolean>>({});
+const localNodeLoading = ref<Record<string, boolean>>({});
+const activeNodeFilters = ref<string[]>([]);
+const requestGeneration = ref(0);
 const partyPageSize = ref(DEFAULT_PAGE_SIZE);
 const partyBeforeCursor = ref<string | null>(null);
 const partyAfterCursor = ref<string | null>(null);
 const loadingNamespaces = ref(false);
-const showNamespaceAdvancedFilter = ref(false);
+const showAdvancedFilter = ref(Object.prototype.hasOwnProperty.call(route.query, 'node'));
 const namespacePublicKeyDraft = ref('');
 const namespaceEncodingDraft = ref<'auto' | 'hex' | 'base64' | 'pem'>('auto');
 const namespaceKeyFormatDraft = ref<'raw' | 'derX509SubjectPublicKeyInfo'>('raw');
@@ -47,21 +55,27 @@ const namespacesResponse = ref<NodePartyFingerprintsEntry | PartyFingerprintsRes
 
 const nodeButtons = computed(() => nodes.value ?? []);
 
-const selectableNodes = computed(() =>
-  selectedMode.value === 'active' || selectedMode.value === 'fingerprints'
-    ? nodeButtons.value
-    : nodeButtons.value.filter((node) => node.mode === 'pqs_with_grpc'),
+const selectedNodes = computed(() =>
+  nodeButtons.value.filter((node) => activeNodeFilters.value.includes(node.id)),
 );
 
+const selectableNodes = computed(() => {
+  if (selectedMode.value === 'all') {
+    return selectedNodes.value.filter((node) => node.mode === 'pqs_with_grpc');
+  }
+
+  return selectedNodes.value;
+});
+
 const selectedNodeSnapshots = computed<NodeSnapshot[]>(() => {
-  return selectableNodes.value;
+  return selectedNodes.value;
 });
 
 const selectedEntries = computed<ActivePartiesNodeEntry[]>(() => {
   const source =
     selectedMode.value === 'all' ? localPartiesByNodeId.value : activePartiesByNodeId.value;
 
-  return selectedNodeSnapshots.value
+  return selectableNodes.value
     .map((node) => source[node.id])
     .filter((entry): entry is ActivePartiesNodeEntry => entry !== undefined);
 });
@@ -85,11 +99,15 @@ const paginatedSelectedParties = computed(() =>
 const selectedFingerprints = computed(() => namespacesResponse.value?.fingerprints ?? []);
 
 const selectedFingerprintSource = computed<'pqs' | 'grpc' | null>(() => {
+  if (selectedMode.value !== 'fingerprints') {
+    return null;
+  }
+
   return namespacesResponse.value?.source ?? null;
 });
 
 const selectedHeader = computed(() => {
-  return selectedNodeSnapshots.value.length > 0 ? 'All Nodes' : null;
+  return selectedNodeSnapshots.value.length > 0 ? 'All Nodes' : 'No Nodes Selected';
 });
 
 const selectedLocalNodeStatus = computed(() => {
@@ -151,85 +169,202 @@ const selectedActiveNodeError = computed(() => {
 });
 
 const isSelectedNodeLoading = computed(() => {
-  const selectedIds = new Set(selectedNodeSnapshots.value.map((node) => node.id));
   if (selectedMode.value === 'all') {
-    return loadingLocalNodeId.value !== null && selectedIds.has(loadingLocalNodeId.value);
+    return selectableNodes.value.some((node) => localNodeLoading.value[node.id]);
   }
   if (selectedMode.value === 'fingerprints') {
     return loadingNamespaces.value;
   }
-  return loadingActiveNodeId.value !== null && selectedIds.has(loadingActiveNodeId.value);
+  return selectableNodes.value.some((node) => activeNodeLoading.value[node.id]);
 });
 
 const resultsLoadingLabel = 'Loading parties across selected nodes';
 
-function selectMode(mode: PartiesMode): void {
-  selectedMode.value = mode;
-  if (mode === 'fingerprints') {
-    resetNamespacePagination();
-  } else {
-    resetPartyPagination();
-    showNamespaceAdvancedFilter.value = false;
-  }
+const selectedActiveRequestError = computed(
+  () =>
+    selectableNodes.value
+      .map((node) => activeNodeErrors.value[node.id])
+      .find((message): message is string => Boolean(message)) ?? null,
+);
 
-  void ensureAllNodesPartiesLoaded(mode);
+const selectedLocalRequestError = computed(
+  () =>
+    selectableNodes.value
+      .map((node) => localNodeErrors.value[node.id])
+      .find((message): message is string => Boolean(message)) ?? null,
+);
+
+function uniqueValues(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
 }
 
-async function ensureAllNodesPartiesLoaded(mode: PartiesMode): Promise<void> {
+function readQueryValues(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+
+  return typeof value === 'string' ? [value] : [];
+}
+
+function readNodeFilters(availableNodes: NodeSnapshot[], query = route.query): string[] {
+  if (!Object.prototype.hasOwnProperty.call(query, 'node')) {
+    return availableNodes.map((node) => node.id);
+  }
+
+  const availableNodeIds = new Set(availableNodes.map((node) => node.id));
+  return uniqueValues(readQueryValues(query.node)).filter((nodeId) =>
+    availableNodeIds.has(nodeId),
+  );
+}
+
+function allNodesSelected(nodeIds: string[]): boolean {
+  return (
+    nodeButtons.value.length > 0 &&
+    nodeIds.length === nodeButtons.value.length &&
+    nodeButtons.value.every((node) => nodeIds.includes(node.id))
+  );
+}
+
+function buildNodeQuery(nodeIds: string[]): LocationQueryRaw {
+  const nextQuery: LocationQueryRaw = { ...route.query };
+  if (allNodesSelected(nodeIds)) {
+    delete nextQuery.node;
+  } else {
+    nextQuery.node = nodeIds.length > 0 ? nodeIds : '';
+  }
+
+  return nextQuery;
+}
+
+function beginRequestGeneration(): number {
+  requestGeneration.value += 1;
+  return requestGeneration.value;
+}
+
+function clearPartyResults(): void {
+  activePartiesByNodeId.value = {};
+  localPartiesByNodeId.value = {};
+  activeNodeErrors.value = {};
+  localNodeErrors.value = {};
+  activeNodeLoading.value = {};
+  localNodeLoading.value = {};
+}
+
+function nodesForMode(mode: PartiesMode): NodeSnapshot[] {
+  const selected = selectedNodes.value;
+  return mode === 'all' ? selected.filter((node) => node.mode === 'pqs_with_grpc') : selected;
+}
+
+function selectMode(mode: PartiesMode): void {
+  selectedMode.value = mode;
+  const generation = beginRequestGeneration();
+  error.value = null;
+
   if (mode === 'fingerprints') {
-    await loadNamespaces();
+    resetNamespacePagination();
+    namespacesResponse.value = null;
+    loadingNamespaces.value = false;
+  } else {
+    resetPartyPagination();
+    loadingNamespaces.value = false;
+    namespacesResponse.value = null;
+    clearPartyResults();
+  }
+
+  void ensureAllNodesPartiesLoaded(mode, generation, true);
+}
+
+async function ensureAllNodesPartiesLoaded(
+  mode: PartiesMode,
+  generation = requestGeneration.value,
+  force = false,
+): Promise<void> {
+  if (mode === 'fingerprints') {
+    await loadNamespaces(generation);
     return;
   }
 
-  await Promise.all(selectableNodes.value.map((node) => ensureNodePartiesLoaded(mode, node.id)));
+  await Promise.all(
+    nodesForMode(mode).map((node) => ensureNodePartiesLoaded(mode, node.id, generation, force)),
+  );
 }
 
-async function ensureNodePartiesLoaded(mode: PartiesMode, nodeId: string): Promise<void> {
+async function ensureNodePartiesLoaded(
+  mode: PartiesMode,
+  nodeId: string,
+  generation = requestGeneration.value,
+  force = false,
+): Promise<void> {
+  const isCurrentRequest = () =>
+    generation === requestGeneration.value &&
+    selectedMode.value === mode &&
+    activeNodeFilters.value.includes(nodeId);
+
   if (mode === 'active') {
-    if (activePartiesByNodeId.value[nodeId] || loadingActiveNodeId.value === nodeId) {
+    if (!force && (activePartiesByNodeId.value[nodeId] || activeNodeLoading.value[nodeId])) {
       return;
     }
 
-    loadingActiveNodeId.value = nodeId;
+    activeNodeLoading.value = { ...activeNodeLoading.value, [nodeId]: true };
+    activeNodeErrors.value = { ...activeNodeErrors.value, [nodeId]: null };
     try {
       const entry = await fetchNodeActiveParties(nodeId);
-      activePartiesByNodeId.value = {
-        ...activePartiesByNodeId.value,
-        [nodeId]: entry,
-      };
-      error.value = null;
+      if (isCurrentRequest()) {
+        activePartiesByNodeId.value = {
+          ...activePartiesByNodeId.value,
+          [nodeId]: entry,
+        };
+      }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error';
+      if (isCurrentRequest()) {
+        activeNodeErrors.value = {
+          ...activeNodeErrors.value,
+          [nodeId]: err instanceof Error ? err.message : 'Unknown error',
+        };
+      }
     } finally {
-      if (loadingActiveNodeId.value === nodeId) {
-        loadingActiveNodeId.value = null;
+      if (generation === requestGeneration.value) {
+        activeNodeLoading.value = { ...activeNodeLoading.value, [nodeId]: false };
       }
     }
     return;
   }
 
   if (mode === 'fingerprints') {
-    await loadNamespaces();
+    await loadNamespaces(generation);
     return;
   }
 
-  if (localPartiesByNodeId.value[nodeId] || loadingLocalNodeId.value === nodeId) {
+  if (!force && (localPartiesByNodeId.value[nodeId] || localNodeLoading.value[nodeId])) {
     return;
   }
 
-  loadingLocalNodeId.value = nodeId;
+  localNodeLoading.value = { ...localNodeLoading.value, [nodeId]: true };
+  localNodeErrors.value = { ...localNodeErrors.value, [nodeId]: null };
   try {
     const entry = await fetchNodeLocalParties(nodeId);
-    localPartiesByNodeId.value = {
-      ...localPartiesByNodeId.value,
-      [nodeId]: entry,
-    };
-    error.value = null;
+    if (isCurrentRequest()) {
+      localPartiesByNodeId.value = {
+        ...localPartiesByNodeId.value,
+        [nodeId]: entry,
+      };
+    }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    if (isCurrentRequest()) {
+      localNodeErrors.value = {
+        ...localNodeErrors.value,
+        [nodeId]: err instanceof Error ? err.message : 'Unknown error',
+      };
+    }
   } finally {
-    if (loadingLocalNodeId.value === nodeId) {
-      loadingLocalNodeId.value = null;
+    if (generation === requestGeneration.value) {
+      localNodeLoading.value = { ...localNodeLoading.value, [nodeId]: false };
     }
   }
 }
@@ -283,11 +418,23 @@ function paginateItems(
   };
 }
 
-async function loadNamespaces(): Promise<void> {
+async function loadNamespaces(generation = requestGeneration.value): Promise<void> {
+  if (generation !== requestGeneration.value || selectedMode.value !== 'fingerprints') {
+    return;
+  }
+
+  if (activeNodeFilters.value.length === 0) {
+    namespacesResponse.value = null;
+    loadingNamespaces.value = false;
+    error.value = null;
+    return;
+  }
+
   loadingNamespaces.value = true;
+  error.value = null;
 
   try {
-    const options = {
+    const options: NonNullable<Parameters<typeof fetchPartyFingerprints>[0]> = {
       before: namespaceBeforeCursor.value ?? undefined,
       after: namespaceAfterCursor.value ?? undefined,
       limit: namespacePageSize.value,
@@ -296,14 +443,23 @@ async function loadNamespaces(): Promise<void> {
       keyFormat: activeNamespaceFilter.value?.keyFormat,
       keyType: activeNamespaceFilter.value?.keyType,
     };
+    if (!allNodesSelected(activeNodeFilters.value)) {
+      options.nodeIds = activeNodeFilters.value;
+    }
 
-    namespacesResponse.value = await fetchPartyFingerprints(options);
-    error.value = null;
+    const response = await fetchPartyFingerprints(options);
+    if (generation === requestGeneration.value && selectedMode.value === 'fingerprints') {
+      namespacesResponse.value = response;
+    }
   } catch (err) {
-    namespacesResponse.value = null;
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    if (generation === requestGeneration.value && selectedMode.value === 'fingerprints') {
+      namespacesResponse.value = null;
+      error.value = err instanceof Error ? err.message : 'Unknown error';
+    }
   } finally {
-    loadingNamespaces.value = false;
+    if (generation === requestGeneration.value) {
+      loadingNamespaces.value = false;
+    }
   }
 }
 
@@ -315,7 +471,7 @@ async function showOlderNamespaces(): Promise<void> {
 
   namespaceBeforeCursor.value = cursor;
   namespaceAfterCursor.value = null;
-  await loadNamespaces();
+  await loadNamespaces(beginRequestGeneration());
 }
 
 async function showNewerNamespaces(): Promise<void> {
@@ -326,7 +482,7 @@ async function showNewerNamespaces(): Promise<void> {
 
   namespaceAfterCursor.value = cursor;
   namespaceBeforeCursor.value = null;
-  await loadNamespaces();
+  await loadNamespaces(beginRequestGeneration());
 }
 
 async function setNamespacePageSize(event: Event): Promise<void> {
@@ -337,11 +493,11 @@ async function setNamespacePageSize(event: Event): Promise<void> {
 
   namespacePageSize.value = Number.parseInt(target.value, 10) || DEFAULT_PAGE_SIZE;
   resetNamespacePagination();
-  await loadNamespaces();
+  await loadNamespaces(beginRequestGeneration());
 }
 
-function toggleNamespaceAdvancedFilter(): void {
-  showNamespaceAdvancedFilter.value = !showNamespaceAdvancedFilter.value;
+function toggleAdvancedFilter(): void {
+  showAdvancedFilter.value = !showAdvancedFilter.value;
 }
 
 async function applyNamespaceAdvancedFilter(): Promise<void> {
@@ -355,7 +511,7 @@ async function applyNamespaceAdvancedFilter(): Promise<void> {
       }
     : null;
   resetNamespacePagination();
-  await loadNamespaces();
+  await loadNamespaces(beginRequestGeneration());
 }
 
 async function clearNamespaceAdvancedFilter(): Promise<void> {
@@ -365,7 +521,24 @@ async function clearNamespaceAdvancedFilter(): Promise<void> {
   namespaceKeyTypeDraft.value = 'auto';
   activeNamespaceFilter.value = null;
   resetNamespacePagination();
-  await loadNamespaces();
+  await loadNamespaces(beginRequestGeneration());
+}
+
+async function setNodeFilters(nodeIds: string[]): Promise<void> {
+  const availableNodeIds = new Set(nodeButtons.value.map((node) => node.id));
+  activeNodeFilters.value = uniqueValues(nodeIds).filter((nodeId) => availableNodeIds.has(nodeId));
+  resetPartyPagination();
+  resetNamespacePagination();
+  namespacesResponse.value = null;
+  loadingNamespaces.value = false;
+  clearPartyResults();
+  error.value = null;
+
+  beginRequestGeneration();
+  await router.push({
+    path: '/parties',
+    query: buildNodeQuery(activeNodeFilters.value),
+  });
 }
 
 function showOlderParties(): void {
@@ -398,10 +571,43 @@ function setPartyPageSize(event: Event): void {
   resetPartyPagination();
 }
 
+function syncNodeFiltersFromRoute(): void {
+  if (Object.prototype.hasOwnProperty.call(route.query, 'node')) {
+    showAdvancedFilter.value = true;
+  }
+
+  if (!nodes.value) {
+    return;
+  }
+
+  activeNodeFilters.value = readNodeFilters(nodes.value);
+  resetPartyPagination();
+  resetNamespacePagination();
+  namespacesResponse.value = null;
+  loadingNamespaces.value = false;
+  clearPartyResults();
+  error.value = null;
+
+  const generation = beginRequestGeneration();
+  void ensureAllNodesPartiesLoaded(selectedMode.value, generation, true);
+}
+
+watch(
+  () => route.query,
+  () => {
+    syncNodeFiltersFromRoute();
+  },
+  { deep: true },
+);
+
 onMounted(async () => {
   try {
     nodes.value = await fetchNodes();
-    await ensureAllNodesPartiesLoaded('active');
+    activeNodeFilters.value = readNodeFilters(nodes.value);
+    if (Object.prototype.hasOwnProperty.call(route.query, 'node')) {
+      showAdvancedFilter.value = true;
+    }
+    await ensureAllNodesPartiesLoaded(selectedMode.value, requestGeneration.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   }
@@ -456,12 +662,11 @@ onMounted(async () => {
           <div class="results-header__actions">
             <div class="node-updates__pager">
               <button
-                v-if="selectedMode === 'fingerprints'"
                 type="button"
                 class="dashboard__refresh"
-                :aria-expanded="showNamespaceAdvancedFilter"
-                aria-controls="namespace-advanced-filter"
-                @click="toggleNamespaceAdvancedFilter"
+                :aria-expanded="showAdvancedFilter"
+                aria-controls="parties-advanced-filter"
+                @click="toggleAdvancedFilter"
               >
                 Advanced Filter
               </button>
@@ -531,74 +736,89 @@ onMounted(async () => {
               </button>
             </div>
             <QuerySourcePill
-              v-if="selectedMode === 'all' || selectedFingerprintSource === 'grpc'"
+              v-if="(selectedMode === 'all' && selectedNodes.length > 0) || selectedFingerprintSource === 'grpc'"
               source="grpc"
             />
           </div>
         </div>
-        <section
-          v-if="selectedMode === 'fingerprints' && showNamespaceAdvancedFilter"
-          id="namespace-advanced-filter"
-          class="node-updates__advanced-filter parties-page__namespace-filter"
-          aria-label="Advanced Filter Parameters"
-        >
-          <h3 class="node-updates__advanced-filter-title">Advanced Filter Parameters</h3>
-          <div class="node-updates__advanced-filter-grid parties-page__namespace-filter-grid">
-            <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field parties-page__namespace-filter-field--full">
-              <span>Public Key</span>
-              <textarea
-                v-model="namespacePublicKeyDraft"
-                aria-label="Public Key"
-                placeholder="Paste hex, base64, or PEM public key"
-                rows="4"
-              ></textarea>
-            </label>
-            <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field">
-              <span>Encoding</span>
-              <select v-model="namespaceEncodingDraft" aria-label="Encoding">
-                <option value="auto">Auto</option>
-                <option value="hex">Hex</option>
-                <option value="base64">Base64</option>
-                <option value="pem">PEM</option>
-              </select>
-            </label>
-            <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field">
-              <span>Key Format</span>
-              <select v-model="namespaceKeyFormatDraft" aria-label="Key Format">
-                <option value="raw">Raw</option>
-                <option value="derX509SubjectPublicKeyInfo">DER X.509 SPKI</option>
-              </select>
-            </label>
-            <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field">
-              <span>Key Type</span>
-              <select v-model="namespaceKeyTypeDraft" aria-label="Key Type">
-                <option value="auto">Auto</option>
-                <option value="ed25519">ED25519</option>
-                <option value="x25519">X25519</option>
-                <option value="secp256k1">Secp256k1</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-          </div>
-          <div class="parties-page__namespace-filter-actions">
-            <button
-              type="button"
-              class="dashboard__refresh"
-              @click="applyNamespaceAdvancedFilter"
-            >
-              Search Namespaces
-            </button>
-            <button
-              type="button"
-              class="dashboard__refresh"
-              @click="clearNamespaceAdvancedFilter"
-            >
-              Clear
-            </button>
-          </div>
-        </section>
         <div
-          v-else-if="selectedMode === 'all' && selectableNodes.length === 0"
+          v-if="showAdvancedFilter"
+          class="node-updates-filter-shell node-updates-filter-shell--open"
+        >
+          <UpdatesAdvancedFilter
+            id="parties-advanced-filter"
+            party-draft=""
+            template-draft=""
+            :active-parties="[]"
+            :active-templates="[]"
+            :template-options="[]"
+            filter-mode="or"
+            :hide-splice="false"
+            :node-options="nodeButtons"
+            :active-nodes="activeNodeFilters"
+            :show-party-filters="false"
+            :show-template-filters="false"
+            @set-node-filters="setNodeFilters"
+          >
+            <template #additional-fields>
+              <template v-if="selectedMode === 'fingerprints'">
+                <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field parties-page__namespace-filter-field--full">
+                  <span>Public Key</span>
+                  <textarea
+                    v-model="namespacePublicKeyDraft"
+                    aria-label="Public Key"
+                    placeholder="Paste hex, base64, or PEM public key"
+                    rows="4"
+                  ></textarea>
+                </label>
+                <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field">
+                  <span>Encoding</span>
+                  <select v-model="namespaceEncodingDraft" aria-label="Encoding">
+                    <option value="auto">Auto</option>
+                    <option value="hex">Hex</option>
+                    <option value="base64">Base64</option>
+                    <option value="pem">PEM</option>
+                  </select>
+                </label>
+                <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field">
+                  <span>Key Format</span>
+                  <select v-model="namespaceKeyFormatDraft" aria-label="Key Format">
+                    <option value="raw">Raw</option>
+                    <option value="derX509SubjectPublicKeyInfo">DER X.509 SPKI</option>
+                  </select>
+                </label>
+                <label class="node-updates__advanced-filter-field parties-page__namespace-filter-field">
+                  <span>Key Type</span>
+                  <select v-model="namespaceKeyTypeDraft" aria-label="Key Type">
+                    <option value="auto">Auto</option>
+                    <option value="ed25519">ED25519</option>
+                    <option value="x25519">X25519</option>
+                    <option value="secp256k1">Secp256k1</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <div class="parties-page__namespace-filter-actions">
+                  <button
+                    type="button"
+                    class="dashboard__refresh"
+                    @click="applyNamespaceAdvancedFilter"
+                  >
+                    Search Namespaces
+                  </button>
+                  <button
+                    type="button"
+                    class="dashboard__refresh"
+                    @click="clearNamespaceAdvancedFilter"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </template>
+            </template>
+          </UpdatesAdvancedFilter>
+        </div>
+        <div
+          v-if="selectedMode === 'all' && selectedNodes.length > 0 && selectableNodes.length === 0"
           class="parties-page__results-header"
         >
           <div>
@@ -619,7 +839,7 @@ onMounted(async () => {
           <span>{{ resultsLoadingLabel }}...</span>
         </div>
 
-        <div v-else-if="selectedMode === 'active' && selectedEntries.length > 0" class="package-detail__list">
+        <div v-else-if="selectedMode === 'active'" class="package-detail__list">
           <div
             v-for="party in paginatedSelectedParties.items"
             :key="party"
@@ -646,14 +866,23 @@ onMounted(async () => {
             {{ selectedActiveNodeError }}
           </p>
           <p
-            v-if="selectedParties.length === 0 && selectedActiveNodeStatus !== 'pqs_error'"
+            v-if="selectedActiveRequestError"
+            class="package-detail__seen-meta parties-page__results-copy"
+          >
+            {{ selectedActiveRequestError }}
+          </p>
+          <p
+            v-if="selectedParties.length === 0 && selectedActiveNodeStatus !== 'pqs_error' && !selectedActiveRequestError"
             class="update-detail__empty"
           >
             No active parties found across selected nodes.
           </p>
         </div>
 
-        <div v-else-if="selectedMode === 'all' && selectedEntries.length > 0" class="package-detail__list">
+        <div
+          v-else-if="selectedMode === 'all' && (selectedNodes.length === 0 || selectableNodes.length > 0)"
+          class="package-detail__list"
+        >
           <div
             v-for="party in paginatedSelectedParties.items"
             :key="party"
@@ -704,14 +933,20 @@ onMounted(async () => {
             gRPC is not configured for this node.
           </p>
           <p
-            v-else-if="selectedParties.length === 0"
+            v-if="selectedLocalRequestError"
+            class="package-detail__seen-meta parties-page__results-copy"
+          >
+            {{ selectedLocalRequestError }}
+          </p>
+          <p
+            v-else-if="selectedParties.length === 0 && !selectedLocalRequestError"
             class="update-detail__empty"
           >
             No local parties found across selected nodes.
           </p>
         </div>
 
-        <div v-else-if="selectedMode === 'fingerprints' && namespacesResponse" class="package-detail__list">
+        <div v-else-if="selectedMode === 'fingerprints'" class="package-detail__list">
           <RouterLink
             v-for="fingerprint in selectedFingerprints"
             :key="fingerprint"
