@@ -363,10 +363,13 @@ describe('PartyDetailView', () => {
 
     const updatesScope = within(updatesSection!);
     const contractsScope = within(contractsSection!);
+    const contractsTopPager = within(
+      contractsSection!.querySelector('.node-detail__hero') as HTMLElement,
+    );
 
     expect(updatesScope.getByRole('button', { name: 'Advanced Filter' })).toBeInTheDocument();
     expect(contractsScope.getByRole('button', { name: 'Advanced Filter' })).toBeInTheDocument();
-    expect(contractsScope.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(contractsTopPager.getByRole('button', { name: 'Older' })).not.toBeDisabled();
 
     await fireEvent.click(contractsScope.getByRole('button', { name: 'Advanced Filter' }));
     expect(await contractsScope.findByText('Advanced Filter Parameters')).toBeInTheDocument();
@@ -383,7 +386,7 @@ describe('PartyDetailView', () => {
       }),
     );
 
-    await fireEvent.click(contractsScope.getByRole('button', { name: 'Older' }));
+    await fireEvent.click(contractsTopPager.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
       expect(api.fetchPartyContracts).toHaveBeenLastCalledWith('Alice', {

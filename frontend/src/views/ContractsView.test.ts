@@ -473,9 +473,10 @@ describe('ContractsView', () => {
       'href',
       '/nodes/participant-2/contracts/00def',
     );
-    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    const topPager = within(screen.getByRole('banner'));
+    expect(topPager.getByRole('button', { name: 'Older' })).not.toBeDisabled();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+    await fireEvent.click(topPager.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
       expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, {
@@ -491,6 +492,23 @@ describe('ContractsView', () => {
     expect(await screen.findByRole('link', { name: '00def' })).toHaveAttribute(
       'href',
       '/nodes/participant-2/contracts/00def',
+    );
+
+    const bottomPager = screen.getByRole('group', { name: 'Bottom contracts pagination' });
+    expect(within(bottomPager).getByRole('button', { name: 'Newer' })).toBeDisabled();
+    expect(within(bottomPager).getByRole('button', { name: 'Older' })).not.toBeDisabled();
+
+    await fireEvent.click(within(bottomPager).getByRole('button', { name: 'Older' }));
+
+    await waitFor(() =>
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, {
+        before: '199',
+        nodeIds: ['participant-2'],
+        parties: ['Alice'],
+        templates: ['Main:Asset'],
+        partyMode: 'and',
+        hideSplice: true,
+      }),
     );
   });
 
