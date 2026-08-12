@@ -28,6 +28,7 @@ const previousDocumentTitle = document.title;
 const themePreference = ref<ThemePreference>('system');
 const systemPrefersDark = ref(false);
 const openNavigationMenuId = ref<NavigationMenuId | null>(null);
+const pointerOpenedNavigationMenuId = ref<NavigationMenuId | null>(null);
 const navigationMenuTriggers = new Map<NavigationMenuId, HTMLButtonElement>();
 let systemThemeQuery: MediaQueryList | null = null;
 let removeSystemThemeListener: (() => void) | null = null;
@@ -92,14 +93,22 @@ function setNavigationMenuTrigger(menuId: NavigationMenuId, element: Element | n
 
 function openNavigationMenu(menuId: NavigationMenuId) {
   openNavigationMenuId.value = menuId;
+  pointerOpenedNavigationMenuId.value = menuId;
 }
 
 function toggleNavigationMenu(menuId: NavigationMenuId) {
+  if (pointerOpenedNavigationMenuId.value === menuId) {
+    pointerOpenedNavigationMenuId.value = null;
+    return;
+  }
+
   openNavigationMenuId.value = openNavigationMenuId.value === menuId ? null : menuId;
+  pointerOpenedNavigationMenuId.value = null;
 }
 
 function closeNavigationMenu() {
   openNavigationMenuId.value = null;
+  pointerOpenedNavigationMenuId.value = null;
 }
 
 function handleNavigationEscape(menuId: NavigationMenuId) {
@@ -107,9 +116,22 @@ function handleNavigationEscape(menuId: NavigationMenuId) {
   navigationMenuTriggers.get(menuId)?.focus();
 }
 
-function handleNavigationFocusout(event: FocusEvent) {
+function handleNavigationFocusout(event: FocusEvent, menuId: NavigationMenuId) {
   const wrapper = event.currentTarget;
   const nextTarget = event.relatedTarget;
+  if (wrapper instanceof Element && nextTarget instanceof Node && wrapper.contains(nextTarget)) {
+    return;
+  }
+
+  if (nextTarget instanceof Element && nextTarget.closest('.app-navigation')) {
+    queueMicrotask(() => {
+      if (openNavigationMenuId.value === menuId) {
+        closeNavigationMenu();
+      }
+    });
+    return;
+  }
+
   if (!(wrapper instanceof Element) || !(nextTarget instanceof Node) || !wrapper.contains(nextTarget)) {
     closeNavigationMenu();
   }
@@ -233,7 +255,7 @@ onBeforeUnmount(() => {
               class="app-navigation"
               @pointerenter="openNavigationMenu(menu.id)"
               @pointerleave="closeNavigationMenu"
-              @focusout="handleNavigationFocusout"
+              @focusout="handleNavigationFocusout($event, menu.id)"
             >
               <button
                 :id="`app-navigation-trigger-${menu.id}`"

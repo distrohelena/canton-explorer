@@ -310,6 +310,18 @@ describe('App', () => {
     expect(document.activeElement).toBe(networkTrigger);
   });
 
+  it('keeps a menu open when clicking immediately after hover opens it', async () => {
+    const { container } = await renderAt('/');
+    const networkWrapper = container.querySelectorAll('.app-navigation')[1];
+    const networkTrigger = screen.getByRole('button', { name: 'Network' });
+
+    await fireEvent.pointerEnter(networkWrapper);
+    expect(screen.getByRole('navigation', { name: 'Network navigation' })).toBeInTheDocument();
+
+    await fireEvent.click(networkTrigger);
+    expect(screen.getByRole('navigation', { name: 'Network navigation' })).toBeInTheDocument();
+  });
+
   it('closes a menu when focus leaves its trigger and menu area', async () => {
     const { container } = await renderAt('/');
     const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
