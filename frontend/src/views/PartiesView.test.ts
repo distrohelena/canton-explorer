@@ -201,6 +201,7 @@ describe('PartiesView', () => {
       'aria-pressed',
       'true',
     );
+    expect(screen.queryByText('Show')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: 'No gRPC nodes available' }),
     ).not.toBeInTheDocument();

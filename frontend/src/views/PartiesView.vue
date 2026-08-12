@@ -614,7 +614,6 @@ onMounted(async () => {
                 Advanced Filter
               </button>
               <label class="node-updates__page-size">
-                <span class="node-updates__page-size-label">Show</span>
                 <select
                   class="node-updates__page-size-select"
                   :value="selectedMode === 'fingerprints' ? namespacePageSize : partyPageSize"
