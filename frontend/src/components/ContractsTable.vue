@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import CopyToClipboardButton from './CopyToClipboardButton.vue';
 import QuerySourcePill from './QuerySourcePill.vue';
 
 interface ContractRow {
@@ -125,25 +126,36 @@ function navigateToContract(contract: ContractRow): void {
         @keydown.enter.prevent="navigateToContract(contract)"
         @keydown.space.prevent="navigateToContract(contract)"
       >
-        <span v-if="showNodeColumn" class="contracts-table__cell" role="cell">{{ contract.label }}</span>
-        <span class="node-updates__id contracts-table__contract-id" role="cell">
+        <span v-if="showNodeColumn" class="node-updates__cell-with-copy contracts-table__cell" role="cell">
+          <span>{{ contract.label }}</span>
+          <CopyToClipboardButton :value="contract.label" label="node name" />
+        </span>
+        <span class="node-updates__cell-with-copy node-updates__id" role="cell">
           <RouterLink
-            class="contract-detail__link"
+            class="contract-detail__link contracts-table__contract-id"
             :to="contractLink(contract)"
             :title="contract.contractId"
             @click.stop
           >
             {{ contract.contractId }}
           </RouterLink>
+          <CopyToClipboardButton :value="contract.contractId" label="contract ID" />
         </span>
-        <span class="contracts-table__cell contracts-table__template" role="cell">
-          <template v-if="contract.templateIdLines">
-            <span class="contracts-table__template-namespace">{{ contract.templateIdLines.namespace }}</span>
-            <span v-if="contract.templateIdLines.templateName" class="contracts-table__template-name">
-              {{ contract.templateIdLines.templateName }}
-            </span>
-          </template>
-          <template v-else>n/a</template>
+        <span class="node-updates__cell-with-copy contracts-table__cell" role="cell">
+          <span class="contracts-table__template">
+            <template v-if="contract.templateIdLines">
+              <span class="contracts-table__template-namespace">{{ contract.templateIdLines.namespace }}</span>
+              <span v-if="contract.templateIdLines.templateName" class="contracts-table__template-name">
+                {{ contract.templateIdLines.templateName }}
+              </span>
+            </template>
+            <template v-else>n/a</template>
+          </span>
+          <CopyToClipboardButton
+            v-if="contract.templateId"
+            :value="contract.templateId"
+            label="template ID"
+          />
         </span>
         <span class="node-updates__time contracts-table__cell" role="cell">
           <template v-if="contract.recordTimeLines">

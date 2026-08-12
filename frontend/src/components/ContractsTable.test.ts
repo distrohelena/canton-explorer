@@ -1,9 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import ContractsTable from './ContractsTable.vue';
 
-async function renderTable() {
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+async function renderTable(showNodeColumn = false) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -26,6 +32,7 @@ async function renderTable() {
           createdRecordTime: '2026-07-01T12:00:00.000Z',
         },
       ],
+      showNodeColumn,
       ariaLabel: 'Node contracts',
     },
     global: {
@@ -70,6 +77,30 @@ describe('ContractsTable', () => {
     expect(screen.getByText('Jul 1, 2026')).toHaveClass('node-updates__time-date');
     expect(screen.getByText('12:00:00 PM')).toHaveClass('node-updates__time-clock');
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00abc"]')).not.toBeNull();
+  });
+
+  it('adds Updates-style copy controls for the node, contract, and template values', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+
+    const { router } = await renderTable(true);
+
+    expect(screen.getByRole('button', { name: 'Copy node name Participant 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy contract ID 00abc' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'Copy template ID Splice.ValidatorLicense:ValidatorLicense',
+      }),
+    ).toBeInTheDocument();
+
+    await fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Copy template ID Splice.ValidatorLicense:ValidatorLicense',
+      }),
+    );
+
+    expect(writeText).toHaveBeenCalledWith('Splice.ValidatorLicense:ValidatorLicense');
+    expect(router.currentRoute.value.fullPath).toBe('/');
   });
 
   it('makes the entire row clickable, matching the updates table row behavior', async () => {
