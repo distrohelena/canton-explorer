@@ -25,7 +25,7 @@ const chartGuideRatios = [0, 0.25, 0.5, 0.75, 1] as const;
 const ranges: Array<{ value: HomeDashboardRange; label: string }> = [
   { value: '24h', label: '24h' },
   { value: '7d', label: '7d' },
-  { value: '31d', label: '31d' },
+  { value: '30d', label: '30d' },
 ];
 
 type HomeDashboardChartPoint = HomeDashboardActivityPoint | HomeDashboardPricePoint;

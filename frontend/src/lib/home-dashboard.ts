@@ -3,7 +3,7 @@ import type { CantonCoinVenue } from '../types/market';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type HomeDashboardRange = '24h' | '7d' | '31d';
+export type HomeDashboardRange = '24h' | '7d' | '30d';
 
 export interface HomeDashboardActivityPoint {
   timestamp: string;
@@ -16,8 +16,8 @@ export interface HomeDashboardPricePoint {
   quote: string;
 }
 
-export function dashboardRangeDays(range: HomeDashboardRange): 1 | 7 | 31 {
-  return range === '24h' ? 1 : range === '7d' ? 7 : 31;
+export function dashboardRangeDays(range: HomeDashboardRange): 1 | 7 | 30 {
+  return range === '24h' ? 1 : range === '7d' ? 7 : 30;
 }
 
 export function aggregateActivityPoints(

@@ -104,6 +104,8 @@ describe('HomeDashboardOverview', () => {
     expect(await screen.findByText('1.25 USDT')).toBeInTheDocument();
     expect(await screen.findByText('42')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '24h' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '30d' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('button', { name: '31d' })).not.toBeInTheDocument();
     expect(fetchActivityHistoryMock).toHaveBeenCalledWith(1);
     expect(fetchCantonCoinHistoryMock).toHaveBeenCalledWith('1D');
     expect(fetchRecentActivePartiesMock).toHaveBeenCalledWith(24);

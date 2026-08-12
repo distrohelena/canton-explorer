@@ -37,7 +37,7 @@ describe('Home dashboard helpers', () => {
   it('maps dashboard ranges to backend activity windows', () => {
     expect(dashboardRangeDays('24h')).toBe(1);
     expect(dashboardRangeDays('7d')).toBe(7);
-    expect(dashboardRangeDays('31d')).toBe(31);
+    expect(dashboardRangeDays('30d')).toBe(30);
   });
 
   it('sums transaction activity at matching timestamps across nodes', () => {
