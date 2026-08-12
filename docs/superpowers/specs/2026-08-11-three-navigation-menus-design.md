@@ -40,10 +40,14 @@ search field rather than a menu link. Legacy transaction routes show Updates.
 - Clicking outside the menus closes the open dropdown.
 - Selecting a route closes the dropdown and navigates normally.
 - Route changes close any open dropdown.
-- Native button behavior supports Enter and Space. When a menu is open, Escape
-  closes it and restores focus to its trigger. Tab proceeds from the triggers
-  left-to-right and then through the links in the open menu. Focus alone does
-  not open a menu, so keyboard navigation is not coupled to pointer hover.
+- Native button behavior supports Enter and Space. The DOM order is trigger
+  followed immediately by that trigger's open navigation links, so Tab enters
+  the opened menu after its trigger and continues to the next trigger after
+  the last link. Shift+Tab from the first link returns to its trigger. When a
+  menu is open, Escape closes it and restores focus to its trigger. If focus
+  leaves the trigger/menu pair without activating a link, the menu closes;
+  focus alone does not open a menu, so keyboard navigation is not coupled to
+  pointer hover.
 - Each trigger has a unique `aria-controls` value and accurate
   `aria-expanded` state. Each dropdown is a labelled `nav`; links retain
   visible focus outlines and active-route styling.
@@ -51,12 +55,16 @@ search field rather than a menu link. Legacy transaction routes show Updates.
 ## Layout and responsive behavior
 
 The three triggers share the existing header visual language and remain
-alongside the search field on desktop. At widths above the existing 720px
-mobile breakpoint, the triggers flex evenly within the toolbar, with a
-110px minimum and 160px maximum per trigger; dropdowns are at least 190px wide
-and anchored to their own trigger. The search and theme controls retain their
-current priority, so the menu triggers may shrink within those bounds before
-the header wraps.
+alongside the search field on desktop. Above 960px, the triggers flex evenly
+within the toolbar, with a 110px minimum and 160px maximum per trigger;
+dropdowns are at least 190px wide and anchored to their own trigger. The
+search and theme controls retain their current priority, so the menu triggers
+may shrink within those bounds before the header wraps.
+
+Between 721px and 960px, the toolbar wraps deliberately: the three triggers
+stay together on the first line, while the search field and theme control
+occupy a second line. This avoids shrinking any trigger below 110px or
+allowing the search field to overflow.
 
 At or below 720px, the toolbar stacks vertically, each trigger spans the
 available toolbar width, and its dropdown is left-aligned with a maximum width
@@ -93,3 +101,8 @@ Update shell tests to cover:
 6. ARIA controls/expanded state and navigation labels are unique and correct.
 7. Desktop sizing/anchoring and the <=720px stacked layout do not overflow.
 8. Existing route navigation and branding/search behavior remain unaffected.
+
+CSS layout verification includes a browser check at 1200px, 800px, and 600px
+viewports. The check must confirm that the trigger/menu bounds stay within the
+viewport, the 800px toolbar uses the intentional two-line layout, and the
+600px toolbar uses the stacked layout.
