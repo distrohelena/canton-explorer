@@ -596,10 +596,7 @@ onMounted(async () => {
         </div>
       </section>
 
-      <section
-        class="node-detail__section parties-page__section parties-page__results"
-        :class="{ 'parties-page__results--inline-actions': true }"
-      >
+      <div>
         <div v-if="selectedHeader" class="parties-page__results-header">
           <div>
             <h3>{{ selectedHeader }}</h3>
@@ -844,7 +841,7 @@ onMounted(async () => {
             {{ isAllNodesSelected ? 'No known namespaces found across selected nodes.' : 'No known namespaces found for this node.' }}
           </p>
         </div>
-      </section>
+      </div>
     </div>
   </section>
 </template>

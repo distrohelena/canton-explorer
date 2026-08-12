@@ -215,6 +215,12 @@ describe('PartiesView', () => {
     );
     expect(screen.getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
     expect(screen.getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
+    expect(
+      screen.getByRole('link', { name: 'Alice' }).closest('.node-detail__section'),
+    ).toBeNull();
+    expect(
+      document.querySelector('.parties-page__results.parties-page__results--inline-actions'),
+    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Copy party ID Alice' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy party ID Bob' })).toBeInTheDocument();
 

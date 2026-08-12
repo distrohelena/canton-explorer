@@ -5132,15 +5132,6 @@ h3 {
   pointer-events: none;
 }
 
-.parties-page__results {
-  position: relative;
-  padding-top: 60px;
-}
-
-.parties-page__results--inline-actions {
-  padding-top: 24px;
-}
-
 .results-section__source-pill {
   position: absolute;
   top: 20px;
@@ -5474,10 +5465,6 @@ h3 {
 }
 
 @media (max-width: 720px) {
-  .parties-page__results {
-    padding-top: 72px;
-  }
-
   .results-section__source-pill {
     top: 16px;
     right: 16px;
