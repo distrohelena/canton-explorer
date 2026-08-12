@@ -3617,22 +3617,6 @@ h3 {
 }
 
 @media (min-width: 721px) {
-  .node-updates__row:not(.node-updates__row--loading):not(.node-updates__row--head) > *:not(:last-child) {
-    position: relative;
-    align-self: stretch;
-  }
-
-  .node-updates__row:not(.node-updates__row--loading):not(.node-updates__row--head) > *:not(:last-child)::after {
-    position: absolute;
-    top: 15%;
-    right: -8px;
-    width: 1px;
-    height: 70%;
-    background: color-mix(in srgb, var(--line-soft) 50%, transparent);
-    content: "";
-    pointer-events: none;
-  }
-
   .node-updates__row:not(.node-updates__row--loading):not(.node-updates__row--head) > .node-updates__time,
   .node-updates__row:not(.node-updates__row--loading):not(.node-updates__row--head) > .node-updates__parties {
     justify-content: center;
