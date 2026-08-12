@@ -40,4 +40,19 @@ describe('NodeCacheService', () => {
     expect(history.nodes).toHaveLength(1);
     expect(history.nodes[0]?.samples).toEqual([]);
   });
+
+  it('exposes the cumulative update count with activity history', () => {
+    const cache = new NodeCacheService();
+
+    cache.seedActivityHistory({
+      nodeId: 'node-1',
+      label: 'Node 1',
+      status: 'healthy',
+      latestActiveContractCount: 12,
+      lastObservedUpdateCount: 40,
+      samples: [],
+    });
+
+    expect(cache.listActivityHistory(1).nodes[0]?.totalUpdateCount).toBe(40);
+  });
 });

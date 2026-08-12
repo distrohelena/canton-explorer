@@ -38,6 +38,7 @@ export interface NodeActivitySeries {
   label: string;
   mode?: NodeMode;
   status: NodeStatus;
+  totalUpdateCount?: number | null;
   latestActiveContractCount: number;
   samples: NodeActivitySample[];
 }

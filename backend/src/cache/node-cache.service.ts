@@ -129,6 +129,10 @@ export class NodeCacheService {
           nodeId,
           label: snapshot?.label ?? series?.label ?? nodeId,
           status: snapshot?.status ?? series?.status ?? 'down',
+          totalUpdateCount:
+            snapshot?.ledgerSummary.totalUpdateCount
+            ?? series?.lastObservedUpdateCount
+            ?? null,
           latestActiveContractCount:
             snapshot?.ledgerSummary.activeContractCount
             ?? series?.latestActiveContractCount
