@@ -22,6 +22,7 @@ const chartHeight = 180;
 const chartPadding = { top: 14, right: 18, bottom: 30, left: 44 };
 const chartTickRatios = [0, 0.25, 0.5, 0.75, 1] as const;
 const chartGuideRatios = [0, 0.25, 0.5, 0.75, 1] as const;
+const priceChartHeadroom = 1.2;
 const ranges: Array<{ value: HomeDashboardRange; label: string }> = [
   { value: '24h', label: '24h' },
   { value: '7d', label: '7d' },
@@ -118,21 +119,26 @@ function chartValue(point: HomeDashboardChartPoint): number {
   return 'value' in point ? point.value : point.close;
 }
 
-function chartScale(points: HomeDashboardChartPoint[]): HomeDashboardChartScale {
+function chartScale(
+  points: HomeDashboardChartPoint[],
+  kind: HomeDashboardChartKind,
+): HomeDashboardChartScale {
   const values = points.map(chartValue);
   const min = 0;
-  const max = Math.max(...values, 1);
+  const max = kind === 'price'
+    ? Math.max(...values, 0) * priceChartHeadroom
+    : Math.max(...values, 1);
   return { min, max, valueRange: max - min || 1 };
 }
 
-function chartPoints(points: HomeDashboardChartPoint[]): string {
+function chartPoints(points: HomeDashboardChartPoint[], kind: HomeDashboardChartKind): string {
   if (points.length === 0) {
     return '';
   }
 
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
-  const { min, valueRange } = chartScale(points);
+  const { min, valueRange } = chartScale(points, kind);
   const firstTimestamp = Date.parse(points[0].timestamp);
   const lastTimestamp = Date.parse(points[points.length - 1].timestamp);
   const timeRange = lastTimestamp - firstTimestamp;
@@ -168,7 +174,7 @@ function chartYAxisTicks(
   }
 
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
-  const { min, valueRange } = chartScale(points);
+  const { min, valueRange } = chartScale(points, kind);
   return chartTickRatios.map((ratio) => ({
     label: formatChartAxisValue(min + valueRange * (1 - ratio), kind),
     position: chartPadding.top + ratio * plotHeight,
@@ -287,7 +293,7 @@ onMounted(() => {
             >{{ tick.label }}</text>
             <polyline
               class="home-dashboard-overview__line"
-              :points="chartPoints(activityPoints)"
+              :points="chartPoints(activityPoints, 'activity')"
               fill="none"
             />
             <text
@@ -344,7 +350,7 @@ onMounted(() => {
             >{{ tick.label }}</text>
             <polyline
               class="home-dashboard-overview__line home-dashboard-overview__line--price"
-              :points="chartPoints(pricePoints)"
+              :points="chartPoints(pricePoints, 'price')"
               fill="none"
             />
             <text

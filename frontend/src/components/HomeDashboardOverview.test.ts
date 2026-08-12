@@ -56,10 +56,10 @@ describe('HomeDashboardOverview', () => {
           candles: [
             {
               timestamp: '2026-08-12T00:00:00.000Z',
-              open: 1.25,
-              high: 1.25,
-              low: 1.25,
-              close: 1.25,
+              open: 0.1,
+              high: 0.1,
+              low: 0.1,
+              close: 0.1,
               volumeQuote: 100,
             },
           ],
@@ -93,7 +93,7 @@ describe('HomeDashboardOverview', () => {
       '6', '5', '3', '2', '0',
     ]);
     expect([...priceChart.querySelectorAll('.home-dashboard-overview__y-tick')].map((tick) => tick.textContent)).toEqual([
-      '1.25', '0.9375', '0.625', '0.3125', '0',
+      '0.12', '0.09', '0.06', '0.03', '0',
     ]);
     expect([...activityChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '150')).toHaveLength(1);
     expect([...priceChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '150')).toHaveLength(1);
@@ -101,7 +101,7 @@ describe('HomeDashboardOverview', () => {
     expect([...priceChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '14')).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'Latest Canton Coin Price' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Active Parties (24h)' })).toBeInTheDocument();
-    expect(await screen.findByText('1.25 USDT')).toBeInTheDocument();
+    expect(await screen.findByText('0.10 USDT')).toBeInTheDocument();
     expect(await screen.findByText('42')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '24h' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: '30d' })).toHaveAttribute('aria-pressed', 'false');
