@@ -119,7 +119,17 @@ describe('HomeDashboardOverview', () => {
 
     expect(fetchActivityHistoryMock).toHaveBeenLastCalledWith(7);
     expect(screen.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
+    expect(fetchRecentActivePartiesMock).toHaveBeenLastCalledWith(168);
+    expect(screen.getByRole('heading', { name: 'Active Parties (7d)' })).toBeInTheDocument();
     expect(fetchCantonCoinHistoryMock).toHaveBeenCalledTimes(1);
-    expect(fetchRecentActivePartiesMock).toHaveBeenCalledTimes(1);
+    expect(fetchRecentActivePartiesMock).toHaveBeenCalledTimes(2);
+
+    await fireEvent.click(screen.getByRole('button', { name: '30d' }));
+
+    expect(fetchActivityHistoryMock).toHaveBeenLastCalledWith(30);
+    expect(fetchRecentActivePartiesMock).toHaveBeenLastCalledWith(720);
+    expect(screen.getByRole('heading', { name: 'Active Parties (30d)' })).toBeInTheDocument();
+    expect(fetchCantonCoinHistoryMock).toHaveBeenCalledTimes(1);
+    expect(fetchRecentActivePartiesMock).toHaveBeenCalledTimes(3);
   });
 });

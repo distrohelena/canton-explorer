@@ -92,7 +92,9 @@ async function refreshRecentParties() {
   recentPartiesError.value = null;
 
   try {
-    recentParties.value = await fetchRecentActiveParties(24);
+    recentParties.value = await fetchRecentActiveParties(
+      dashboardRangeDays(selectedRange.value) * 24,
+    );
     if (recentParties.value.status === 'error') {
       recentPartiesError.value = recentParties.value.error ?? 'Unable to load active parties.';
     }
@@ -109,7 +111,7 @@ async function selectRange(range: HomeDashboardRange) {
   }
 
   selectedRange.value = range;
-  await refreshActivity();
+  await Promise.all([refreshActivity(), refreshRecentParties()]);
 }
 
 function chartValue(point: HomeDashboardChartPoint): number {
@@ -373,12 +375,12 @@ onMounted(() => {
         <span v-else>Latest available daily close</span>
       </article>
       <article class="home-dashboard-overview__metric-panel">
-        <h4>Active Parties (24h)</h4>
+        <h4>Active Parties ({{ selectedRange }})</h4>
         <strong v-if="!recentPartiesLoading && !recentPartiesError">{{ recentParties?.count ?? 0 }}</strong>
         <strong v-else-if="recentPartiesLoading">Loading…</strong>
         <strong v-else>—</strong>
         <span v-if="recentPartiesError" class="home-dashboard-overview__metric-error">{{ recentPartiesError }}</span>
-        <span v-else>Unique parties seen in updates during the last 24 hours</span>
+        <span v-else>Unique parties seen in updates during the last {{ selectedRange }}</span>
       </article>
     </div>
   </section>
