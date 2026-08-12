@@ -1961,15 +1961,16 @@ body {
   align-items: center;
 }
 
-.app-explore {
+.app-navigation {
   position: relative;
-  width: 210px;
   align-self: stretch;
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 110px;
+  min-width: 110px;
+  max-width: 160px;
 }
 
-.app-explore__button {
+.app-navigation__button {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1993,16 +1994,23 @@ body {
   transition: background-color 160ms ease;
 }
 
-.app-explore__button:hover,
-.app-explore__button[aria-expanded="true"] {
+.app-navigation__button:hover,
+.app-navigation__button[aria-expanded="true"] {
   background: color-mix(in srgb, var(--accent-600) 12%, transparent);
 }
 
-.app-explore__button:active {
+.app-navigation__button:active {
   background: color-mix(in srgb, var(--accent-600) 16%, transparent);
 }
 
-.app-explore__arrow {
+.app-navigation__button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-navigation__arrow {
   display: block;
   flex: 0 0 1rem;
   width: 1rem;
@@ -2012,24 +2020,24 @@ body {
   transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.app-explore__button[aria-expanded="true"] .app-explore__arrow {
+.app-navigation__button[aria-expanded="true"] .app-navigation__arrow {
   transform: rotate(180deg);
 }
 
-.app-explore__button:focus-visible,
-.app-explore__link:focus-visible {
+.app-navigation__button:focus-visible,
+.app-navigation__link:focus-visible {
   outline: 2px solid var(--blue-600);
   outline-offset: 2px;
 }
 
-.app-explore__menu {
+.app-navigation__menu {
   position: absolute;
   top: 100%;
   right: 0;
   z-index: 20;
   display: grid;
-  width: 100%;
-  min-width: 0;
+  width: max(190px, 100%);
+  min-width: 190px;
   box-sizing: border-box;
   gap: 4px;
   padding: 8px;
@@ -2042,7 +2050,7 @@ body {
   animation: explore-menu-in 180ms ease-out both;
 }
 
-.app-explore__link {
+.app-navigation__link {
   display: block;
   border-radius: 0;
   color: var(--text-700);
@@ -2055,53 +2063,30 @@ body {
   animation: explore-link-in 180ms ease-out both;
 }
 
-.app-explore__link:nth-child(1) {
+.app-navigation__link:nth-child(1) {
   animation-delay: 30ms;
 }
-.app-explore__link:nth-child(2) {
+.app-navigation__link:nth-child(2) {
   animation-delay: 55ms;
 }
-.app-explore__link:nth-child(3) {
+.app-navigation__link:nth-child(3) {
   animation-delay: 80ms;
 }
-.app-explore__link:nth-child(4) {
+.app-navigation__link:nth-child(4) {
   animation-delay: 105ms;
 }
-.app-explore__link:nth-child(5) {
+.app-navigation__link:nth-child(5) {
   animation-delay: 130ms;
 }
-.app-explore__link:nth-child(6) {
+.app-navigation__link:nth-child(6) {
   animation-delay: 155ms;
 }
 
-.app-explore__link:hover,
-.app-explore__link.router-link-active {
+.app-navigation__link:hover,
+.app-navigation__link.router-link-active {
   background: var(--blue-50);
   color: var(--text-900);
   transform: translateX(2px);
-}
-
-.app-explore__group {
-  display: grid;
-  gap: 2px;
-  padding-top: 6px;
-}
-
-.app-explore__group:first-child {
-  padding-top: 0;
-}
-
-.app-explore__group-label {
-  color: var(--text-500);
-  padding: 4px 12px 2px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.app-explore__group-link {
-  padding-left: 20px;
 }
 
 @keyframes explore-menu-in {
@@ -2129,12 +2114,33 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-explore__button,
-  .app-explore__arrow,
-  .app-explore__link,
-  .app-explore__menu {
+  .app-navigation__button,
+  .app-navigation__arrow,
+  .app-navigation__link,
+  .app-navigation__menu {
     animation: none;
     transition: none;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 960px) {
+  .app-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .app-navigation {
+    flex: 0 1 calc((100% - 24px) / 3);
+    max-width: none;
+  }
+
+  .app-search-form {
+    order: 4;
+    flex: 1 1 calc(100% - 54px);
+  }
+
+  .app-theme-toggle {
+    order: 5;
+    flex: 0 0 42px;
   }
 }
 
@@ -5763,15 +5769,18 @@ h3 {
     align-items: stretch;
   }
 
-  .app-explore {
+  .app-navigation {
     align-self: stretch;
     width: 100%;
-    max-width: 210px;
+    max-width: none;
+    flex: 0 0 auto;
   }
 
-  .app-explore__menu {
+  .app-navigation__menu {
     right: auto;
     left: 0;
+    width: min(190px, calc(100vw - 36px));
+    min-width: 0;
   }
 
   .app-nav {

@@ -62,7 +62,7 @@ describe('styles.css', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];
     const searchFormStyles =
-      styles.match(/\.app-search-form \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\n\.app-search-form \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const searchHoverStyles = styles.match(/\.app-search:hover \{([\s\S]*?)\n\}/)?.[1];
     const searchFocusStyles = styles.match(/\.app-search:focus \{([\s\S]*?)\n\}/)?.[1];
     const searchFocusVisibleStyles = styles.match(/\.app-search:focus-visible \{([\s\S]*?)\n\}/)?.[1];
@@ -79,9 +79,9 @@ describe('styles.css', () => {
     expect(searchFocusVisibleStyles).toContain('outline: none;');
   });
 
-  it('centers the Explore arrow within its own icon box', () => {
+  it('centers the navigation arrow within its own icon box', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const arrowStyles = styles.match(/\.app-explore__arrow \{([\s\S]*?)\n\}/)?.[1];
+    const arrowStyles = styles.match(/\.app-navigation__arrow \{([\s\S]*?)\n\}/)?.[1];
 
     expect(arrowStyles).toContain('display: block;');
     expect(arrowStyles).toContain('width: 1rem;');
@@ -89,12 +89,11 @@ describe('styles.css', () => {
     expect(arrowStyles).toContain('transform-origin: center;');
   });
 
-  it('uses theme tokens for the Explore menu in both color modes', () => {
+  it('uses theme tokens for the navigation menus in both color modes', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const menuStyles = styles.match(/\.app-explore__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const linkStyles = styles.match(/\.app-explore__link \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const hoverStyles = styles.match(/\.app-explore__link:hover,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const labelStyles = styles.match(/\.app-explore__group-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const menuStyles = styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const linkStyles = styles.match(/\.app-navigation__link \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const hoverStyles = styles.match(/\.app-navigation__link:hover,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(menuStyles).toContain('border: 1px solid var(--line-soft);');
     expect(menuStyles).toContain('background: var(--surface-card);');
@@ -102,15 +101,33 @@ describe('styles.css', () => {
     expect(linkStyles).toContain('color: var(--text-700);');
     expect(hoverStyles).toContain('background: var(--blue-50);');
     expect(hoverStyles).toContain('color: var(--text-900);');
-    expect(labelStyles).toContain('color: var(--text-500);');
   });
 
-  it('keeps the Explore menu attached to its hover trigger', () => {
+  it('keeps each navigation menu attached to its hover trigger', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const menuStyles = styles.match(/\.app-explore__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const menuStyles = styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(menuStyles).toContain('top: 100%;');
     expect(menuStyles).not.toContain('top: calc(100% + 8px);');
+  });
+
+  it('supports three responsive navigation controls and ellipsized labels', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const navigationStyles = styles.match(/\.app-navigation \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const labelStyles = styles.match(/\.app-navigation__button-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(navigationStyles).toContain('flex: 1 1 110px;');
+    expect(navigationStyles).toContain('min-width: 110px;');
+    expect(navigationStyles).toContain('max-width: 160px;');
+    expect(labelStyles).toContain('white-space: nowrap;');
+    expect(labelStyles).toContain('overflow: hidden;');
+    expect(labelStyles).toContain('text-overflow: ellipsis;');
+    expect(styles).toContain('@media (min-width: 721px) and (max-width: 960px)');
+    expect(styles).toContain('flex: 0 1 calc((100% - 24px) / 3);');
+    expect(styles).toContain('flex: 1 1 calc(100% - 54px);');
+    expect(styles).toContain('calc(100vw - 36px)');
+    expect(styles).toContain('.app-navigation__button:focus-visible');
+    expect(styles).toContain('.app-navigation__link:focus-visible');
   });
 
   it('keeps party copy controls aligned at the right edge of each row', () => {
