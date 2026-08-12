@@ -69,6 +69,14 @@ describe('styles.css', () => {
     expect(compactViewAllRowStyles).toContain('padding: 6px 20px;');
   });
 
+  it('keeps overview loading states the same height as rendered charts', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const overviewStateStyles =
+      styles.match(/\.home-dashboard-overview__state \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(overviewStateStyles).toContain('box-sizing: border-box;');
+  });
+
   it('highlights the search input with only a bottom line when focused', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];

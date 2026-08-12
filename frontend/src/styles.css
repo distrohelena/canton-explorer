@@ -2923,6 +2923,7 @@ h3 {
 
 .home-dashboard-overview__state {
   display: grid;
+  box-sizing: border-box;
   min-height: 190px;
   margin-top: 14px;
   place-items: center;
