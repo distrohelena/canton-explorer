@@ -3585,6 +3585,9 @@ export class PqsSummaryService {
       }),
     );
     const parties = new Set<string>();
+    const successfulNodeCount = results.filter(
+      (result): result is PromiseFulfilledResult<string[]> => result.status === 'fulfilled',
+    ).length;
     const failures = results.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
@@ -3598,7 +3601,7 @@ export class PqsSummaryService {
     const status =
       failures.length === 0
         ? 'ok'
-        : parties.size > 0
+        : successfulNodeCount > 0
           ? 'partial'
           : 'error';
     const firstFailure = failures[0]?.reason;

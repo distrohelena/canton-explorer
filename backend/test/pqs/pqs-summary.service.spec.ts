@@ -1257,6 +1257,51 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('reports a partial result when an empty successful node is mixed with a failed node', async () => {
+    const participant1Query = jest.fn(async () => ({ rows: [] }));
+    const participant2Query = jest.fn(async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:5542');
+    });
+
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      {
+        getRawExecutor: async (node: { id: string }) => ({
+          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      },
+      undefined,
+      undefined,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchRecentActiveParties?: (
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode: 'pqs_only' | 'pqs_with_grpc';
+        }>,
+      ) => Promise<{
+        count: number;
+        windowStart: string;
+        windowEnd: string;
+        status: 'ok' | 'partial' | 'error';
+        error: string | null;
+      }>;
+    };
+
+    await expect(
+      service.fetchRecentActiveParties?.([
+        { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+        { id: 'participant-2', label: 'Participant 2', mode: 'pqs_only' },
+      ]),
+    ).resolves.toMatchObject({
+      count: 0,
+      status: 'partial',
+      error: 'connect ECONNREFUSED 127.0.0.1:5542',
+    });
+  });
+
   it('returns a party summary aggregated across nodes', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
