@@ -83,7 +83,7 @@ function displayNavigationLabel(menu: NavigationMenu): string {
     : menu.label;
 }
 
-function setNavigationMenuTrigger(menuId: NavigationMenuId, element: Element | null) {
+function setNavigationMenuTrigger(menuId: NavigationMenuId, element: unknown) {
   if (element instanceof HTMLButtonElement) {
     navigationMenuTriggers.set(menuId, element);
   } else {
