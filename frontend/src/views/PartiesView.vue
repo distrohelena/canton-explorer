@@ -531,8 +531,8 @@ onMounted(async () => {
               </button>
             </div>
             <QuerySourcePill
-              v-if="selectedMode === 'fingerprints' ? selectedFingerprintSource : true"
-              :source="selectedMode === 'fingerprints' ? selectedFingerprintSource! : (selectedMode === 'active' ? 'pqs' : 'grpc')"
+              v-if="selectedMode === 'all' || selectedFingerprintSource === 'grpc'"
+              source="grpc"
             />
           </div>
         </div>

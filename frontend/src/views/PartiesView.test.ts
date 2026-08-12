@@ -193,7 +193,9 @@ describe('PartiesView', () => {
       },
     });
 
-    expect(await screen.findByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
+    await screen.findByRole('link', { name: 'Carol' });
+
+    expect(screen.queryByText('PQS')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Active Parties' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -204,9 +206,6 @@ describe('PartiesView', () => {
     expect(
       screen.queryByRole('heading', { name: 'No gRPC nodes available' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByText('PQS').closest('.results-header__actions'),
-    ).not.toBeNull();
     expect(fetchNodeActiveParties).toHaveBeenCalledTimes(2);
     expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-1');
     expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-2');
@@ -367,7 +366,7 @@ describe('PartiesView', () => {
     );
     expect(screen.getByText('1220alice')).toBeInTheDocument();
     expect(screen.getByText('1220carol')).toBeInTheDocument();
-    expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
+    expect(screen.queryByText('PQS')).not.toBeInTheDocument();
     expect(screen.queryAllByText('gRPC')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
