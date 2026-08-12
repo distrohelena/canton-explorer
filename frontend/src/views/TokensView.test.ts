@@ -135,8 +135,21 @@ describe('TokensView', () => {
     expect(within(transfersTable).getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
     expect(transfersBrowserSection.closest('.node-detail__section')).toBeNull();
-    expect(within(transfersBrowserSection).getByRole('button', { name: 'Older' })).not.toBeDisabled();
-    expect(within(transfersBrowserSection).getByRole('button', { name: 'Newer' })).toBeDisabled();
+    const transfersTopPager = within(
+      transfersBrowserSection.querySelector('.node-detail__hero') as HTMLElement,
+    );
+    expect(transfersTopPager.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(transfersTopPager.getByRole('button', { name: 'Newer' })).toBeDisabled();
+    const transfersBottomPager = within(transfersBrowserSection).getByRole('group', {
+      name: 'Bottom latest transfers pagination',
+    });
+    expect(within(transfersBottomPager).getByRole('button', { name: 'Newer' })).toBeDisabled();
+    expect(within(transfersBottomPager).getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    const knownTokensBottomPager = within(sectionForHeading('Known Tokens')).getByRole('group', {
+      name: 'Bottom known tokens pagination',
+    });
+    expect(within(knownTokensBottomPager).getByRole('button', { name: 'Newer' })).toBeDisabled();
+    expect(within(knownTokensBottomPager).getByRole('button', { name: 'Older' })).toBeDisabled();
     expect(fetchLatestTokenTransfers).toHaveBeenCalledWith(15, {});
   });
 
@@ -335,7 +348,11 @@ describe('TokensView', () => {
 
     const knownTokensSection = sectionForHeading('Known Tokens');
 
-    await fireEvent.click(within(knownTokensSection).getByRole('button', { name: 'Older' }));
+    const knownTokensBottomPager = within(knownTokensSection).getByRole('group', {
+      name: 'Bottom known tokens pagination',
+    });
+
+    await fireEvent.click(within(knownTokensBottomPager).getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
       expect(fetchTokens).toHaveBeenNthCalledWith(2, {
@@ -350,7 +367,7 @@ describe('TokensView', () => {
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?tokensBefore=tokens-cursor-before-1'));
     expect(await screen.findByText('Beta')).toBeInTheDocument();
 
-    await fireEvent.click(within(knownTokensSection).getByRole('button', { name: 'Newer' }));
+    await fireEvent.click(within(knownTokensBottomPager).getByRole('button', { name: 'Newer' }));
 
     await waitFor(() =>
       expect(fetchTokens).toHaveBeenNthCalledWith(3, {
@@ -571,17 +588,20 @@ describe('TokensView', () => {
 
     await screen.findByRole('table', { name: 'Latest token transfers' });
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
+    const transfersBottomPager = within(transfersBrowserSection).getByRole('group', {
+      name: 'Bottom latest transfers pagination',
+    });
 
-    await fireEvent.click(within(transfersBrowserSection).getByRole('button', { name: 'Older' }));
+    await fireEvent.click(within(transfersBottomPager).getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
       expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(2, 15, { before: 'cursor-token-0' }),
     );
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?before=cursor-token-0'));
     expect(await screen.findByText('Participant 1')).toBeInTheDocument();
-    expect(within(transfersBrowserSection).getByRole('button', { name: 'Newer' })).not.toBeDisabled();
+    expect(within(transfersBottomPager).getByRole('button', { name: 'Newer' })).not.toBeDisabled();
 
-    await fireEvent.click(within(transfersBrowserSection).getByRole('button', { name: 'Newer' }));
+    await fireEvent.click(within(transfersBottomPager).getByRole('button', { name: 'Newer' }));
 
     await waitFor(() =>
       expect(fetchLatestTokenTransfers).toHaveBeenNthCalledWith(3, 15, { after: 'cursor-token-1' }),

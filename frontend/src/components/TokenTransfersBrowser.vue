@@ -695,5 +695,61 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
         </RouterLink>
       </div>
     </section>
+
+    <div
+      v-if="!compact && !tokenTransfersError && (loadingTransfers || renderedTransfers.length > 0)"
+      class="node-updates__pager node-updates__pager--bottom"
+      role="group"
+      aria-label="Bottom latest transfers pagination"
+    >
+      <button
+        type="button"
+        class="dashboard__refresh"
+        :disabled="!tokenTransfersResponse?.nextAfter || loadingTransfers"
+        aria-label="Newer"
+        title="Newer"
+        @click="showNewer"
+      >
+        <svg
+          class="node-updates__pagination-icon node-updates__pagination-icon--newer"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M15 5l-7 7 7 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.75"
+          />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="dashboard__refresh"
+        :disabled="!tokenTransfersResponse?.nextBefore || loadingTransfers"
+        aria-label="Older"
+        title="Older"
+        @click="showOlder"
+      >
+        <svg
+          class="node-updates__pagination-icon node-updates__pagination-icon--older"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M9 5l7 7-7 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.75"
+          />
+        </svg>
+      </button>
+    </div>
   </section>
 </template>

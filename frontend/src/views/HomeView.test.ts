@@ -137,6 +137,7 @@ describe('HomeView', () => {
     expect(updatesViewAllRow).toHaveClass('node-updates__row--link');
     expect(tradesViewAllRow).toHaveAttribute('href', '/tokens');
     expect(tradesViewAllRow).toHaveClass('tokens-page__known-row--link');
+    expect(screen.queryByRole('group', { name: 'Bottom latest transfers pagination' })).not.toBeInTheDocument();
     expect(within(updatesTable).queryByText('Est. USD')).not.toBeInTheDocument();
     expect(within(tradesTable).queryByRole('columnheader', { name: 'Nodes' })).not.toBeInTheDocument();
     expect(fetchLatestUpdatesMock).toHaveBeenCalledWith(6, {});

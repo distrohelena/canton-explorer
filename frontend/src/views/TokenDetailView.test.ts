@@ -200,8 +200,11 @@ describe('TokenDetailView', () => {
     expect(within(transfersTable).queryByText('Issuer::validator-license')).not.toBeInTheDocument();
     expect(within(transfersTable).getByText('Transfer')).toBeInTheDocument();
     expect(container.querySelector('a[href="/tokens"]')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
+    const transfersSection = screen.getByRole('heading', { name: 'Latest Transfers' }).closest('section');
+    expect(transfersSection).not.toBeNull();
+    const transfersTopPager = within(transfersSection!.querySelector('.node-detail__hero') as HTMLElement);
+    expect(transfersTopPager.getByRole('button', { name: 'Older' })).not.toBeDisabled();
+    expect(transfersTopPager.getByRole('button', { name: 'Newer' })).toBeDisabled();
 
     const transferRow = container.querySelector('.tokens-page__row.node-updates__row--link');
     expect(transferRow).not.toBeNull();

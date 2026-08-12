@@ -369,6 +369,62 @@ watch(
           <span class="tokens-page__cell" role="cell"><QuerySourcePill :source="token.source" /></span>
         </RouterLink>
       </div>
+
+      <div
+        v-if="!tokensError && tokensResponse && (loadingTokens || tokensResponse.tokens.length > 0)"
+        class="node-updates__pager node-updates__pager--bottom"
+        role="group"
+        aria-label="Bottom known tokens pagination"
+      >
+        <button
+          type="button"
+          class="dashboard__refresh"
+          :disabled="!tokensResponse?.nextAfter || loadingTokens"
+          aria-label="Newer"
+          title="Newer"
+          @click="showPreviousTokens"
+        >
+          <svg
+            class="node-updates__pagination-icon node-updates__pagination-icon--newer"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M15 5l-7 7 7 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.75"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="dashboard__refresh"
+          :disabled="!tokensResponse?.nextBefore || loadingTokens"
+          aria-label="Older"
+          title="Older"
+          @click="showNextTokens"
+        >
+          <svg
+            class="node-updates__pagination-icon node-updates__pagination-icon--older"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.75"
+            />
+          </svg>
+        </button>
+      </div>
     </section>
 
     <TokenTransfersBrowser
