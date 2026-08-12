@@ -82,8 +82,9 @@ describe('HomeDashboardOverview', () => {
   });
 
   it('renders the two charts and the two full-width metrics panels', async () => {
-    render(HomeDashboardOverview);
+    const { container } = render(HomeDashboardOverview);
 
+    expect(container.querySelector('.home-dashboard-overview__metrics')).toBeNull();
     expect(await screen.findByRole('heading', { name: 'Transactions over time' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'CC price over time' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Latest Canton Coin Price' })).toBeInTheDocument();

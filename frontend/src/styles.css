@@ -2861,8 +2861,7 @@ h3 {
   min-width: 0;
 }
 
-.home-dashboard-overview__chart-panel,
-.home-dashboard-overview__metrics {
+.home-dashboard-overview__chart-panel {
   min-width: 0;
   padding: 18px;
   border: 1px solid var(--panel-border);
@@ -2930,12 +2929,6 @@ h3 {
 .home-dashboard-overview__state--error,
 .home-dashboard-overview__metric-error {
   color: var(--danger-600);
-}
-
-.home-dashboard-overview__metrics {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
 }
 
 .home-dashboard-overview__metric-grid {

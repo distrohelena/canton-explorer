@@ -304,30 +304,28 @@ onMounted(() => {
       </section>
     </div>
 
-    <section class="home-dashboard-overview__metrics" aria-labelledby="home-dashboard-metrics-title">
-      <div class="home-dashboard-overview__metrics-heading">
-        <div>
-          <p class="home-dashboard-overview__eyebrow">Network metrics</p>
-          <h3 id="home-dashboard-metrics-title">Current snapshot</h3>
-        </div>
+    <div class="home-dashboard-overview__metrics-heading">
+      <div>
+        <p class="home-dashboard-overview__eyebrow">Network metrics</p>
+        <h3 id="home-dashboard-metrics-title">Current snapshot</h3>
       </div>
-      <div class="home-dashboard-overview__metric-grid">
-        <article class="home-dashboard-overview__metric-panel">
-          <h4>Latest Canton Coin Price</h4>
-          <strong v-if="!marketLoading">{{ formatPrice(latestPrice) }}</strong>
-          <strong v-else>Loading…</strong>
-          <span v-if="marketError" class="home-dashboard-overview__metric-error">{{ marketError }}</span>
-          <span v-else>Latest available daily close</span>
-        </article>
-        <article class="home-dashboard-overview__metric-panel">
-          <h4>Active Parties (24h)</h4>
-          <strong v-if="!recentPartiesLoading && !recentPartiesError">{{ recentParties?.count ?? 0 }}</strong>
-          <strong v-else-if="recentPartiesLoading">Loading…</strong>
-          <strong v-else>—</strong>
-          <span v-if="recentPartiesError" class="home-dashboard-overview__metric-error">{{ recentPartiesError }}</span>
-          <span v-else>Unique parties seen in updates during the last 24 hours</span>
-        </article>
-      </div>
-    </section>
+    </div>
+    <div class="home-dashboard-overview__metric-grid">
+      <article class="home-dashboard-overview__metric-panel">
+        <h4>Latest Canton Coin Price</h4>
+        <strong v-if="!marketLoading">{{ formatPrice(latestPrice) }}</strong>
+        <strong v-else>Loading…</strong>
+        <span v-if="marketError" class="home-dashboard-overview__metric-error">{{ marketError }}</span>
+        <span v-else>Latest available daily close</span>
+      </article>
+      <article class="home-dashboard-overview__metric-panel">
+        <h4>Active Parties (24h)</h4>
+        <strong v-if="!recentPartiesLoading && !recentPartiesError">{{ recentParties?.count ?? 0 }}</strong>
+        <strong v-else-if="recentPartiesLoading">Loading…</strong>
+        <strong v-else>—</strong>
+        <span v-if="recentPartiesError" class="home-dashboard-overview__metric-error">{{ recentPartiesError }}</span>
+        <span v-else>Unique parties seen in updates during the last 24 hours</span>
+      </article>
+    </div>
   </section>
 </template>
