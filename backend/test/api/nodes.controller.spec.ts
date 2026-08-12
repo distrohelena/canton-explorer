@@ -549,6 +549,7 @@ describe('NodesController', () => {
     fetchNodeTemplates: jest.Mock;
     fetchNodeContracts: jest.Mock;
     fetchActiveParties: jest.Mock;
+    fetchRecentActiveParties: jest.Mock;
     fetchPartyDetail: jest.Mock;
     fetchNamespaceDetail: jest.Mock;
     fetchNamespaceParties: jest.Mock;
@@ -711,6 +712,13 @@ describe('NodesController', () => {
       fetchNodeTemplates: jest.fn().mockResolvedValue(typedTemplateFilterFixture),
       fetchNodeContracts: jest.fn().mockResolvedValue(typedNodeContractsFixture),
       fetchActiveParties: jest.fn().mockResolvedValue(typedActivePartiesFixture),
+      fetchRecentActiveParties: jest.fn().mockResolvedValue({
+        count: 2,
+        windowStart: '2026-08-11T12:00:00.000Z',
+        windowEnd: '2026-08-12T12:00:00.000Z',
+        status: 'ok',
+        error: null,
+      }),
       fetchPartyDetail: jest.fn().mockResolvedValue(typedPartyDetailFixture),
       fetchNamespaceDetail: jest.fn().mockResolvedValue(typedNamespaceDetailFixture),
       fetchNamespaceParties: jest.fn().mockResolvedValue(typedNamespacePartiesFixture),
@@ -1270,6 +1278,33 @@ describe('NodesController', () => {
     expect(pqsSummaryService.fetchActiveParties).toHaveBeenCalledWith(expect.any(Array));
     expect(response?.nodes[0].nodeId).toBe('participant-1');
     expect(response).toEqual(typedActivePartiesFixture);
+  });
+
+  it('returns rolling recent active parties and normalizes the hours query', async () => {
+    const maybeController = controller as {
+      listRecentActiveParties?: (hours?: string) => Promise<{
+        count: number;
+        windowStart: string;
+        windowEnd: string;
+        status: 'ok' | 'partial' | 'error';
+        error: string | null;
+      }>;
+    };
+
+    const response = await maybeController.listRecentActiveParties?.('12');
+
+    expect(pqsSummaryService.fetchRecentActiveParties).toHaveBeenCalledWith(
+      expect.any(Array),
+      12,
+    );
+    expect(response?.count).toBe(2);
+
+    await maybeController.listRecentActiveParties?.('not-a-number');
+
+    expect(pqsSummaryService.fetchRecentActiveParties).toHaveBeenLastCalledWith(
+      expect.any(Array),
+      24,
+    );
   });
 
   it('returns active parties for a single known node id', async () => {

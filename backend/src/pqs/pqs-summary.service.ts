@@ -7,6 +7,7 @@ import {
 import { NodeConfigService } from '../config/node-config.service';
 import type {
   ActivePartiesResponse,
+  RecentActivePartiesResponse,
   GlobalContractsResponse,
   GlobalRecentUpdatesResponse,
   NamespaceDetailResponse,
@@ -1328,6 +1329,42 @@ function pqsRecentUpdatePartiesQuery(
       where tx.transaction_id in (${quotedIds})
     ) update_parties
     group by update_id
+  `;
+}
+
+function pqsRecentActivePartiesQuery(
+  node: NodeConfig,
+  windowStart: string,
+): string {
+  const relations = pqsCoreRelations(node);
+  const quotedWindowStart = escapeSqlLiteral(windowStart);
+
+  return `
+    select
+      array_agg(distinct party order by party) as parties
+    from (
+      select unnest(contract_row.witnesses) as party
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.created_at_ix = tx.ix
+      where tx.effective_at >= '${quotedWindowStart}'::timestamptz
+
+      union
+
+      select unnest(contract_row.witnesses) as party
+      from ${relations.transactions} tx
+      join ${relations.contracts} contract_row
+        on contract_row.archived_at_ix = tx.ix
+      where tx.effective_at >= '${quotedWindowStart}'::timestamptz
+
+      union
+
+      select unnest(exercise_row.witnesses) as party
+      from ${relations.transactions} tx
+      join ${relations.exercises} exercise_row
+        on exercise_row.exercised_at_ix = tx.ix
+      where tx.effective_at >= '${quotedWindowStart}'::timestamptz
+    ) recent_parties
   `;
 }
 
@@ -3524,6 +3561,59 @@ export class PqsSummaryService {
       nodes: await Promise.all(
         nodes.map(async (node) => this.buildActivePartiesEntry(node)),
       ),
+    };
+  }
+
+  async fetchRecentActiveParties(
+    nodes: NodeConfig[],
+    hours = 24,
+    now = new Date(),
+  ): Promise<RecentActivePartiesResponse> {
+    const normalizedHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
+    const windowEnd = now.toISOString();
+    const windowStart = new Date(
+      now.getTime() - normalizedHours * 60 * 60 * 1000,
+    ).toISOString();
+    const results = await Promise.allSettled(
+      nodes.map(async (node) => {
+        const client = await this.managerFactory.getRawExecutor(node);
+        const result = await client.query(
+          pqsRecentActivePartiesQuery(node, windowStart),
+        );
+        const row = (result.rows as ActivePartiesRow[])[0];
+        return this.normalizeParties(row?.parties ?? null);
+      }),
+    );
+    const parties = new Set<string>();
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        result.value.forEach((party) => parties.add(party));
+      }
+    });
+
+    const status =
+      failures.length === 0
+        ? 'ok'
+        : parties.size > 0
+          ? 'partial'
+          : 'error';
+    const firstFailure = failures[0]?.reason;
+
+    return {
+      count: parties.size,
+      windowStart,
+      windowEnd,
+      status,
+      error:
+        failures.length === 0
+          ? null
+          : firstFailure instanceof Error
+            ? firstFailure.message
+            : 'Unable to load recent active parties.',
     };
   }
 

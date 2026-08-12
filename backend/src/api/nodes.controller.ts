@@ -609,6 +609,18 @@ export class NodesController {
     return this.pqsSummaryService.fetchActiveParties(this.configService.list());
   }
 
+  @Get('/parties/activity')
+  async listRecentActiveParties(@Query('hours') hours?: string) {
+    const parsedHours = Number.parseInt(hours ?? '', 10);
+    const normalizedHours =
+      Number.isFinite(parsedHours) && parsedHours > 0 ? parsedHours : 24;
+
+    return this.pqsSummaryService.fetchRecentActiveParties(
+      this.configService.list(),
+      normalizedHours,
+    );
+  }
+
   @Get('/templates')
   async listTemplates() {
     return this.pqsSummaryService.fetchTemplates();

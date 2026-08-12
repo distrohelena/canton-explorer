@@ -1199,6 +1199,64 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('aggregates distinct parties observed during the requested rolling window', async () => {
+    const participant1Query = jest.fn(async (sql: string) => {
+      expect(sql).toContain('tx.effective_at');
+      return { rows: [{ parties: ['p|Alice', 'Bob'] }] };
+    });
+    const participant2Query = jest.fn(async (sql: string) => {
+      expect(sql).toContain('tx.effective_at');
+      return { rows: [{ parties: ['Bob', 'Charlie'] }] };
+    });
+
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      {
+        getRawExecutor: async (node: { id: string }) => ({
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
+        }),
+      },
+      undefined,
+      undefined,
+      undefined,
+    ) as PqsSummaryService & {
+      fetchRecentActiveParties?: (
+        nodes: Array<{
+          id: string;
+          label: string;
+          mode: 'pqs_only' | 'pqs_with_grpc';
+        }>,
+        hours?: number,
+        now?: Date,
+      ) => Promise<{
+        count: number;
+        windowStart: string;
+        windowEnd: string;
+        status: 'ok' | 'partial' | 'error';
+        error: string | null;
+      }>;
+    };
+
+    await expect(
+      service.fetchRecentActiveParties?.(
+        [
+          { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
+          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_with_grpc' },
+        ],
+        24,
+        new Date('2026-08-12T12:00:00.000Z'),
+      ),
+    ).resolves.toEqual({
+      count: 3,
+      windowStart: '2026-08-11T12:00:00.000Z',
+      windowEnd: '2026-08-12T12:00:00.000Z',
+      status: 'ok',
+      error: null,
+    });
+  });
+
   it('returns a party summary aggregated across nodes', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
