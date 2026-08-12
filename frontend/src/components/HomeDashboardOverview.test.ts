@@ -22,6 +22,7 @@ describe('HomeDashboardOverview', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           status: 'healthy',
+          totalUpdateCount: 128,
           latestActiveContractCount: 5,
           samples: [
             {
@@ -101,7 +102,10 @@ describe('HomeDashboardOverview', () => {
     expect([...priceChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '14')).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'Latest Canton Coin Price' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Active Parties (24h)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Transactions' })).toBeInTheDocument();
     expect(await screen.findByText('0.10 USDT')).toBeInTheDocument();
+    expect(await screen.findByText('128')).toBeInTheDocument();
+    expect(screen.getByText('0.0017 TPS in the last hour')).toBeInTheDocument();
     expect(await screen.findByText('42')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '24h' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: '30d' })).toHaveAttribute('aria-pressed', 'false');

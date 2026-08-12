@@ -47,6 +47,33 @@ const recentPartiesError = ref<string | null>(null);
 const activityPoints = computed(() =>
   aggregateActivityPoints(activity.value?.nodes ?? []),
 );
+const representativeActivitySeries = computed(() =>
+  activity.value?.nodes.find(
+    (node) => node.status === 'healthy'
+      && typeof node.totalUpdateCount === 'number'
+      && Number.isFinite(node.totalUpdateCount),
+  ) ?? null,
+);
+const totalTransactions = computed(
+  () => representativeActivitySeries.value?.totalUpdateCount ?? null,
+);
+const latestHourTps = computed(() => {
+  const series = representativeActivitySeries.value;
+  const generatedAt = Date.parse(activity.value?.generatedAt ?? '');
+  if (!series || !Number.isFinite(generatedAt)) {
+    return null;
+  }
+
+  const windowStart = generatedAt - 60 * 60 * 1000;
+  const latestHourTransactions = series.samples.reduce((total, sample) => {
+    const timestamp = Date.parse(sample.timestamp);
+    return timestamp >= windowStart && timestamp <= generatedAt
+      ? total + Math.max(sample.activityValue, 0)
+      : total;
+  }, 0);
+
+  return latestHourTransactions / 3600;
+});
 const pricePoints = computed(() => {
   const points = preferredCantonCoinDailyPoints(market.value?.venues ?? []);
   if (points.length === 0) {
@@ -218,6 +245,21 @@ function formatPrice(point: HomeDashboardPricePoint | null): string {
   })} ${point.quote}`;
 }
 
+function formatTransactionTotal(value: number | null): string {
+  return value === null ? '—' : value.toLocaleString('en-US');
+}
+
+function formatTps(value: number | null): string {
+  if (value === null) {
+    return '—';
+  }
+
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: value < 1 ? 4 : 2,
+    maximumFractionDigits: 4,
+  });
+}
+
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -387,6 +429,17 @@ onMounted(() => {
         <strong v-else>—</strong>
         <span v-if="recentPartiesError" class="home-dashboard-overview__metric-error">{{ recentPartiesError }}</span>
         <span v-else>Unique parties seen in updates during the last {{ selectedRange }}</span>
+      </article>
+      <article class="home-dashboard-overview__metric-panel">
+        <h4>Transactions</h4>
+        <strong v-if="activityLoading">Loading…</strong>
+        <strong v-else>{{ formatTransactionTotal(totalTransactions) }}</strong>
+        <span v-if="activityError" class="home-dashboard-overview__metric-error">{{ activityError }}</span>
+        <span v-else-if="!activityLoading && latestHourTps !== null">
+          {{ formatTps(latestHourTps) }} TPS in the last hour
+        </span>
+        <span v-else-if="!activityLoading">Transaction telemetry unavailable</span>
+        <span v-else>Cumulative updates and latest-hour throughput</span>
       </article>
     </div>
   </section>

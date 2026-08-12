@@ -12,6 +12,7 @@ export interface ActivitySeries {
   label: string;
   mode?: NodeMode;
   status: NodeStatus;
+  totalUpdateCount?: number | null;
   latestActiveContractCount: number;
   samples: ActivitySample[];
 }
