@@ -97,6 +97,8 @@ describe('HomeDashboardOverview', () => {
     ]);
     expect([...activityChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '150')).toHaveLength(1);
     expect([...priceChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '150')).toHaveLength(1);
+    expect([...activityChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '14')).toHaveLength(1);
+    expect([...priceChart.querySelectorAll('.home-dashboard-overview__guide')].filter((guide) => guide.getAttribute('y1') === '14')).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'Latest Canton Coin Price' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Active Parties (24h)' })).toBeInTheDocument();
     expect(await screen.findByText('1.25 USDT')).toBeInTheDocument();
