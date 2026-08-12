@@ -18,6 +18,14 @@ export interface ActivePartiesResponse {
   nodes: ActivePartiesNodeEntry[];
 }
 
+export interface RecentActivePartiesResponse {
+  count: number;
+  windowStart: string;
+  windowEnd: string;
+  status: 'ok' | 'partial' | 'error';
+  error: string | null;
+}
+
 export interface NodePartyFingerprintsEntry {
   nodeId: string;
   label: string;

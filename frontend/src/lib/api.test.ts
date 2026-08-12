@@ -5,6 +5,7 @@ import {
   fetchActivityHistory,
   fetchBranding,
   fetchLocalParties,
+  fetchRecentActiveParties,
   fetchTokenDetail,
   fetchTokenHolders,
   fetchTokenTransfers,
@@ -639,6 +640,27 @@ describe('fetchNodes', () => {
     expect(result.nodes[0].nodeId).toBe('participant-1');
     expect(result.nodes[0].parties).toEqual(['Alice', 'Bob']);
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/parties');
+  });
+
+  it('loads recent active parties for a requested rolling window', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        count: 4,
+        windowStart: '2026-08-11T12:00:00.000Z',
+        windowEnd: '2026-08-12T12:00:00.000Z',
+        status: 'ok',
+        error: null,
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchRecentActiveParties();
+
+    expect(result.count).toBe(4);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/parties/activity?hours=24',
+    );
   });
 
   it('loads local parties grouped by node from the backend API', async () => {

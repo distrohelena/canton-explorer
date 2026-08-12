@@ -2,6 +2,7 @@ import type {
   ActivePartiesResponse,
   NodePartyFingerprintsEntry,
   PartyFingerprintsResponse,
+  RecentActivePartiesResponse,
 } from '../types/active-parties';
 import type { ActivityHistoryResponse } from '../types/activity';
 import type { BrandingConfig } from '../types/branding';
@@ -120,6 +121,10 @@ export function fetchNodes(): Promise<NodeSnapshot[]> {
 
 export function fetchActiveParties(): Promise<ActivePartiesResponse> {
   return fetchJson<ActivePartiesResponse>('/parties');
+}
+
+export function fetchRecentActiveParties(hours = 24): Promise<RecentActivePartiesResponse> {
+  return fetchJson<RecentActivePartiesResponse>(`/parties/activity?hours=${hours}`);
 }
 
 export function fetchLocalParties(): Promise<ActivePartiesResponse> {
@@ -415,7 +420,7 @@ export function fetchTrafficPurchases(options?: {
   return fetchJson<GlobalTrafficPurchasesResponse>(`/traffic-purchases${suffix}`);
 }
 
-export function fetchActivityHistory(days = 1): Promise<ActivityHistoryResponse> {
+export function fetchActivityHistory(days: 1 | 7 | 30 | 31 = 1): Promise<ActivityHistoryResponse> {
   return fetchJson<ActivityHistoryResponse>(`/nodes/activity-history?days=${days}`);
 }
 
