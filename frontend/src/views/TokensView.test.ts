@@ -133,6 +133,9 @@ describe('TokensView', () => {
     expect(within(transfersTable).getByText('42.0')).toBeInTheDocument();
     expect(within(transfersTable).getByRole('link', { name: 'Alice' })).toHaveAttribute('href', '/parties/Alice');
     expect(within(transfersTable).getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
+    const transfersSourcePill = within(transfersTable).getByText('PQS');
+    expect(transfersSourcePill.closest('[role="columnheader"]')?.textContent).toContain('Record Time');
+    expect(transfersSourcePill.closest('.results-header__actions')).toBeNull();
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
     expect(transfersBrowserSection.closest('.node-detail__section')).toBeNull();
     const transfersTopPager = within(

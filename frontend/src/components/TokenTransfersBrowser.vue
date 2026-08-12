@@ -517,7 +517,6 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
           @newer="showNewer"
           @older="showOlder"
         />
-        <QuerySourcePill source="pqs" />
       </div>
     </header>
 
@@ -582,7 +581,10 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
           <span v-if="compact" role="columnheader">From → To</span>
           <span v-else role="columnheader">From</span>
           <span v-if="!compact" role="columnheader">To</span>
-          <span role="columnheader">Record Time</span>
+          <span class="contracts-table__record-time-header" role="columnheader">
+            <span>Record Time</span>
+            <QuerySourcePill v-if="!compact" class="contracts-table__source-pill" source="pqs" />
+          </span>
         </div>
 
         <div
