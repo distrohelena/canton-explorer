@@ -32,6 +32,7 @@ describe('NodeCacheService', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           status: 'healthy',
+          totalUpdateCount: 100,
           latestActiveContractCount: 12,
           samples: [
             {
@@ -303,6 +304,7 @@ describe('NodeCacheService', () => {
           nodeId: 'participant-2',
           label: 'Participant 2',
           status: 'degraded',
+          totalUpdateCount: 0,
           latestActiveContractCount: 0,
           samples: [],
         },

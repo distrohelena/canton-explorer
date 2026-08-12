@@ -1756,6 +1756,7 @@ describe('NodesController', () => {
           label: 'Participant 1',
           mode: 'pqs_only',
           status: 'healthy',
+          totalUpdateCount: 42,
           latestActiveContractCount: 12,
           samples: [
             {

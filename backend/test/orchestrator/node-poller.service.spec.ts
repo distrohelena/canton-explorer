@@ -155,6 +155,7 @@ describe('NodePollerService', () => {
             nodeId: 'participant-1',
             label: 'Participant 1',
             status: 'healthy',
+            totalUpdateCount: 107,
             latestActiveContractCount: 12,
             samples: [
               expect.objectContaining({
