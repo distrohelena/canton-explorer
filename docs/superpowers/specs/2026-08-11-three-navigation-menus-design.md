@@ -66,6 +66,12 @@ stay together on the first line, while the search field and theme control
 occupy a second line. This avoids shrinking any trigger below 110px or
 allowing the search field to overflow.
 
+Trigger labels remain on one line. If an active title such as Traffic
+Purchases cannot fit beside the arrow, its visible text uses an ellipsis
+instead of clipping; the trigger keeps the complete title in its `title` and
+accessible name. Canton Coin and Traffic Purchases must be included in the
+browser layout checks at the stated viewports.
+
 At or below 720px, the toolbar stacks vertically, each trigger spans the
 available toolbar width, and its dropdown is left-aligned with a maximum width
 of `calc(100vw - 36px)` to prevent viewport overflow. The three menus remain
@@ -105,4 +111,6 @@ Update shell tests to cover:
 CSS layout verification includes a browser check at 1200px, 800px, and 600px
 viewports. The check must confirm that the trigger/menu bounds stay within the
 viewport, the 800px toolbar uses the intentional two-line layout, and the
-600px toolbar uses the stacked layout.
+600px toolbar uses the stacked layout. It must also confirm that the active
+Canton Coin and Traffic Purchases labels remain readable or ellipsized without
+overflow and retain their complete accessible names.
