@@ -2697,6 +2697,12 @@ h3 {
   gap: 18px;
 }
 
+.home-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 .home-dashboard {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2779,6 +2785,193 @@ h3 {
 .home-dashboard__view-all:hover {
   color: var(--blue-700);
   text-decoration: underline;
+}
+
+.home-dashboard-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.home-dashboard-overview__header,
+.home-dashboard-overview__panel-heading,
+.home-dashboard-overview__metrics-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.home-dashboard-overview__header h2,
+.home-dashboard-overview__panel-heading h3,
+.home-dashboard-overview__metrics-heading h3,
+.home-dashboard-overview__metric-panel h4 {
+  margin: 0;
+}
+
+.home-dashboard-overview__header h2 {
+  font-size: 1.65rem;
+  letter-spacing: -0.035em;
+}
+
+.home-dashboard-overview__panel-heading h3,
+.home-dashboard-overview__metrics-heading h3 {
+  font-size: 1.12rem;
+}
+
+.home-dashboard-overview__eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent-600);
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home-dashboard-overview__ranges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.home-dashboard-overview__range {
+  border: 1px solid var(--filter-chip-border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--text-700);
+  background: var(--filter-chip-bg);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.home-dashboard-overview__range:hover,
+.home-dashboard-overview__range[aria-pressed='true'] {
+  border-color: var(--accent-600);
+  color: var(--blue-700);
+  background: var(--filter-active-bg);
+}
+
+.home-dashboard-overview__charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  min-width: 0;
+}
+
+.home-dashboard-overview__chart-panel,
+.home-dashboard-overview__metrics {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: var(--panel-gradient-start);
+  box-shadow: var(--shadow-soft);
+}
+
+.home-dashboard-overview__panel-unit {
+  color: var(--muted-text);
+  font-size: 0.75rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.home-dashboard-overview__chart-shell {
+  min-height: 190px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    var(--chart-gradient-start),
+    var(--chart-gradient-end)
+  );
+}
+
+.home-dashboard-overview__chart {
+  display: block;
+  width: 100%;
+  height: 190px;
+}
+
+.home-dashboard-overview__guide {
+  stroke: var(--chart-guide);
+  stroke-width: 1;
+}
+
+.home-dashboard-overview__line {
+  stroke: var(--chart-line);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.home-dashboard-overview__line--price {
+  stroke: var(--accent-600);
+}
+
+.home-dashboard-overview__tick {
+  fill: var(--muted-text);
+  font-size: 10px;
+}
+
+.home-dashboard-overview__state {
+  display: grid;
+  min-height: 190px;
+  margin-top: 14px;
+  place-items: center;
+  padding: 20px;
+  color: var(--muted-text);
+  text-align: center;
+}
+
+.home-dashboard-overview__state--error,
+.home-dashboard-overview__metric-error {
+  color: var(--danger-600);
+}
+
+.home-dashboard-overview__metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.home-dashboard-overview__metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.home-dashboard-overview__metric-panel {
+  display: flex;
+  min-height: 112px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid var(--panel-divider);
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.home-dashboard-overview__metric-panel h4 {
+  color: var(--text-700);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.home-dashboard-overview__metric-panel strong {
+  color: var(--text-900);
+  font-size: 1.65rem;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.home-dashboard-overview__metric-panel span {
+  color: var(--muted-text);
+  font-size: 0.76rem;
 }
 
 .activity-home__hero {
@@ -5886,6 +6079,22 @@ h3 {
 
   .home-dashboard {
     grid-template-columns: 1fr;
+  }
+
+  .home-dashboard-overview__header,
+  .home-dashboard-overview__panel-heading,
+  .home-dashboard-overview__metrics-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-dashboard-overview__charts,
+  .home-dashboard-overview__metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-dashboard-overview__ranges {
+    justify-content: flex-start;
   }
 
   .node-updates__table--compact .node-updates__row--compact,
