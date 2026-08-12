@@ -21,6 +21,7 @@ const chartWidth = 520;
 const chartHeight = 180;
 const chartPadding = { top: 14, right: 18, bottom: 30, left: 44 };
 const chartTickRatios = [0, 0.25, 0.5, 0.75, 1] as const;
+const chartGuideRatios = [0.25, 0.5, 0.75, 1] as const;
 const ranges: Array<{ value: HomeDashboardRange; label: string }> = [
   { value: '24h', label: '24h' },
   { value: '7d', label: '7d' },
@@ -265,7 +266,7 @@ onMounted(() => {
             aria-label="Transactions over time chart"
           >
             <line
-              v-for="position in [0.25, 0.5, 0.75]"
+              v-for="position in chartGuideRatios"
               :key="position"
               class="home-dashboard-overview__guide"
               :x1="chartPadding.left"
@@ -322,7 +323,7 @@ onMounted(() => {
             aria-label="Canton Coin price over time chart"
           >
             <line
-              v-for="position in [0.25, 0.5, 0.75]"
+              v-for="position in chartGuideRatios"
               :key="position"
               class="home-dashboard-overview__guide"
               :x1="chartPadding.left"
