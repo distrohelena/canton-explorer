@@ -749,10 +749,15 @@ describe('PartiesView', () => {
 
     expect(await screen.findByRole('link', { name: 'Active 01' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Active 16' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Newer' })).toBeDisabled();
+    const newerButton = screen.getByRole('button', { name: 'Newer' });
+    const olderButton = screen.getByRole('button', { name: 'Older' });
+    expect(newerButton).toHaveClass('dashboard__refresh');
+    expect(newerButton.querySelector('.node-updates__pagination-icon--newer')).not.toBeNull();
+    expect(olderButton.querySelector('.node-updates__pagination-icon--older')).not.toBeNull();
+    expect(olderButton).not.toBeDisabled();
+    expect(newerButton).toBeDisabled();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+    await fireEvent.click(olderButton);
 
     expect(await screen.findByRole('link', { name: 'Active 16' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();

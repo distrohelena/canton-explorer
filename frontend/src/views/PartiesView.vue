@@ -634,17 +634,49 @@ onMounted(async () => {
                 type="button"
                 class="dashboard__refresh"
                 :disabled="selectedMode === 'fingerprints' ? !namespacesResponse?.nextAfter : !paginatedSelectedParties.nextAfter"
+                aria-label="Newer"
+                title="Newer"
                 @click="selectedMode === 'fingerprints' ? showNewerNamespaces() : showNewerParties()"
               >
-                Newer
+                <svg
+                  class="node-updates__pagination-icon node-updates__pagination-icon--newer"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M15 5l-7 7 7 7"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                  />
+                </svg>
               </button>
               <button
                 type="button"
                 class="dashboard__refresh"
                 :disabled="selectedMode === 'fingerprints' ? !namespacesResponse?.nextBefore : !paginatedSelectedParties.nextBefore"
+                aria-label="Older"
+                title="Older"
                 @click="selectedMode === 'fingerprints' ? showOlderNamespaces() : showOlderParties()"
               >
-                Older
+                <svg
+                  class="node-updates__pagination-icon node-updates__pagination-icon--older"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M9 5l7 7-7 7"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                  />
+                </svg>
               </button>
             </div>
             <QuerySourcePill
