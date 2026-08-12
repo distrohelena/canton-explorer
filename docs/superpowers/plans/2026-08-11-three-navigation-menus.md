@@ -301,7 +301,7 @@ for (const [width, mode] of [[1200, 'desktop'], [800, 'intermediate'], [600, 'mo
   assert.ok(metrics.menus.every((rect) => rect.left >= 0 && rect.right <= width));
   if (mode === 'desktop') {
     assert.ok(metrics.menus.every((rect) => rect.width >= 110 && rect.width <= 160));
-    assert.ok(metrics.search && metrics.theme && Math.abs(metrics.search.top - metrics.menus[0].top) < 2 && Math.abs(metrics.theme.top - metrics.menus[0].top) < 2);
+    assert.ok(metrics.search && metrics.theme && Math.abs(metrics.search.top + metrics.search.height / 2 - (metrics.menus[0].top + metrics.menus[0].height / 2)) < 2 && Math.abs(metrics.theme.top + metrics.theme.height / 2 - (metrics.menus[0].top + metrics.menus[0].height / 2)) < 2);
   } else if (mode === 'intermediate') {
     assert.ok(metrics.search && metrics.theme && metrics.search.top > metrics.menus[0].bottom - 2 && metrics.theme.top > metrics.menus[0].bottom - 2);
   } else {
