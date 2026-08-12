@@ -426,7 +426,7 @@ onMounted(async () => {
             :aria-pressed="selectedMode === 'active'"
             @click="selectMode('active')"
           >
-            Active Parties
+            Active Parties (PQS)
           </button>
           <button
             type="button"
@@ -435,7 +435,7 @@ onMounted(async () => {
             :aria-pressed="selectedMode === 'all'"
             @click="selectMode('all')"
           >
-            All Parties
+            All Parties (gRPC)
           </button>
           <button
             type="button"
@@ -444,7 +444,7 @@ onMounted(async () => {
             :aria-pressed="selectedMode === 'fingerprints'"
             @click="selectMode('fingerprints')"
           >
-            Namespaces
+            Namespaces (gRPC)
           </button>
       </div>
 

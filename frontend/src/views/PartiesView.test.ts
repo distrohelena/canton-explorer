@@ -196,7 +196,7 @@ describe('PartiesView', () => {
     await screen.findByRole('link', { name: 'Carol' });
 
     expect(screen.queryByText('PQS')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Active Parties' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Active Parties (PQS)' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -227,7 +227,7 @@ describe('PartiesView', () => {
     );
     expect(fetchNodeActiveParties).toHaveBeenCalledTimes(2);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'All Parties' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'All Parties (gRPC)' }));
 
     expect(await screen.findByRole('link', { name: 'LocalCarol' })).toHaveAttribute(
       'href',
@@ -359,7 +359,7 @@ describe('PartiesView', () => {
     expect(screen.getByRole('link', { name: 'Bob' })).toHaveAttribute('href', '/parties/Bob');
     expect(screen.getByRole('link', { name: 'Carol' })).toHaveAttribute('href', '/parties/Carol');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
 
     await waitFor(() =>
       expect(fetchPartyFingerprints).toHaveBeenCalledTimes(1),
@@ -446,7 +446,7 @@ describe('PartiesView', () => {
       },
     });
 
-    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces (gRPC)' }));
 
     expect(await screen.findByText('1220a')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Older' })).not.toBeDisabled();
@@ -530,7 +530,7 @@ describe('PartiesView', () => {
       },
     });
 
-    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces (gRPC)' }));
 
     expect(await screen.findByRole('link', { name: '1220abcd' })).toHaveAttribute(
       'href',
@@ -609,7 +609,7 @@ describe('PartiesView', () => {
       },
     });
 
-    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Namespaces (gRPC)' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
 
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
@@ -709,7 +709,7 @@ describe('PartiesView', () => {
     expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Newer' })).not.toBeDisabled();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'All Parties' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'All Parties (gRPC)' }));
 
     expect(await screen.findByRole('link', { name: 'Local 01' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Local 16' })).not.toBeInTheDocument();
@@ -788,7 +788,7 @@ describe('PartiesView', () => {
       },
     });
 
-    await fireEvent.click(await screen.findByRole('button', { name: 'All Parties' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'All Parties (gRPC)' }));
 
     expect(
       await screen.findByText('gRPC error while listing local parties for this node.'),
