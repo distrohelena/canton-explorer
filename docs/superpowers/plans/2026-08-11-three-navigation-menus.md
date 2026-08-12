@@ -314,6 +314,7 @@ assert.equal(await page.getByRole('button', { name: 'Traffic Purchases' }).count
 await page.goto('http://localhost:46000/', { waitUntil: 'networkidle' });
 const ledger = page.locator('.app-navigation').first();
 await ledger.hover();
+await page.waitForTimeout(250);
 const dropdown = page.locator('#app-navigation-menu-ledger');
 const dropdownRect = await dropdown.boundingBox();
 const ledgerRect = await ledger.boundingBox();
