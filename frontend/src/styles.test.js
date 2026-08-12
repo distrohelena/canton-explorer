@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('styles.css', () => {
-  it('keeps Current snapshot spacing aligned with Latest Updates', () => {
+  it('keeps Current Snapshot spacing aligned with Latest Updates', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const overviewStyles = styles.match(/\.home-dashboard-overview \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const latestUpdatesStyles = styles.match(/\.node-updates \{([\s\S]*?)\n\}/)?.[1] ?? '';

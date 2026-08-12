@@ -409,7 +409,7 @@ onMounted(() => {
 
     <div class="home-dashboard-overview__metrics-heading">
       <div>
-        <h3 id="home-dashboard-metrics-title">Current snapshot</h3>
+        <h3 id="home-dashboard-metrics-title">Current Snapshot</h3>
       </div>
     </div>
     <div class="home-dashboard-overview__metric-grid">
