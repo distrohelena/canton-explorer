@@ -2942,6 +2942,10 @@ h3 {
   gap: 12px;
 }
 
+.home-dashboard-overview__metrics-heading + .home-dashboard-overview__metric-grid {
+  margin-top: -10px;
+}
+
 .home-dashboard-overview__metric-panel {
   display: flex;
   min-height: 112px;

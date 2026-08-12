@@ -3,6 +3,17 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('styles.css', () => {
+  it('keeps Current snapshot spacing aligned with Latest Updates', () => {
+    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+    const overviewStyles = styles.match(/\.home-dashboard-overview \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const latestUpdatesStyles = styles.match(/\.node-updates \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(overviewStyles).toContain('gap: 18px;');
+    expect(latestUpdatesStyles).toContain('gap: 8px;');
+    expect(styles).toContain(
+      '.home-dashboard-overview__metrics-heading + .home-dashboard-overview__metric-grid {\n  margin-top: -10px;\n}',
+    );
+  });
+
   it('lays out the home dashboard previews side by side and stacks them on mobile', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
     const homeDashboardStyles =
