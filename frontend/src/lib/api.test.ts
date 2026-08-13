@@ -22,6 +22,12 @@ import {
   fetchNodes,
   resolveApiBaseUrl,
   fetchTokens,
+  fetchPackageSummary,
+  fetchPackageNodes,
+  fetchPackageModules,
+  fetchPackageTemplates,
+  fetchPackageDataTypes,
+  fetchPackageModule,
 } from './api';
 import type { NodeContractDetailResponse, NodeContractsResponse } from '../types/contracts';
 import type { NodePackagesResponse, NodeParticipantStatusResponse } from '../types/nodes';
@@ -1520,6 +1526,47 @@ describe('fetchNodes', () => {
         status: 'decoded',
         modules: ['Splice.Amulet'],
       }),
+    );
+  });
+
+  it('loads package detail panels through independent backend endpoints', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', seenOnNodes: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', modules: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', templates: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', dataTypes: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await Promise.all([
+      fetchPackageSummary('pkg'),
+      fetchPackageNodes('pkg'),
+      fetchPackageModules('pkg'),
+      fetchPackageTemplates('pkg'),
+      fetchPackageDataTypes('pkg'),
+    ]);
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'http://localhost:4600/api/packages/pkg/summary',
+      'http://localhost:4600/api/packages/pkg/nodes',
+      'http://localhost:4600/api/packages/pkg/modules',
+      'http://localhost:4600/api/packages/pkg/templates',
+      'http://localhost:4600/api/packages/pkg/data-types',
+    ]);
+  });
+
+  it('loads a package module from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ packageId: 'pkg', moduleName: 'Main.Module' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchPackageModule('pkg', 'Main.Module')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'pkg', moduleName: 'Main.Module' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/packages/pkg/modules/Main.Module',
     );
   });
 

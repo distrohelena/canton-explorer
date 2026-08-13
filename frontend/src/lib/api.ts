@@ -23,7 +23,16 @@ import type {
 import type { NamespaceDetailResponse, NamespacePartiesResponse } from '../types/namespaces';
 import type { PartyDetailResponse } from '../types/parties';
 import type { PartyContractsResponse } from '../types/parties';
-import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
+import type {
+  PackageDetailDataTypesResponse,
+  PackageDetailModulesResponse,
+  PackageDetailNodesResponse,
+  PackageDetailResponse,
+  PackageDetailSummaryResponse,
+  PackageDetailTemplatesResponse,
+  PackageFamilyResponse,
+  PackageModuleDetailResponse,
+} from '../types/packages';
 import type { SearchResultsResponse } from '../types/search';
 import type { TemplateFilterResponse } from '../types/templates';
 import type {
@@ -743,6 +752,35 @@ export function fetchNodeContractDetail(
 
 export function fetchPackageDetail(packageId: string): Promise<PackageDetailResponse> {
   return fetchJson<PackageDetailResponse>(`/packages/${packageId}`);
+}
+
+export function fetchPackageSummary(packageId: string): Promise<PackageDetailSummaryResponse> {
+  return fetchJson<PackageDetailSummaryResponse>(`/packages/${packageId}/summary`);
+}
+
+export function fetchPackageNodes(packageId: string): Promise<PackageDetailNodesResponse> {
+  return fetchJson<PackageDetailNodesResponse>(`/packages/${packageId}/nodes`);
+}
+
+export function fetchPackageModules(packageId: string): Promise<PackageDetailModulesResponse> {
+  return fetchJson<PackageDetailModulesResponse>(`/packages/${packageId}/modules`);
+}
+
+export function fetchPackageTemplates(packageId: string): Promise<PackageDetailTemplatesResponse> {
+  return fetchJson<PackageDetailTemplatesResponse>(`/packages/${packageId}/templates`);
+}
+
+export function fetchPackageDataTypes(packageId: string): Promise<PackageDetailDataTypesResponse> {
+  return fetchJson<PackageDetailDataTypesResponse>(`/packages/${packageId}/data-types`);
+}
+
+export function fetchPackageModule(
+  packageId: string,
+  moduleName: string,
+): Promise<PackageModuleDetailResponse> {
+  return fetchJson<PackageModuleDetailResponse>(
+    `/packages/${packageId}/modules/${encodeURIComponent(moduleName)}`,
+  );
 }
 
 export function fetchTemplates(): Promise<TemplateFilterResponse> {

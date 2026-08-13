@@ -14,6 +14,12 @@ import type {
   NodeParticipantStatusResponse,
   NodePackagesResponse,
   PackageDetailResponse,
+  PackageDetailDataTypesResponse,
+  PackageDetailModulesResponse,
+  PackageDetailNodesResponse,
+  PackageDetailSummaryResponse,
+  PackageDetailTemplatesResponse,
+  PackageModuleDetailResponse,
   PackageFamilyResponse,
   TemplateFilterResponse,
   TokenDetailResponse,
@@ -563,6 +569,12 @@ describe('NodesController', () => {
     fetchContractDetail: jest.Mock;
     search: jest.Mock;
     fetchPackageDetail: jest.Mock;
+    fetchPackageSummary: jest.Mock;
+    fetchPackageNodes: jest.Mock;
+    fetchPackageModules: jest.Mock;
+    fetchPackageTemplates: jest.Mock;
+    fetchPackageDataTypes: jest.Mock;
+    fetchPackageModule: jest.Mock;
     fetchPackagesByName: jest.Mock;
     fetchTemplates: jest.Mock;
     fetchNodePackages: jest.Mock;
@@ -726,6 +738,47 @@ describe('NodesController', () => {
         },
       }),
       fetchPackageDetail: jest.fn().mockResolvedValue(typedPackageDetailFixture),
+      fetchPackageSummary: jest.fn().mockResolvedValue({
+        packageId: typedPackageDetailFixture.packageId,
+        name: typedPackageDetailFixture.name,
+        version: typedPackageDetailFixture.version,
+        uploadedAt: typedPackageDetailFixture.uploadedAt,
+        packageSize: typedPackageDetailFixture.packageSize,
+        status: typedPackageDetailFixture.status,
+        moduleCount: typedPackageDetailFixture.moduleCount,
+        templateCount: typedPackageDetailFixture.templateCount,
+        dataTypeCount: typedPackageDetailFixture.dataTypeCount,
+      } satisfies PackageDetailSummaryResponse),
+      fetchPackageNodes: jest.fn().mockResolvedValue({
+        packageId: typedPackageDetailFixture.packageId,
+        seenOnNodes: typedPackageDetailFixture.seenOnNodes,
+      } satisfies PackageDetailNodesResponse),
+      fetchPackageModules: jest.fn().mockResolvedValue({
+        packageId: typedPackageDetailFixture.packageId,
+        status: typedPackageDetailFixture.status,
+        modules: typedPackageDetailFixture.modules,
+      } satisfies PackageDetailModulesResponse),
+      fetchPackageTemplates: jest.fn().mockResolvedValue({
+        packageId: typedPackageDetailFixture.packageId,
+        status: typedPackageDetailFixture.status,
+        templates: typedPackageDetailFixture.templates,
+      } satisfies PackageDetailTemplatesResponse),
+      fetchPackageDataTypes: jest.fn().mockResolvedValue({
+        packageId: typedPackageDetailFixture.packageId,
+        status: typedPackageDetailFixture.status,
+        dataTypes: typedPackageDetailFixture.dataTypes,
+      } satisfies PackageDetailDataTypesResponse),
+      fetchPackageModule: jest.fn().mockResolvedValue({
+        packageId: typedPackageDetailFixture.packageId,
+        name: typedPackageDetailFixture.name,
+        version: typedPackageDetailFixture.version,
+        uploadedAt: typedPackageDetailFixture.uploadedAt,
+        packageSize: typedPackageDetailFixture.packageSize,
+        status: typedPackageDetailFixture.status,
+        moduleName: 'Main.Module',
+        templates: typedPackageDetailFixture.templates,
+        dataTypes: typedPackageDetailFixture.dataTypes,
+      } satisfies PackageModuleDetailResponse),
       fetchPackagesByName: jest.fn().mockResolvedValue(typedPackageFamilyFixture),
       fetchTemplates: jest.fn().mockResolvedValue(typedTemplateFilterFixture),
       fetchNodePackages: jest.fn().mockResolvedValue(typedNodePackagesFixture),
@@ -931,11 +984,45 @@ describe('NodesController', () => {
     expect(response).toEqual(typedPackageDetailFixture);
   });
 
+  it('exposes independent package detail section endpoints', async () => {
+    await expect(controller.getPackageSummary('main-package')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'main-package', status: 'decoded' }),
+    );
+    await expect(controller.getPackageNodes('main-package')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'main-package' }),
+    );
+    await expect(controller.getPackageModules('main-package')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'main-package', modules: typedPackageDetailFixture.modules }),
+    );
+    await expect(controller.getPackageTemplates('main-package')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'main-package' }),
+    );
+    await expect(controller.getPackageDataTypes('main-package')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'main-package' }),
+    );
+
+    expect(pqsSummaryService.fetchPackageSummary).toHaveBeenCalledWith('main-package');
+    expect(pqsSummaryService.fetchPackageNodes).toHaveBeenCalledWith('main-package');
+    expect(pqsSummaryService.fetchPackageModules).toHaveBeenCalledWith('main-package');
+    expect(pqsSummaryService.fetchPackageTemplates).toHaveBeenCalledWith('main-package');
+    expect(pqsSummaryService.fetchPackageDataTypes).toHaveBeenCalledWith('main-package');
+  });
+
   it('returns 404 for an unknown package id', async () => {
     pqsSummaryService.fetchPackageDetail.mockRejectedValueOnce(new Error('Package not found'));
 
     await expect(controller.getPackageDetail('missing-package')).rejects.toBeInstanceOf(
       NotFoundException,
+    );
+  });
+
+  it('returns a filtered package module detail', async () => {
+    await expect(controller.getPackageModule('main-package', 'Main.Module')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'main-package', moduleName: 'Main.Module' }),
+    );
+    expect(pqsSummaryService.fetchPackageModule).toHaveBeenCalledWith(
+      'main-package',
+      'Main.Module',
     );
   });
 

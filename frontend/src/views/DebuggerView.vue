@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CSSProperties } from 'vue';
-import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import type { LocationQueryRaw } from 'vue-router';
 import DebuggerControlPanel from '../components/DebuggerControlPanel.vue';
 import DebuggerEventList from '../components/DebuggerEventList.vue';
@@ -748,7 +748,7 @@ const updateDetailTarget = computed(() => {
     return null;
   }
 
-  return `/nodes/${encodeURIComponent(session.value.nodeId)}/updates/${encodeURIComponent(session.value.offset)}`;
+  return `nodes/${encodeURIComponent(session.value.nodeId)}/updates/${encodeURIComponent(session.value.offset)}`;
 });
 
 const currentScopes = computed(() => session.value?.currentStep.scopes ?? []);
@@ -1394,30 +1394,30 @@ onBeforeUnmount(() => {
               <div>
                 <dt>Event Offset</dt>
                 <dd class="update-detail__id">
-                  <RouterLink
+                  <a
                     v-if="updateDetailTarget"
                     class="debugger-view__detail-link"
-                    :to="updateDetailTarget"
+                    :href="updateDetailTarget"
                     target="_blank"
                     rel="noreferrer"
                   >
                     {{ session.offset }}
-                  </RouterLink>
+                  </a>
                   <span v-else>{{ session.offset }}</span>
                 </dd>
               </div>
               <div class="debugger-view__summary-item debugger-view__summary-item--canonical">
                 <dt>Canonical Update ID</dt>
                 <dd class="update-detail__canonical">
-                  <RouterLink
+                  <a
                     v-if="updateDetailTarget && (session.updateId ?? updateId)"
                     class="debugger-view__detail-link"
-                    :to="updateDetailTarget"
+                    :href="updateDetailTarget"
                     target="_blank"
                     rel="noreferrer"
                   >
                     {{ session.updateId ?? updateId }}
-                  </RouterLink>
+                  </a>
                   <span v-else>{{ session.updateId ?? updateId ?? 'n/a' }}</span>
                 </dd>
               </div>

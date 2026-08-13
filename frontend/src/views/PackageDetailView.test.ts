@@ -1,16 +1,162 @@
 import { cleanup, render, screen } from '@testing-library/vue';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PackageDetailView from './PackageDetailView.vue';
-import { fetchPackageDetail } from '../lib/api';
+import {
+  fetchPackageDataTypes,
+  fetchPackageDetail,
+  fetchPackageModules,
+  fetchPackageNodes,
+  fetchPackageSummary,
+  fetchPackageTemplates,
+} from '../lib/api';
+import type { PackageDetailResponse } from '../types/packages';
 
 vi.mock('../lib/api', () => ({
   fetchPackageDetail: vi.fn(),
+  fetchPackageSummary: vi.fn(),
+  fetchPackageNodes: vi.fn(),
+  fetchPackageModules: vi.fn(),
+  fetchPackageTemplates: vi.fn(),
+  fetchPackageDataTypes: vi.fn(),
 }));
 
 describe('PackageDetailView', () => {
+  beforeEach(() => {
+    vi.mocked(fetchPackageSummary).mockImplementation(async (packageId) => {
+      const detail = await vi.mocked(fetchPackageDetail)(packageId) as PackageDetailResponse;
+      return {
+        packageId: detail.packageId,
+        name: detail.name,
+        version: detail.version,
+        uploadedAt: detail.uploadedAt,
+        packageSize: detail.packageSize,
+        status: detail.status,
+        moduleCount: detail.moduleCount,
+        templateCount: detail.templateCount,
+        dataTypeCount: detail.dataTypeCount,
+      };
+    });
+    vi.mocked(fetchPackageNodes).mockImplementation(async (packageId) => {
+      const detail = await vi.mocked(fetchPackageDetail)(packageId) as PackageDetailResponse;
+      return { packageId: detail.packageId, seenOnNodes: detail.seenOnNodes };
+    });
+    vi.mocked(fetchPackageModules).mockImplementation(async (packageId) => {
+      const detail = await vi.mocked(fetchPackageDetail)(packageId) as PackageDetailResponse;
+      return { packageId: detail.packageId, status: detail.status, modules: detail.modules };
+    });
+    vi.mocked(fetchPackageTemplates).mockImplementation(async (packageId) => {
+      const detail = await vi.mocked(fetchPackageDetail)(packageId) as PackageDetailResponse;
+      return { packageId: detail.packageId, status: detail.status, templates: detail.templates };
+    });
+    vi.mocked(fetchPackageDataTypes).mockImplementation(async (packageId) => {
+      const detail = await vi.mocked(fetchPackageDetail)(packageId) as PackageDetailResponse;
+      return { packageId: detail.packageId, status: detail.status, dataTypes: detail.dataTypes };
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     cleanup();
+  });
+
+  it('renders every panel immediately and resolves each panel independently', async () => {
+    let resolveSummary!: (value: unknown) => void;
+    const summaryPromise = new Promise((resolve) => {
+      resolveSummary = resolve;
+    });
+
+    vi.mocked(fetchPackageSummary).mockReturnValue(summaryPromise as never);
+    vi.mocked(fetchPackageNodes).mockResolvedValue({ packageId: 'pkg', seenOnNodes: [] });
+    vi.mocked(fetchPackageModules).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(fetchPackageTemplates).mockResolvedValue({
+      packageId: 'pkg',
+      status: 'decoded',
+      templates: [],
+    });
+    vi.mocked(fetchPackageDataTypes).mockResolvedValue({
+      packageId: 'pkg',
+      status: 'decoded',
+      dataTypes: [],
+    });
+
+    render(PackageDetailView, {
+      props: { packageId: 'pkg' },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(screen.getByRole('heading', { name: 'Package' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Seen On Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Modules' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Templates' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Data Types' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading summary' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading modules' })).toBeInTheDocument();
+    expect(await screen.findByText('No node presence recorded for this package.')).toBeInTheDocument();
+
+    resolveSummary({
+      packageId: 'pkg',
+      name: 'pkg',
+      version: '1.0.0',
+      uploadedAt: null,
+      packageSize: null,
+      status: 'decoded',
+      moduleCount: 0,
+      templateCount: 0,
+      dataTypeCount: 0,
+    });
+
+    expect(await screen.findByText('Decoded')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading modules' })).toBeInTheDocument();
+  });
+
+  it('keeps other panels available when one panel fails', async () => {
+    vi.mocked(fetchPackageSummary).mockResolvedValue({
+      packageId: 'pkg',
+      name: 'pkg',
+      version: '1.0.0',
+      uploadedAt: null,
+      packageSize: null,
+      status: 'decoded',
+      moduleCount: 1,
+      templateCount: 0,
+      dataTypeCount: 0,
+    });
+    vi.mocked(fetchPackageNodes).mockResolvedValue({ packageId: 'pkg', seenOnNodes: [] });
+    vi.mocked(fetchPackageModules).mockResolvedValue({
+      packageId: 'pkg',
+      status: 'decoded',
+      modules: ['Main.Module'],
+    });
+    vi.mocked(fetchPackageTemplates).mockRejectedValue(new Error('Templates unavailable'));
+    vi.mocked(fetchPackageDataTypes).mockResolvedValue({
+      packageId: 'pkg',
+      status: 'decoded',
+      dataTypes: [],
+    });
+
+    render(PackageDetailView, {
+      props: { packageId: 'pkg' },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(await screen.findByText('Templates unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Main.Module')).toBeInTheDocument();
+    expect(screen.getByText('No data type definitions are present in this package.')).toBeInTheDocument();
   });
 
   it('shows a loading state before the package detail resolves', () => {
@@ -30,7 +176,7 @@ describe('PackageDetailView', () => {
       },
     });
 
-    expect(screen.getByText('Loading package detail...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading summary' })).toBeInTheDocument();
   });
 
   it('renders decoded package metadata, node presence, and decoded structure', async () => {
@@ -157,6 +303,9 @@ describe('PackageDetailView', () => {
     expect(screen.getByText('12:05:00 PM')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Modules' })).toBeInTheDocument();
     expect(screen.getByText('Splice.Amulet')).toBeInTheDocument();
+    expect(
+      container.querySelector('a[href="/packages/splice-amulet/modules/Splice.Amulet"]'),
+    ).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Templates' })).toBeInTheDocument();
     expect(screen.getAllByText('Splice.Amulet:SvRewardCoupon').length).toBeGreaterThan(0);
     expect(screen.getByText('dso')).toBeInTheDocument();

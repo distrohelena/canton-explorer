@@ -1,22 +1,124 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PackageTypeInlineSchema from '../components/PackageTypeInlineSchema.vue';
 import PackageTypeTree from '../components/PackageTypeTree.vue';
-import { fetchPackageDetail } from '../lib/api';
-import type { PackageDetailResponse } from '../types/packages';
+import {
+  fetchPackageDataTypes,
+  fetchPackageModules,
+  fetchPackageNodes,
+  fetchPackageSummary,
+  fetchPackageTemplates,
+} from '../lib/api';
+import type {
+  PackageDetailDataTypesResponse,
+  PackageDetailModulesResponse,
+  PackageDetailNodesResponse,
+  PackageDetailStatus,
+  PackageDetailSummaryResponse,
+  PackageDetailTemplatesResponse,
+} from '../types/packages';
 
 const props = defineProps<{ packageId: string }>();
 
-const packageDetail = ref<PackageDetailResponse | null>(null);
-const error = ref<string | null>(null);
+const packageSummary = ref<PackageDetailSummaryResponse | null>(null);
+const packageNodes = ref<PackageDetailNodesResponse | null>(null);
+const packageModules = ref<PackageDetailModulesResponse | null>(null);
+const packageTemplates = ref<PackageDetailTemplatesResponse | null>(null);
+const packageDataTypes = ref<PackageDetailDataTypesResponse | null>(null);
+const summaryLoading = ref(false);
+const nodesLoading = ref(false);
+const modulesLoading = ref(false);
+const templatesLoading = ref(false);
+const dataTypesLoading = ref(false);
+const summaryError = ref<string | null>(null);
+const nodesError = ref<string | null>(null);
+const modulesError = ref<string | null>(null);
+const templatesError = ref<string | null>(null);
+const dataTypesError = ref<string | null>(null);
 
-onMounted(async () => {
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
+async function loadPackageSummary() {
+  summaryLoading.value = true;
+  summaryError.value = null;
+  packageSummary.value = null;
+
   try {
-    packageDetail.value = await fetchPackageDetail(props.packageId);
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    packageSummary.value = await fetchPackageSummary(props.packageId);
+  } catch (error) {
+    summaryError.value = getErrorMessage(error);
+  } finally {
+    summaryLoading.value = false;
   }
-});
+}
+
+async function loadPackageNodes() {
+  nodesLoading.value = true;
+  nodesError.value = null;
+  packageNodes.value = null;
+
+  try {
+    packageNodes.value = await fetchPackageNodes(props.packageId);
+  } catch (error) {
+    nodesError.value = getErrorMessage(error);
+  } finally {
+    nodesLoading.value = false;
+  }
+}
+
+async function loadPackageModules() {
+  modulesLoading.value = true;
+  modulesError.value = null;
+  packageModules.value = null;
+
+  try {
+    packageModules.value = await fetchPackageModules(props.packageId);
+  } catch (error) {
+    modulesError.value = getErrorMessage(error);
+  } finally {
+    modulesLoading.value = false;
+  }
+}
+
+async function loadPackageTemplates() {
+  templatesLoading.value = true;
+  templatesError.value = null;
+  packageTemplates.value = null;
+
+  try {
+    packageTemplates.value = await fetchPackageTemplates(props.packageId);
+  } catch (error) {
+    templatesError.value = getErrorMessage(error);
+  } finally {
+    templatesLoading.value = false;
+  }
+}
+
+async function loadPackageDataTypes() {
+  dataTypesLoading.value = true;
+  dataTypesError.value = null;
+  packageDataTypes.value = null;
+
+  try {
+    packageDataTypes.value = await fetchPackageDataTypes(props.packageId);
+  } catch (error) {
+    dataTypesError.value = getErrorMessage(error);
+  } finally {
+    dataTypesLoading.value = false;
+  }
+}
+
+function loadPackageSections() {
+  void loadPackageSummary();
+  void loadPackageNodes();
+  void loadPackageModules();
+  void loadPackageTemplates();
+  void loadPackageDataTypes();
+}
+
+watch(() => props.packageId, loadPackageSections, { immediate: true });
 
 function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
   if (!recordTime) {
@@ -46,7 +148,7 @@ function formatPackageSize(packageSize: number | null): string {
   return `${new Intl.NumberFormat().format(packageSize)} bytes`;
 }
 
-function formatDecodeStatus(status: PackageDetailResponse['status']): string {
+function formatDecodeStatus(status: PackageDetailStatus): string {
   switch (status) {
     case 'decoded':
       return 'Decoded';
@@ -71,41 +173,36 @@ function packageSectionEmptyMessage(section: 'modules' | 'templates' | 'dataType
 }
 
 const heading = computed(() => {
-  if (!packageDetail.value) {
+  if (!packageSummary.value) {
     return 'Package';
   }
 
-  return `${packageDetail.value.name ?? packageDetail.value.packageId} Package`;
+  return `${packageSummary.value.name ?? packageSummary.value.packageId} Package`;
 });
 
 const uploadedAtLines = computed(() =>
-  packageDetail.value ? formatRecordTime(packageDetail.value.uploadedAt) : null,
+  packageSummary.value ? formatRecordTime(packageSummary.value.uploadedAt) : null,
 );
 
 const seenOnNodes = computed(() =>
-  (packageDetail.value?.seenOnNodes ?? []).map((node) => ({
+  (packageNodes.value?.seenOnNodes ?? []).map((node) => ({
     ...node,
     seenAtLines: formatRecordTime(node.seenAt),
   })),
 );
 
 const packageFamilyPath = computed(() => {
-  if (!packageDetail.value?.name) {
+  if (!packageSummary.value?.name) {
     return null;
   }
 
-  return `/packages/by-name/${encodeURIComponent(packageDetail.value.name)}`;
+  return `/packages/by-name/${encodeURIComponent(packageSummary.value.name)}`;
 });
 </script>
 
 <template>
   <section class="package-detail">
-    <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p v-else-if="!packageDetail" class="node-detail__message inline-loading" role="status">
-      <span class="node-updates__spinner" aria-hidden="true"></span>
-      <span>Loading package detail...</span>
-    </p>
-    <div v-else class="node-page">
+    <div class="node-page">
       <div class="node-page__main package-detail__content">
         <header class="node-detail__hero">
           <div>
@@ -116,30 +213,37 @@ const packageFamilyPath = computed(() => {
         <div class="node-detail__sections">
           <section class="node-detail__section package-detail__section--summary">
             <h3>Summary</h3>
-            <dl class="detail-grid package-detail__summary-grid">
+            <div v-if="summaryLoading" class="inline-loading" role="status" aria-label="Loading summary">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading summary...</span>
+            </div>
+            <p v-else-if="summaryError" class="node-detail__message node-detail__message--error">
+              {{ summaryError }}
+            </p>
+            <dl v-else-if="packageSummary" class="detail-grid package-detail__summary-grid">
               <div class="package-detail__summary-item package-detail__summary-item--full-row">
                 <dt>Package ID</dt>
-                <dd class="update-detail__id">{{ packageDetail.packageId }}</dd>
+                <dd class="update-detail__id">{{ packageSummary.packageId }}</dd>
               </div>
               <div class="package-detail__summary-item package-detail__summary-item--full-row">
                 <div class="package-detail__summary-pair">
                   <div class="package-detail__summary-subitem">
                     <dt>Package Name</dt>
-                    <dd v-if="packageDetail.name && packageFamilyPath">
+                    <dd v-if="packageSummary.name && packageFamilyPath">
                       <RouterLink class="contract-detail__link" :to="packageFamilyPath">
-                        {{ packageDetail.name }}
+                        {{ packageSummary.name }}
                       </RouterLink>
                     </dd>
-                    <dd v-else>{{ packageDetail.name ?? 'n/a' }}</dd>
+                    <dd v-else>{{ packageSummary.name ?? 'n/a' }}</dd>
                   </div>
                   <div class="package-detail__summary-subitem">
                     <dt>Version</dt>
-                    <dd v-if="packageDetail.version && packageFamilyPath">
+                    <dd v-if="packageSummary.version && packageFamilyPath">
                       <RouterLink class="contract-detail__link" :to="packageFamilyPath">
-                        {{ packageDetail.version }}
+                        {{ packageSummary.version }}
                       </RouterLink>
                     </dd>
-                    <dd v-else>{{ packageDetail.version ?? 'n/a' }}</dd>
+                    <dd v-else>{{ packageSummary.version ?? 'n/a' }}</dd>
                   </div>
                 </div>
               </div>
@@ -159,35 +263,42 @@ const packageFamilyPath = computed(() => {
                   </div>
                   <div class="package-detail__summary-subitem">
                     <dt>Package Size</dt>
-                    <dd>{{ formatPackageSize(packageDetail.packageSize) }}</dd>
+                    <dd>{{ formatPackageSize(packageSummary.packageSize) }}</dd>
                   </div>
                 </div>
               </div>
               <div class="package-detail__summary-item">
                 <dt>Decode Status</dt>
-                <dd>{{ formatDecodeStatus(packageDetail.status) }}</dd>
+                <dd>{{ formatDecodeStatus(packageSummary.status) }}</dd>
               </div>
               <div class="package-detail__summary-item">
                 <dt>Modules</dt>
-                <dd>{{ packageDetail.moduleCount }}</dd>
+                <dd>{{ packageSummary.moduleCount }}</dd>
               </div>
               <div class="package-detail__summary-item">
                 <dt>Templates</dt>
-                <dd>{{ packageDetail.templateCount }}</dd>
+                <dd>{{ packageSummary.templateCount }}</dd>
               </div>
               <div class="package-detail__summary-item">
                 <dt>Data Types</dt>
-                <dd>{{ packageDetail.dataTypeCount }}</dd>
+                <dd>{{ packageSummary.dataTypeCount }}</dd>
               </div>
             </dl>
           </section>
 
           <section class="node-detail__section package-detail__section--nodes">
             <h3>Seen On Nodes</h3>
-            <p v-if="packageDetail.seenOnNodes.length === 0" class="update-detail__empty">
+            <div v-if="nodesLoading" class="inline-loading" role="status" aria-label="Loading observed nodes">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading observed nodes...</span>
+            </div>
+            <p v-else-if="nodesError" class="node-detail__message node-detail__message--error">
+              {{ nodesError }}
+            </p>
+            <p v-else-if="packageNodes?.seenOnNodes.length === 0" class="update-detail__empty">
               No node presence recorded for this package.
             </p>
-            <div v-else class="package-detail__seen-list">
+            <div v-else-if="packageNodes" class="package-detail__seen-list">
               <div
                 v-for="node in seenOnNodes"
                 :key="`${node.nodeId}-${node.seenAt}`"
@@ -196,7 +307,7 @@ const packageFamilyPath = computed(() => {
                 <div>
                   <p class="package-detail__seen-node">{{ node.nodeId }}</p>
                   <p class="package-detail__seen-meta">
-                    {{ node.packageName ?? packageDetail.name ?? packageDetail.packageId }}
+                    {{ node.packageName ?? packageSummary?.name ?? props.packageId }}
                   </p>
                 </div>
                 <div v-if="node.seenAtLines" class="update-detail__time">
@@ -209,15 +320,22 @@ const packageFamilyPath = computed(() => {
 
           <section class="node-detail__section package-detail__section--decoded">
             <h3>Modules</h3>
-            <p v-if="packageDetail.status !== 'decoded'" class="update-detail__empty">
+            <div v-if="modulesLoading" class="inline-loading" role="status" aria-label="Loading modules">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading modules...</span>
+            </div>
+            <p v-else-if="modulesError" class="node-detail__message node-detail__message--error">
+              {{ modulesError }}
+            </p>
+            <p v-else-if="packageModules?.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
             </p>
-            <p v-else-if="packageDetail.modules.length === 0" class="update-detail__empty">
+            <p v-else-if="packageModules?.modules.length === 0" class="update-detail__empty">
               {{ packageSectionEmptyMessage('modules') }}
             </p>
-            <div v-else class="package-detail__list">
+            <div v-else-if="packageModules" class="package-detail__list">
               <div
-                v-for="moduleName in packageDetail.modules"
+                v-for="moduleName in packageModules.modules"
                 :key="moduleName"
                 class="package-detail__list-row"
               >
@@ -228,15 +346,22 @@ const packageFamilyPath = computed(() => {
 
           <section class="node-detail__section package-detail__section--decoded">
             <h3>Templates</h3>
-            <p v-if="packageDetail.status !== 'decoded'" class="update-detail__empty">
+            <div v-if="templatesLoading" class="inline-loading" role="status" aria-label="Loading templates">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading templates...</span>
+            </div>
+            <p v-else-if="templatesError" class="node-detail__message node-detail__message--error">
+              {{ templatesError }}
+            </p>
+            <p v-else-if="packageTemplates?.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
             </p>
-            <p v-else-if="packageDetail.templates.length === 0" class="update-detail__empty">
+            <p v-else-if="packageTemplates?.templates.length === 0" class="update-detail__empty">
               {{ packageSectionEmptyMessage('templates') }}
             </p>
-            <div v-else class="package-detail__list">
+            <div v-else-if="packageTemplates" class="package-detail__list">
               <div
-                v-for="template in packageDetail.templates"
+                v-for="template in packageTemplates.templates"
                 :key="template.templateId"
                 class="package-detail__list-row package-detail__list-row--stacked"
               >
@@ -248,15 +373,22 @@ const packageFamilyPath = computed(() => {
 
           <section class="node-detail__section package-detail__section--decoded">
             <h3>Data Types</h3>
-            <p v-if="packageDetail.status !== 'decoded'" class="update-detail__empty">
+            <div v-if="dataTypesLoading" class="inline-loading" role="status" aria-label="Loading data types">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading data types...</span>
+            </div>
+            <p v-else-if="dataTypesError" class="node-detail__message node-detail__message--error">
+              {{ dataTypesError }}
+            </p>
+            <p v-else-if="packageDataTypes?.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
             </p>
-            <p v-else-if="packageDetail.dataTypes.length === 0" class="update-detail__empty">
+            <p v-else-if="packageDataTypes?.dataTypes.length === 0" class="update-detail__empty">
               {{ packageSectionEmptyMessage('dataTypes') }}
             </p>
-            <div v-else class="package-detail__list">
+            <div v-else-if="packageDataTypes" class="package-detail__list">
               <div
-                v-for="dataType in packageDetail.dataTypes"
+                v-for="dataType in packageDataTypes.dataTypes"
                 :key="dataType.typeId"
                 class="package-detail__list-row package-detail__list-row--stacked"
               >

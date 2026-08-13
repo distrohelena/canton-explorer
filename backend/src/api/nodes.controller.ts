@@ -779,6 +779,87 @@ export class NodesController {
     }
   }
 
+  @Get('/packages/:packageId/summary')
+  async getPackageSummary(@Param('packageId') packageId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPackageSummary(packageId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/packages/:packageId/nodes')
+  async getPackageNodes(@Param('packageId') packageId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPackageNodes(packageId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/packages/:packageId/modules')
+  async getPackageModules(@Param('packageId') packageId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPackageModules(packageId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/packages/:packageId/templates')
+  async getPackageTemplates(@Param('packageId') packageId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPackageTemplates(packageId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/packages/:packageId/data-types')
+  async getPackageDataTypes(@Param('packageId') packageId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPackageDataTypes(packageId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/packages/:packageId/modules/:moduleName')
+  async getPackageModule(
+    @Param('packageId') packageId: string,
+    @Param('moduleName') moduleName: string,
+  ) {
+    try {
+      return await this.pqsSummaryService.fetchPackageModule(packageId, moduleName);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
+      }
+
+      throw error;
+    }
+  }
+
   @Get('/packages/:packageId')
   async getPackageDetail(@Param('packageId') packageId: string) {
     try {

@@ -14,6 +14,12 @@ import type {
   TokenTransfersResponse,
   TokensResponse,
   NodeUpdateDetailResponse,
+  PackageDetailDataTypesResponse,
+  PackageDetailModulesResponse,
+  PackageDetailNodesResponse,
+  PackageModuleDetailResponse,
+  PackageDetailSummaryResponse,
+  PackageDetailTemplatesResponse,
 } from '../../src/domain/node.types';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
 import { DamlValueDecoderService } from '../../src/packages/daml-value-decoder.service';
@@ -2651,6 +2657,184 @@ describe('PqsSummaryService', () => {
     await expect(
       service.fetchPackageDetail?.('splice-amulet'),
     ).resolves.toEqual(typedPackageDetailFixture);
+  });
+
+  it('exposes package detail sections independently', async () => {
+    const metadata = {
+      packageId: 'splice-amulet',
+      name: 'splice-amulet',
+      version: '0.1.24',
+      uploadedAt: '1782930571952849',
+      packageSize: 960436,
+    };
+    const inspectPackage = jest.fn().mockResolvedValue({
+      ok: true,
+      definition: {
+        packageId: metadata.packageId,
+        packageName: metadata.name,
+        packageVersion: metadata.version,
+        modules: ['Splice.Amulet'],
+        templates: typedPackageDetailFixture.templates,
+        dataTypes: typedPackageDetailFixture.dataTypes,
+        moduleCount: 1,
+        templateCount: 1,
+        dataTypeCount: 1,
+      },
+    });
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
+      undefined,
+      {
+        getPackageMetadata: jest.fn().mockReturnValue(metadata),
+        listNodesForPackage: jest.fn().mockReturnValue([
+          {
+            nodeId: 'cnqs-sv',
+            packageName: 'splice-amulet',
+            packageVersion: '0.1.24',
+            seenAt: '2026-07-02T12:00:00.000Z',
+          },
+        ]),
+      },
+      { inspectPackage },
+    ) as PqsSummaryService & {
+      fetchPackageSummary?: (packageId: string) => Promise<PackageDetailSummaryResponse>;
+      fetchPackageNodes?: (packageId: string) => Promise<PackageDetailNodesResponse>;
+      fetchPackageModules?: (packageId: string) => Promise<PackageDetailModulesResponse>;
+      fetchPackageTemplates?: (packageId: string) => Promise<PackageDetailTemplatesResponse>;
+      fetchPackageDataTypes?: (packageId: string) => Promise<PackageDetailDataTypesResponse>;
+    };
+
+    const [summary, nodes, modules, templates, dataTypes] = await Promise.all([
+      service.fetchPackageSummary?.('splice-amulet'),
+      service.fetchPackageNodes?.('splice-amulet'),
+      service.fetchPackageModules?.('splice-amulet'),
+      service.fetchPackageTemplates?.('splice-amulet'),
+      service.fetchPackageDataTypes?.('splice-amulet'),
+    ]);
+
+    expect(summary).toEqual({
+      packageId: 'splice-amulet',
+      name: 'splice-amulet',
+      version: '0.1.24',
+      uploadedAt: '1782930571952849',
+      packageSize: 960436,
+      status: 'decoded',
+      moduleCount: 1,
+      templateCount: 1,
+      dataTypeCount: 1,
+    });
+    expect(nodes).toEqual({
+      packageId: 'splice-amulet',
+      seenOnNodes: [
+        {
+          nodeId: 'cnqs-sv',
+          packageName: 'splice-amulet',
+          packageVersion: '0.1.24',
+          seenAt: '2026-07-02T12:00:00.000Z',
+        },
+      ],
+    });
+    expect(modules).toEqual({ packageId: 'splice-amulet', status: 'decoded', modules: ['Splice.Amulet'] });
+    expect(templates).toEqual({
+      packageId: 'splice-amulet',
+      status: 'decoded',
+      templates: typedPackageDetailFixture.templates,
+    });
+    expect(dataTypes).toEqual({
+      packageId: 'splice-amulet',
+      status: 'decoded',
+      dataTypes: typedPackageDetailFixture.dataTypes,
+    });
+    expect(inspectPackage).toHaveBeenCalledTimes(4);
+  });
+
+  it('returns only the definitions belonging to the requested module', async () => {
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
+      undefined,
+      {
+        getPackageMetadata: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: null,
+          packageSize: 1024,
+        }),
+      },
+      {
+        inspectPackage: jest.fn().mockResolvedValue({
+          ok: true,
+          definition: {
+            packageId: 'main-package',
+            packageName: 'Main Package',
+            packageVersion: '1.2.3',
+            modules: ['Main.Module', 'Other.Module'],
+            templates: [
+              {
+                templateId: 'Main.Module:Asset',
+                moduleName: 'Main.Module',
+                entityName: 'Asset',
+                createType: null,
+              },
+              {
+                templateId: 'Other.Module:OtherAsset',
+                moduleName: 'Other.Module',
+                entityName: 'OtherAsset',
+                createType: null,
+              },
+            ],
+            dataTypes: [
+              {
+                typeId: 'Main.Module:AssetData',
+                moduleName: 'Main.Module',
+                entityName: 'AssetData',
+                definition: null,
+              },
+            ],
+            moduleCount: 2,
+            templateCount: 2,
+            dataTypeCount: 1,
+          },
+        }),
+      },
+    ) as PqsSummaryService & {
+      fetchPackageModule?: (
+        packageId: string,
+        moduleName: string,
+      ) => Promise<PackageModuleDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPackageModule?.('main-package', 'Main.Module'),
+    ).resolves.toEqual({
+      packageId: 'main-package',
+      name: 'Main Package',
+      version: '1.2.3',
+      uploadedAt: null,
+      packageSize: 1024,
+      status: 'decoded',
+      moduleName: 'Main.Module',
+      templates: [
+        {
+          templateId: 'Main.Module:Asset',
+          moduleName: 'Main.Module',
+          entityName: 'Asset',
+          createType: null,
+        },
+      ],
+      dataTypes: [
+        {
+          typeId: 'Main.Module:AssetData',
+          moduleName: 'Main.Module',
+          entityName: 'AssetData',
+          definition: null,
+        },
+      ],
+    });
   });
 
   it('returns invalid package detail with metadata but empty decoded lists', async () => {

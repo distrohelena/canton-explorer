@@ -6,6 +6,10 @@ import {
 } from '../config/node-config.schema';
 import { NodeConfigService } from '../config/node-config.service';
 import type {
+  PackageRegistryResult,
+  ResolvedPackageInspection,
+} from '../packages/daml-decoder.types';
+import type {
   ActivePartiesResponse,
   RecentActivePartiesResponse,
   GlobalContractsResponse,
@@ -22,7 +26,13 @@ import type {
   NodeDecodedDamlValue,
   NodeExerciseDecodeState,
   PackageTypeNode,
+  PackageDetailDataTypesResponse,
+  PackageDetailModulesResponse,
+  PackageDetailNodesResponse,
   PackageDetailResponse,
+  PackageDetailSummaryResponse,
+  PackageDetailTemplatesResponse,
+  PackageModuleDetailResponse,
   PackageFamilyResponse,
   NodeUpdateDetailEvent,
   NodeUpdateDetailMeta,
@@ -3484,6 +3494,131 @@ export class PqsSummaryService {
         left.typeId.localeCompare(right.typeId),
       ),
     };
+  }
+
+  async fetchPackageSummary(packageId: string): Promise<PackageDetailSummaryResponse> {
+    const { metadata, inspection } = await this.inspectPackageDetailSection(packageId);
+
+    if (!inspection.ok) {
+      return {
+        packageId: metadata.packageId,
+        name: metadata.name,
+        version: metadata.version,
+        uploadedAt: metadata.uploadedAt,
+        packageSize: metadata.packageSize,
+        status: this.packageDetailStatus(inspection),
+        moduleCount: 0,
+        templateCount: 0,
+        dataTypeCount: 0,
+      };
+    }
+
+    return {
+      packageId: metadata.packageId,
+      name: metadata.name,
+      version: metadata.version,
+      uploadedAt: metadata.uploadedAt,
+      packageSize: metadata.packageSize,
+      status: 'decoded',
+      moduleCount: inspection.definition.moduleCount,
+      templateCount: inspection.definition.templateCount,
+      dataTypeCount: inspection.definition.dataTypeCount,
+    };
+  }
+
+  async fetchPackageNodes(packageId: string): Promise<PackageDetailNodesResponse> {
+    this.getPackageMetadataOrThrow(packageId);
+
+    return {
+      packageId,
+      seenOnNodes: (this.packageCacheService?.listNodesForPackage(packageId) ?? []).map((row) => ({
+        nodeId: row.nodeId,
+        packageName: row.packageName,
+        packageVersion: row.packageVersion,
+        seenAt: row.seenAt,
+      })),
+    };
+  }
+
+  async fetchPackageModules(packageId: string): Promise<PackageDetailModulesResponse> {
+    const { inspection } = await this.inspectPackageDetailSection(packageId);
+
+    return {
+      packageId,
+      status: this.packageDetailStatus(inspection),
+      modules: inspection.ok ? inspection.definition.modules : [],
+    };
+  }
+
+  async fetchPackageTemplates(packageId: string): Promise<PackageDetailTemplatesResponse> {
+    const { inspection } = await this.inspectPackageDetailSection(packageId);
+
+    return {
+      packageId,
+      status: this.packageDetailStatus(inspection),
+      templates: inspection.ok ? inspection.definition.templates : [],
+    };
+  }
+
+  async fetchPackageDataTypes(packageId: string): Promise<PackageDetailDataTypesResponse> {
+    const { inspection } = await this.inspectPackageDetailSection(packageId);
+
+    return {
+      packageId,
+      status: this.packageDetailStatus(inspection),
+      dataTypes: inspection.ok ? inspection.definition.dataTypes : [],
+    };
+  }
+
+  async fetchPackageModule(
+    packageId: string,
+    moduleName: string,
+  ): Promise<PackageModuleDetailResponse> {
+    const { metadata, inspection } = await this.inspectPackageDetailSection(packageId);
+
+    return {
+      packageId: metadata.packageId,
+      name: metadata.name,
+      version: metadata.version,
+      uploadedAt: metadata.uploadedAt,
+      packageSize: metadata.packageSize,
+      status: this.packageDetailStatus(inspection),
+      moduleName,
+      templates: inspection.ok
+        ? inspection.definition.templates.filter((template) => template.moduleName === moduleName)
+        : [],
+      dataTypes: inspection.ok
+        ? inspection.definition.dataTypes.filter((dataType) => dataType.moduleName === moduleName)
+        : [],
+    };
+  }
+
+  private getPackageMetadataOrThrow(packageId: string) {
+    const metadata = this.packageCacheService?.getPackageMetadata(packageId) ?? null;
+    if (!metadata) {
+      throw new Error('Package not found');
+    }
+
+    return metadata;
+  }
+
+  private async inspectPackageDetailSection(packageId: string) {
+    const metadata = this.getPackageMetadataOrThrow(packageId);
+    const inspection: PackageRegistryResult<ResolvedPackageInspection> = this.packageRegistryService
+      ? await this.packageRegistryService.inspectPackage(packageId)
+      : { ok: false, reason: 'missing_package' };
+
+    return { metadata, inspection };
+  }
+
+  private packageDetailStatus(
+    inspection: PackageRegistryResult<ResolvedPackageInspection>,
+  ): PackageDetailResponse['status'] {
+    if (inspection.ok) {
+      return 'decoded';
+    }
+
+    return inspection.reason === 'missing_package' ? 'not_available' : 'invalid_package';
   }
 
   async fetchPackagesByName(

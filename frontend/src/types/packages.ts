@@ -5,6 +5,59 @@ export interface PackageSeenOnNode {
   seenAt: string;
 }
 
+export type PackageDetailStatus =
+  | 'decoded'
+  | 'invalid_package'
+  | 'missing_package'
+  | 'not_available';
+
+export interface PackageDetailSummaryResponse {
+  packageId: string;
+  name: string | null;
+  version: string | null;
+  uploadedAt: string | null;
+  packageSize: number | null;
+  status: PackageDetailStatus;
+  moduleCount: number;
+  templateCount: number;
+  dataTypeCount: number;
+}
+
+export interface PackageDetailNodesResponse {
+  packageId: string;
+  seenOnNodes: PackageSeenOnNode[];
+}
+
+export interface PackageDetailModulesResponse {
+  packageId: string;
+  status: PackageDetailStatus;
+  modules: string[];
+}
+
+export interface PackageDetailTemplatesResponse {
+  packageId: string;
+  status: PackageDetailStatus;
+  templates: PackageTemplateSummary[];
+}
+
+export interface PackageDetailDataTypesResponse {
+  packageId: string;
+  status: PackageDetailStatus;
+  dataTypes: PackageDataTypeSummary[];
+}
+
+export interface PackageModuleDetailResponse {
+  packageId: string;
+  name: string | null;
+  version: string | null;
+  uploadedAt: string | null;
+  packageSize: number | null;
+  status: PackageDetailStatus;
+  moduleName: string;
+  templates: PackageTemplateSummary[];
+  dataTypes: PackageDataTypeSummary[];
+}
+
 export interface PackageTypeField {
   name: string;
   type: PackageTypeNode;
@@ -77,7 +130,7 @@ export interface PackageDetailResponse {
   version: string | null;
   uploadedAt: string | null;
   packageSize: number | null;
-  status: 'decoded' | 'invalid_package' | 'missing_package' | 'not_available';
+  status: PackageDetailStatus;
   seenOnNodes: PackageSeenOnNode[];
   moduleCount: number;
   templateCount: number;
