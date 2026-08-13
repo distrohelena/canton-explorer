@@ -2806,6 +2806,7 @@ describe('PqsSummaryService', () => {
                 moduleName: 'Main.Module',
                 entityName: 'Asset',
                 createType: null,
+                choices: representativeTemplateChoices,
               },
               {
                 templateId: 'Other.Module:OtherAsset',
@@ -2851,6 +2852,7 @@ describe('PqsSummaryService', () => {
           moduleName: 'Main.Module',
           entityName: 'Asset',
           createType: null,
+          choices: representativeTemplateChoices,
         },
       ],
       dataTypes: [
