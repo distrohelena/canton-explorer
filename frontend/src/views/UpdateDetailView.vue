@@ -69,6 +69,9 @@ const recordTimeLines = computed(() =>
   updateDetail.value ? formatRecordTime(updateDetail.value.recordTime) : null,
 );
 const renderedEvents = computed(() => updateDetail.value?.events ?? []);
+const choiceTargets = computed(() =>
+  renderedEvents.value.map((event) => choiceTarget(event)),
+);
 const debuggerTarget = computed(() => {
   if (!updateDetail.value) {
     return "/debugger";
@@ -385,9 +388,9 @@ function getEventDataTables(
                 <dt>Choice</dt>
                 <dd>
                   <RouterLink
-                    v-if="choiceTarget(event)"
+                    v-if="choiceTargets[eventIndex]"
                     class="contract-detail__link"
-                    :to="choiceTarget(event)"
+                    :to="choiceTargets[eventIndex]"
                   >
                     {{ event.choice }}
                   </RouterLink>

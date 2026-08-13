@@ -22,7 +22,7 @@ vi.mock("vue-router", () => ({
 
 function renderUpdateEvents(
   events: NodeUpdateDetailResponse["events"],
-): { container: HTMLElement } {
+): { container: Element } {
   vi.mocked(fetchNodeUpdateDetail).mockResolvedValue({
     nodeId: "participant-1",
     label: "Participant 1",
@@ -100,6 +100,28 @@ describe("UpdateDetailView", () => {
     ).toHaveAttribute(
       "href",
       "/packages/main-package/templates/Main%3AAsset#choice-ReceiveSvRewardCoupon",
+    );
+  });
+
+  it("preserves the encoded template path and logical special-character choice hash", async () => {
+    renderUpdateEvents([
+      {
+        eventKind: "non_consuming_exercise",
+        eventId: "#0:0",
+        contractId: "00asset",
+        packageId: "main-package",
+        templateId: "Main:Asset",
+        choice: "A Choice/With:Symbols",
+        witnesses: [],
+        raw: {},
+      },
+    ]);
+
+    expect(
+      await screen.findByRole("link", { name: "A Choice/With:Symbols" }),
+    ).toHaveAttribute(
+      "href",
+      "/packages/main-package/templates/Main%3AAsset#choice-A Choice/With:Symbols",
     );
   });
 
