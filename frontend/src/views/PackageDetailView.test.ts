@@ -238,6 +238,7 @@ describe('PackageDetailView', () => {
               },
             ],
           },
+          choices: [],
         },
       ],
       dataTypes: [
