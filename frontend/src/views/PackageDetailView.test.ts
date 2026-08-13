@@ -169,7 +169,7 @@ describe('PackageDetailView', () => {
     expect(screen.getAllByText('Splice.Amulet:AmuletRules')).toHaveLength(1);
     expect(screen.getByText('transferConfigUsd')).toBeInTheDocument();
     expect(screen.getByText('Text')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
     expect(container.querySelector('a[href="/packages/by-name/splice-amulet"]')).not.toBeNull();
     expect(container.querySelector('.package-detail__seen-list')).not.toBeNull();
   });

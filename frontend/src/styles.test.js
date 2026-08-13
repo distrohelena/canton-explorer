@@ -861,13 +861,19 @@ describe("styles.css", () => {
     expect(styles).toContain(".update-detail__data-table-field {");
     expect(styles).toContain(".update-detail__data-table-type {");
     expect(styles).toContain(
-      ".update-detail__data-table-col--type {\n  width: 12%;\n}",
+      ".update-detail__data-table-col--field {\n  width: 20%;\n}",
+    );
+    expect(styles).toContain(
+      ".update-detail__data-table-col--type {\n  width: 20%;\n}",
+    );
+    expect(styles).toContain(
+      ".update-detail__data-table-col--value {\n  width: 60%;\n}",
     );
     const typeCellStyles =
       styles.match(
         /\.update-detail__data-table-type \{([\s\S]*?)\n\}/,
       )?.[1] ?? "";
-    expect(typeCellStyles).toContain("width: 12%;");
+    expect(typeCellStyles).toContain("width: 20%;");
     expect(styles).toContain(".update-detail__data-table-value {");
     expect(styles).not.toContain(".update-detail__event-item--exercise-data");
     expect(styles).not.toContain(".update-detail__exercise-data {");

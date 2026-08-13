@@ -19,6 +19,7 @@ import type {
   NodeDecodeState,
   NodeDecodedDamlValue,
   NodeExerciseDecodeState,
+  PackageTypeNode,
 } from '../domain/node.types';
 
 interface VersionedValueMessage {
@@ -80,11 +81,16 @@ export class DamlValueDecoderService {
       return { status: 'invalid_data', reason: 'decode_failure' };
     }
 
-    return this.decodeRawValue(
+    const decoded = this.decodeRawValue(
       createArgument,
       templateResult.definition.packageRef,
       templateResult.definition.dataType,
       new Map(),
+    );
+
+    return this.attachDecodedType(
+      decoded,
+      this.packageRegistry.buildTemplateTypeNode(templateResult.definition),
     );
   }
 
@@ -126,25 +132,46 @@ export class DamlValueDecoderService {
       choiceResult.definition.templateChoice.retType,
       new Map(),
     );
+    const argumentSchema = this.packageRegistry.buildTypeNodeForType(
+      packageRef,
+      choiceResult.definition.templateChoice.argBinder?.type,
+    );
+    const resultSchema = this.packageRegistry.buildTypeNodeForType(
+      packageRef,
+      choiceResult.definition.templateChoice.retType,
+    );
 
     return {
       argument: input.exerciseArgument
-        ? this.decodeVersionedValue(
-            input.exerciseArgument,
-            packageRef,
-            argumentType,
-            new Map(),
+        ? this.attachDecodedType(
+            this.decodeVersionedValue(
+              input.exerciseArgument,
+              packageRef,
+              argumentType,
+              new Map(),
+            ),
+            argumentSchema,
           )
         : { status: 'not_available' },
       result: input.exerciseResult
-        ? this.decodeVersionedValue(
-            input.exerciseResult,
-            packageRef,
-            resultType,
-            new Map(),
+        ? this.attachDecodedType(
+            this.decodeVersionedValue(
+              input.exerciseResult,
+              packageRef,
+              resultType,
+              new Map(),
+            ),
+            resultSchema,
           )
         : { status: 'not_available' },
     };
+  }
+
+  private attachDecodedType<T>(
+    state: NodeDecodeState<T>,
+    type: PackageTypeNode | null,
+  ): NodeDecodeState<T> {
+    return state.status === 'decoded' ? { ...state, type } : state;
   }
 
   private decodeVersionedValue(

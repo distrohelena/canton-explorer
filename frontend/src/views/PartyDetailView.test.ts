@@ -261,10 +261,7 @@ describe('PartyDetailView', () => {
     expect(await screen.findByRole('heading', { name: 'Alice' })).toBeInTheDocument();
     expect(container.querySelector('.party-detail__sections')).not.toBeNull();
     expect(container.querySelector('.party-detail__summary-grid')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute(
-      'href',
-      '/parties',
-    );
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Observed Nodes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Party Topology' })).toBeInTheDocument();

@@ -592,6 +592,89 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('preserves DAR type metadata for JSON exercise payloads', async () => {
+    const argumentRawType = {};
+    const resultRawType = {};
+    const argumentSchema = {
+      kind: 'record',
+      label: 'Main:Argument',
+      fields: [
+        {
+          name: 'context',
+          type: {
+            kind: 'record',
+            label: 'Main:Context',
+            fields: [
+              {
+                name: 'validatorRights',
+                type: {
+                  kind: 'builtin',
+                  label: 'Optional',
+                  arguments: [
+                    { kind: 'builtin', label: 'Text', arguments: [] },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const packageRegistry = {
+      resolveChoice: jest.fn().mockImplementation(({ choice }: { choice: string }) =>
+        choice === 'AppPaymentRequest_Accept'
+          ? {
+              ok: true as const,
+              definition: {
+                template: { packageRef: {} },
+                templateChoice: {
+                  argBinder: { type: argumentRawType },
+                  retType: resultRawType,
+                },
+              },
+            }
+          : { ok: false as const, reason: 'unknown_choice' as const },
+      ),
+      buildTypeNodeForType: jest.fn((_packageRef: unknown, rawType: unknown) =>
+        rawType === argumentRawType ? argumentSchema : null,
+      ),
+    };
+    const service = new PqsSummaryService(
+      {} as never,
+      undefined,
+      undefined,
+      packageRegistry as never,
+    );
+
+    const decoded = await (
+      service as PqsSummaryService & {
+        decodeExerciseData: (...args: any[]) => Promise<unknown>;
+      }
+    ).decodeExerciseData(null, {
+      packageId: 'package-id',
+      templateId: 'Main:AppPaymentRequest',
+      rawChoice: 'Accept',
+      exerciseArgument: {
+        context: { validatorRights: null },
+      },
+      exerciseResult: null,
+    });
+
+    expect(decoded).toEqual(
+      expect.objectContaining({
+        argument: expect.objectContaining({
+          status: 'decoded',
+          type: argumentSchema,
+        }),
+      }),
+    );
+    expect(packageRegistry.resolveChoice).toHaveBeenCalledWith({
+      packageId: 'package-id',
+      templateId: 'Main:AppPaymentRequest',
+      choice: 'AppPaymentRequest_Accept',
+    });
+  });
+
   it('returns empty successful search groups without querying nodes for a blank query', async () => {
     const query = jest.fn();
     const list = jest
@@ -1243,7 +1326,11 @@ describe('PqsSummaryService', () => {
       service.fetchRecentActiveParties?.(
         [
           { id: 'participant-1', label: 'Participant 1', mode: 'pqs_only' },
-          { id: 'participant-2', label: 'Participant 2', mode: 'pqs_with_grpc' },
+          {
+            id: 'participant-2',
+            label: 'Participant 2',
+            mode: 'pqs_with_grpc',
+          },
         ],
         24,
         new Date('2026-08-12T12:00:00.000Z'),
@@ -1268,7 +1355,8 @@ describe('PqsSummaryService', () => {
     )(
       {
         getRawExecutor: async (node: { id: string }) => ({
-          query: node.id === 'participant-1' ? participant1Query : participant2Query,
+          query:
+            node.id === 'participant-1' ? participant1Query : participant2Query,
         }),
       },
       undefined,
@@ -3360,7 +3448,8 @@ describe('PqsSummaryService', () => {
     };
 
     serviceWithFetch.fetchRecentUpdates = jest.fn(async (node, options) => {
-      const limit = typeof options === 'number' ? options : (options.limit ?? 30);
+      const limit =
+        typeof options === 'number' ? options : (options.limit ?? 30);
       const before = typeof options === 'number' ? undefined : options.before;
       const beforeIndex = before
         ? updates.findIndex((update) => update.eventOffset === before)
@@ -3374,7 +3463,9 @@ describe('PqsSummaryService', () => {
         label: node.label,
         limit,
         nextBefore:
-          rows.length > limit ? (page[page.length - 1]?.eventOffset ?? null) : null,
+          rows.length > limit
+            ? (page[page.length - 1]?.eventOffset ?? null)
+            : null,
         nextAfter: null,
         updates: page.map((update) => ({
           ...update,
@@ -4835,7 +4926,7 @@ describe('PqsSummaryService', () => {
             eventKind: 'non_consuming_exercise',
             choice: 'SubmitStatusReport',
             exerciseData: {
-              argument: {
+              argument: expect.objectContaining({
                 status: 'decoded',
                 value: {
                   kind: 'record',
@@ -4868,8 +4959,8 @@ describe('PqsSummaryService', () => {
                     }),
                   ]),
                 },
-              },
-              result: {
+              }),
+              result: expect.objectContaining({
                 status: 'decoded',
                 value: {
                   kind: 'record',
@@ -4882,7 +4973,7 @@ describe('PqsSummaryService', () => {
                     }),
                   ],
                 },
-              },
+              }),
             },
           }),
         ],
@@ -5046,7 +5137,7 @@ describe('PqsSummaryService', () => {
           '1d8317b1e476c03ea2a85bed8435e5c182abe501db58350009187fa839ab2cca',
         packageName: 'splice-wallet',
         packageVersion: '0.1.19',
-        contractData: {
+        contractData: expect.objectContaining({
           status: 'decoded',
           value: {
             kind: 'record',
@@ -5069,7 +5160,7 @@ describe('PqsSummaryService', () => {
               }),
             ]),
           },
-        },
+        }),
       }),
     );
   });

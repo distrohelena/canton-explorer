@@ -285,6 +285,36 @@ export class PackageRegistryService implements OnModuleInit {
     this.packageCache.delete(packageId);
   }
 
+  buildTemplateTypeNode(template: ResolvedTemplate): PackageTypeNode | null {
+    if (!template.dataType) {
+      return null;
+    }
+
+    return this.buildDataTypeNode(
+      template.packageRef,
+      template.templateId,
+      template.dataType,
+      new Set<string>(),
+      new Map<string, SdkRawType>(),
+      new Set<string>(),
+    );
+  }
+
+  buildTypeNodeForType(
+    resolvedPackage: ResolvedPackage,
+    rawType: SdkRawType | null | undefined,
+  ): PackageTypeNode | null {
+    return rawType
+      ? this.buildTypeNode(
+          resolvedPackage,
+          rawType,
+          new Set<string>(),
+          new Map<string, SdkRawType>(),
+          new Set<string>(),
+        )
+      : null;
+  }
+
   private buildDataTypeNode(
     resolvedPackage: ResolvedPackage,
     typeId: string,

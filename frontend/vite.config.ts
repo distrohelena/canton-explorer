@@ -10,6 +10,7 @@ const packageMetadata = JSON.parse(
 ) as { version: string };
 
 export default defineConfig({
+  base: './',
   plugins: [vue()],
   define: {
     __CANTON_EXPLORER_VERSION__: JSON.stringify(packageMetadata.version),

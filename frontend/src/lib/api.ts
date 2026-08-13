@@ -61,7 +61,7 @@ export function resolveApiBaseUrl(
     return 'http://localhost:4600/api';
   }
 
-  return '/api';
+  return 'api';
 }
 
 const API_BASE = resolveApiBaseUrl();

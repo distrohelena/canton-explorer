@@ -21,6 +21,7 @@ import type {
   NodeDecodeState,
   NodeDecodedDamlValue,
   NodeExerciseDecodeState,
+  PackageTypeNode,
   PackageDetailResponse,
   PackageFamilyResponse,
   NodeUpdateDetailEvent,
@@ -7019,7 +7020,10 @@ export class PqsSummaryService {
     if (!Buffer.isBuffer(contractInstance)) {
       const decodedJson = this.decodePqsJsonData(contractInstance);
       if (decodedJson) {
-        return decodedJson;
+        return this.attachDecodedType(
+          decodedJson,
+          await this.resolveTemplateTypeNode(packageId, templateId),
+        );
       }
     }
 
@@ -7064,11 +7068,16 @@ export class PqsSummaryService {
     ) {
       const argument = this.decodePqsJsonData(input.exerciseArgument);
       const result = this.decodePqsJsonData(input.exerciseResult);
+      const schemas = await this.resolveExerciseTypeNodes(input);
 
       if (argument || result) {
         return {
-          argument: argument ?? { status: 'not_available' },
-          result: result ?? { status: 'not_available' },
+          argument: argument
+            ? this.attachDecodedType(argument, schemas?.argument ?? null)
+            : { status: 'not_available' },
+          result: result
+            ? this.attachDecodedType(result, schemas?.result ?? null)
+            : { status: 'not_available' },
         };
       }
     }
@@ -7535,6 +7544,105 @@ export class PqsSummaryService {
           status: 'decoded',
           value: decoded,
         };
+  }
+
+  private attachDecodedType<T>(
+    state: NodeDecodeState<T>,
+    type: PackageTypeNode | null,
+  ): NodeDecodeState<T> {
+    return state.status === 'decoded' && type ? { ...state, type } : state;
+  }
+
+  private async resolveTemplateTypeNode(
+    packageId: string | null,
+    templateId: string | null,
+  ): Promise<PackageTypeNode | null> {
+    if (!this.packageRegistryService || !packageId || !templateId) {
+      return null;
+    }
+
+    try {
+      const templateResult = await this.packageRegistryService.resolveTemplate({
+        packageId,
+        templateId,
+      });
+
+      return templateResult.ok
+        ? this.packageRegistryService.buildTemplateTypeNode(
+            templateResult.definition,
+          )
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async resolveExerciseTypeNodes(input: {
+    packageId: string | null;
+    templateId: string | null;
+    rawChoice: string | null;
+  }): Promise<{
+    argument: PackageTypeNode | null;
+    result: PackageTypeNode | null;
+  } | null> {
+    if (
+      !this.packageRegistryService ||
+      !input.packageId ||
+      !input.templateId ||
+      !input.rawChoice
+    ) {
+      return null;
+    }
+
+    const rawChoice = input.rawChoice.replace(/^c\|/, '');
+    if (!rawChoice) {
+      return null;
+    }
+
+    try {
+      const shortChoice = this.normalizeChoiceIdentifier(rawChoice) ?? rawChoice;
+      const templateName = input.templateId.split(':').at(-1);
+      const choices = [
+        rawChoice,
+        templateName ? `${templateName}_${shortChoice}` : null,
+        shortChoice,
+      ].filter((candidate, index, all): candidate is string =>
+        Boolean(candidate) && all.indexOf(candidate) === index,
+      );
+
+      let choiceResult: Awaited<
+        ReturnType<PackageRegistryService['resolveChoice']>
+      > | null = null;
+      for (const choice of choices) {
+        const result = await this.packageRegistryService.resolveChoice({
+          packageId: input.packageId,
+          templateId: input.templateId,
+          choice,
+        });
+        if (result.ok) {
+          choiceResult = result;
+          break;
+        }
+      }
+
+      if (!choiceResult) {
+        return null;
+      }
+
+      const packageRef = choiceResult.definition.template.packageRef;
+      return {
+        argument: this.packageRegistryService.buildTypeNodeForType(
+          packageRef,
+          choiceResult.definition.templateChoice.argBinder?.type,
+        ),
+        result: this.packageRegistryService.buildTypeNodeForType(
+          packageRef,
+          choiceResult.definition.templateChoice.retType,
+        ),
+      };
+    } catch {
+      return null;
+    }
   }
 
   private decodePqsJsonValue(value: unknown): NodeDecodedDamlValue | null {

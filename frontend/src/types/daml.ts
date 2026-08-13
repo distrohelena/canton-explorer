@@ -1,3 +1,5 @@
+import type { PackageTypeNode } from './packages';
+
 export type DecodeFailureReason =
   | 'missing_package'
   | 'invalid_package'
@@ -7,6 +9,7 @@ export type DecodeFailureReason =
   | 'decode_failure';
 
 export type DecodedDamlValue =
+  | null
   | string
   | number
   | boolean
@@ -21,7 +24,7 @@ export type DecodedDamlValue =
   | { kind: 'unit' };
 
 export type DecodeState<T> =
-  | { status: 'decoded'; value: T }
+  | { status: 'decoded'; value: T; type?: PackageTypeNode | null }
   | { status: 'invalid_data'; reason: DecodeFailureReason }
   | { status: 'not_available' };
 

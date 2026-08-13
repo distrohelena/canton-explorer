@@ -134,12 +134,7 @@ describe('NodeDetailView', () => {
 
     expect(await screen.findByText('Node Participant 1')).toBeInTheDocument();
     expect(container.querySelector('.node-detail')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveTextContent('←');
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute(
-      'href',
-      '/nodes',
-    );
-    expect(screen.queryByText('Back to overview')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Service Health' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ledger Snapshot' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Service Health' }).closest('section')).toHaveClass(
@@ -168,13 +163,13 @@ describe('NodeDetailView', () => {
     );
   });
 
-  it('returns to global updates when opened from the Updates page', async () => {
+  it('does not render a back control when opened from the Updates page', async () => {
     routeQuery.from = 'updates';
 
     renderView();
 
     expect(await screen.findByText('Node Participant 1')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
   });
 
   it('renders participant status data for grpc-enabled nodes', async () => {

@@ -62,12 +62,6 @@ const recordTimeLines = computed(() =>
       <span>Loading transfer detail...</span>
     </p>
     <div v-else class="node-page">
-      <div class="node-page__rail">
-        <RouterLink class="node-detail__back" to="/tokens" aria-label="Back to overview">
-          ←
-        </RouterLink>
-      </div>
-
       <div class="node-page__main contract-detail__content">
         <header class="node-detail__hero">
           <div>

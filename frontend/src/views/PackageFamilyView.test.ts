@@ -93,6 +93,6 @@ describe('PackageFamilyView', () => {
     expect(screen.getAllByText('Jul 1, 2026')).toHaveLength(1);
     expect(container.querySelector('a[href="/packages/splice-amulet-v2"]')).not.toBeNull();
     expect(container.querySelector('a[href="/packages/splice-amulet-v1"]')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
   });
 });

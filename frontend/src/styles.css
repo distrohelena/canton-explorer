@@ -4071,6 +4071,23 @@ h3 {
   font-size: 0.92rem;
 }
 
+.update-detail__canonical-with-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  word-break: normal;
+}
+
+.update-detail__canonical-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .update-detail__time {
   display: flex;
   flex-direction: column;
@@ -4793,15 +4810,15 @@ h3 {
 }
 
 .update-detail__data-table-col--field {
-  width: 34%;
+  width: 20%;
 }
 
 .update-detail__data-table-col--type {
-  width: 12%;
+  width: 20%;
 }
 
 .update-detail__data-table-col--value {
-  width: 54%;
+  width: 60%;
 }
 
 .update-detail__data-table th,
@@ -4833,21 +4850,121 @@ h3 {
 }
 
 .update-detail__data-table-field {
-  width: 34%;
+  width: 20%;
   color: var(--text-500);
   font-weight: 600;
 }
 
 .update-detail__data-table-type {
-  width: 12%;
+  width: 20%;
   color: var(--text-500);
   font-family: var(--font-mono);
   font-size: 0.85rem;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .update-detail__data-table-value {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+}
+
+.update-detail__data-table-value-content {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-detail__data-table-value-with-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.update-detail__data-table-value-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-detail__data-table td.update-detail__data-table-array-cell {
+  padding: 8px 0 8px 10%;
+}
+
+.update-detail__data-table-array-cell .update-detail__nested-data-table {
+  width: 100%;
+}
+
+.update-detail__nested-data-table {
+  width: 100%;
+  min-width: 420px;
+  table-layout: fixed;
+  border: 1px solid var(--line-soft);
+  border-collapse: collapse;
+  border-radius: 8px;
+  background: var(--surface-card);
+}
+
+.update-detail__nested-data-table-col--field {
+  width: 20%;
+}
+
+.update-detail__nested-data-table-col--type {
+  width: 20%;
+}
+
+.update-detail__nested-data-table-col--value {
+  width: 60%;
+}
+
+.update-detail__nested-data-table th,
+.update-detail__nested-data-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.update-detail__nested-data-table thead {
+  background: var(--surface-muted);
+  color: var(--text-500);
+}
+
+.update-detail__nested-data-table tbody tr:last-child th,
+.update-detail__nested-data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.update-detail__nested-data-table-item th {
+  background: var(--surface-muted);
+  color: var(--text-900);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.update-detail__nested-data-table .update-detail__data-table-field {
+  width: 20%;
+  font-size: 0.74rem;
+}
+
+.update-detail__nested-data-table .update-detail__data-table-type {
+  width: 20%;
+  font-size: 0.78rem;
+}
+
+.update-detail__nested-data-table .update-detail__data-table-value {
+  width: 60%;
+  font-size: 0.84rem;
 }
 
 .contract-detail__data {
@@ -5660,17 +5777,6 @@ h3 {
   color: var(--red-600);
 }
 
-.node-page {
-  position: relative;
-}
-
-.node-page__rail {
-  position: absolute;
-  top: 4px;
-  left: 0;
-  transform: translateX(-120%);
-}
-
 .node-page__main {
   min-width: 0;
   width: 100%;
@@ -5682,33 +5788,6 @@ h3 {
   flex-direction: column;
   gap: 18px;
   max-width: 100%;
-}
-
-.node-detail__back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--back-button-border);
-  border-radius: 999px;
-  background: var(--back-button-bg);
-  color: var(--blue-600);
-  text-decoration: none;
-  font-size: 1.1rem;
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: var(--back-button-shadow);
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease,
-    transform 160ms ease;
-}
-
-.node-detail__back:hover {
-  border-color: var(--blue-600);
-  background: var(--blue-50);
-  transform: translateX(-1px);
 }
 
 .node-detail__hero {
@@ -6158,13 +6237,6 @@ h3 {
 
   .update-detail__event-grid {
     grid-template-columns: 1fr;
-  }
-
-  .node-page__rail {
-    position: static;
-    display: flex;
-    justify-content: flex-start;
-    transform: none;
   }
 
   .node-page__main {

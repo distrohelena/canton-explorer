@@ -199,7 +199,7 @@ describe('TokenDetailView', () => {
     expect(within(transfersTable).getByText('9:00:00 AM')).toBeInTheDocument();
     expect(within(transfersTable).queryByText('Issuer::validator-license')).not.toBeInTheDocument();
     expect(within(transfersTable).getByText('Transfer')).toBeInTheDocument();
-    expect(container.querySelector('a[href="/tokens"]')).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
     const transfersSection = screen.getByRole('heading', { name: 'Latest Transfers' }).closest('section');
     expect(transfersSection).not.toBeNull();
     const transfersTopPager = within(transfersSection!.querySelector('.node-detail__hero') as HTMLElement);

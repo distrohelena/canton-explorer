@@ -122,10 +122,7 @@ describe('ContractDetailView', () => {
     expect(container.querySelector('a[href="/nodes/participant-1/updates/0000000000000001"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/updates/0000000000000002"]')).not.toBeNull();
     expect(container.querySelector('a[href="/nodes/participant-1/contracts/00coupon"]')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute(
-      'href',
-      '/contracts',
-    );
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
   });
 
   it('renders archived record time as Not Present when the archive timestamp is missing', async () => {

@@ -271,7 +271,7 @@ export type NodeDecodedDamlValue =
   | { kind: 'unit' };
 
 export type NodeDecodeState<T> =
-  | { status: 'decoded'; value: T }
+  | { status: 'decoded'; value: T; type?: PackageTypeNode | null }
   | { status: 'invalid_data'; reason: NodeDecodeFailureReason }
   | { status: 'not_available' };
 

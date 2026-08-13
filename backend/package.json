@@ -1,6 +1,6 @@
 {
     "name": "@distrohelena/canton-explorer",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "Read-only operations explorer for Canton participant nodes and PQS-backed ledgers.",
     "author": "",
     "license": "Apache-2.0",

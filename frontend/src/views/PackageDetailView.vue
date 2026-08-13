@@ -106,12 +106,6 @@ const packageFamilyPath = computed(() => {
       <span>Loading package detail...</span>
     </p>
     <div v-else class="node-page">
-      <div class="node-page__rail">
-        <RouterLink class="node-detail__back" to="/" aria-label="Back to overview">
-          ←
-        </RouterLink>
-      </div>
-
       <div class="node-page__main package-detail__content">
         <header class="node-detail__hero">
           <div>

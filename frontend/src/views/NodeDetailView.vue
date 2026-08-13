@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
 import { fetchNode, fetchNodePackages, fetchNodeParticipantStatus } from '../lib/api';
 import type {
   NodePackagesResponse,
@@ -9,7 +8,6 @@ import type {
 } from '../types/nodes';
 
 const props = defineProps<{ id: string }>();
-const route = useRoute();
 
 const node = ref<NodeSnapshot | null>(null);
 const nodePackages = ref<NodePackagesResponse | null>(null);
@@ -44,12 +42,6 @@ const modeLabel = computed(() =>
 );
 
 const grpcNotConfigured = computed(() => node.value?.mode === 'pqs_only');
-
-const backTarget = computed(() => {
-  const source = Array.isArray(route.query.from) ? route.query.from[0] : route.query.from;
-
-  return source === 'updates' ? '/' : '/nodes';
-});
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
@@ -109,10 +101,6 @@ function formatSynchronizerHealth(value: string) {
     <span>Loading node detail...</span>
   </p>
   <div v-else class="node-page">
-    <div class="node-page__rail">
-      <RouterLink class="node-detail__back" :to="backTarget" aria-label="Back to overview">←</RouterLink>
-    </div>
-
     <div class="node-page__main node-detail__content">
       <header class="node-detail__hero">
         <div>

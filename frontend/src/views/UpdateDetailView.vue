@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
 import CopyToClipboardButton from "../components/CopyToClipboardButton.vue";
+import EventDataTable from "../components/EventDataTable.vue";
 import { fetchNodeUpdateDetail } from "../lib/api";
 import type { NodeUpdateDetailResponse } from "../types/updates";
-import type { DecodedDamlValue } from "../types/daml";
+import {
+  flattenDecodedValue as flattenEventDataValue,
+} from "../lib/event-data";
+import type { EventDataEntry as SharedEventDataEntry } from "../lib/event-data";
+
+type EventDataEntry = SharedEventDataEntry;
 
 const props = defineProps<{ id: string; eventOffset: string }>();
-const route = useRoute();
 
 const updateDetail = ref<NodeUpdateDetailResponse | null>(null);
 const error = ref<string | null>(null);
@@ -73,33 +77,6 @@ const debuggerTarget = computed(() => {
 
   return `/debugger?${params.toString()}`;
 });
-const backTarget = computed(() => {
-  const source = Array.isArray(route.query.from)
-    ? route.query.from[0]
-    : route.query.from;
-  const partyId = Array.isArray(route.query.partyId)
-    ? route.query.partyId[0]
-    : route.query.partyId;
-
-  if (source === "updates") {
-    return "/";
-  }
-
-  if (source === "tokens") {
-    return "/tokens";
-  }
-
-  if (
-    source === "party" &&
-    typeof partyId === "string" &&
-    partyId.trim().length > 0
-  ) {
-    return `/parties/${encodeURIComponent(partyId)}`;
-  }
-
-  return `/nodes/${props.id}/updates`;
-});
-
 function formatEventKind(
   eventKind: NodeUpdateDetailResponse["events"][number]["eventKind"],
 ): string {
@@ -113,274 +90,8 @@ function formatEventKind(
   }
 }
 
-function formatInteger(value: number): string {
-  return new Intl.NumberFormat().format(value);
-}
-
-function formatEventDataLabel(key: string): string {
-  return key
-    .split(".")
-    .map((segment) =>
-      segment
-        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-        .replace(/^./, (char) => char.toUpperCase()),
-    )
-    .join(" / ");
-}
-
-function formatEventDataValue(
-  value:
-    | string
-    | number
-    | boolean
-    | null
-    | { kind: "contract_id"; value: string }
-    | { kind: "unit" },
-): string {
-  if (typeof value === "number") {
-    return formatInteger(value);
-  }
-
-  if (typeof value === "boolean") {
-    return value ? "True" : "False";
-  }
-
-  if (value && typeof value === "object") {
-    if (value.kind === "contract_id") {
-      return value.value;
-    }
-
-    if (value.kind === "unit") {
-      return "Unit";
-    }
-  }
-
-  return value ?? "n/a";
-}
-
-function isContractReference(
-  value:
-    | string
-    | number
-    | boolean
-    | null
-    | { kind: "contract_id"; value: string }
-    | { kind: "unit" },
-): value is { kind: "contract_id"; value: string } {
-  return typeof value === "object" && value?.kind === "contract_id";
-}
-
-function isPartyFieldLabel(label: string): boolean {
-  return label.split(".").some((segment) =>
-    segment
-      .replace(/\[\d+\]/g, "")
-      .toLowerCase()
-      .includes("party"),
-  );
-}
-
-function isPartyReference(
-  label: string,
-  value: RenderableValue,
-): value is string {
-  return (
-    typeof value === "string" &&
-    value.trim().length > 0 &&
-    (isPartyFieldLabel(label) || value.includes("::"))
-  );
-}
-
-function isContractIdFieldLabel(label: string): boolean {
-  const fieldLabel = label
-    .split(".")
-    .at(-1)
-    ?.replace(/\[\d+\]/g, "")
-    .toLowerCase();
-  return Boolean(
-    fieldLabel &&
-    (fieldLabel.endsWith("cid") || fieldLabel.includes("contractid")),
-  );
-}
-
-function isContractIdStringReference(
-  label: string,
-  value: RenderableValue,
-): value is string {
-  return (
-    typeof value === "string" &&
-    value.trim().length > 0 &&
-    isContractIdFieldLabel(label)
-  );
-}
-
-function contractReferenceValue(value: RenderableValue): string {
-  return isContractReference(value) ? value.value : String(value);
-}
-
-type RenderableValue =
-  | string
-  | number
-  | boolean
-  | null
-  | { kind: "contract_id"; value: string }
-  | { kind: "unit" };
-
-type EventDataEntry = [string, RenderableValue, number];
-
-function isNumericFieldLabel(label: string): boolean {
-  const fieldLabel = label
-    .split(".")
-    .at(-1)
-    ?.replace(/\[\d+\]/g, "")
-    .toLowerCase();
-
-  return Boolean(
-    fieldLabel &&
-    /(?:amount|balance|decimal|fee|numeric|percentage|price|quantity|rate|ratio|shares|value)/.test(
-      fieldLabel,
-    ),
-  );
-}
-
-function inferOptionalInnerType(label: string): string {
-  const innerLabel = label.replace(/(^|\.)optional(?=[A-Z]|\.|$)/gi, "$1");
-
-  if (isContractIdFieldLabel(innerLabel)) {
-    return "ContractId";
-  }
-
-  if (isPartyFieldLabel(innerLabel)) {
-    return "Party";
-  }
-
-  if (isNumericFieldLabel(innerLabel)) {
-    return "Numeric";
-  }
-
-  const fieldLabel = innerLabel
-    .split(".")
-    .at(-1)
-    ?.replace(/\[\d+\]/g, "")
-    .toLowerCase();
-
-  return fieldLabel?.endsWith("round") ? "Int64" : "Text";
-}
-
-function formatEventDataType(
-  label: string,
-  value: RenderableValue,
-  optionalDepth = 0,
-): string {
-  let baseType: string;
-
-  if (value === null) {
-    baseType =
-      optionalDepth > 0 ? inferOptionalInnerType(label) : "Optional";
-  } else if (
-    isContractReference(value) ||
-    isContractIdStringReference(label, value)
-  ) {
-    baseType = "ContractId";
-  } else if (isPartyReference(label, value)) {
-    baseType = "Party";
-  } else if (value && typeof value === "object") {
-    baseType = value.kind === "unit" ? "Unit" : "Unknown";
-  } else if (typeof value === "boolean") {
-    baseType = "Bool";
-  } else if (typeof value === "number") {
-    baseType = isNumericFieldLabel(label) ? "Numeric" : "Int64";
-  } else {
-    baseType = "Text";
-  }
-
-  return (
-    "Optional<".repeat(optionalDepth) +
-    baseType +
-    ">".repeat(optionalDepth)
-  );
-}
-
 function formatDecodeFailureReason(reason: string): string {
   return reason.replaceAll("_", " ");
-}
-
-function flattenDecodedValue(
-  label: string,
-  value: DecodedDamlValue,
-  optionalDepth = 0,
-): EventDataEntry[] {
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    value === null
-  ) {
-    return [[label, value, optionalDepth]];
-  }
-
-  if (value.kind === "contract_id" || value.kind === "unit") {
-    return [[label, value, optionalDepth]];
-  }
-
-  if (value.kind === "record") {
-    return value.fields.flatMap((field) =>
-      flattenDecodedValue(
-        label ? `${label}.${field.label}` : field.label,
-        field.value,
-        optionalDepth,
-      ),
-    );
-  }
-
-  if (value.kind === "variant") {
-    return value.value === null
-      ? [[label, value.constructor, optionalDepth]]
-      : [
-          [label, value.constructor, optionalDepth],
-          ...flattenDecodedValue(
-            `${label}.${value.constructor}`,
-            value.value,
-            optionalDepth,
-          ),
-        ];
-  }
-
-  if (value.kind === "enum") {
-    return [[label, value.constructor, optionalDepth]];
-  }
-
-  if (value.kind === "optional") {
-    return value.value === null
-      ? [[label, null, optionalDepth + 1]]
-      : flattenDecodedValue(label, value.value, optionalDepth + 1);
-  }
-
-  if (value.kind === "list") {
-    return value.items.length === 0
-      ? [[label, null, optionalDepth]]
-      : value.items.flatMap((item, index) =>
-          flattenDecodedValue(`${label}[${index + 1}]`, item, optionalDepth),
-        );
-  }
-
-  if (value.kind === "text_map") {
-    return value.entries.flatMap((entry) =>
-      flattenDecodedValue(`${label}.${entry.key}`, entry.value, optionalDepth),
-    );
-  }
-
-  return value.entries.flatMap((entry, index) => [
-    ...flattenDecodedValue(
-      `${label}[${index + 1}].key`,
-      entry.key,
-      optionalDepth,
-    ),
-    ...flattenDecodedValue(
-      `${label}[${index + 1}].value`,
-      entry.value,
-      optionalDepth,
-    ),
-  ]);
 }
 
 function getRecordEntries(
@@ -397,6 +108,7 @@ function getRecordEntries(
         "decodeStatus",
         `Invalid data (${formatDecodeFailureReason(state.reason)})`,
         0,
+        null,
       ],
     ];
   }
@@ -405,59 +117,87 @@ function getRecordEntries(
     return [];
   }
 
-  return flattenDecodedValue("", state.value).map(
-    ([key, value, optionalDepth]) => [key || "value", value, optionalDepth],
+  return flattenEventDataValue("", state.value, 0, state.type ?? null).map(
+    ([key, value, optionalDepth, type]) => [
+      key || "value",
+      value,
+      optionalDepth,
+      type,
+    ],
+  );
+}
+
+type EventDataTableModel = {
+  label: "Create Data" | "Argument" | "Result";
+  entries: EventDataEntry[];
+};
+
+type ExerciseDataBranch = NonNullable<
+  NonNullable<
+    NodeUpdateDetailResponse["events"][number]["exerciseData"]
+  >["argument"]
+>;
+
+function getExerciseBranchEntries(
+  state: ExerciseDataBranch | undefined,
+): EventDataEntry[] {
+  if (!state) {
+    return [];
+  }
+
+  if (state.status === "invalid_data") {
+    return [
+      [
+        "decodeStatus",
+        `Invalid data (${formatDecodeFailureReason(state.reason)})`,
+        0,
+        null,
+      ],
+    ];
+  }
+
+  if (state.status !== "decoded") {
+    return [];
+  }
+
+  return flattenEventDataValue("", state.value, 0, state.type ?? null).map(
+    ([key, value, optionalDepth, type]) => [
+      key || "value",
+      value,
+      optionalDepth,
+      type,
+    ],
   );
 }
 
 function getExerciseEntries(
   state:
-    | NodeUpdateDetailResponse["events"][number]["exerciseData"]
-    | null
-    | undefined,
-): EventDataEntry[] {
-  const entries: EventDataEntry[] = [];
-
-  for (const [label, branch] of [
-    ["argument", state?.argument],
-    ["result", state?.result],
-  ] as const) {
-    if (!branch || branch.status !== "decoded") {
-      if (branch?.status === "invalid_data") {
-        entries.push([
-          `${label}.decodeStatus`,
-          `Invalid data (${formatDecodeFailureReason(branch.reason)})`,
-          0,
-        ]);
-      }
-      continue;
-    }
-
-    entries.push(...flattenDecodedValue(label, branch.value));
+    NodeUpdateDetailResponse["events"][number]["exerciseData"] | null | undefined,
+): EventDataTableModel[] {
+  if (!state) {
+    return [];
   }
 
-  return entries;
+  return ([
+    ["Argument", state.argument],
+    ["Result", state.result],
+  ] as const)
+    .map(([label, branch]) => ({
+      label,
+      entries: getExerciseBranchEntries(branch),
+    }))
+    .filter((table) => table.entries.length > 0);
 }
 
-type EventDataTableModel = {
-  label: "Create Data" | "Exercise Data";
-  entries: EventDataEntry[];
-};
-
-function getEventDataTable(
+function getEventDataTables(
   event: NodeUpdateDetailResponse["events"][number],
-): EventDataTableModel | null {
+): EventDataTableModel[] {
   const createEntries = getRecordEntries(event.createData);
   if (createEntries.length > 0) {
-    return { label: "Create Data", entries: createEntries };
+    return [{ label: "Create Data", entries: createEntries }];
   }
 
-  const exerciseEntries = getExerciseEntries(event.exerciseData);
-  if (exerciseEntries.length > 0) {
-    return { label: "Exercise Data", entries: exerciseEntries };
-  }
-
-  return null;
+  return getExerciseEntries(event.exerciseData);
 }
 </script>
 <template>
@@ -474,16 +214,6 @@ function getEventDataTable(
       <span>Loading update detail...</span>
     </p>
     <div v-else class="node-page">
-      <div class="node-page__rail">
-        <RouterLink
-          class="node-detail__back"
-          :to="backTarget"
-          aria-label="Back to overview"
-        >
-          ←
-        </RouterLink>
-      </div>
-
       <div class="update-detail__action-rail">
         <RouterLink class="update-detail__debug-action" :to="debuggerTarget">
           Debug Offset
@@ -509,8 +239,19 @@ function getEventDataTable(
               </div>
               <div class="update-detail__summary-item">
                 <dt>Canonical Update ID</dt>
-                <dd class="update-detail__canonical">
-                  {{ updateDetail.updateId }}
+                <dd
+                  class="update-detail__canonical update-detail__canonical-with-copy"
+                >
+                  <span
+                    class="update-detail__canonical-value"
+                    :title="updateDetail.updateId"
+                  >
+                    {{ updateDetail.updateId }}
+                  </span>
+                  <CopyToClipboardButton
+                    :value="updateDetail.updateId"
+                    label="update ID"
+                  />
                 </dd>
               </div>
               <div class="update-detail__summary-item">
@@ -654,68 +395,27 @@ function getEventDataTable(
               </div>
             </dl>
             <section
-              v-if="getEventDataTable(event)"
+              v-if="getEventDataTables(event).length > 0"
               class="update-detail__data-section"
-              :aria-labelledby="`update-detail-event-data-heading-${eventIndex}`"
+              :aria-labelledby="`update-detail-event-data-heading-${eventIndex}-0`"
             >
-              <h4 :id="`update-detail-event-data-heading-${eventIndex}`">
-                {{ getEventDataTable(event)?.label }}
-              </h4>
-              <div class="update-detail__data-table-wrap">
-                <table
-                  class="update-detail__data-table"
-                  :aria-labelledby="`update-detail-event-data-heading-${eventIndex}`"
+              <template
+                v-for="(dataTable, dataTableIndex) in getEventDataTables(event)"
+                :key="`${event.eventId ?? 'missing-event-id'}-${dataTable.label}`"
+              >
+                <h4
+                  :id="`update-detail-event-data-heading-${eventIndex}-${dataTableIndex}`"
                 >
-                  <colgroup>
-                    <col class="update-detail__data-table-col--field" />
-                    <col class="update-detail__data-table-col--type" />
-                    <col class="update-detail__data-table-col--value" />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th scope="col">Field</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="[key, value, optionalDepth] in getEventDataTable(event)
-                        ?.entries ?? []"
-                      :key="`${event.eventId ?? 'missing-event-id'}-${key}`"
-                    >
-                      <th scope="row" class="update-detail__data-table-field">
-                        {{ formatEventDataLabel(key) }}
-                      </th>
-                      <td class="update-detail__data-table-type">
-                        {{ formatEventDataType(key, value, optionalDepth) }}
-                      </td>
-                      <td class="update-detail__data-table-value">
-                        <RouterLink
-                          v-if="
-                            isContractReference(value) ||
-                            isContractIdStringReference(key, value)
-                          "
-                          class="contract-detail__link"
-                          :to="`/nodes/${props.id}/contracts/${contractReferenceValue(value)}`"
-                        >
-                          {{ contractReferenceValue(value) }}
-                        </RouterLink>
-                        <RouterLink
-                          v-else-if="isPartyReference(key, value)"
-                          class="contract-detail__link"
-                          :to="`/parties/${value}`"
-                        >
-                          {{ value }}
-                        </RouterLink>
-                        <template v-else>
-                          {{ formatEventDataValue(value) }}
-                        </template>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                  {{ dataTable.label }}
+                </h4>
+                <div class="update-detail__data-table-wrap">
+                  <EventDataTable
+                    :entries="dataTable.entries"
+                    :node-id="props.id"
+                    :aria-labelledby="`update-detail-event-data-heading-${eventIndex}-${dataTableIndex}`"
+                  />
+                </div>
+              </template>
             </section>
           </article>
         </div>

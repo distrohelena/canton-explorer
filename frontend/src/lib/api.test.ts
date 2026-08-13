@@ -554,9 +554,9 @@ describe('fetchNodes', () => {
   });
 
   it('uses the local backend only for the vite dev server', () => {
-    expect(resolveApiBaseUrl('', false, '4600', 'localhost')).toBe('/api');
-    expect(resolveApiBaseUrl('', false, '8080', 'example.com')).toBe('/api');
-    expect(resolveApiBaseUrl('', false, '46000', 'localhost')).toBe('/api');
+    expect(resolveApiBaseUrl('', false, '4600', 'localhost')).toBe('api');
+    expect(resolveApiBaseUrl('', false, '8080', 'example.com')).toBe('api');
+    expect(resolveApiBaseUrl('', false, '46000', 'localhost')).toBe('api');
     expect(resolveApiBaseUrl('', true, '46000', 'localhost')).toBe('http://localhost:4600/api');
   });
 

@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from "@testing-library/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import UpdateDetailView from "./UpdateDetailView.vue";
 import { fetchNodeUpdateDetail } from "../lib/api";
+import "../styles.css";
 
 const routeQuery = {
   from: undefined as string | undefined,
@@ -89,6 +90,62 @@ describe("UpdateDetailView", () => {
                 {
                   label: "optionalRewardRound",
                   value: { kind: "optional", value: null },
+                },
+                {
+                  label: "optionalTextMap",
+                  value: {
+                    kind: "text_map",
+                    entries: [
+                      {
+                        key: "entry",
+                        value: { kind: "optional", value: null },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            type: {
+              kind: "record",
+              label: "Main:Asset",
+              fields: [
+                { name: "rewardRound", type: { kind: "builtin", label: "Int64" } },
+                { name: "recipientParty", type: { kind: "builtin", label: "Party" } },
+                {
+                  name: "couponContractId",
+                  type: { kind: "builtin", label: "ContractId" },
+                },
+                {
+                  name: "optionalMemo",
+                  type: {
+                    kind: "builtin",
+                    label: "Optional",
+                    arguments: [{ kind: "builtin", label: "Text" }],
+                  },
+                },
+                {
+                  name: "optionalRewardRound",
+                  type: {
+                    kind: "builtin",
+                    label: "Optional",
+                    arguments: [{ kind: "builtin", label: "Text" }],
+                  },
+                },
+                {
+                  name: "optionalTextMap",
+                  type: {
+                    kind: "builtin",
+                    label: "TextMap",
+                    arguments: [
+                      {
+                        kind: "builtin",
+                        label: "Optional",
+                        arguments: [
+                          { kind: "builtin", label: "ContractId" },
+                        ],
+                      },
+                    ],
+                  },
                 },
               ],
             },
@@ -191,6 +248,11 @@ describe("UpdateDetailView", () => {
         "1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Copy update ID 1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1",
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Jul 1, 2026")).toBeInTheDocument();
     expect(screen.getByText("12:00:00 PM")).toBeInTheDocument();
     expect(screen.queryByText("Alice, Bob")).not.toBeInTheDocument();
@@ -254,22 +316,22 @@ describe("UpdateDetailView", () => {
       "update-detail__event-item--choice",
     );
     expect(screen.getByText("Create Data")).toBeInTheDocument();
-    expect(screen.getByText("Coupon Contract Id")).toBeInTheDocument();
-    expect(screen.getByText("Result / Coupon Contract Id")).toBeInTheDocument();
+    expect(screen.getAllByText("Coupon Contract Id")).toHaveLength(2);
     expect(screen.getAllByText("00coupon")).toHaveLength(2);
-    expect(screen.getByText("Exercise Data")).toBeInTheDocument();
-    expect(screen.getByText("Result / Reward Amount")).toBeInTheDocument();
+    expect(screen.queryByText("Exercise Data")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Result" })).toBeInTheDocument();
+    expect(screen.getByText("Reward Amount")).toBeInTheDocument();
     expect(screen.getByText("20,000")).toBeInTheDocument();
-    expect(screen.getByText("Result / Reward Round")).toBeInTheDocument();
+    expect(screen.getAllByText("Reward Round")).toHaveLength(2);
     expect(screen.getAllByText("258")).toHaveLength(2);
     const createDataTable = screen.getByRole("table", { name: "Create Data" });
     expect(createDataTable).toHaveAttribute(
       "aria-labelledby",
-      "update-detail-event-data-heading-0",
+      "update-detail-event-data-heading-0-0",
     );
     expect(
       screen.getByRole("heading", { name: "Create Data" }),
-    ).toHaveAttribute("id", "update-detail-event-data-heading-0");
+    ).toHaveAttribute("id", "update-detail-event-data-heading-0-0");
     expect(
       within(createDataTable)
         .getAllByRole("columnheader")
@@ -303,37 +365,61 @@ describe("UpdateDetailView", () => {
     expect(
       within(createDataTable).getByText("Optional Memo"),
     ).toBeInTheDocument();
-    expect(
-      within(createDataTable).getByText("Optional<Text>"),
-    ).toBeInTheDocument();
+    expect(within(createDataTable).getAllByText("Optional<Text>")).toHaveLength(
+      2,
+    );
     expect(
       within(createDataTable).getByText("Optional Reward Round"),
     ).toBeInTheDocument();
     expect(
-      within(createDataTable).getByText("Optional<Int64>"),
+      within(createDataTable).getByText("Optional Text Map / Entry"),
     ).toBeInTheDocument();
+    const emptyTextMapOptionalRow = within(createDataTable)
+      .getByText("Optional Text Map / Entry")
+      .closest("tr");
+    expect(emptyTextMapOptionalRow).not.toBeNull();
+    expect(
+      within(emptyTextMapOptionalRow as HTMLElement).getByText(
+        "Optional<ContractId>",
+      ),
+    ).toBeInTheDocument();
+    const emptyOptionalRow = within(createDataTable)
+      .getByText("Optional Reward Round")
+      .closest("tr");
+    expect(emptyOptionalRow).not.toBeNull();
+    expect(within(emptyOptionalRow as HTMLElement).getByText("Optional<Text>"))
+      .toBeInTheDocument();
     expect(
       within(createDataTable).getByRole("link", { name: "Alice" }),
     ).toHaveAttribute("href", "/parties/Alice");
     expect(
+      within(createDataTable).getByRole("button", {
+        name: "Copy party ID Alice",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(createDataTable).getByRole("link", { name: "Alice" }),
+    ).toHaveClass("update-detail__data-table-value-link");
+    expect(
       within(createDataTable).getByRole("link", { name: "00coupon" }),
     ).toHaveAttribute("href", "/nodes/participant-1/contracts/00coupon");
-    const exerciseDataTable = screen.getByRole("table", {
-      name: "Exercise Data",
-    });
-    expect(exerciseDataTable).toHaveAttribute(
+    expect(
+      within(createDataTable).getByRole("button", {
+        name: "Copy contract ID 00coupon",
+      }),
+    ).toBeInTheDocument();
+    const resultTable = screen.getByRole("table", { name: "Result" });
+    expect(resultTable).toHaveAttribute(
       "aria-labelledby",
-      "update-detail-event-data-heading-1",
+      "update-detail-event-data-heading-1-0",
     );
     expect(
-      within(exerciseDataTable)
+      within(resultTable)
         .getAllByRole("columnheader")
         .map((header) => header.textContent?.trim()),
     ).toEqual(["Field", "Type", "Value"]);
-    expect(
-      within(exerciseDataTable).getByText("Result / Reward Amount"),
-    ).toBeInTheDocument();
-    expect(within(exerciseDataTable).getByText("Numeric")).toBeInTheDocument();
+    expect(within(resultTable).getByText("Reward Amount")).toBeInTheDocument();
+    expect(within(resultTable).getByText("Numeric")).toBeInTheDocument();
     expect(
       container.querySelectorAll(".update-detail__event-item--exercise-data"),
     ).toHaveLength(0);
@@ -363,8 +449,8 @@ describe("UpdateDetailView", () => {
     ).not.toBeNull();
     expect(screen.queryByText("Update Detail")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Back to overview" }),
-    ).toHaveAttribute("href", "/nodes/participant-1/updates");
+      screen.queryByRole("link", { name: "Back to overview" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Debug Offset" })).toHaveAttribute(
       "href",
       "/debugger?updateId=1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1",
@@ -372,7 +458,7 @@ describe("UpdateDetailView", () => {
     expect(screen.queryByText("Back to overview")).not.toBeInTheDocument();
   });
 
-  it("returns to the global updates page when opened from that feed", async () => {
+  it("does not render a back control when opened from the global updates feed", async () => {
     routeQuery.from = "updates";
 
     vi.mocked(fetchNodeUpdateDetail).mockResolvedValue({
@@ -410,11 +496,11 @@ describe("UpdateDetailView", () => {
     await screen.findByText("No event rows found for this update.");
 
     expect(
-      screen.getByRole("link", { name: "Back to overview" }),
-    ).toHaveAttribute("href", "/");
+      screen.queryByRole("link", { name: "Back to overview" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("returns to the party page when opened from a party-scoped updates browser", async () => {
+  it("does not render a back control when opened from a party-scoped updates browser", async () => {
     routeQuery.from = "party";
     routeQuery.partyId = "Alice";
 
@@ -453,11 +539,11 @@ describe("UpdateDetailView", () => {
     await screen.findByText("No event rows found for this update.");
 
     expect(
-      screen.getByRole("link", { name: "Back to overview" }),
-    ).toHaveAttribute("href", "/parties/Alice");
+      screen.queryByRole("link", { name: "Back to overview" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("renders nested decoded exercise data with flattened labels", async () => {
+  it("renders nested decoded exercise data with grouped array fields", async () => {
     const endUserParty =
       "app_user_quickstart-helena-1::122039623d5100d9d3e7570612752bc03420abf158361d66c5694f22ee0f72260339";
 
@@ -495,6 +581,131 @@ describe("UpdateDetailView", () => {
                           value: "2026-07-02T16:28:31.901Z",
                         },
                         { label: "migrationId", value: -1 },
+                      ],
+                    },
+                  },
+                  {
+                    label: "context",
+                    value: {
+                      kind: "record",
+                      fields: [
+                        {
+                          label: "context",
+                          value: {
+                            kind: "record",
+                            fields: [
+                              { label: "validatorRights", value: null },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    label: "inputs",
+                    value: {
+                      kind: "list",
+                      items: [
+                        {
+                          kind: "record",
+                          fields: [
+                            { label: "tag", value: "InputAmulet" },
+                            {
+                              label: "value",
+                              value:
+                                "00529caed95939d8b40d6bfaf7e0c26c707afb43f4ff49a4d8d5b554e8c4bf8254ca1212206e915acf6d312d929ae6240c659cb9ecf4add764740a851d3877b2b9bb47f4",
+                            },
+                          ],
+                        },
+                        {
+                          kind: "record",
+                          fields: [
+                            {
+                              label: "tag",
+                              value: "InputValidatorLivenessActivityRecord",
+                            },
+                            {
+                              label: "value",
+                              value:
+                                "00d628f7400febf4ca4aec4ea4e3129a1bfe1e0cb5c895a93bf86dd110ba6d383bca121220c858d095eef727e73c2e7fe1f1be367eeaa2fd193786db6918bcbbd60a9c402e",
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+              type: {
+                kind: "record",
+                label: "Splice.Wallet.Payment:AppPaymentRequest_Accept",
+                fields: [
+                  {
+                    name: "context",
+                    type: {
+                      kind: "type_con",
+                      label: "Splice.Wallet.Payment:Context",
+                      definition: {
+                        kind: "record",
+                        label: "Splice.Wallet.Payment:Context",
+                        fields: [
+                          {
+                            name: "context",
+                            type: {
+                              kind: "type_con",
+                              label: "Splice.Wallet.Payment:Context",
+                              definition: {
+                                kind: "record",
+                                label: "Splice.Wallet.Payment:Context",
+                                fields: [
+                                  {
+                                    name: "validatorRights",
+                                    type: {
+                                      kind: "builtin",
+                                      label: "GenMap",
+                                      arguments: [
+                                        { kind: "builtin", label: "Party" },
+                                        {
+                                          kind: "builtin",
+                                          label: "ContractId",
+                                          arguments: [
+                                            {
+                                              kind: "type_con",
+                                              label: "Splice.Amulet:ValidatorRight",
+                                            },
+                                          ],
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  {
+                    name: "inputs",
+                    type: {
+                      kind: "builtin",
+                      label: "List",
+                      arguments: [
+                        {
+                          kind: "record",
+                          label: "Input",
+                          fields: [
+                            {
+                              name: "tag",
+                              type: { kind: "builtin", label: "Text" },
+                            },
+                            {
+                              name: "value",
+                              type: { kind: "builtin", label: "Text" },
+                            },
+                          ],
+                        },
                       ],
                     },
                   },
@@ -549,19 +760,79 @@ describe("UpdateDetailView", () => {
         name: "CNQS Super Validator Update",
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Argument / Status / Report Time"),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Argument" })).toBeInTheDocument();
+    expect(screen.getByText("Report Time")).toBeInTheDocument();
     expect(screen.getByText("2026-07-02T16:28:31.901Z")).toBeInTheDocument();
-    expect(
-      screen.getByText("Argument / Status / Migration Id"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Migration Id")).toBeInTheDocument();
     expect(screen.getByText("-1")).toBeInTheDocument();
-    expect(screen.getByText("Result / Opt End User Party")).toBeInTheDocument();
-    expect(screen.getByText("Result / New Report")).toBeInTheDocument();
+    expect(screen.queryByText("Context / Context / Validator Rights")).not.toBeInTheDocument();
+    const argumentTable = screen.getByRole("table", { name: "Argument" });
+    const contextSummary = within(argumentTable)
+      .getAllByText("Context")[0]
+      .closest("tr");
+    expect(contextSummary).not.toBeNull();
+    expect(within(contextSummary as HTMLElement).getByText("1 field")).toBeInTheDocument();
+    const contextTable = screen.getAllByRole("table", { name: "Context" })[0];
+    expect(contextTable).toBeDefined();
+    expect(within(contextTable as HTMLElement).getByText("1 field")).toBeInTheDocument();
+    const nestedContextSummary = within(contextTable)
+      .getByText("Context")
+      .closest("tr");
+    expect(nestedContextSummary).not.toBeNull();
+    const nestedContextTable = screen.getAllByRole("table", { name: "Context" })[1];
+    expect(nestedContextTable).toBeDefined();
+    expect(nestedContextTable?.closest("td")).toHaveAttribute("colspan", "3");
+    expect(within(nestedContextTable as HTMLElement).getByText("Validator Rights")).toBeInTheDocument();
+    const longTypeCell = within(nestedContextTable as HTMLElement)
+      .getByText("GenMap<Party, ContractId<Splice.Amulet:ValidatorRight>>")
+      .closest("td");
+    expect(longTypeCell).not.toBeNull();
+    expect(longTypeCell).toHaveClass(
+      "update-detail__data-table-type--wrappable",
+    );
+    const inputsSummary = within(argumentTable).getByText("Inputs").closest("tr");
+    expect(inputsSummary).not.toBeNull();
+    expect(within(inputsSummary as HTMLElement).getByText("2 items")).toBeInTheDocument();
+    expect(
+      within(inputsSummary as HTMLElement).queryByRole("table", { name: "Inputs" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(argumentTable).queryByText("Inputs[1] / Tag"),
+    ).not.toBeInTheDocument();
+    const inputsTable = screen.getByRole("table", { name: "Inputs" });
+    const inputsContinuation = inputsTable.closest("td");
+    expect(inputsContinuation).not.toBeNull();
+    expect(inputsContinuation).toHaveAttribute("colspan", "3");
+    expect(inputsContinuation?.parentElement?.previousElementSibling).toBe(
+      inputsSummary,
+    );
+    expect(within(inputsTable).getByText("Field 1")).toBeInTheDocument();
+    expect(within(inputsTable).getByText("Field 2")).toBeInTheDocument();
+    expect(within(inputsTable).getAllByText("Tag")).toHaveLength(2);
+    expect(within(inputsTable).getAllByText("Value")).toHaveLength(3);
+    expect(within(inputsTable).getByText("InputAmulet")).toBeInTheDocument();
+    expect(
+      within(inputsTable).getByText("InputValidatorLivenessActivityRecord"),
+    ).toBeInTheDocument();
+    expect(
+      within(inputsTable).getByText(
+        "00529caed95939d8b40d6bfaf7e0c26c707afb43f4ff49a4d8d5b554e8c4bf8254ca1212206e915acf6d312d929ae6240c659cb9ecf4add764740a851d3877b2b9bb47f4",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("GenMap<Party, ContractId<Splice.Amulet:ValidatorRight>>"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Result" })).toBeInTheDocument();
+    expect(screen.getByText("Opt End User Party")).toBeInTheDocument();
+    expect(screen.getByText("New Report")).toBeInTheDocument();
+    expect(screen.queryByText("Exercise Data")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^(Argument|Result) \/\//)).not.toBeInTheDocument();
     expect(
       container.querySelector(`a[href="/parties/${endUserParty}"]`),
     ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: `Copy party ID ${endUserParty}` }),
+    ).toBeInTheDocument();
     expect(
       container.querySelector('a[href="/parties/sv::party"]'),
     ).not.toBeNull();

@@ -71,7 +71,7 @@ describe('TokenTransferDetailView', () => {
       } as unknown as typeof Intl.DateTimeFormat,
     );
 
-    const { container } = render(TokenTransferDetailView, {
+    render(TokenTransferDetailView, {
       props: {
         updateId: 'token-update-2',
       },
@@ -122,6 +122,6 @@ describe('TokenTransferDetailView', () => {
       'href',
       '/nodes/participant-2/updates/202?from=tokens',
     );
-    expect(container.querySelector('a[href="/tokens"]')).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
   });
 });

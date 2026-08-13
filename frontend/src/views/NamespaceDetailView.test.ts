@@ -166,7 +166,7 @@ describe('NamespaceDetailView', () => {
     expect(api.fetchNamespaceParties).toHaveBeenCalledWith('1220abcd', { limit: 15 });
 
     expect(await screen.findByText('1220abcd Namespace')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to overview' })).toHaveAttribute('href', '/parties');
+    expect(screen.queryByRole('link', { name: 'Back to overview' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Observed Parties' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Observed Nodes' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Alice::1220abcd' })).toHaveAttribute('href', '/parties/Alice%3A%3A1220abcd');
