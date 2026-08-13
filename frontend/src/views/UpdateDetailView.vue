@@ -77,6 +77,11 @@ const debuggerTarget = computed(() => {
 
   return `/debugger?${params.toString()}`;
 });
+
+function templateTarget(packageId: string, templateId: string): string {
+  return `/packages/${encodeURIComponent(packageId)}/templates/${encodeURIComponent(templateId)}`;
+}
+
 function formatEventKind(
   eventKind: NodeUpdateDetailResponse["events"][number]["eventKind"],
 ): string {
@@ -333,7 +338,14 @@ function getEventDataTables(
                   class="update-detail__event-template-id"
                   :title="event.templateId ?? 'n/a'"
                 >
-                  {{ event.templateId ?? "n/a" }}
+                  <RouterLink
+                    v-if="event.packageId && event.templateId"
+                    class="contract-detail__link"
+                    :to="templateTarget(event.packageId, event.templateId)"
+                  >
+                    {{ event.templateId }}
+                  </RouterLink>
+                  <span v-else>{{ event.templateId ?? "n/a" }}</span>
                 </dd>
               </div>
               <div

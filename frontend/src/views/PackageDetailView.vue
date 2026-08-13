@@ -198,6 +198,14 @@ const packageFamilyPath = computed(() => {
 
   return `/packages/by-name/${encodeURIComponent(packageSummary.value.name)}`;
 });
+
+function packageModulePath(moduleName: string): string {
+  return `/packages/${encodeURIComponent(props.packageId)}/modules/${encodeURIComponent(moduleName)}`;
+}
+
+function packageTemplatePath(templateId: string): string {
+  return `/packages/${encodeURIComponent(props.packageId)}/templates/${encodeURIComponent(templateId)}`;
+}
 </script>
 
 <template>
@@ -339,7 +347,9 @@ const packageFamilyPath = computed(() => {
                 :key="moduleName"
                 class="package-detail__list-row"
               >
-                {{ moduleName }}
+                <RouterLink class="contract-detail__link" :to="packageModulePath(moduleName)">
+                  {{ moduleName }}
+                </RouterLink>
               </div>
             </div>
           </section>
@@ -365,7 +375,11 @@ const packageFamilyPath = computed(() => {
                 :key="template.templateId"
                 class="package-detail__list-row package-detail__list-row--stacked"
               >
-                <div class="package-detail__entry-title">{{ template.templateId }}</div>
+                <div class="package-detail__entry-title">
+                  <RouterLink class="contract-detail__link" :to="packageTemplatePath(template.templateId)">
+                    {{ template.templateId }}
+                  </RouterLink>
+                </div>
                 <PackageTypeTree v-if="template.createType" :node="template.createType" />
               </div>
             </div>

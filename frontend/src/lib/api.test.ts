@@ -28,6 +28,7 @@ import {
   fetchPackageTemplates,
   fetchPackageDataTypes,
   fetchPackageModule,
+  fetchPackageTemplate,
 } from './api';
 import type { NodeContractDetailResponse, NodeContractsResponse } from '../types/contracts';
 import type { NodePackagesResponse, NodeParticipantStatusResponse } from '../types/nodes';
@@ -1567,6 +1568,21 @@ describe('fetchNodes', () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:4600/api/packages/pkg/modules/Main.Module',
+    );
+  });
+
+  it('loads a package template from the backend API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ packageId: 'pkg', template: { templateId: 'Main.Module:Asset' } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchPackageTemplate('pkg', 'Main.Module:Asset')).resolves.toEqual(
+      expect.objectContaining({ packageId: 'pkg' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4600/api/packages/pkg/templates/Main.Module%3AAsset',
     );
   });
 

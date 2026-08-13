@@ -21,6 +21,14 @@ describe('ModuleDetailView', () => {
         packageId: 'pkg',
         moduleName: 'Main.Module',
       },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
     });
 
     expect(screen.getByRole('heading', { name: 'Main.Module' })).toBeInTheDocument();
@@ -59,6 +67,14 @@ describe('ModuleDetailView', () => {
         packageId: 'pkg',
         moduleName: 'Main.Module',
       },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
     });
 
     expect(await screen.findByText('Main Package')).toBeInTheDocument();
@@ -67,5 +83,8 @@ describe('ModuleDetailView', () => {
     expect(screen.getByText('Main.Module:Asset')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Data Types' })).toBeInTheDocument();
     expect(screen.getByText('Main.Module:AssetData')).toBeInTheDocument();
+    expect(
+      document.querySelector('a[href="/packages/pkg/templates/Main.Module%3AAsset"]'),
+    ).not.toBeNull();
   });
 });

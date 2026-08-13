@@ -6,13 +6,29 @@ import {
   DEFAULT_HOST,
   DEFAULT_PORT,
   configureFrontendAssets,
+  injectFrontendBasePath,
   resolveHost,
+  resolveFrontendBasePath,
   resolveFrontendAssetsDir,
   resolvePort,
   startApp,
 } from '../src/app-bootstrap';
 
 describe('startApp', () => {
+  it('reads the frontend base path from the node config service', () => {
+    const configService = {
+      getFrontendConfig: jest
+        .fn()
+        .mockReturnValue({ basePath: '/canton-explorer/' }),
+    };
+
+    expect(
+      resolveFrontendBasePath({
+        get: jest.fn().mockReturnValue(configService),
+      }),
+    ).toBe('/canton-explorer/');
+  });
+
   it('binds the Nest app to 0.0.0.0', async () => {
     process.env.PORT = '4600';
     process.env.HOST = '';
@@ -63,6 +79,55 @@ describe('startApp', () => {
     expect(registerGet).toHaveBeenCalledTimes(1);
 
     rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('injects the configured base path into the SPA fallback HTML', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'canton-explorer-static-'));
+    writeFileSync(
+      join(tempDir, 'index.html'),
+      '<html><head><title>Canton Explorer</title></head><body></body></html>',
+      'utf8',
+    );
+
+    const registerGet = jest.fn();
+    configureFrontendAssets(
+      {
+        enableCors: jest.fn(),
+        listen: jest.fn().mockResolvedValue(undefined),
+        useStaticAssets: jest.fn(),
+        getHttpAdapter: () => ({
+          getInstance: () => ({
+            get: registerGet,
+          }),
+        }),
+      },
+      tempDir,
+      '/canton-explorer/',
+    );
+
+    const response = { send: jest.fn() };
+    const handler = registerGet.mock.calls[0][1] as (
+      request: unknown,
+      response: typeof response,
+    ) => void;
+    handler({}, response);
+
+    expect(response.send).toHaveBeenCalledWith(
+      expect.stringContaining('<base href="/canton-explorer/">'),
+    );
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('replaces an existing base element instead of duplicating it', () => {
+    expect(
+      injectFrontendBasePath(
+        '<html><head><base href="/old/"><title>Canton Explorer</title></head></html>',
+        '/canton-explorer/',
+      ),
+    ).toBe(
+      '<html><head><base href="/canton-explorer/"><title>Canton Explorer</title></head></html>',
+    );
   });
 
   it('resolves packaged frontend assets from dist/public when dist/src/public is absent', () => {

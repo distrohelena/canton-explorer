@@ -17,6 +17,9 @@ describe('NodeConfigService', () => {
           applicationTitle: 'Canton Operations',
           headerTitle: 'Operations Console',
         },
+        frontend: {
+          basePath: '/canton-explorer/',
+        },
         nodes: [
           {
             id: 'participant-1',
@@ -43,6 +46,9 @@ describe('NodeConfigService', () => {
       expect(branding).not.toHaveProperty('nodes');
       expect(branding).not.toHaveProperty('debugger');
       expect(branding).not.toHaveProperty('tokenMetadata');
+      expect(service.getFrontendConfig()).toEqual({
+        basePath: '/canton-explorer/',
+      });
     } finally {
       if (originalConfigPath === undefined) {
         delete process.env.NODE_CONFIG_PATH;

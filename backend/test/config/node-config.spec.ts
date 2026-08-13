@@ -27,6 +27,30 @@ const notAvailablePackageDetailFixture = {
 } satisfies PackageDetailResponse;
 
 describe('parseNodeConfigFile', () => {
+  it('defaults the frontend base path to the root path when omitted', () => {
+    const result = parseNodeConfigFile({ nodes: [createValidNodeConfig()] });
+
+    expect(result.frontend).toEqual({ basePath: '/' });
+  });
+
+  it('parses and normalizes the configured frontend base path', () => {
+    const result = parseNodeConfigFile({
+      frontend: { basePath: '/canton-explorer' },
+      nodes: [createValidNodeConfig()],
+    });
+
+    expect(result.frontend).toEqual({ basePath: '/canton-explorer/' });
+  });
+
+  it('rejects an absolute URL as the frontend base path', () => {
+    expect(() =>
+      parseNodeConfigFile({
+        frontend: { basePath: 'https://example.com/canton-explorer/' },
+        nodes: [createValidNodeConfig()],
+      }),
+    ).toThrow(/basePath/i);
+  });
+
   it('defaults branding when omitted', () => {
     const result = parseNodeConfigFile({ nodes: [createValidNodeConfig()] });
 

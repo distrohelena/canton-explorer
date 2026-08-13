@@ -310,6 +310,9 @@ describe("UpdateDetailView", () => {
     expect(screen.getByText("00abc")).toBeInTheDocument();
     expect(screen.getByText("Main:Asset")).toBeInTheDocument();
     expect(
+      container.querySelector('a[href="/packages/main-package/templates/Main%3AAsset"]'),
+    ).not.toBeNull();
+    expect(
       screen.queryByText(/"template_id": "Main:Asset"/),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("Choice")[0].closest("div")).toHaveClass(

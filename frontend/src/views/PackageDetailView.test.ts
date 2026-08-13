@@ -308,6 +308,11 @@ describe('PackageDetailView', () => {
     ).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Templates' })).toBeInTheDocument();
     expect(screen.getAllByText('Splice.Amulet:SvRewardCoupon').length).toBeGreaterThan(0);
+    expect(
+      container.querySelector(
+        'a[href="/packages/splice-amulet/templates/Splice.Amulet%3ASvRewardCoupon"]',
+      ),
+    ).not.toBeNull();
     expect(screen.getByText('dso')).toBeInTheDocument();
     expect(screen.getByText('Party')).toBeInTheDocument();
     expect(screen.getByText('round')).toBeInTheDocument();

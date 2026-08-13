@@ -58,6 +58,16 @@ export interface PackageModuleDetailResponse {
   dataTypes: PackageDataTypeSummary[];
 }
 
+export interface PackageTemplateDetailResponse {
+  packageId: string;
+  name: string | null;
+  version: string | null;
+  uploadedAt: string | null;
+  packageSize: number | null;
+  status: PackageDetailStatus;
+  template: PackageTemplateSummary | null;
+}
+
 export interface PackageTypeField {
   name: string;
   type: PackageTypeNode;

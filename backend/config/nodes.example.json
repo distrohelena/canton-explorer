@@ -3,6 +3,9 @@
     "applicationTitle": "Canton Explorer",
     "headerTitle": "Canton Explorer"
   },
+  "frontend": {
+    "basePath": "/"
+  },
   "debugger": {
     "localDarDirectory": "./debug-dars"
   },

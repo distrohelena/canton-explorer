@@ -10,6 +10,10 @@ export const DEFAULT_BRANDING_CONFIG = {
   headerTitle: 'Canton Explorer',
 } as const;
 
+export const DEFAULT_FRONTEND_CONFIG = {
+  basePath: '/',
+} as const;
+
 const nodeBaseSchema = {
   id: z.string().min(1),
   label: z.string().min(1),
@@ -105,6 +109,20 @@ const brandingSchema = z
     headerTitle: DEFAULT_BRANDING_CONFIG.headerTitle,
   });
 
+const frontendSchema = z
+  .object({
+    basePath: z
+      .string()
+      .trim()
+      .min(1)
+      .regex(/^\/(?!\/)[^?#]*$/, 'basePath must be a relative URL path')
+      .transform((value) => (value.endsWith('/') ? value : `${value}/`)),
+  })
+  .strict()
+  .default({
+    basePath: DEFAULT_FRONTEND_CONFIG.basePath,
+  });
+
 const nodeSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -123,6 +141,7 @@ const nodeSchema = z.discriminatedUnion('mode', [
 
 const configSchema = z.object({
   branding: brandingSchema,
+  frontend: frontendSchema,
   debugger: debuggerConfigSchema,
   tokenMetadata: tokenMetadataSchema.default({
     nameKeys: [...DEFAULT_TOKEN_METADATA_CONFIG.nameKeys],
@@ -136,6 +155,7 @@ export type NodeConfig = z.infer<typeof nodeSchema>;
 export type TokenMetadataConfig = z.infer<typeof tokenMetadataSchema>;
 export type DebuggerConfig = z.infer<typeof debuggerConfigSchema>;
 export type BrandingConfig = z.infer<typeof brandingSchema>;
+export type FrontendConfig = z.infer<typeof frontendSchema>;
 
 export function parseNodeConfigFile(input: unknown): NodeConfigFile {
   return configSchema.parse(input);

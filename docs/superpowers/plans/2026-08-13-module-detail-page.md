@@ -19,10 +19,10 @@
 - Test: `backend/test/pqs/pqs-summary.service.spec.ts`
 - Test: `backend/test/api/nodes.controller.spec.ts`
 
-- [ ] Write failing service/controller tests for module filtering and the endpoint.
-- [ ] Run the focused backend tests and confirm the new method is missing.
-- [ ] Implement the response type, service filtering, and controller route.
-- [ ] Run the focused backend tests and confirm they pass.
+- [x] Write failing service/controller tests for module filtering and the endpoint.
+- [x] Run the focused backend tests and confirm the new method is missing.
+- [x] Implement the response type, service filtering, and controller route.
+- [x] Run the focused backend tests and confirm they pass.
 
 ### Task 2: Add frontend API, route, and Module detail view
 
@@ -34,10 +34,10 @@
 - Test: `frontend/src/lib/api.test.ts`
 - Test: `frontend/src/views/ModuleDetailView.test.ts`
 
-- [ ] Write failing API and view tests for module URL loading and rendered definitions.
-- [ ] Run the focused frontend tests and confirm the new API/view are missing.
-- [ ] Implement the fetch function, route, and view with loading/error/empty states.
-- [ ] Run the focused frontend tests and confirm they pass.
+- [x] Write failing API and view tests for module URL loading and rendered definitions.
+- [x] Run the focused frontend tests and confirm the new API/view are missing.
+- [x] Implement the fetch function, route, and view with loading/error/empty states.
+- [x] Run the focused frontend tests and confirm they pass.
 
 ### Task 3: Link package modules to the new page
 
@@ -45,15 +45,15 @@
 - Modify: `frontend/src/views/PackageDetailView.vue`
 - Test: `frontend/src/views/PackageDetailView.test.ts`
 
-- [ ] Add a failing assertion that a module row links to the module route.
-- [ ] Implement the module link while preserving the existing module list styling.
-- [ ] Run the package detail tests and confirm they pass.
+- [x] Add a failing assertion that a module row links to the module route.
+- [x] Implement the module link while preserving the existing module list styling.
+- [x] Run the package detail tests and confirm they pass.
 
 ### Task 4: Verify the complete change
 
 **Files:**
 - No source changes expected.
 
-- [ ] Run `npm test` from the repository root.
-- [ ] Run `npm run build` from the repository root.
-- [ ] Run `git diff --check` and review the final changed-file list.
+- [x] Run `npm test` from the repository root.
+- [x] Run `npm run build` from the repository root.
+- [x] Run `git diff --check` and review the final changed-file list.

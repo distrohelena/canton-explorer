@@ -20,6 +20,7 @@ import type {
   PackageDetailSummaryResponse,
   PackageDetailTemplatesResponse,
   PackageModuleDetailResponse,
+  PackageTemplateDetailResponse,
   PackageFamilyResponse,
   TemplateFilterResponse,
   TokenDetailResponse,
@@ -575,6 +576,7 @@ describe('NodesController', () => {
     fetchPackageTemplates: jest.Mock;
     fetchPackageDataTypes: jest.Mock;
     fetchPackageModule: jest.Mock;
+    fetchPackageTemplate: jest.Mock;
     fetchPackagesByName: jest.Mock;
     fetchTemplates: jest.Mock;
     fetchNodePackages: jest.Mock;
@@ -779,6 +781,15 @@ describe('NodesController', () => {
         templates: typedPackageDetailFixture.templates,
         dataTypes: typedPackageDetailFixture.dataTypes,
       } satisfies PackageModuleDetailResponse),
+      fetchPackageTemplate: jest.fn().mockResolvedValue({
+        packageId: typedPackageDetailFixture.packageId,
+        name: typedPackageDetailFixture.name,
+        version: typedPackageDetailFixture.version,
+        uploadedAt: typedPackageDetailFixture.uploadedAt,
+        packageSize: typedPackageDetailFixture.packageSize,
+        status: typedPackageDetailFixture.status,
+        template: typedPackageDetailFixture.templates[0],
+      } satisfies PackageTemplateDetailResponse),
       fetchPackagesByName: jest.fn().mockResolvedValue(typedPackageFamilyFixture),
       fetchTemplates: jest.fn().mockResolvedValue(typedTemplateFilterFixture),
       fetchNodePackages: jest.fn().mockResolvedValue(typedNodePackagesFixture),
@@ -1023,6 +1034,21 @@ describe('NodesController', () => {
     expect(pqsSummaryService.fetchPackageModule).toHaveBeenCalledWith(
       'main-package',
       'Main.Module',
+    );
+  });
+
+  it('returns a package template detail', async () => {
+    await expect(
+      controller.getPackageTemplate('main-package', 'Main.Module:Asset'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        packageId: 'main-package',
+        template: typedPackageDetailFixture.templates[0],
+      }),
+    );
+    expect(pqsSummaryService.fetchPackageTemplate).toHaveBeenCalledWith(
+      'main-package',
+      'Main.Module:Asset',
     );
   });
 

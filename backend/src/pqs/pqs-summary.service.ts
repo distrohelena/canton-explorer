@@ -33,6 +33,7 @@ import type {
   PackageDetailSummaryResponse,
   PackageDetailTemplatesResponse,
   PackageModuleDetailResponse,
+  PackageTemplateDetailResponse,
   PackageFamilyResponse,
   NodeUpdateDetailEvent,
   NodeUpdateDetailMeta,
@@ -3590,6 +3591,25 @@ export class PqsSummaryService {
       dataTypes: inspection.ok
         ? inspection.definition.dataTypes.filter((dataType) => dataType.moduleName === moduleName)
         : [],
+    };
+  }
+
+  async fetchPackageTemplate(
+    packageId: string,
+    templateId: string,
+  ): Promise<PackageTemplateDetailResponse> {
+    const { metadata, inspection } = await this.inspectPackageDetailSection(packageId);
+
+    return {
+      packageId: metadata.packageId,
+      name: metadata.name,
+      version: metadata.version,
+      uploadedAt: metadata.uploadedAt,
+      packageSize: metadata.packageSize,
+      status: this.packageDetailStatus(inspection),
+      template: inspection.ok
+        ? inspection.definition.templates.find((template) => template.templateId === templateId) ?? null
+        : null,
     };
   }
 

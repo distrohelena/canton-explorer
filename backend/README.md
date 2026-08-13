@@ -47,6 +47,12 @@ Both values default independently to `Canton Explorer` when omitted, so setting
 one does not change the other. Changes to the JSON configuration require a
 backend restart to take effect.
 
+The optional `frontend.basePath` sets the deployment path used by the browser.
+Use `/` for a root deployment or a trailing-slash path such as
+`/canton-explorer/` when the explorer is served below a URL prefix. The backend
+injects this value into the served frontend at runtime, so it can be changed in
+the deployment config without rebuilding the frontend.
+
 For self-signed ES256 gRPC authentication, set the environment variable named
 by `privateKeyEnv` to the base64url encoding of the JSON private P-256 JWK. The
 auth configuration uses `sub`, `aud`, and `privateKeyEnv`; see

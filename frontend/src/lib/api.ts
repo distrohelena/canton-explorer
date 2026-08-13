@@ -32,6 +32,7 @@ import type {
   PackageDetailTemplatesResponse,
   PackageFamilyResponse,
   PackageModuleDetailResponse,
+  PackageTemplateDetailResponse,
 } from '../types/packages';
 import type { SearchResultsResponse } from '../types/search';
 import type { TemplateFilterResponse } from '../types/templates';
@@ -780,6 +781,15 @@ export function fetchPackageModule(
 ): Promise<PackageModuleDetailResponse> {
   return fetchJson<PackageModuleDetailResponse>(
     `/packages/${packageId}/modules/${encodeURIComponent(moduleName)}`,
+  );
+}
+
+export function fetchPackageTemplate(
+  packageId: string,
+  templateId: string,
+): Promise<PackageTemplateDetailResponse> {
+  return fetchJson<PackageTemplateDetailResponse>(
+    `/packages/${packageId}/templates/${encodeURIComponent(templateId)}`,
   );
 }
 

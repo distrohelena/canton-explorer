@@ -18,6 +18,7 @@ import type {
   PackageDetailModulesResponse,
   PackageDetailNodesResponse,
   PackageModuleDetailResponse,
+  PackageTemplateDetailResponse,
   PackageDetailSummaryResponse,
   PackageDetailTemplatesResponse,
 } from '../../src/domain/node.types';
@@ -2834,6 +2835,57 @@ describe('PqsSummaryService', () => {
           definition: null,
         },
       ],
+    });
+  });
+
+  it('returns a template detail from the requested package', async () => {
+    const service = new (
+      PqsSummaryService as unknown as new (...args: any[]) => PqsSummaryService
+    )(
+      { getRawExecutor: async () => ({ query: jest.fn() }) },
+      undefined,
+      {
+        getPackageMetadata: jest.fn().mockReturnValue({
+          packageId: 'main-package',
+          name: 'Main Package',
+          version: '1.2.3',
+          uploadedAt: null,
+          packageSize: 1024,
+        }),
+      },
+      {
+        inspectPackage: jest.fn().mockResolvedValue({
+          ok: true,
+          definition: {
+            packageId: 'main-package',
+            packageName: 'Main Package',
+            packageVersion: '1.2.3',
+            modules: ['Main.Module'],
+            templates: [typedPackageDetailFixture.templates[0]],
+            dataTypes: [],
+            moduleCount: 1,
+            templateCount: 1,
+            dataTypeCount: 0,
+          },
+        }),
+      },
+    ) as PqsSummaryService & {
+      fetchPackageTemplate?: (
+        packageId: string,
+        templateId: string,
+      ) => Promise<PackageTemplateDetailResponse>;
+    };
+
+    await expect(
+      service.fetchPackageTemplate?.('main-package', 'Splice.Amulet:SvRewardCoupon'),
+    ).resolves.toEqual({
+      packageId: 'main-package',
+      name: 'Main Package',
+      version: '1.2.3',
+      uploadedAt: null,
+      packageSize: 1024,
+      status: 'decoded',
+      template: typedPackageDetailFixture.templates[0],
     });
   });
 

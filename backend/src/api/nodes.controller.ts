@@ -860,6 +860,22 @@ export class NodesController {
     }
   }
 
+  @Get('/packages/:packageId/templates/:templateId')
+  async getPackageTemplate(
+    @Param('packageId') packageId: string,
+    @Param('templateId') templateId: string,
+  ) {
+    try {
+      return await this.pqsSummaryService.fetchPackageTemplate(packageId, templateId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Package not found') {
+        throw new NotFoundException(`Unknown package: ${packageId}`);
+      }
+
+      throw error;
+    }
+  }
+
   @Get('/packages/:packageId')
   async getPackageDetail(@Param('packageId') packageId: string) {
     try {

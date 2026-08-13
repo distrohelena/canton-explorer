@@ -12,6 +12,8 @@ import NodeDetailView from './views/NodeDetailView.vue';
 import UpdateDetailView from './views/UpdateDetailView.vue';
 import ContractDetailView from './views/ContractDetailView.vue';
 import PackageDetailView from './views/PackageDetailView.vue';
+import ModuleDetailView from './views/ModuleDetailView.vue';
+import TemplateDetailView from './views/TemplateDetailView.vue';
 import PackageFamilyView from './views/PackageFamilyView.vue';
 import PartyDetailView from './views/PartyDetailView.vue';
 import NamespaceDetailView from './views/NamespaceDetailView.vue';
@@ -42,6 +44,16 @@ export const router = createRouter({
     { path: '/parties/:partyId', component: PartyDetailView, props: true },
     { path: '/namespaces/:namespaceId', component: NamespaceDetailView, props: true },
     { path: '/packages/by-name/:packageName', component: PackageFamilyView, props: true },
+    {
+      path: '/packages/:packageId/modules/:moduleName',
+      component: ModuleDetailView,
+      props: true,
+    },
+    {
+      path: '/packages/:packageId/templates/:templateId',
+      component: TemplateDetailView,
+      props: true,
+    },
     { path: '/packages/:packageId', component: PackageDetailView, props: true },
     { path: '/nodes/:id', component: NodeDetailView, props: true },
   ],

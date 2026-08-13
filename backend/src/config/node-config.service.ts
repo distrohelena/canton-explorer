@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import {
   type BrandingConfig,
   type DebuggerConfig,
+  type FrontendConfig,
   type NodeConfig,
   type NodeConfigFile,
   type TokenMetadataConfig,
@@ -27,6 +28,10 @@ export class NodeConfigService {
 
   getBranding(): BrandingConfig {
     return this.config.branding;
+  }
+
+  getFrontendConfig(): FrontendConfig {
+    return this.config.frontend;
   }
 
   getTokenMetadataConfig(): TokenMetadataConfig {
