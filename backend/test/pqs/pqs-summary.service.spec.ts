@@ -167,6 +167,30 @@ const typedContractDetailFixture = {
   },
 } satisfies NodeContractDetailResponse;
 
+const representativeTemplateChoices = [
+  {
+    name: 'Archive',
+    consuming: true,
+    argumentType: {
+      kind: 'record',
+      label: 'Main.Module:ArchiveArgs',
+      fields: [
+        {
+          name: 'reason',
+          type: {
+            kind: 'builtin',
+            label: 'Text',
+          },
+        },
+      ],
+    },
+    resultType: {
+      kind: 'builtin',
+      label: 'Unit',
+    },
+  },
+];
+
 const typedNodeContractsFixture = {
   nodeId: 'participant-1',
   label: 'Participant 1',
@@ -224,6 +248,7 @@ const typedPackageDetailFixture = {
           },
         ],
       },
+      choices: representativeTemplateChoices,
     },
   ],
   dataTypes: [
@@ -2619,6 +2644,7 @@ describe('PqsSummaryService', () => {
                     },
                   ],
                 },
+                choices: representativeTemplateChoices,
               },
             ],
             dataTypes: [
@@ -2780,6 +2806,7 @@ describe('PqsSummaryService', () => {
                 moduleName: 'Main.Module',
                 entityName: 'Asset',
                 createType: null,
+                choices: representativeTemplateChoices,
               },
               {
                 templateId: 'Other.Module:OtherAsset',
@@ -2825,6 +2852,7 @@ describe('PqsSummaryService', () => {
           moduleName: 'Main.Module',
           entityName: 'Asset',
           createType: null,
+          choices: representativeTemplateChoices,
         },
       ],
       dataTypes: [
@@ -2876,9 +2904,13 @@ describe('PqsSummaryService', () => {
       ) => Promise<PackageTemplateDetailResponse>;
     };
 
-    await expect(
-      service.fetchPackageTemplate?.('main-package', 'Splice.Amulet:SvRewardCoupon'),
-    ).resolves.toEqual({
+    const templateDetail = await service.fetchPackageTemplate?.(
+      'main-package',
+      'Splice.Amulet:SvRewardCoupon',
+    );
+
+    expect(templateDetail?.template?.choices).toEqual(representativeTemplateChoices);
+    expect(templateDetail).toEqual({
       packageId: 'main-package',
       name: 'Main Package',
       version: '1.2.3',

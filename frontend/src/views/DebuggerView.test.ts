@@ -205,6 +205,7 @@ describe('DebuggerView', () => {
           label: 'Main:Asset',
           fields: [{ name: 'owner', type: { kind: 'builtin', label: 'Party' } }],
         },
+        choices: [],
       }],
       dataTypes: [],
     });
@@ -265,6 +266,7 @@ describe('DebuggerView', () => {
           label: 'Main:Asset',
           fields: [{ name: 'owner', type: { kind: 'builtin', label: 'Party' } }],
         },
+        choices: [],
       }],
       dataTypes: [],
     });

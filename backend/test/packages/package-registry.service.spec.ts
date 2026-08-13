@@ -241,6 +241,44 @@ describe('PackageRegistryService', () => {
                 }),
               ]),
             }),
+            choices: [
+              expect.objectContaining({
+                name: 'Archive',
+                consuming: true,
+                argumentType: expect.objectContaining({
+                  kind: 'type_con',
+                  typeId: 'DA.Internal.Template:Archive',
+                }),
+                resultType: expect.objectContaining({
+                  kind: 'builtin',
+                  label: 'Unit',
+                }),
+              }),
+              expect.objectContaining({
+                name: 'SvRewardCoupon_ArchiveAsBeneficiary',
+                consuming: true,
+                argumentType: expect.objectContaining({
+                  kind: 'type_con',
+                  typeId: 'Splice.Amulet:SvRewardCoupon_ArchiveAsBeneficiary',
+                }),
+                resultType: expect.objectContaining({
+                  kind: 'type_con',
+                  typeId: 'Splice.Amulet:SvRewardCoupon_ArchiveAsBeneficiaryResult',
+                }),
+              }),
+              expect.objectContaining({
+                name: SAMPLE_DAML_FIXTURE.resultChoice,
+                consuming: true,
+                argumentType: expect.objectContaining({
+                  kind: 'type_con',
+                  typeId: 'Splice.Amulet:SvRewardCoupon_DsoExpire',
+                }),
+                resultType: expect.objectContaining({
+                  kind: 'type_con',
+                  typeId: 'Splice.Amulet:SvRewardCoupon_DsoExpireResult',
+                }),
+              }),
+            ],
           }),
         ]),
         dataTypes: expect.arrayContaining([
@@ -280,6 +318,67 @@ describe('PackageRegistryService', () => {
         modules: expect.arrayContaining(['Splice.Amulet']),
         templateCount: expect.any(Number),
         dataTypeCount: expect.any(Number),
+      },
+    });
+  });
+
+  it('preserves null schemas for template choices without raw types', async () => {
+    const cacheService = new PackageCacheService();
+    const registry = new PackageRegistryService(cacheService) as PackageRegistryService & {
+      packageCache?: Map<string, unknown>;
+      inspectPackage?: (packageId: string) => Promise<unknown>;
+    };
+    const resolvedPackage = {
+      packageId: 'synthetic-package',
+      packageName: null,
+      packageVersion: null,
+      rawPackage: {
+        internedStrings: ['MissingSchema'],
+        modules: [],
+      },
+      templatesById: new Map([
+        [
+          'Test.Module:Template',
+          {
+            packageId: 'synthetic-package',
+            templateId: 'Test.Module:Template',
+            moduleName: 'Test.Module',
+            entityName: 'Template',
+            template: {
+              choices: [
+                {
+                  nameInternedStr: 0,
+                  consuming: false,
+                  argBinder: {},
+                },
+              ],
+            },
+            dataType: null,
+            packageRef: null,
+            sdkTemplate: null,
+          },
+        ],
+      ]),
+      dataTypesById: new Map(),
+    };
+    registry.packageCache?.set('synthetic-package', resolvedPackage);
+
+    await expect(registry.inspectPackage?.('synthetic-package')).resolves.toMatchObject({
+      ok: true,
+      definition: {
+        templates: [
+          {
+            templateId: 'Test.Module:Template',
+            choices: [
+              {
+                name: 'MissingSchema',
+                consuming: false,
+                argumentType: null,
+                resultType: null,
+              },
+            ],
+          },
+        ],
       },
     });
   });

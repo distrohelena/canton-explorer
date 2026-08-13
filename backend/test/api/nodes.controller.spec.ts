@@ -67,6 +67,29 @@ const typedPackageDetailFixture = {
           },
         ],
       },
+      choices: [
+        {
+          name: 'Archive',
+          consuming: true,
+          argumentType: {
+            kind: 'record',
+            label: 'Main.Module:ArchiveArgs',
+            fields: [
+              {
+                name: 'reason',
+                type: {
+                  kind: 'builtin',
+                  label: 'Text',
+                },
+              },
+            ],
+          },
+          resultType: {
+            kind: 'builtin',
+            label: 'Unit',
+          },
+        },
+      ],
     },
   ],
   dataTypes: [
@@ -1005,8 +1028,14 @@ describe('NodesController', () => {
     await expect(controller.getPackageModules('main-package')).resolves.toEqual(
       expect.objectContaining({ packageId: 'main-package', modules: typedPackageDetailFixture.modules }),
     );
-    await expect(controller.getPackageTemplates('main-package')).resolves.toEqual(
-      expect.objectContaining({ packageId: 'main-package' }),
+    const packageTemplates = await controller.getPackageTemplates('main-package');
+    expect(packageTemplates).toEqual(
+      expect.objectContaining({
+        packageId: 'main-package',
+        templates: [
+          expect.objectContaining({ choices: typedPackageDetailFixture.templates[0].choices }),
+        ],
+      }),
     );
     await expect(controller.getPackageDataTypes('main-package')).resolves.toEqual(
       expect.objectContaining({ packageId: 'main-package' }),
@@ -1029,7 +1058,13 @@ describe('NodesController', () => {
 
   it('returns a filtered package module detail', async () => {
     await expect(controller.getPackageModule('main-package', 'Main.Module')).resolves.toEqual(
-      expect.objectContaining({ packageId: 'main-package', moduleName: 'Main.Module' }),
+      expect.objectContaining({
+        packageId: 'main-package',
+        moduleName: 'Main.Module',
+        templates: [
+          expect.objectContaining({ choices: typedPackageDetailFixture.templates[0].choices }),
+        ],
+      }),
     );
     expect(pqsSummaryService.fetchPackageModule).toHaveBeenCalledWith(
       'main-package',
@@ -1043,7 +1078,10 @@ describe('NodesController', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         packageId: 'main-package',
-        template: typedPackageDetailFixture.templates[0],
+        template: expect.objectContaining({
+          ...typedPackageDetailFixture.templates[0],
+          choices: typedPackageDetailFixture.templates[0].choices,
+        }),
       }),
     );
     expect(pqsSummaryService.fetchPackageTemplate).toHaveBeenCalledWith(

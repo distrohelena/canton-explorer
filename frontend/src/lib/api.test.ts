@@ -225,6 +225,7 @@ const typedPackageDetailFixture = {
           },
         ],
       },
+      choices: [],
     },
   ],
   dataTypes: [
@@ -1574,7 +1575,13 @@ describe('fetchNodes', () => {
   it('loads a package template from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ packageId: 'pkg', template: { templateId: 'Main.Module:Asset' } }),
+      json: async () => ({
+        packageId: 'pkg',
+        template: {
+          templateId: 'Main.Module:Asset',
+          choices: [],
+        },
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
 

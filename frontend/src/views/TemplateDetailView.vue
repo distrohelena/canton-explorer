@@ -98,6 +98,47 @@ function formatPackageSize(packageSize: number | null): string {
               :node="templateDetail.template.createType"
             />
           </section>
+
+          <section class="node-detail__section package-detail__section--decoded">
+            <h3>Choices</h3>
+            <p v-if="templateDetail.status !== 'decoded'" class="update-detail__empty">
+              Decoded template structure is not available for this package.
+            </p>
+            <p v-else-if="!templateDetail.template" class="update-detail__empty">
+              Template definition not found in this package.
+            </p>
+            <p v-else-if="templateDetail.template.choices.length === 0" class="update-detail__empty">
+              No choices are available for this template.
+            </p>
+            <div v-else class="package-detail__list">
+              <div
+                v-for="choice in templateDetail.template.choices"
+                :key="choice.name"
+                class="package-detail__list-row package-detail__list-row--stacked"
+              >
+                <div class="package-detail__entry-title">{{ choice.name }}</div>
+                <div class="package-tree__choice">
+                  <div class="package-tree__meta">
+                    {{ choice.consuming ? 'Consuming' : 'Non-Consuming' }}
+                  </div>
+                  <div class="package-tree__group">
+                    <div class="package-tree__group-title">Argument</div>
+                    <div v-if="choice.argumentType" class="package-tree__children">
+                      <PackageTypeTree :node="choice.argumentType" />
+                    </div>
+                    <p v-else class="update-detail__empty">Argument type is unavailable.</p>
+                  </div>
+                  <div class="package-tree__group">
+                    <div class="package-tree__group-title">Result</div>
+                    <div v-if="choice.resultType" class="package-tree__children">
+                      <PackageTypeTree :node="choice.resultType" />
+                    </div>
+                    <p v-else class="update-detail__empty">Result type is unavailable.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
