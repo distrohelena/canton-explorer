@@ -1,7 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import express from 'express';
 import { describe, expect, it, jest } from '@jest/globals';
+import request from 'supertest';
 import {
   DEFAULT_HOST,
   DEFAULT_PORT,
@@ -75,7 +77,7 @@ describe('startApp', () => {
       tempDir,
     );
 
-    expect(useStaticAssets).toHaveBeenCalledWith(tempDir);
+    expect(useStaticAssets).toHaveBeenCalledWith(tempDir, { index: false });
     expect(registerGet).toHaveBeenCalledTimes(1);
 
     rmSync(tempDir, { recursive: true, force: true });
@@ -115,6 +117,38 @@ describe('startApp', () => {
     expect(response.send).toHaveBeenCalledWith(
       expect.stringContaining('<base href="/canton-explorer/">'),
     );
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('renders the configured SPA index at the proxy-stripped root path', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'canton-explorer-static-'));
+    writeFileSync(
+      join(tempDir, 'index.html'),
+      '<html><head><title>Canton Explorer</title></head><body></body></html>',
+      'utf8',
+    );
+
+    const expressApp = express();
+    configureFrontendAssets(
+      {
+        enableCors: jest.fn(),
+        listen: jest.fn().mockResolvedValue(undefined),
+        useStaticAssets: (path, options) => {
+          expressApp.use(express.static(path, options));
+        },
+        getHttpAdapter: () => ({
+          getInstance: () => expressApp,
+        }),
+      } as Parameters<typeof configureFrontendAssets>[0],
+      tempDir,
+      '/canton-explorer/',
+    );
+
+    const response = await request(expressApp).get('/');
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('<base href="/canton-explorer/">');
 
     rmSync(tempDir, { recursive: true, force: true });
   });

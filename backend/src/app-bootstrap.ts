@@ -13,7 +13,7 @@ export const DEFAULT_API_BASE_PATH = '/api';
 type BootstrapApp = {
   enableCors(): void;
   listen(port: number, host: string): Promise<unknown>;
-  useStaticAssets?(path: string): void;
+  useStaticAssets?(path: string, options?: { index?: boolean }): void;
   getHttpAdapter?(): {
     getInstance(): {
       get(
@@ -101,7 +101,7 @@ export function configureFrontendAssets(
     frontendBasePath,
   );
 
-  app.useStaticAssets(frontendAssetsDir);
+  app.useStaticAssets(frontendAssetsDir, { index: false });
   app
     .getHttpAdapter()
     .getInstance()
