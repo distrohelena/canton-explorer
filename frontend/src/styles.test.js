@@ -1,547 +1,878 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-describe('styles.css', () => {
-  it('keeps Current Snapshot spacing aligned with Latest Updates', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const overviewStyles = styles.match(/\.home-dashboard-overview \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const latestUpdatesStyles = styles.match(/\.node-updates \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(overviewStyles).toContain('gap: 18px;');
-    expect(latestUpdatesStyles).toContain('gap: 8px;');
+describe("styles.css", () => {
+  it("keeps Current Snapshot spacing aligned with Latest Updates", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const overviewStyles =
+      styles.match(/\.home-dashboard-overview \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const latestUpdatesStyles =
+      styles.match(/\.node-updates \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    expect(overviewStyles).toContain("gap: 18px;");
+    expect(latestUpdatesStyles).toContain("gap: 8px;");
     expect(styles).toContain(
-      '.home-dashboard-overview__metrics-heading + .home-dashboard-overview__metric-grid {\n  margin-top: -10px;\n}',
+      ".home-dashboard-overview__metrics-heading + .home-dashboard-overview__metric-grid {\n  margin-top: -10px;\n}",
     );
   });
 
-  it('lays out the home dashboard previews side by side and stacks them on mobile', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("lays out the home dashboard previews side by side and stacks them on mobile", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const homeDashboardStyles =
-      styles.match(/\.home-dashboard \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.home-dashboard \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const homeCardStyles =
-      styles.match(/\.home-dashboard__card \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.home-dashboard__card \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const viewAllRowStyles =
-      styles.match(/\.home-dashboard__view-all-row > span \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.home-dashboard__view-all-row > span \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
     const viewAllLayoutStyles =
-      styles.match(/\n\.home-dashboard__view-all-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\n\.home-dashboard__view-all-row \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
     const compactViewAllRowStyles =
       styles.match(
         /\.node-updates__table--compact \.home-dashboard__view-all-row,\n\.tokens-page__table--compact \.home-dashboard__view-all-row \{([\s\S]*?)\n\}/,
-      )?.[1] ?? '';
+      )?.[1] ?? "";
     const homeHeadingStyles =
-      styles.match(/\.home-dashboard__card \.node-detail__hero h3 \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.home-dashboard__card \.node-detail__hero h3 \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(homeDashboardStyles).toContain('display: grid;');
+    expect(homeDashboardStyles).toContain("display: grid;");
     expect(homeDashboardStyles).toContain(
-      'grid-template-columns: repeat(2, minmax(0, 1fr));',
+      "grid-template-columns: repeat(2, minmax(0, 1fr));",
     );
-    expect(styles).toContain('.node-updates__row--compact');
-    expect(styles).toContain('.tokens-page__table--compact .tokens-page__row');
-    expect(styles).toContain('.home-dashboard__view-all-row');
-    expect(styles).toContain('@media (max-width: 720px)');
-    expect(styles).toContain('.home-dashboard {\n    grid-template-columns: 1fr;');
-    expect(homeCardStyles).toContain('border: none;');
-    expect(homeCardStyles).toContain('background: transparent;');
-    expect(homeCardStyles).toContain('padding: 0;');
+    expect(styles).toContain(".node-updates__row--compact");
+    expect(styles).toContain(".tokens-page__table--compact .tokens-page__row");
+    expect(styles).toContain(".home-dashboard__view-all-row");
+    expect(styles).toContain("@media (max-width: 720px)");
     expect(styles).toContain(
-      '.home-dashboard__card > .node-updates,\n.home-dashboard__card > .node-detail__section',
+      ".home-dashboard {\n    grid-template-columns: 1fr;",
     );
-    expect(styles).toContain('height: 100%;');
-    expect(styles).toContain('.home-dashboard__card .node-updates__section');
-    expect(styles).toContain('flex: 1;');
-    expect(styles).toContain('min-height: 24px;');
-    expect(homeHeadingStyles).toContain('font-size: 1.2rem;');
-    expect(homeHeadingStyles).toContain('line-height: 1.2;');
-    expect(styles).toContain('.home-dashboard__card .node-updates__table');
-    expect(styles).toContain('flex: 1 1 0;');
+    expect(homeCardStyles).toContain("border: none;");
+    expect(homeCardStyles).toContain("background: transparent;");
+    expect(homeCardStyles).toContain("padding: 0;");
     expect(styles).toContain(
-      '.home-dashboard__card .node-updates__table--compact > .node-updates__row--link',
+      ".home-dashboard__card > .node-updates,\n.home-dashboard__card > .node-detail__section",
+    );
+    expect(styles).toContain("height: 100%;");
+    expect(styles).toContain(".home-dashboard__card .node-updates__section");
+    expect(styles).toContain("flex: 1;");
+    expect(styles).toContain("min-height: 24px;");
+    expect(homeHeadingStyles).toContain("font-size: 1.2rem;");
+    expect(homeHeadingStyles).toContain("line-height: 1.2;");
+    expect(styles).toContain(".home-dashboard__card .node-updates__table");
+    expect(styles).toContain("flex: 1 1 0;");
+    expect(styles).toContain(
+      ".home-dashboard__card .node-updates__table--compact > .node-updates__row--link",
     );
     expect(styles).toContain(
-      '.home-dashboard__card .tokens-page__table--compact > .tokens-page__row.node-updates__row--link',
+      ".home-dashboard__card .tokens-page__table--compact > .tokens-page__row.node-updates__row--link",
     );
     expect(styles).toContain(
-      '.home-dashboard__card .node-updates__table--compact .node-updates__row--compact > *:not(:last-child)::after',
+      ".home-dashboard__card .node-updates__table--compact .node-updates__row--compact > *:not(:last-child)::after",
     );
-    expect(styles).toContain('display: none;');
-    expect(viewAllRowStyles).toContain('justify-content: center;');
-    expect(viewAllLayoutStyles).toContain('padding: 6px 20px;');
-    expect(compactViewAllRowStyles).toContain('padding: 6px 20px;');
+    expect(styles).toContain("display: none;");
+    expect(viewAllRowStyles).toContain("justify-content: center;");
+    expect(viewAllLayoutStyles).toContain("padding: 6px 20px;");
+    expect(compactViewAllRowStyles).toContain("padding: 6px 20px;");
   });
 
-  it('keeps overview loading states the same height as rendered charts', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps overview loading states the same height as rendered charts", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const overviewStateStyles =
-      styles.match(/\.home-dashboard-overview__state \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.home-dashboard-overview__state \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
 
-    expect(overviewStateStyles).toContain('box-sizing: border-box;');
+    expect(overviewStateStyles).toContain("box-sizing: border-box;");
   });
 
-  it('keeps Tokens section headings close to their tables', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps Tokens section headings close to their tables", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const tokensTableSectionStyles =
-      styles.match(/\.tokens-page__table-section \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.tokens-page__table-section \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const tokensTableHeaderStyles =
-      styles.match(/\.tokens-page__table-section > \.node-detail__hero \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.tokens-page__table-section > \.node-detail__hero \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(tokensTableSectionStyles).toContain('gap: 8px;');
-    expect(tokensTableHeaderStyles).toContain('align-items: flex-end;');
+    expect(tokensTableSectionStyles).toContain("gap: 8px;");
+    expect(tokensTableHeaderStyles).toContain("align-items: flex-end;");
   });
 
-  it('offsets the first party row from its results header', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("offsets the first party row from its results header", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const partiesResultsHeaderStyles =
-      styles.match(/\.parties-page__results-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.parties-page__results-header \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
     const partiesFilterShellStyles =
-      styles.match(/\.parties-page__filter-shell \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.parties-page__filter-shell \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(partiesResultsHeaderStyles).toContain('margin-bottom: 8px;');
-    expect(partiesFilterShellStyles).toContain('margin-bottom: 0;');
+    expect(partiesResultsHeaderStyles).toContain("margin-bottom: 8px;");
+    expect(partiesFilterShellStyles).toContain("margin-bottom: 0;");
   });
 
-  it('highlights the search input with only a bottom line when focused', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps update event template IDs on one line with ellipsis", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const templateIdStyles =
+      styles.match(
+        /\.update-detail__event-template-id \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+
+    expect(templateIdStyles).toContain("display: block;");
+    expect(templateIdStyles).toContain("overflow: hidden;");
+    expect(templateIdStyles).toContain("text-overflow: ellipsis;");
+    expect(templateIdStyles).toContain("white-space: nowrap;");
+  });
+
+  it("places update event template IDs on their own row", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const templateItemStyles =
+      styles.match(
+        /\.update-detail__event-item--template \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+
+    expect(templateItemStyles).toContain("grid-column: 1 / -1;");
+  });
+
+  it("keeps update event kinds on one line without clipping", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const eventKindStyles =
+      styles.match(/\.update-detail__event-kind \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const eventGridStyles =
+      styles.match(/\.update-detail__event-grid \{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+    expect(eventKindStyles).toContain("white-space: nowrap;");
+    expect(eventKindStyles).not.toContain("overflow: hidden;");
+    expect(eventKindStyles).not.toContain("text-overflow: ellipsis;");
+    expect(eventGridStyles).toContain(
+      "grid-template-columns: max-content minmax(0, 1fr);",
+    );
+  });
+
+  it("places update traffic cost beside record time", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const summaryGridStyles =
+      styles.match(/\.update-detail__summary-grid \{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+    expect(summaryGridStyles).toContain(
+      "grid-template-columns: repeat(2, minmax(0, 1fr));",
+    );
+  });
+
+  it("renders update summary parties as full-width list rows", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const partiesStyles =
+      styles.match(/\.update-detail__parties \{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+    expect(partiesStyles).toContain("align-items: stretch;");
+    expect(partiesStyles).toContain("gap: 8px;");
+  });
+
+  it("renders update witnesses as full-width list rows", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const witnessesStyles =
+      styles.match(/\.update-detail__witnesses \{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+    expect(witnessesStyles).toContain("gap: 8px;");
+    expect(witnessesStyles).toContain("align-items: stretch;");
+  });
+
+  it("highlights the search input with only a bottom line when focused", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const searchStyles = styles.match(/\.app-search \{([\s\S]*?)\n\}/)?.[1];
     const searchFormStyles =
-      styles.match(/\n\.app-search-form \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const searchHoverStyles = styles.match(/\.app-search:hover \{([\s\S]*?)\n\}/)?.[1];
-    const searchFocusStyles = styles.match(/\.app-search:focus \{([\s\S]*?)\n\}/)?.[1];
-    const searchFocusVisibleStyles = styles.match(/\.app-search:focus-visible \{([\s\S]*?)\n\}/)?.[1];
+      styles.match(/\n\.app-search-form \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const searchHoverStyles = styles.match(
+      /\.app-search:hover \{([\s\S]*?)\n\}/,
+    )?.[1];
+    const searchFocusStyles = styles.match(
+      /\.app-search:focus \{([\s\S]*?)\n\}/,
+    )?.[1];
+    const searchFocusVisibleStyles = styles.match(
+      /\.app-search:focus-visible \{([\s\S]*?)\n\}/,
+    )?.[1];
 
-    expect(searchStyles).toContain('background: transparent;');
-    expect(searchStyles).toContain('width: min(300px, 100%);');
-    expect(searchFormStyles).toContain('flex: 0 1 300px;');
-    expect(searchFormStyles).toContain('min-width: 0;');
-    expect(searchStyles).toContain('border-bottom: 2px solid transparent;');
-    expect(searchHoverStyles).toContain('border-bottom-color: var(--line-soft);');
-    expect(searchFocusStyles).toContain('background: transparent;');
-    expect(searchFocusStyles).toContain('border-bottom-color: var(--accent-600);');
-    expect(searchFocusStyles).not.toContain('background: color-mix');
-    expect(searchFocusVisibleStyles).toContain('outline: none;');
+    expect(searchStyles).toContain("background: transparent;");
+    expect(searchStyles).toContain("width: min(300px, 100%);");
+    expect(searchFormStyles).toContain("flex: 0 1 300px;");
+    expect(searchFormStyles).toContain("min-width: 0;");
+    expect(searchStyles).toContain("border-bottom: 2px solid transparent;");
+    expect(searchHoverStyles).toContain(
+      "border-bottom-color: var(--line-soft);",
+    );
+    expect(searchFocusStyles).toContain("background: transparent;");
+    expect(searchFocusStyles).toContain(
+      "border-bottom-color: var(--accent-600);",
+    );
+    expect(searchFocusStyles).not.toContain("background: color-mix");
+    expect(searchFocusVisibleStyles).toContain("outline: none;");
   });
 
-  it('centers the navigation arrow within its own icon box', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const arrowStyles = styles.match(/\.app-navigation__arrow \{([\s\S]*?)\n\}/)?.[1];
+  it("centers the navigation arrow within its own icon box", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const arrowStyles = styles.match(
+      /\.app-navigation__arrow \{([\s\S]*?)\n\}/,
+    )?.[1];
 
-    expect(arrowStyles).toContain('display: block;');
-    expect(arrowStyles).toContain('width: 1rem;');
-    expect(arrowStyles).toContain('height: 1rem;');
-    expect(arrowStyles).toContain('transform-origin: center;');
+    expect(arrowStyles).toContain("display: block;");
+    expect(arrowStyles).toContain("width: 1rem;");
+    expect(arrowStyles).toContain("height: 1rem;");
+    expect(arrowStyles).toContain("transform-origin: center;");
   });
 
-  it('uses theme tokens for the navigation menus in both color modes', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const menuStyles = styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const linkStyles = styles.match(/\.app-navigation__link \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const hoverStyles = styles.match(/\.app-navigation__link:hover,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const groupStyles = styles.match(/\.app-navigation__group \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const groupLabelStyles = styles.match(/\.app-navigation__group-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const groupLinkStyles = styles.match(/\.app-navigation__group-link \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("uses theme tokens for the navigation menus in both color modes", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const menuStyles =
+      styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const linkStyles =
+      styles.match(/\.app-navigation__link \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const hoverStyles =
+      styles.match(
+        /\.app-navigation__link:hover,[\s\S]*?\{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+    const groupStyles =
+      styles.match(/\.app-navigation__group \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const groupLabelStyles =
+      styles.match(/\.app-navigation__group-label \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const groupLinkStyles =
+      styles.match(/\.app-navigation__group-link \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(menuStyles).toContain('border: 1px solid var(--line-soft);');
-    expect(menuStyles).toContain('background: var(--surface-card);');
-    expect(menuStyles).toContain('box-shadow: var(--shadow-soft);');
-    expect(linkStyles).toContain('color: var(--text-700);');
-    expect(groupStyles).toContain('display: grid;');
-    expect(groupLabelStyles).toContain('color: var(--text-500);');
-    expect(groupLabelStyles).toContain('text-transform: uppercase;');
-    expect(groupLinkStyles).toContain('padding-left: 20px;');
-    expect(hoverStyles).toContain('background: var(--blue-50);');
-    expect(hoverStyles).toContain('color: var(--text-900);');
+    expect(menuStyles).toContain("border: 1px solid var(--line-soft);");
+    expect(menuStyles).toContain("background: var(--surface-card);");
+    expect(menuStyles).toContain("box-shadow: var(--shadow-soft);");
+    expect(linkStyles).toContain("color: var(--text-700);");
+    expect(groupStyles).toContain("display: grid;");
+    expect(groupLabelStyles).toContain("color: var(--text-500);");
+    expect(groupLabelStyles).toContain("text-transform: uppercase;");
+    expect(groupLinkStyles).toContain("padding-left: 20px;");
+    expect(hoverStyles).toContain("background: var(--blue-50);");
+    expect(hoverStyles).toContain("color: var(--text-900);");
   });
 
-  it('keeps each navigation menu attached to its hover trigger', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const menuStyles = styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("keeps each navigation menu attached to its hover trigger", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const menuStyles =
+      styles.match(/\.app-navigation__menu \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(menuStyles).toContain('top: 100%;');
-    expect(menuStyles).toContain('width: 100%;');
-    expect(menuStyles).toContain('min-width: 0;');
-    expect(menuStyles).not.toContain('top: calc(100% + 8px);');
+    expect(menuStyles).toContain("top: 100%;");
+    expect(menuStyles).toContain("width: 100%;");
+    expect(menuStyles).toContain("min-width: 0;");
+    expect(menuStyles).not.toContain("top: calc(100% + 8px);");
   });
 
-  it('supports three responsive navigation controls and ellipsized labels', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const navigationStyles = styles.match(/\.app-navigation \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const labelStyles = styles.match(/\.app-navigation__button-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("supports three responsive navigation controls and ellipsized labels", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const navigationStyles =
+      styles.match(/\.app-navigation \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const labelStyles =
+      styles.match(/\.app-navigation__button-label \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
 
-    expect(navigationStyles).toContain('flex: 1 1 110px;');
-    expect(navigationStyles).toContain('min-width: 110px;');
-    expect(navigationStyles).toContain('max-width: 160px;');
-    expect(labelStyles).toContain('white-space: nowrap;');
-    expect(labelStyles).toContain('overflow: hidden;');
-    expect(labelStyles).toContain('text-overflow: ellipsis;');
-    expect(styles).toContain('@media (min-width: 721px) and (max-width: 960px)');
-    expect(styles).toContain('flex: 0 1 calc((100% - 24px) / 3);');
-    expect(styles).toContain('flex: 1 1 calc(100% - 54px);');
-    expect(styles).toContain('.app-navigation__button:focus-visible');
-    expect(styles).toContain('.app-navigation__link:focus-visible');
+    expect(navigationStyles).toContain("flex: 1 1 110px;");
+    expect(navigationStyles).toContain("min-width: 110px;");
+    expect(navigationStyles).toContain("max-width: 160px;");
+    expect(labelStyles).toContain("white-space: nowrap;");
+    expect(labelStyles).toContain("overflow: hidden;");
+    expect(labelStyles).toContain("text-overflow: ellipsis;");
+    expect(styles).toContain(
+      "@media (min-width: 721px) and (max-width: 960px)",
+    );
+    expect(styles).toContain("flex: 0 1 calc((100% - 24px) / 3);");
+    expect(styles).toContain("flex: 1 1 calc(100% - 54px);");
+    expect(styles).toContain(".app-navigation__button:focus-visible");
+    expect(styles).toContain(".app-navigation__link:focus-visible");
   });
 
-  it('removes side borders from navigation buttons', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const buttonStyles = styles.match(/\.app-navigation__button \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("removes side borders from navigation buttons", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const buttonStyles =
+      styles.match(/\.app-navigation__button \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(buttonStyles).toContain('border-left: 0;');
-    expect(buttonStyles).toContain('border-right: 0;');
+    expect(buttonStyles).toContain("border-left: 0;");
+    expect(buttonStyles).toContain("border-right: 0;");
   });
 
-  it('touches adjacent navigation buttons while preserving other toolbar gaps', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("touches adjacent navigation buttons while preserving other toolbar gaps", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const adjacentStyles =
-      styles.match(/\.app-navigation \+ \.app-navigation \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const mobileStyles = styles.slice(styles.indexOf('@media (max-width: 720px)'));
+      styles.match(
+        /\.app-navigation \+ \.app-navigation \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+    const mobileStyles = styles.slice(
+      styles.indexOf("@media (max-width: 720px)"),
+    );
 
-    expect(adjacentStyles).toContain('margin-left: -12px;');
-    expect(mobileStyles).toContain('.app-navigation + .app-navigation');
-    expect(mobileStyles).toContain('margin-top: -12px;');
-    expect(mobileStyles).toContain('margin-left: 0;');
+    expect(adjacentStyles).toContain("margin-left: -12px;");
+    expect(mobileStyles).toContain(".app-navigation + .app-navigation");
+    expect(mobileStyles).toContain("margin-top: -12px;");
+    expect(mobileStyles).toContain("margin-left: 0;");
   });
 
-  it('keeps party copy controls aligned at the right edge of each row', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps party copy controls aligned at the right edge of each row", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const partyRowStyles =
-      styles.match(/\.parties-page__party-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.parties-page__party-row \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const copyButtonStyles =
-      styles.match(/\.copy-to-clipboard-button \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.copy-to-clipboard-button \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const copyButtonInteractionStyles =
-      styles.match(/\.copy-to-clipboard-button:hover,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.copy-to-clipboard-button:hover,[\s\S]*?\{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(partyRowStyles).toContain('display: grid;');
-    expect(partyRowStyles).toContain('grid-template-columns: minmax(0, 1fr) auto;');
-    expect(partyRowStyles).toContain('align-items: center;');
-    expect(styles).toContain('.party-detail__heading {');
-    expect(styles).toContain('width: 100%;');
-    expect(copyButtonStyles).toContain('flex: 0 0 32px;');
-    expect(copyButtonStyles).toContain('width: 32px;');
-    expect(copyButtonStyles).toContain('height: 32px;');
-    expect(copyButtonStyles).toContain('border: none;');
-    expect(copyButtonStyles).toContain('background: transparent;');
-    expect(copyButtonInteractionStyles).toContain('background: var(--surface-muted);');
-    expect(styles).toContain('.copy-to-clipboard-button--copied');
-    expect(styles).toContain('color: var(--accent-600);');
-    expect(styles).toContain('.copy-to-clipboard-button__feedback');
-    expect(styles).toContain('bottom: calc(100% + 4px);');
+    expect(partyRowStyles).toContain("display: grid;");
+    expect(partyRowStyles).toContain(
+      "grid-template-columns: minmax(0, 1fr) auto;",
+    );
+    expect(partyRowStyles).toContain("align-items: center;");
+    expect(styles).toContain(".party-detail__heading {");
+    expect(styles).toContain("width: 100%;");
+    expect(copyButtonStyles).toContain("flex: 0 0 32px;");
+    expect(copyButtonStyles).toContain("width: 32px;");
+    expect(copyButtonStyles).toContain("height: 32px;");
+    expect(copyButtonStyles).toContain("border: none;");
+    expect(copyButtonStyles).toContain("background: transparent;");
+    expect(copyButtonInteractionStyles).toContain(
+      "background: var(--surface-muted);",
+    );
+    expect(styles).toContain(".copy-to-clipboard-button--copied");
+    expect(styles).toContain("color: var(--accent-600);");
+    expect(styles).toContain(".copy-to-clipboard-button__feedback");
+    expect(styles).toContain("bottom: calc(100% + 4px);");
   });
 
-  it('keeps update party copy controls aligned at the right edge of each row', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps update party copy controls aligned at the right edge of each row", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const partyRowStyles =
-      styles.match(/\.node-updates__party-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__party-row \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(partyRowStyles).toContain('display: grid;');
-    expect(partyRowStyles).toContain('grid-template-columns: minmax(0, 1fr) auto;');
-    expect(partyRowStyles).toContain('align-items: center;');
-    expect(partyRowStyles).toContain('width: 100%;');
+    expect(partyRowStyles).toContain("display: grid;");
+    expect(partyRowStyles).toContain(
+      "grid-template-columns: minmax(0, 1fr) auto;",
+    );
+    expect(partyRowStyles).toContain("align-items: center;");
+    expect(partyRowStyles).toContain("width: 100%;");
   });
 
-  it('uses compact vertical padding for update rows', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("uses compact vertical padding for update rows", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const updateRowStyles =
-      styles.match(/\.node-updates__row \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__row \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(updateRowStyles).toContain('padding: 6px 20px;');
+    expect(updateRowStyles).toContain("padding: 6px 20px;");
   });
 
-  it('aligns update node and offset copy controls to the right edge', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("aligns update node and offset copy controls to the right edge", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const cellStyles =
-      styles.match(/\.node-updates__cell-with-copy \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__cell-with-copy \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
 
-    expect(cellStyles).toContain('display: grid;');
-    expect(cellStyles).toContain('grid-template-columns: minmax(0, 1fr) auto;');
-    expect(cellStyles).toContain('width: 100%;');
+    expect(cellStyles).toContain("display: grid;");
+    expect(cellStyles).toContain("grid-template-columns: minmax(0, 1fr) auto;");
+    expect(cellStyles).toContain("width: 100%;");
   });
 
-  it('does not add vertical separators between Updates columns', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("does not add vertical separators between Updates columns", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const separatorStyles =
-      styles.match(/\.node-updates__row:not\(\.node-updates__row--loading\):not\(\.node-updates__row--head\) > \*:not\(:last-child\)::after \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.node-updates__row:not\(\.node-updates__row--loading\):not\(\.node-updates__row--head\) > \*:not\(:last-child\)::after \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(separatorStyles).toBe('');
+    expect(separatorStyles).toBe("");
   });
 
-  it('defines the approved dark grape palette without changing light mode', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const lightRoot = styles.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? '';
+  it("defines the approved dark grape palette without changing light mode", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const lightRoot = styles.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? "";
     const darkRoot =
-      styles.match(/^:root\[data-theme="dark"\] \{([\s\S]*?)^\}/m)?.[1] ?? '';
+      styles.match(/^:root\[data-theme="dark"\] \{([\s\S]*?)^\}/m)?.[1] ?? "";
 
     const darkTokens = {
-      '--text-900': '#f7f0ff',
-      '--text-800': '#e9ddf6',
-      '--text-700': '#d0c0e0',
-      '--text-600': '#b5a1c8',
-      '--text-500': '#9b87ae',
-      '--muted-text': '#a491b9',
-      '--surface-0': '#2e1f43',
-      '--surface-2': '#543563',
-      '--surface-page': '#36254a',
-      '--surface-card': '#442c59',
-      '--surface-muted': '#3f2652',
-      '--line-soft': '#66437e',
-      '--line-strong': '#845497',
-      '--accent-600': '#c7a7f6',
-      '--blue-500': '#e0cdff',
-      '--blue-600': '#c7a7f6',
-      '--blue-700': '#e8d6ff',
-      '--blue-50': '#543370',
-      '--shadow-soft': '0 16px 28px rgba(7, 2, 15, 0.28)',
-      '--nav-active-border': '#926bb1',
-      '--nav-active-bg': '#553473',
-      '--nav-active-text': '#f7f0ff',
-      '--panel-border': '#7b4e91',
-      '--panel-gradient-start': '#442c59',
-      '--panel-gradient-end': '#442c59',
-      '--chart-gradient-start': '#3f2652',
-      '--chart-gradient-end': '#3f2652',
-      '--chart-guide': 'rgba(224, 205, 255, 0.18)',
-      '--chart-line': '#e0cdff',
-      '--panel-divider': '#66437e',
-      '--filter-active-border': '#a37dc1',
-      '--filter-active-bg': '#613979',
-      '--filter-chip-border': '#84569d',
-      '--filter-chip-bg': '#4e3161',
-      '--back-button-border': '#8858a0',
-      '--back-button-bg': '#4e3161',
-      '--back-button-shadow': '0 12px 22px rgba(45, 14, 64, 0.22)',
-      '--editor-surface': '#442c59',
-      '--editor-tab-surface': '#2e1f43',
-      '--editor-divider': '#66437e',
-      '--editor-hover-surface': '#3f2652',
-      '--editor-active-border': '#e0cdff',
-      '--editor-summary-glow': '#e0cdff',
-      '--editor-summary-surface': '#2e1f43',
-      '--editor-column-surface': '#36254a',
-      '--editor-header-surface': '#2e1f43',
-      '--editor-signal-accent': '#c7a7f6',
-      '--editor-signal-surface': '#2e1f43',
-      '--editor-signal-text': '#e8d6ff',
-      '--editor-status-surface': '#3f2652',
-      '--editor-control-surface': '#2e1f43',
-      '--editor-control-button': '#3f2652',
-      '--editor-control-hover-border': '#e0cdff',
-      '--editor-control-hover-surface': '#543563',
-      '--editor-tree-surface': '#2e1f43',
-      '--editor-tabs-surface': '#36254a',
-      '--editor-tab-active-border': '#e0cdff',
-      '--editor-event-active-surface': '#543563',
-      '--editor-event-active-accent': '#e0cdff',
-      '--editor-event-expanded-surface': '#3f2652',
-      '--editor-event-details-surface': '#36254a',
-      '--editor-code-surface': '#2e1f43',
-      '--editor-workspace-shadow': '0 16px 28px rgba(7, 2, 15, 0.28)',
-      '--editor-control-shadow': '0 14px 32px rgba(7, 2, 15, 0.28)',
-      '--metadata-surface': '#2e1f43',
-      '--metadata-text': '#e8d6ff',
-      '--explore-divider': '#66437e',
+      "--text-900": "#f7f0ff",
+      "--text-800": "#e9ddf6",
+      "--text-700": "#d0c0e0",
+      "--text-600": "#b5a1c8",
+      "--text-500": "#9b87ae",
+      "--muted-text": "#a491b9",
+      "--surface-0": "#2e1f43",
+      "--surface-2": "#543563",
+      "--surface-page": "#36254a",
+      "--surface-card": "#442c59",
+      "--surface-muted": "#3f2652",
+      "--line-soft": "#66437e",
+      "--line-strong": "#845497",
+      "--accent-600": "#c7a7f6",
+      "--blue-500": "#e0cdff",
+      "--blue-600": "#c7a7f6",
+      "--blue-700": "#e8d6ff",
+      "--blue-50": "#543370",
+      "--shadow-soft": "0 16px 28px rgba(7, 2, 15, 0.28)",
+      "--nav-active-border": "#926bb1",
+      "--nav-active-bg": "#553473",
+      "--nav-active-text": "#f7f0ff",
+      "--panel-border": "#7b4e91",
+      "--panel-gradient-start": "#442c59",
+      "--panel-gradient-end": "#442c59",
+      "--chart-gradient-start": "#3f2652",
+      "--chart-gradient-end": "#3f2652",
+      "--chart-guide": "rgba(224, 205, 255, 0.18)",
+      "--chart-line": "#e0cdff",
+      "--panel-divider": "#66437e",
+      "--filter-active-border": "#a37dc1",
+      "--filter-active-bg": "#613979",
+      "--filter-chip-border": "#84569d",
+      "--filter-chip-bg": "#4e3161",
+      "--back-button-border": "#8858a0",
+      "--back-button-bg": "#4e3161",
+      "--back-button-shadow": "0 12px 22px rgba(45, 14, 64, 0.22)",
+      "--editor-surface": "#442c59",
+      "--editor-tab-surface": "#2e1f43",
+      "--editor-divider": "#66437e",
+      "--editor-hover-surface": "#3f2652",
+      "--editor-active-border": "#e0cdff",
+      "--editor-summary-glow": "#e0cdff",
+      "--editor-summary-surface": "#2e1f43",
+      "--editor-column-surface": "#36254a",
+      "--editor-header-surface": "#2e1f43",
+      "--editor-signal-accent": "#c7a7f6",
+      "--editor-signal-surface": "#2e1f43",
+      "--editor-signal-text": "#e8d6ff",
+      "--editor-status-surface": "#3f2652",
+      "--editor-control-surface": "#2e1f43",
+      "--editor-control-button": "#3f2652",
+      "--editor-control-hover-border": "#e0cdff",
+      "--editor-control-hover-surface": "#543563",
+      "--editor-tree-surface": "#2e1f43",
+      "--editor-tabs-surface": "#36254a",
+      "--editor-tab-active-border": "#e0cdff",
+      "--editor-event-active-surface": "#543563",
+      "--editor-event-active-accent": "#e0cdff",
+      "--editor-event-expanded-surface": "#3f2652",
+      "--editor-event-details-surface": "#36254a",
+      "--editor-code-surface": "#2e1f43",
+      "--editor-workspace-shadow": "0 16px 28px rgba(7, 2, 15, 0.28)",
+      "--editor-control-shadow": "0 14px 32px rgba(7, 2, 15, 0.28)",
+      "--metadata-surface": "#2e1f43",
+      "--metadata-text": "#e8d6ff",
+      "--explore-divider": "#66437e",
     };
 
     for (const [name, value] of Object.entries(darkTokens)) {
       expect(darkRoot).toContain(`${name}: ${value};`);
     }
 
-    expect(darkRoot).toContain('--green-600: #79e6cc;');
-    expect(darkRoot).toContain('--amber-600: #ffbe78;');
-    expect(darkRoot).toContain('--red-600: #ffa1c1;');
-    expect(darkRoot).toContain('--danger-600: #ffa1c1;');
-    expect(darkRoot).toContain('--status-healthy-bg: #21403d;');
-    expect(darkRoot).toContain('--status-degraded-bg: #4a392a;');
-    expect(darkRoot).toContain('--status-down-bg: #4d3140;');
+    expect(darkRoot).toContain("--green-600: #79e6cc;");
+    expect(darkRoot).toContain("--amber-600: #ffbe78;");
+    expect(darkRoot).toContain("--red-600: #ffa1c1;");
+    expect(darkRoot).toContain("--danger-600: #ffa1c1;");
+    expect(darkRoot).toContain("--status-healthy-bg: #21403d;");
+    expect(darkRoot).toContain("--status-degraded-bg: #4a392a;");
+    expect(darkRoot).toContain("--status-down-bg: #4d3140;");
 
-    expect(lightRoot).toContain('--surface-page: #f6f8fb;');
-    expect(lightRoot).toContain('--surface-card: #ffffff;');
-    expect(lightRoot).toContain('--blue-600: #1f6feb;');
-    expect(lightRoot).toContain('--chart-gradient-start: #f6f8fb;');
-    expect(lightRoot).toContain('--chart-gradient-end: #f6f8fb;');
+    expect(lightRoot).toContain("--surface-page: #f6f8fb;");
+    expect(lightRoot).toContain("--surface-card: #ffffff;");
+    expect(lightRoot).toContain("--blue-600: #1f6feb;");
+    expect(lightRoot).toContain("--chart-gradient-start: #f6f8fb;");
+    expect(lightRoot).toContain("--chart-gradient-end: #f6f8fb;");
 
-    expect(styles).toContain('background: var(--editor-surface, #252845);');
-    expect(styles).toContain('background: color-mix(in srgb, var(--editor-tab-surface, #1a1f37) 92%, black 8%);');
-    expect(styles).toContain('var(--editor-summary-surface, #14182c) 96%, black 4%');
-    expect(styles).toContain('box-shadow: var(--editor-workspace-shadow, 0 18px 44px rgba(9, 11, 22, 0.22));');
-    expect(styles).toContain('box-shadow: var(--editor-control-shadow, 0 14px 32px rgba(8, 10, 20, 0.34));');
-    expect(styles).toContain('background: var(--metadata-surface, #0f172a);');
-    expect(styles).toContain('color: var(--metadata-text, #dbe7ff);');
+    expect(styles).toContain("background: var(--editor-surface, #252845);");
+    expect(styles).toContain(
+      "background: color-mix(in srgb, var(--editor-tab-surface, #1a1f37) 92%, black 8%);",
+    );
+    expect(styles).toContain(
+      "var(--editor-summary-surface, #14182c) 96%, black 4%",
+    );
+    expect(styles).toContain(
+      "box-shadow: var(--editor-workspace-shadow, 0 18px 44px rgba(9, 11, 22, 0.22));",
+    );
+    expect(styles).toContain(
+      "box-shadow: var(--editor-control-shadow, 0 14px 32px rgba(8, 10, 20, 0.34));",
+    );
+    expect(styles).toContain("background: var(--metadata-surface, #0f172a);");
+    expect(styles).toContain("color: var(--metadata-text, #dbe7ff);");
   });
 
-  it('uses the adjusted wider shared central content frame', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const appFrameStyles = styles.match(/\.app-frame \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const headerStyles = styles.match(/\.app-header__inner \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const footerStyles = styles.match(/\.app-footer__inner \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("uses the adjusted wider shared central content frame", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const appFrameStyles =
+      styles.match(/\.app-frame \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const headerStyles =
+      styles.match(/\.app-header__inner \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const footerStyles =
+      styles.match(/\.app-footer__inner \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(appFrameStyles).toContain('max-width: 1398px;');
-    expect(headerStyles).toContain('max-width: 1398px;');
-    expect(footerStyles).toContain('max-width: 1398px;');
+    expect(appFrameStyles).toContain("max-width: 1398px;");
+    expect(headerStyles).toContain("max-width: 1398px;");
+    expect(footerStyles).toContain("max-width: 1398px;");
   });
 
-  it('uses the compact shared application header height', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const titlebarStyles = styles.match(/\.app-titlebar \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("uses the compact shared application header height", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const titlebarStyles =
+      styles.match(/\.app-titlebar \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(titlebarStyles).toContain('min-height: 58px;');
+    expect(titlebarStyles).toContain("min-height: 58px;");
   });
 
-  it('reduces shared table body text by five percent', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const tableBodyRule = styles.match(
-      /\.search-results-row,[\s\S]*?\.tokens-page__row:not\(\.tokens-page__row--head\) \{([\s\S]*?)\n\}/,
-    )?.[1] ?? '';
+  it("reduces shared table body text by five percent", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const tableBodyRule =
+      styles.match(
+        /\.search-results-row,[\s\S]*?\.tokens-page__row:not\(\.tokens-page__row--head\) \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(tableBodyRule).toContain('font-size: 0.95rem;');
+    expect(tableBodyRule).toContain("font-size: 0.95rem;");
   });
 
-  it('styles the Updates offset range subtitle below the title', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("styles the Updates offset range subtitle below the title", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const subtitleStyles =
-      styles.match(/\.node-updates__subtitle \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__subtitle \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(subtitleStyles).toContain('margin: 4px 0 0;');
-    expect(subtitleStyles).toContain('color: var(--text-500);');
+    expect(subtitleStyles).toContain("margin: 4px 0 0;");
+    expect(subtitleStyles).toContain("color: var(--text-500);");
   });
 
-  it('keeps the Contracts PQS pill beside the Created Time header', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const headerStyles = styles.match(/\.contracts-table__record-time-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const pillStyles = styles.match(/\.contracts-table__source-pill \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("keeps the Contracts PQS pill beside the Created Time header", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const headerStyles =
+      styles.match(
+        /\.contracts-table__record-time-header \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+    const pillStyles =
+      styles.match(/\.contracts-table__source-pill \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
 
-    expect(headerStyles).toContain('display: flex;');
-    expect(headerStyles).toContain('align-items: center;');
-    expect(headerStyles).toContain('justify-content: space-between;');
-    expect(headerStyles).toContain('gap: 12px;');
-    expect(pillStyles).toContain('flex: 0 0 auto;');
-    expect(pillStyles).not.toContain('position: absolute;');
+    expect(headerStyles).toContain("display: flex;");
+    expect(headerStyles).toContain("align-items: center;");
+    expect(headerStyles).toContain("justify-content: space-between;");
+    expect(headerStyles).toContain("gap: 12px;");
+    expect(pillStyles).toContain("flex: 0 0 auto;");
+    expect(pillStyles).not.toContain("position: absolute;");
   });
 
-  it('keeps the Advanced Filter control as a compact icon button', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps the Advanced Filter control as a compact icon button", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const filterButtonStyles =
-      styles.match(/\.node-updates__filter-button \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__filter-button \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const filterIconStyles =
-      styles.match(/\.node-updates__filter-icon \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__filter-icon \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const filterButtonOverrideStyles =
-      styles.match(/\.node-updates__pager \.node-updates__filter-button \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.node-updates__pager \.node-updates__filter-button \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(filterButtonStyles).toContain('width: 40px;');
-    expect(filterButtonStyles).toContain('height: 40px;');
-    expect(filterButtonStyles).toContain('padding: 0;');
-    expect(filterButtonOverrideStyles).toContain('padding: 8px;');
-    expect(filterIconStyles).toContain('width: 32.8px;');
-    expect(filterIconStyles).toContain('height: 32.8px;');
+    expect(filterButtonStyles).toContain("width: 40px;");
+    expect(filterButtonStyles).toContain("height: 40px;");
+    expect(filterButtonStyles).toContain("padding: 0;");
+    expect(filterButtonOverrideStyles).toContain("padding: 8px;");
+    expect(filterIconStyles).toContain("width: 32.8px;");
+    expect(filterIconStyles).toContain("height: 32.8px;");
   });
 
-  it('sizes the Updates pagination arrow icons', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("sizes the Updates pagination arrow icons", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const paginationIconStyles =
-      styles.match(/\.node-updates__pagination-icon \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__pagination-icon \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
 
-    expect(paginationIconStyles).toContain('width: 18px;');
-    expect(paginationIconStyles).toContain('height: 18px;');
+    expect(paginationIconStyles).toContain("width: 18px;");
+    expect(paginationIconStyles).toContain("height: 18px;");
   });
 
-  it('lets the open advanced filter show its combobox menu', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("lets the open advanced filter show its combobox menu", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const openFilterStyles =
-      styles.match(/\.node-updates-filter-shell--open \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates-filter-shell--open \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
 
-    expect(openFilterStyles).toContain('overflow: visible;');
-    expect(openFilterStyles).toContain('position: relative;');
-    expect(openFilterStyles).toContain('z-index: 3;');
+    expect(openFilterStyles).toContain("overflow: visible;");
+    expect(openFilterStyles).toContain("position: relative;");
+    expect(openFilterStyles).toContain("z-index: 3;");
   });
 
-  it('themes the advanced filter checkbox to match the form surfaces', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("themes the advanced filter checkbox to match the form surfaces", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
 
-    expect(styles).toContain('.node-updates__advanced-filter-checkbox {');
-    expect(styles).toContain('position: relative;');
-    expect(styles).toContain('background: var(--surface-muted);');
-    expect(styles).toContain('border: 1px solid var(--line-soft);');
-    expect(styles).toContain('.node-updates__advanced-filter-checkbox::after {');
-    expect(styles).toContain('position: absolute;');
-    expect(styles).toContain('inset: 0;');
-    expect(styles).toContain('margin: auto;');
-    expect(styles).toContain('.node-updates__advanced-filter-checkbox:checked {');
-    expect(styles).toContain('background: var(--blue-600);');
+    expect(styles).toContain(".node-updates__advanced-filter-checkbox {");
+    expect(styles).toContain("position: relative;");
+    expect(styles).toContain("background: var(--surface-muted);");
+    expect(styles).toContain("border: 1px solid var(--line-soft);");
+    expect(styles).toContain(
+      ".node-updates__advanced-filter-checkbox::after {",
+    );
+    expect(styles).toContain("position: absolute;");
+    expect(styles).toContain("inset: 0;");
+    expect(styles).toContain("margin: auto;");
+    expect(styles).toContain(
+      ".node-updates__advanced-filter-checkbox:checked {",
+    );
+    expect(styles).toContain("background: var(--blue-600);");
   });
 
-  it('keeps the template combobox from overlapping the add button', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps the template combobox from overlapping the add button", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
 
-    expect(styles).toContain('.searchable-combobox {');
-    expect(styles).toContain('flex: 1 1 auto;');
-    expect(styles).toContain('min-width: 0;');
-    expect(styles).toContain('.searchable-combobox__input {');
-    expect(styles).toContain('box-sizing: border-box;');
-    expect(styles).toContain('.node-updates__advanced-filter-add {');
-    expect(styles).toContain('flex: 0 0 40px;');
+    expect(styles).toContain(".searchable-combobox {");
+    expect(styles).toContain("flex: 1 1 auto;");
+    expect(styles).toContain("min-width: 0;");
+    expect(styles).toContain(".searchable-combobox__input {");
+    expect(styles).toContain("box-sizing: border-box;");
+    expect(styles).toContain(".node-updates__advanced-filter-add {");
+    expect(styles).toContain("flex: 0 0 40px;");
   });
 
-  it('gives the Party ID field the Template ID width', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("gives the Party ID field the Template ID width", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const partyIdStyles =
-      styles.match(/\.node-updates__advanced-filter-field--party-id \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.node-updates__advanced-filter-field--party-id \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(partyIdStyles).toContain('max-width: 720px;');
+    expect(partyIdStyles).toContain("max-width: 720px;");
   });
 
-  it('allows the template combobox menu to escape the advanced filter card', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("allows the template combobox menu to escape the advanced filter card", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
 
-    expect(styles).toContain('.node-updates__advanced-filter {');
-    expect(styles).toContain('overflow: visible;');
-    expect(styles).toContain('.searchable-combobox__menu {');
-    expect(styles).toContain('z-index: 50;');
+    expect(styles).toContain(".node-updates__advanced-filter {");
+    expect(styles).toContain("overflow: visible;");
+    expect(styles).toContain(".searchable-combobox__menu {");
+    expect(styles).toContain("z-index: 50;");
   });
 
-  it('keeps the bottom updates pager close to the table', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const updatesStyles = styles.match(/\.node-updates \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  it("keeps the bottom updates pager close to the table", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const updatesStyles =
+      styles.match(/\.node-updates \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const collapsedFilterShellStyles =
-      styles.match(/\.node-updates-filter-shell \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates-filter-shell \{([\s\S]*?)\n\}/)?.[1] ?? "";
     const bottomPagerStyles =
-      styles.match(/\.node-updates__pager--bottom \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.node-updates__pager--bottom \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(updatesStyles).toContain('gap: 8px;');
-    expect(collapsedFilterShellStyles).toContain('margin-bottom: -8px;');
-    expect(bottomPagerStyles).toContain('margin-top: 0;');
+    expect(updatesStyles).toContain("gap: 8px;");
+    expect(collapsedFilterShellStyles).toContain("margin-bottom: -8px;");
+    expect(bottomPagerStyles).toContain("margin-top: 0;");
   });
 
-  it('makes the Updates and Contracts titles roughly 50 percent larger', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("makes the Updates and Contracts titles roughly 50 percent larger", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const explorerTitleStyles =
-      styles.match(/\.node-updates > \.node-detail__hero h3 \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(
+        /\.node-updates > \.node-detail__hero h3 \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
 
-    expect(explorerTitleStyles).toContain('font-size: 1.2rem;');
-    expect(explorerTitleStyles).toContain('line-height: 1.2;');
+    expect(explorerTitleStyles).toContain("font-size: 1.2rem;");
+    expect(explorerTitleStyles).toContain("line-height: 1.2;");
   });
 
-  it('emphasizes the inline package schema kind label as primary type text', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("emphasizes the inline package schema kind label as primary type text", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
 
-    expect(styles).toContain('.package-schema__kind {');
-    expect(styles).toContain('color: var(--text-900);');
-    expect(styles).toContain('font-weight: 800;');
-    expect(styles).toContain('.package-schema__group-title {');
+    expect(styles).toContain(".package-schema__kind {");
+    expect(styles).toContain("color: var(--text-900);");
+    expect(styles).toContain("font-weight: 800;");
+    expect(styles).toContain(".package-schema__group-title {");
   });
 
-  it('uses the shared explorer surface tokens for search results instead of white panel fallbacks', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("uses the shared explorer surface tokens for search results instead of white panel fallbacks", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
 
-    expect(styles).toContain('.search-results-view__loading,');
-    expect(styles).toContain('.search-results-group {');
-    expect(styles).toContain('border: 1px solid var(--line-soft);');
-    expect(styles).toContain('background: var(--surface-card);');
-    expect(styles).not.toContain('background: var(--panel-bg, rgba(255, 255, 255, 0.92));');
+    expect(styles).toContain(".search-results-view__loading,");
+    expect(styles).toContain(".search-results-group {");
+    expect(styles).toContain("border: 1px solid var(--line-soft);");
+    expect(styles).toContain("background: var(--surface-card);");
+    expect(styles).not.toContain(
+      "background: var(--panel-bg, rgba(255, 255, 255, 0.92));",
+    );
   });
 
-  it('keeps shared eyebrow labels styled as uppercase when present', () => {
-    const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+  it("keeps shared eyebrow labels styled as uppercase when present", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
     const activityEyebrowStyles =
-      styles.match(/\.activity-home__eyebrow \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const eyebrowStyles = styles.match(/\.eyebrow \{([\s\S]*?)\n\}/)?.[1] ?? '';
+      styles.match(/\.activity-home__eyebrow \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const eyebrowStyles = styles.match(/\.eyebrow \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    expect(activityEyebrowStyles).toContain('text-transform: uppercase;');
-    expect(eyebrowStyles).toContain('text-transform: uppercase;');
+    expect(activityEyebrowStyles).toContain("text-transform: uppercase;");
+    expect(eyebrowStyles).toContain("text-transform: uppercase;");
+  });
+
+  it("styles update event data as a compact responsive table", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const dataSectionStyles =
+      styles.match(/\.update-detail__data-section \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const tableWrapStyles =
+      styles.match(/\.update-detail__data-table-wrap \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
+    const tableStyles =
+      styles.match(/\.update-detail__data-table \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const tableHeadStyles =
+      styles.match(/\.update-detail__data-table thead \{([\s\S]*?)\n\}/)?.[1] ??
+      "";
+    const tableCellStyles =
+      styles.match(
+        /\.update-detail__data-table th,\n\.update-detail__data-table td \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+
+    expect(dataSectionStyles).toContain("min-width: 0;");
+    expect(tableWrapStyles).toContain("min-width: 0;");
+    expect(tableWrapStyles).toContain("overflow-x: auto;");
+    expect(tableStyles).toContain("width: 100%;");
+    expect(tableStyles).toContain("min-width: 560px;");
+    expect(tableStyles).toContain("table-layout: fixed;");
+    expect(tableStyles).toContain("border-collapse: collapse;");
+    expect(tableHeadStyles).toContain("background: var(--surface-muted);");
+    expect(tableHeadStyles).toContain("color: var(--text-500);");
+    expect(tableCellStyles).toContain("padding: 8px 12px;");
+    expect(tableCellStyles).toContain(
+      "border-bottom: 1px solid var(--line-soft);",
+    );
+    expect(styles).toContain(
+      ".update-detail__data-table tbody tr {\n  background: var(--surface-card);\n}",
+    );
+    expect(styles).toContain(".update-detail__data-table-field {");
+    expect(styles).toContain(".update-detail__data-table-type {");
+    expect(styles).toContain(
+      ".update-detail__data-table-col--type {\n  width: 12%;\n}",
+    );
+    const typeCellStyles =
+      styles.match(
+        /\.update-detail__data-table-type \{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+    expect(typeCellStyles).toContain("width: 12%;");
+    expect(styles).toContain(".update-detail__data-table-value {");
+    expect(styles).not.toContain(".update-detail__event-item--exercise-data");
+    expect(styles).not.toContain(".update-detail__exercise-data {");
+    expect(styles).not.toContain(".update-detail__exercise-data-row {");
+    expect(styles).not.toContain(".update-detail__exercise-data-key {");
+    expect(styles).not.toContain(".update-detail__exercise-data-value {");
   });
 });

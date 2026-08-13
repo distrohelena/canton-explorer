@@ -348,6 +348,14 @@ onBeforeUnmount(() => {
     <footer v-if="!isDebuggerRoute" class="app-footer">
       <div class="app-footer__inner">
         <p class="app-footer__text">
+          <a
+            class="app-footer__package"
+            href="https://www.npmjs.com/package/@distrohelena/canton-explorer"
+            target="_blank"
+            rel="noreferrer"
+          >
+            @distrohelena/canton-explorer
+          </a>
           powered by
           <a
             class="app-footer__package"
@@ -357,7 +365,7 @@ onBeforeUnmount(() => {
           >
             @distrohelena/canton-typescript-sdk
           </a>
-          <span> · version {{ explorerVersion }}</span>
+          <span> - version {{ explorerVersion }}</span>
         </p>
       </div>
     </footer>

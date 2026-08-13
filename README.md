@@ -26,6 +26,8 @@ ledger views and its deeper filtering and transfer workflows.
 
 The publishable runtime package is the backend workspace:
 
+[npmjs.com/package/@distrohelena/canton-explorer](https://www.npmjs.com/package/@distrohelena/canton-explorer)
+
 ```bash
 npx @distrohelena/canton-explorer --config ./config/nodes.local.json
 ```

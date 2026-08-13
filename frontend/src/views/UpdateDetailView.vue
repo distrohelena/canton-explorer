@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
+import CopyToClipboardButton from "../components/CopyToClipboardButton.vue";
 import { fetchNodeUpdateDetail } from "../lib/api";
 import type { NodeUpdateDetailResponse } from "../types/updates";
 import type { DecodedDamlValue } from "../types/daml";
@@ -224,6 +225,81 @@ type RenderableValue =
   | { kind: "contract_id"; value: string }
   | { kind: "unit" };
 
+type EventDataEntry = [string, RenderableValue, number];
+
+function isNumericFieldLabel(label: string): boolean {
+  const fieldLabel = label
+    .split(".")
+    .at(-1)
+    ?.replace(/\[\d+\]/g, "")
+    .toLowerCase();
+
+  return Boolean(
+    fieldLabel &&
+    /(?:amount|balance|decimal|fee|numeric|percentage|price|quantity|rate|ratio|shares|value)/.test(
+      fieldLabel,
+    ),
+  );
+}
+
+function inferOptionalInnerType(label: string): string {
+  const innerLabel = label.replace(/(^|\.)optional(?=[A-Z]|\.|$)/gi, "$1");
+
+  if (isContractIdFieldLabel(innerLabel)) {
+    return "ContractId";
+  }
+
+  if (isPartyFieldLabel(innerLabel)) {
+    return "Party";
+  }
+
+  if (isNumericFieldLabel(innerLabel)) {
+    return "Numeric";
+  }
+
+  const fieldLabel = innerLabel
+    .split(".")
+    .at(-1)
+    ?.replace(/\[\d+\]/g, "")
+    .toLowerCase();
+
+  return fieldLabel?.endsWith("round") ? "Int64" : "Text";
+}
+
+function formatEventDataType(
+  label: string,
+  value: RenderableValue,
+  optionalDepth = 0,
+): string {
+  let baseType: string;
+
+  if (value === null) {
+    baseType =
+      optionalDepth > 0 ? inferOptionalInnerType(label) : "Optional";
+  } else if (
+    isContractReference(value) ||
+    isContractIdStringReference(label, value)
+  ) {
+    baseType = "ContractId";
+  } else if (isPartyReference(label, value)) {
+    baseType = "Party";
+  } else if (value && typeof value === "object") {
+    baseType = value.kind === "unit" ? "Unit" : "Unknown";
+  } else if (typeof value === "boolean") {
+    baseType = "Bool";
+  } else if (typeof value === "number") {
+    baseType = isNumericFieldLabel(label) ? "Numeric" : "Int64";
+  } else {
+    baseType = "Text";
+  }
+
+  return (
+    "Optional<".repeat(optionalDepth) +
+    baseType +
+    ">".repeat(optionalDepth)
+  );
+}
+
 function formatDecodeFailureReason(reason: string): string {
   return reason.replaceAll("_", " ");
 }
@@ -231,18 +307,19 @@ function formatDecodeFailureReason(reason: string): string {
 function flattenDecodedValue(
   label: string,
   value: DecodedDamlValue,
-): Array<[string, RenderableValue]> {
+  optionalDepth = 0,
+): EventDataEntry[] {
   if (
     typeof value === "string" ||
     typeof value === "number" ||
     typeof value === "boolean" ||
     value === null
   ) {
-    return [[label, value]];
+    return [[label, value, optionalDepth]];
   }
 
   if (value.kind === "contract_id" || value.kind === "unit") {
-    return [[label, value]];
+    return [[label, value, optionalDepth]];
   }
 
   if (value.kind === "record") {
@@ -250,53 +327,66 @@ function flattenDecodedValue(
       flattenDecodedValue(
         label ? `${label}.${field.label}` : field.label,
         field.value,
+        optionalDepth,
       ),
     );
   }
 
   if (value.kind === "variant") {
     return value.value === null
-      ? [[label, value.constructor]]
+      ? [[label, value.constructor, optionalDepth]]
       : [
-          [label, value.constructor],
-          ...flattenDecodedValue(`${label}.${value.constructor}`, value.value),
+          [label, value.constructor, optionalDepth],
+          ...flattenDecodedValue(
+            `${label}.${value.constructor}`,
+            value.value,
+            optionalDepth,
+          ),
         ];
   }
 
   if (value.kind === "enum") {
-    return [[label, value.constructor]];
+    return [[label, value.constructor, optionalDepth]];
   }
 
   if (value.kind === "optional") {
     return value.value === null
-      ? [[label, null]]
-      : flattenDecodedValue(label, value.value);
+      ? [[label, null, optionalDepth + 1]]
+      : flattenDecodedValue(label, value.value, optionalDepth + 1);
   }
 
   if (value.kind === "list") {
     return value.items.length === 0
-      ? [[label, null]]
+      ? [[label, null, optionalDepth]]
       : value.items.flatMap((item, index) =>
-          flattenDecodedValue(`${label}[${index + 1}]`, item),
+          flattenDecodedValue(`${label}[${index + 1}]`, item, optionalDepth),
         );
   }
 
   if (value.kind === "text_map") {
     return value.entries.flatMap((entry) =>
-      flattenDecodedValue(`${label}.${entry.key}`, entry.value),
+      flattenDecodedValue(`${label}.${entry.key}`, entry.value, optionalDepth),
     );
   }
 
   return value.entries.flatMap((entry, index) => [
-    ...flattenDecodedValue(`${label}[${index + 1}].key`, entry.key),
-    ...flattenDecodedValue(`${label}[${index + 1}].value`, entry.value),
+    ...flattenDecodedValue(
+      `${label}[${index + 1}].key`,
+      entry.key,
+      optionalDepth,
+    ),
+    ...flattenDecodedValue(
+      `${label}[${index + 1}].value`,
+      entry.value,
+      optionalDepth,
+    ),
   ]);
 }
 
 function getRecordEntries(
   state:
     NodeUpdateDetailResponse["events"][number]["createData"] | null | undefined,
-): Array<[string, RenderableValue]> {
+): EventDataEntry[] {
   if (!state) {
     return [];
   }
@@ -306,6 +396,7 @@ function getRecordEntries(
       [
         "decodeStatus",
         `Invalid data (${formatDecodeFailureReason(state.reason)})`,
+        0,
       ],
     ];
   }
@@ -314,10 +405,9 @@ function getRecordEntries(
     return [];
   }
 
-  return flattenDecodedValue("", state.value).map(([key, value]) => [
-    key || "value",
-    value,
-  ]);
+  return flattenDecodedValue("", state.value).map(
+    ([key, value, optionalDepth]) => [key || "value", value, optionalDepth],
+  );
 }
 
 function getExerciseEntries(
@@ -325,8 +415,8 @@ function getExerciseEntries(
     | NodeUpdateDetailResponse["events"][number]["exerciseData"]
     | null
     | undefined,
-): Array<[string, RenderableValue]> {
-  const entries: Array<[string, RenderableValue]> = [];
+): EventDataEntry[] {
+  const entries: EventDataEntry[] = [];
 
   for (const [label, branch] of [
     ["argument", state?.argument],
@@ -337,6 +427,7 @@ function getExerciseEntries(
         entries.push([
           `${label}.decodeStatus`,
           `Invalid data (${formatDecodeFailureReason(branch.reason)})`,
+          0,
         ]);
       }
       continue;
@@ -347,13 +438,38 @@ function getExerciseEntries(
 
   return entries;
 }
+
+type EventDataTableModel = {
+  label: "Create Data" | "Exercise Data";
+  entries: EventDataEntry[];
+};
+
+function getEventDataTable(
+  event: NodeUpdateDetailResponse["events"][number],
+): EventDataTableModel | null {
+  const createEntries = getRecordEntries(event.createData);
+  if (createEntries.length > 0) {
+    return { label: "Create Data", entries: createEntries };
+  }
+
+  const exerciseEntries = getExerciseEntries(event.exerciseData);
+  if (exerciseEntries.length > 0) {
+    return { label: "Exercise Data", entries: exerciseEntries };
+  }
+
+  return null;
+}
 </script>
 <template>
   <section class="update-detail">
     <p v-if="error" class="node-detail__message node-detail__message--error">
       {{ error }}
     </p>
-    <p v-else-if="!updateDetail" class="node-detail__message inline-loading" role="status">
+    <p
+      v-else-if="!updateDetail"
+      class="node-detail__message inline-loading"
+      role="status"
+    >
       <span class="node-updates__spinner" aria-hidden="true"></span>
       <span>Loading update detail...</span>
     </p>
@@ -398,17 +514,6 @@ function getExerciseEntries(
                 </dd>
               </div>
               <div class="update-detail__summary-item">
-                <dt>Estimated traffic cost</dt>
-                <dd>
-                  {{
-                    formatEstimatedTrafficUsd(
-                      updateDetail.estimatedTrafficUsd,
-                      updateDetail.estimatedTrafficUsdGapDays,
-                    )
-                  }}
-                </dd>
-              </div>
-              <div class="update-detail__summary-item">
                 <dt>Record Time</dt>
                 <dd v-if="recordTimeLines" class="update-detail__time">
                   <span class="update-detail__time-date">{{
@@ -420,191 +525,199 @@ function getExerciseEntries(
                 </dd>
                 <dd v-else>n/a</dd>
               </div>
+              <div class="update-detail__summary-item">
+                <dt>Estimated traffic cost</dt>
+                <dd>
+                  {{
+                    formatEstimatedTrafficUsd(
+                      updateDetail.estimatedTrafficUsd,
+                      updateDetail.estimatedTrafficUsdGapDays,
+                    )
+                  }}
+                </dd>
+              </div>
               <div
                 class="update-detail__summary-item update-detail__summary-item--parties"
               >
                 <dt>Parties</dt>
                 <dd class="update-detail__parties">
                   <template v-if="updateDetail.parties.length > 0">
-                    <RouterLink
+                    <div
                       v-for="party in updateDetail.parties"
                       :key="party"
-                      class="contract-detail__link update-detail__party"
-                      :to="`/parties/${party}`"
+                      class="package-detail__list-row parties-page__party-row"
                     >
-                      {{ party }}
-                    </RouterLink>
+                      <RouterLink
+                        class="contract-detail__link parties-page__party-link"
+                        :to="`/parties/${party}`"
+                      >
+                        {{ party }}
+                      </RouterLink>
+                      <CopyToClipboardButton :value="party" />
+                    </div>
                   </template>
                   <span v-else>No parties</span>
                 </dd>
               </div>
             </dl>
           </section>
+        </div>
 
-          <section class="node-detail__section update-detail__events-section">
-            <h3>Events</h3>
-            <p v-if="renderedEvents.length === 0" class="update-detail__empty">
-              No event rows found for this update.
-            </p>
-            <div v-else class="update-detail__events">
-              <article
-                v-for="event in renderedEvents"
-                :key="`${event.eventKind}-${event.eventId ?? 'missing-event-id'}-${event.contractId ?? 'missing-contract-id'}`"
-                class="update-detail__event"
+        <h3>Events</h3>
+        <p v-if="renderedEvents.length === 0" class="update-detail__empty">
+          No event rows found for this update.
+        </p>
+        <div v-else class="update-detail__events">
+          <article
+            v-for="(event, eventIndex) in renderedEvents"
+            :key="`${event.eventKind}-${event.eventId ?? 'missing-event-id'}-${event.contractId ?? 'missing-contract-id'}`"
+            class="update-detail__event"
+          >
+            <dl class="detail-grid update-detail__event-grid">
+              <div class="update-detail__event-item">
+                <dt>Event ID</dt>
+                <dd>{{ event.eventId ?? "n/a" }}</dd>
+              </div>
+              <div class="update-detail__event-item">
+                <dt>Kind</dt>
+                <dd class="update-detail__event-kind">
+                  {{ formatEventKind(event.eventKind) }}
+                </dd>
+              </div>
+              <div
+                class="update-detail__event-item update-detail__event-item--template"
               >
-                <dl class="detail-grid update-detail__event-grid">
-                  <div class="update-detail__event-item">
-                    <dt>Event ID</dt>
-                    <dd>{{ event.eventId ?? "n/a" }}</dd>
-                  </div>
-                  <div class="update-detail__event-item">
-                    <dt>Kind</dt>
-                    <dd>{{ formatEventKind(event.eventKind) }}</dd>
-                  </div>
-                  <div
-                    class="update-detail__event-item update-detail__event-item--template"
+                <dt>Template ID</dt>
+                <dd
+                  class="update-detail__event-template-id"
+                  :title="event.templateId ?? 'n/a'"
+                >
+                  {{ event.templateId ?? "n/a" }}
+                </dd>
+              </div>
+              <div
+                class="update-detail__event-item update-detail__event-item--package"
+              >
+                <dt>Package ID</dt>
+                <dd v-if="event.packageId">
+                  <RouterLink
+                    class="contract-detail__link update-detail__event-package-id"
+                    :title="event.packageId"
+                    :to="`/packages/${event.packageId}`"
                   >
-                    <dt>Template ID</dt>
-                    <dd>{{ event.templateId ?? "n/a" }}</dd>
-                  </div>
-                  <div
-                    class="update-detail__event-item update-detail__event-item--package"
+                    {{ event.packageId }}
+                  </RouterLink>
+                </dd>
+                <dd v-else>n/a</dd>
+              </div>
+              <div
+                class="update-detail__event-item update-detail__event-item--choice"
+              >
+                <dt>Choice</dt>
+                <dd>{{ event.choice ?? "n/a" }}</dd>
+              </div>
+              <div
+                class="update-detail__event-item update-detail__event-item--contract"
+              >
+                <dt>Contract ID</dt>
+                <dd v-if="event.contractId">
+                  <RouterLink
+                    class="contract-detail__link update-detail__event-contract-id"
+                    :title="event.contractId"
+                    :to="`/nodes/${props.id}/contracts/${event.contractId}`"
                   >
-                    <dt>Package ID</dt>
-                    <dd v-if="event.packageId">
+                    {{ event.contractId }}
+                  </RouterLink>
+                </dd>
+                <dd v-else>n/a</dd>
+              </div>
+              <div class="update-detail__event-item">
+                <dt>Witnesses</dt>
+                <dd class="update-detail__witnesses">
+                  <template v-if="event.witnesses.length > 0">
+                    <div
+                      v-for="witness in event.witnesses"
+                      :key="`${event.eventId ?? 'missing-event-id'}-${witness}`"
+                      class="package-detail__list-row parties-page__party-row"
+                    >
                       <RouterLink
-                        class="contract-detail__link update-detail__event-package-id"
-                        :title="event.packageId"
-                        :to="`/packages/${event.packageId}`"
+                        class="contract-detail__link parties-page__party-link"
+                        :to="`/parties/${witness}`"
                       >
-                        {{ event.packageId }}
+                        {{ witness }}
                       </RouterLink>
-                    </dd>
-                    <dd v-else>n/a</dd>
-                  </div>
-                  <div
-                    class="update-detail__event-item update-detail__event-item--choice"
-                  >
-                    <dt>Choice</dt>
-                    <dd>{{ event.choice ?? "n/a" }}</dd>
-                  </div>
-                  <div
-                    class="update-detail__event-item update-detail__event-item--contract"
-                  >
-                    <dt>Contract ID</dt>
-                    <dd v-if="event.contractId">
-                      <RouterLink
-                        class="contract-detail__link update-detail__event-contract-id"
-                        :title="event.contractId"
-                        :to="`/nodes/${props.id}/contracts/${event.contractId}`"
-                      >
-                        {{ event.contractId }}
-                      </RouterLink>
-                    </dd>
-                    <dd v-else>n/a</dd>
-                  </div>
-                  <div class="update-detail__event-item">
-                    <dt>Witnesses</dt>
-                    <dd class="update-detail__witnesses">
-                      <template v-if="event.witnesses.length > 0">
+                      <CopyToClipboardButton :value="witness" />
+                    </div>
+                  </template>
+                  <span v-else>No witnesses</span>
+                </dd>
+              </div>
+            </dl>
+            <section
+              v-if="getEventDataTable(event)"
+              class="update-detail__data-section"
+              :aria-labelledby="`update-detail-event-data-heading-${eventIndex}`"
+            >
+              <h4 :id="`update-detail-event-data-heading-${eventIndex}`">
+                {{ getEventDataTable(event)?.label }}
+              </h4>
+              <div class="update-detail__data-table-wrap">
+                <table
+                  class="update-detail__data-table"
+                  :aria-labelledby="`update-detail-event-data-heading-${eventIndex}`"
+                >
+                  <colgroup>
+                    <col class="update-detail__data-table-col--field" />
+                    <col class="update-detail__data-table-col--type" />
+                    <col class="update-detail__data-table-col--value" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th scope="col">Field</th>
+                      <th scope="col">Type</th>
+                      <th scope="col">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="[key, value, optionalDepth] in getEventDataTable(event)
+                        ?.entries ?? []"
+                      :key="`${event.eventId ?? 'missing-event-id'}-${key}`"
+                    >
+                      <th scope="row" class="update-detail__data-table-field">
+                        {{ formatEventDataLabel(key) }}
+                      </th>
+                      <td class="update-detail__data-table-type">
+                        {{ formatEventDataType(key, value, optionalDepth) }}
+                      </td>
+                      <td class="update-detail__data-table-value">
                         <RouterLink
-                          v-for="witness in event.witnesses"
-                          :key="`${event.eventId ?? 'missing-event-id'}-${witness}`"
-                          class="contract-detail__link update-detail__witness"
-                          :to="`/parties/${witness}`"
+                          v-if="
+                            isContractReference(value) ||
+                            isContractIdStringReference(key, value)
+                          "
+                          class="contract-detail__link"
+                          :to="`/nodes/${props.id}/contracts/${contractReferenceValue(value)}`"
                         >
-                          {{ witness }}
+                          {{ contractReferenceValue(value) }}
                         </RouterLink>
-                      </template>
-                      <span v-else>No witnesses</span>
-                    </dd>
-                  </div>
-                  <div
-                    v-if="getRecordEntries(event.createData).length > 0"
-                    class="update-detail__event-item update-detail__event-item--exercise-data"
-                  >
-                    <dt>Create Data</dt>
-                    <dd class="update-detail__exercise-data">
-                      <div
-                        v-for="[key, value] in getRecordEntries(
-                          event.createData,
-                        )"
-                        :key="`${event.eventId ?? 'missing-event-id'}-create-${key}`"
-                        class="update-detail__exercise-data-row"
-                      >
-                        <span class="update-detail__exercise-data-key">
-                          {{ formatEventDataLabel(key) }}
-                        </span>
-                        <span class="update-detail__exercise-data-value">
-                          <RouterLink
-                            v-if="
-                              isContractReference(value) ||
-                              isContractIdStringReference(key, value)
-                            "
-                            class="contract-detail__link"
-                            :to="`/nodes/${props.id}/contracts/${contractReferenceValue(value)}`"
-                          >
-                            {{ contractReferenceValue(value) }}
-                          </RouterLink>
-                          <RouterLink
-                            v-else-if="isPartyReference(key, value)"
-                            class="contract-detail__link"
-                            :to="`/parties/${value}`"
-                          >
-                            {{ value }}
-                          </RouterLink>
-                          <template v-else>
-                            {{ formatEventDataValue(value) }}
-                          </template>
-                        </span>
-                      </div>
-                    </dd>
-                  </div>
-                  <div
-                    v-if="getExerciseEntries(event.exerciseData).length > 0"
-                    class="update-detail__event-item update-detail__event-item--exercise-data"
-                  >
-                    <dt>Exercise Data</dt>
-                    <dd class="update-detail__exercise-data">
-                      <div
-                        v-for="[key, value] in getExerciseEntries(
-                          event.exerciseData,
-                        )"
-                        :key="`${event.eventId ?? 'missing-event-id'}-${key}`"
-                        class="update-detail__exercise-data-row"
-                      >
-                        <span class="update-detail__exercise-data-key">
-                          {{ formatEventDataLabel(key) }}
-                        </span>
-                        <span class="update-detail__exercise-data-value">
-                          <RouterLink
-                            v-if="
-                              isContractReference(value) ||
-                              isContractIdStringReference(key, value)
-                            "
-                            class="contract-detail__link"
-                            :to="`/nodes/${props.id}/contracts/${contractReferenceValue(value)}`"
-                          >
-                            {{ contractReferenceValue(value) }}
-                          </RouterLink>
-                          <RouterLink
-                            v-else-if="isPartyReference(key, value)"
-                            class="contract-detail__link"
-                            :to="`/parties/${value}`"
-                          >
-                            {{ value }}
-                          </RouterLink>
-                          <template v-else>
-                            {{ formatEventDataValue(value) }}
-                          </template>
-                        </span>
-                      </div>
-                    </dd>
-                  </div>
-                </dl>
-              </article>
-            </div>
-          </section>
+                        <RouterLink
+                          v-else-if="isPartyReference(key, value)"
+                          class="contract-detail__link"
+                          :to="`/parties/${value}`"
+                        >
+                          {{ value }}
+                        </RouterLink>
+                        <template v-else>
+                          {{ formatEventDataValue(value) }}
+                        </template>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </article>
         </div>
       </div>
     </div>

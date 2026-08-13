@@ -4090,14 +4090,9 @@ h3 {
 .update-detail__parties {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: stretch;
+  gap: 8px;
   line-height: 1.6;
-}
-
-.update-detail__party {
-  display: block;
-  white-space: nowrap;
 }
 
 .update-detail__meta {
@@ -4112,8 +4107,7 @@ h3 {
 }
 
 .update-detail__section--summary,
-.update-detail__section--meta,
-.update-detail__events-section {
+.update-detail__section--meta {
   grid-column: 1 / -1;
 }
 
@@ -4722,7 +4716,7 @@ h3 {
 }
 
 .update-detail__event-grid {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: max-content minmax(0, 1fr);
 }
 
 .update-detail__event-item {
@@ -4730,7 +4724,7 @@ h3 {
 }
 
 .update-detail__event-item--template {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .update-detail__event-item--package,
@@ -4739,8 +4733,13 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.update-detail__event-kind {
+  white-space: nowrap;
+}
+
 .update-detail__event-package-id,
-.update-detail__event-contract-id {
+.update-detail__event-contract-id,
+.update-detail__event-template-id {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -4752,45 +4751,103 @@ h3 {
   grid-column: 1 / -1;
 }
 
-.update-detail__event-item--exercise-data {
-  grid-column: 1 / -1;
-}
-
 .update-detail__witnesses {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: stretch;
+  gap: 8px;
   min-width: 0;
 }
 
-.update-detail__exercise-data {
+.update-detail__data-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
-.update-detail__exercise-data-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 12px;
+.update-detail__data-section h4 {
+  margin: 0;
+  color: var(--text-900);
+  font-size: 0.92rem;
+}
+
+.update-detail__data-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
   border: 1px solid var(--line-soft);
   border-radius: 10px;
+}
+
+.update-detail__data-table {
+  width: 100%;
+  min-width: 560px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: var(--surface-card);
+}
+
+.update-detail__data-table thead {
   background: var(--surface-muted);
-}
-
-.update-detail__exercise-data-key {
   color: var(--text-500);
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
-.update-detail__exercise-data-value {
+.update-detail__data-table-col--field {
+  width: 34%;
+}
+
+.update-detail__data-table-col--type {
+  width: 12%;
+}
+
+.update-detail__data-table-col--value {
+  width: 54%;
+}
+
+.update-detail__data-table th,
+.update-detail__data-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.update-detail__data-table tbody tr:last-child th,
+.update-detail__data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.update-detail__data-table th {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.update-detail__data-table td {
   color: var(--text-900);
+}
+
+.update-detail__data-table tbody tr {
+  background: var(--surface-card);
+}
+
+.update-detail__data-table-field {
+  width: 34%;
+  color: var(--text-500);
   font-weight: 600;
-  text-align: right;
-  word-break: break-word;
+}
+
+.update-detail__data-table-type {
+  width: 12%;
+  color: var(--text-500);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.update-detail__data-table-value {
+  overflow-wrap: anywhere;
 }
 
 .contract-detail__data {
@@ -4838,13 +4895,6 @@ h3 {
 .activity-home__updates-section--global-updates .contract-detail__link {
   color: var(--blue-500);
   color: color-mix(in srgb, var(--blue-600) 70%, var(--text-600));
-}
-
-.update-detail__witness {
-  display: block;
-  white-space: nowrap;
-  word-break: normal;
-  overflow-wrap: normal;
 }
 
 .update-detail__empty {
@@ -5849,7 +5899,7 @@ h3 {
 }
 
 .update-detail__summary-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .update-detail__summary-item {
@@ -6103,6 +6153,10 @@ h3 {
   }
 
   .node-detail__sections {
+    grid-template-columns: 1fr;
+  }
+
+  .update-detail__event-grid {
     grid-template-columns: 1fr;
   }
 

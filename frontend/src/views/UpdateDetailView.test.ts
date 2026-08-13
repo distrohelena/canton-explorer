@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/vue";
+import { cleanup, render, screen, within } from "@testing-library/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import UpdateDetailView from "./UpdateDetailView.vue";
 import { fetchNodeUpdateDetail } from "../lib/api";
@@ -77,9 +77,18 @@ describe("UpdateDetailView", () => {
               kind: "record",
               fields: [
                 { label: "rewardRound", value: 258 },
+                { label: "recipientParty", value: "Alice" },
                 {
                   label: "couponContractId",
                   value: { kind: "contract_id", value: "00coupon" },
+                },
+                {
+                  label: "optionalMemo",
+                  value: { kind: "optional", value: "memo" },
+                },
+                {
+                  label: "optionalRewardRound",
+                  value: { kind: "optional", value: null },
                 },
               ],
             },
@@ -167,6 +176,17 @@ describe("UpdateDetailView", () => {
     expect(screen.getByText("Estimated traffic cost")).toBeInTheDocument();
     expect(screen.getByText("$12.34 (1 day)")).toBeInTheDocument();
     expect(
+      Array.from(
+        container.querySelectorAll(".update-detail__summary-grid dt"),
+      ).map((label) => label.textContent?.trim()),
+    ).toEqual([
+      "Event Offset",
+      "Canonical Update ID",
+      "Record Time",
+      "Estimated traffic cost",
+      "Parties",
+    ]);
+    expect(
       screen.getByText(
         "1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1",
       ),
@@ -179,20 +199,49 @@ describe("UpdateDetailView", () => {
     expect(summaryParties?.textContent).toContain("Alice");
     expect(summaryParties?.textContent).toContain("Bob");
     expect(
-      summaryParties?.querySelectorAll(".update-detail__party"),
+      summaryParties?.querySelectorAll(
+        ".package-detail__list-row.parties-page__party-row",
+      ),
+    ).toHaveLength(2);
+    expect(
+      summaryParties?.querySelectorAll(".parties-page__party-link"),
     ).toHaveLength(2);
     expect(container.querySelector('a[href="/parties/Alice"]')).not.toBeNull();
     expect(container.querySelector('a[href="/parties/Bob"]')).not.toBeNull();
+    expect(
+      summaryParties?.querySelector('button[aria-label="Copy party ID Alice"]'),
+    ).not.toBeNull();
+    expect(
+      summaryParties?.querySelector('button[aria-label="Copy party ID Bob"]'),
+    ).not.toBeNull();
     expect(
       screen.getByRole("heading", { name: "Summary" }).closest("section"),
     ).toHaveClass("update-detail__section--summary");
     expect(
       screen.queryByRole("heading", { name: "Raw Metadata" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Events" })).toBeInTheDocument();
+    const eventsHeading = screen.getByRole("heading", { name: "Events" });
+    expect(eventsHeading).toBeInTheDocument();
+    expect(
+      container.querySelector(".update-detail__events-section"),
+    ).toBeNull();
+    expect(eventsHeading.closest(".node-detail__sections")).toBeNull();
     expect(screen.getByText("Create")).toBeInTheDocument();
     expect(screen.getByText("Non-Consuming Exercise")).toBeInTheDocument();
+    expect(screen.getByText("Non-Consuming Exercise")).toHaveClass(
+      "update-detail__event-kind",
+    );
     expect(screen.getByText("#0:0")).toBeInTheDocument();
+    expect(
+      container.querySelectorAll(
+        ".update-detail__witnesses .package-detail__list-row.parties-page__party-row",
+      ),
+    ).toHaveLength(3);
+    expect(
+      container.querySelectorAll(
+        ".update-detail__witnesses .copy-to-clipboard-button",
+      ),
+    ).toHaveLength(3);
     expect(screen.getAllByText("Package ID")).toHaveLength(2);
     expect(screen.getByText("main-package")).toBeInTheDocument();
     expect(screen.getByText("splice-dso-rules")).toBeInTheDocument();
@@ -213,6 +262,81 @@ describe("UpdateDetailView", () => {
     expect(screen.getByText("20,000")).toBeInTheDocument();
     expect(screen.getByText("Result / Reward Round")).toBeInTheDocument();
     expect(screen.getAllByText("258")).toHaveLength(2);
+    const createDataTable = screen.getByRole("table", { name: "Create Data" });
+    expect(createDataTable).toHaveAttribute(
+      "aria-labelledby",
+      "update-detail-event-data-heading-0",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Create Data" }),
+    ).toHaveAttribute("id", "update-detail-event-data-heading-0");
+    expect(
+      within(createDataTable)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent?.trim()),
+    ).toEqual(["Field", "Type", "Value"]);
+    expect(createDataTable.querySelectorAll("col")).toHaveLength(3);
+    expect(
+      createDataTable.querySelector(
+        "col.update-detail__data-table-col--field",
+      ),
+    ).not.toBeNull();
+    expect(
+      createDataTable.querySelector(
+        "col.update-detail__data-table-col--type",
+      ),
+    ).not.toBeNull();
+    expect(
+      createDataTable.querySelector(
+        "col.update-detail__data-table-col--value",
+      ),
+    ).not.toBeNull();
+    expect(
+      within(createDataTable).getByText("Reward Round"),
+    ).toBeInTheDocument();
+    expect(
+      within(createDataTable).getByText("Recipient Party"),
+    ).toBeInTheDocument();
+    expect(within(createDataTable).getByText("Int64")).toBeInTheDocument();
+    expect(within(createDataTable).getByText("ContractId")).toBeInTheDocument();
+    expect(within(createDataTable).getByText("Party")).toBeInTheDocument();
+    expect(
+      within(createDataTable).getByText("Optional Memo"),
+    ).toBeInTheDocument();
+    expect(
+      within(createDataTable).getByText("Optional<Text>"),
+    ).toBeInTheDocument();
+    expect(
+      within(createDataTable).getByText("Optional Reward Round"),
+    ).toBeInTheDocument();
+    expect(
+      within(createDataTable).getByText("Optional<Int64>"),
+    ).toBeInTheDocument();
+    expect(
+      within(createDataTable).getByRole("link", { name: "Alice" }),
+    ).toHaveAttribute("href", "/parties/Alice");
+    expect(
+      within(createDataTable).getByRole("link", { name: "00coupon" }),
+    ).toHaveAttribute("href", "/nodes/participant-1/contracts/00coupon");
+    const exerciseDataTable = screen.getByRole("table", {
+      name: "Exercise Data",
+    });
+    expect(exerciseDataTable).toHaveAttribute(
+      "aria-labelledby",
+      "update-detail-event-data-heading-1",
+    );
+    expect(
+      within(exerciseDataTable)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent?.trim()),
+    ).toEqual(["Field", "Type", "Value"]);
+    expect(
+      within(exerciseDataTable).getByText("Result / Reward Amount"),
+    ).toBeInTheDocument();
+    expect(within(exerciseDataTable).getByText("Numeric")).toBeInTheDocument();
+    expect(
+      container.querySelectorAll(".update-detail__event-item--exercise-data"),
+    ).toHaveLength(0);
     expect(
       container.querySelector('a[href="/packages/main-package"]'),
     ).not.toBeNull();
