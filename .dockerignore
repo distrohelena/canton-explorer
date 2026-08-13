@@ -6,7 +6,9 @@ frontend/node_modules
 backend/dist
 frontend/dist
 backend/config/nodes.local.json
-backend/.env
+.env*
+**/.env*
+!frontend/.env.packaged
 data
 debug-dars
 coverage

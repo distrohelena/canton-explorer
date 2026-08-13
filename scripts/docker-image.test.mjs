@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import test from 'node:test';
@@ -70,4 +72,46 @@ test('production image serves mounted branding as the node user', { timeout: 300
 
   const { stdout: uid } = await docker('exec', containerName, 'id', '-u');
   assert.equal(uid.trim(), '1000');
+});
+
+test('Docker build context excludes local dotenv files but retains the packaged frontend config', { timeout: 300_000 }, async (t) => {
+  const contextDirectory = mkdtempSync(path.join(os.tmpdir(), 'canton-explorer-dockerignore-'));
+  const dockerfilePath = path.join(contextDirectory, 'Dockerfile');
+  const image = `canton-explorer-dockerignore:test-${process.pid}`;
+
+  t.after(async () => {
+    try {
+      await docker('image', 'rm', '--force', image);
+    } catch {
+      // The image may not have been created when the build-context assertion fails.
+    }
+    rmSync(contextDirectory, { force: true, recursive: true });
+  });
+
+  cpSync(path.join(projectRoot, '.dockerignore'), path.join(contextDirectory, '.dockerignore'));
+  mkdirSync(path.join(contextDirectory, 'backend'));
+  mkdirSync(path.join(contextDirectory, 'frontend'));
+  mkdirSync(path.join(contextDirectory, 'workspace', 'nested'), { recursive: true });
+  writeFileSync(path.join(contextDirectory, '.env'), 'ROOT_SECRET=must-not-be-copied\n');
+  writeFileSync(path.join(contextDirectory, 'backend', '.env'), 'BACKEND_SECRET=must-not-be-copied\n');
+  writeFileSync(
+    path.join(contextDirectory, 'frontend', '.env.packaged.local'),
+    'VITE_API_BASE_URL=https://must-not-be-copied.invalid\n',
+  );
+  writeFileSync(path.join(contextDirectory, 'frontend', '.env.packaged'), 'VITE_API_BASE_URL=/api\n');
+  writeFileSync(path.join(contextDirectory, 'workspace', 'nested', '.env.local'), 'NESTED_SECRET=must-not-be-copied\n');
+  writeFileSync(
+    dockerfilePath,
+    `FROM node:22-bookworm-slim
+WORKDIR /app
+COPY . .
+RUN test ! -e .env \\
+  && test ! -e backend/.env \\
+  && test ! -e frontend/.env.packaged.local \\
+  && test ! -e workspace/nested/.env.local \\
+  && test -f frontend/.env.packaged
+`,
+  );
+
+  await docker('build', '--file', dockerfilePath, '--tag', image, contextDirectory);
 });
