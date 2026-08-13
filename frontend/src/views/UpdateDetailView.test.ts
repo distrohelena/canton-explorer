@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from "@testing-library/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import UpdateDetailView from "./UpdateDetailView.vue";
 import { fetchNodeUpdateDetail } from "../lib/api";
+import type { NodeUpdateDetailResponse } from "../types/updates";
 import "../styles.css";
 
 const routeQuery = {
@@ -18,6 +19,36 @@ vi.mock("vue-router", () => ({
     query: routeQuery,
   }),
 }));
+
+function renderUpdateEvents(
+  events: NodeUpdateDetailResponse["events"],
+): { container: HTMLElement } {
+  vi.mocked(fetchNodeUpdateDetail).mockResolvedValue({
+    nodeId: "participant-1",
+    label: "Participant 1",
+    eventOffset: "0000000000000001",
+    updateId: "update-1",
+    recordTime: null,
+    parties: [],
+    events,
+    meta: {},
+  });
+
+  return render(UpdateDetailView, {
+    props: {
+      id: "participant-1",
+      eventOffset: "0000000000000001",
+    },
+    global: {
+      stubs: {
+        RouterLink: {
+          props: ["to"],
+          template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+        },
+      },
+    },
+  });
+}
 
 describe("UpdateDetailView", () => {
   afterEach(() => {
@@ -48,6 +79,75 @@ describe("UpdateDetailView", () => {
     });
 
     expect(screen.getByText("Loading update detail...")).toBeInTheDocument();
+  });
+
+  it("links a fully identified choice to its encoded template route and hash", async () => {
+    renderUpdateEvents([
+      {
+        eventKind: "non_consuming_exercise",
+        eventId: "#0:0",
+        contractId: "00asset",
+        packageId: "main-package",
+        templateId: "Main:Asset",
+        choice: "ReceiveSvRewardCoupon",
+        witnesses: [],
+        raw: {},
+      },
+    ]);
+
+    expect(
+      await screen.findByRole("link", { name: "ReceiveSvRewardCoupon" }),
+    ).toHaveAttribute(
+      "href",
+      "/packages/main-package/templates/Main%3AAsset#choice-ReceiveSvRewardCoupon",
+    );
+  });
+
+  it("keeps choice values as plain text when any link identifier is missing", async () => {
+    const { container } = renderUpdateEvents([
+      {
+        eventKind: "non_consuming_exercise",
+        eventId: "#0:0",
+        contractId: "00asset-1",
+        packageId: null,
+        templateId: "Main:Asset",
+        choice: "MissingPackageIdChoice",
+        witnesses: [],
+        raw: {},
+      },
+      {
+        eventKind: "non_consuming_exercise",
+        eventId: "#0:1",
+        contractId: "00asset-2",
+        packageId: "main-package",
+        templateId: null,
+        choice: "MissingTemplateIdChoice",
+        witnesses: [],
+        raw: {},
+      },
+      {
+        eventKind: "non_consuming_exercise",
+        eventId: "#0:2",
+        contractId: "00asset-3",
+        packageId: "main-package",
+        templateId: "Main:Asset",
+        choice: null,
+        witnesses: [],
+        raw: {},
+      },
+    ]);
+
+    const packageMissingChoice = await screen.findByText("MissingPackageIdChoice");
+    expect(packageMissingChoice.closest("a")).toBeNull();
+    const templateMissingChoice = screen.getByText("MissingTemplateIdChoice");
+    expect(templateMissingChoice.closest("a")).toBeNull();
+
+    const choiceItems = container.querySelectorAll(
+      ".update-detail__event-item--choice",
+    );
+    expect(choiceItems).toHaveLength(3);
+    expect(choiceItems[2]).toHaveTextContent("n/a");
+    expect(choiceItems[2].querySelector("a")).toBeNull();
   });
 
   it("renders a single update detail without a raw metadata section", async () => {
