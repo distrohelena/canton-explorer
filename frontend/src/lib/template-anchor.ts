@@ -31,12 +31,7 @@ export function choiceNameFromHash(hash?: string): string | null {
     return null;
   }
 
-  try {
-    // Vue Router supplies a decoded hash. Validate percent escapes without decoding it again.
-    decodeURIComponent(choiceName);
-  } catch {
-    return null;
-  }
-
+  // Vue Router supplies a decoded hash. Preserve the remainder as-is so literal
+  // percent characters in choice names remain addressable.
   return choiceName;
 }

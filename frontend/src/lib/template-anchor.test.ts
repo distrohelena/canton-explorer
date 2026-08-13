@@ -15,6 +15,7 @@ describe('choice template anchors', () => {
   it('extracts a choice name from an already-decoded route hash', () => {
     expect(choiceNameFromHash('#choice-A Choice/With:Symbols')).toBe('A Choice/With:Symbols');
     expect(choiceNameFromHash('#choice-A%2FChoice')).toBe('A%2FChoice');
+    expect(choiceNameFromHash('#choice-100%')).toBe('100%');
   });
 
   it('returns null for empty choice names', () => {
@@ -24,13 +25,8 @@ describe('choice template anchors', () => {
     expect(choiceNameFromHash('#choice-')).toBeNull();
   });
 
-  it('returns null for unexpected or malformed hashes without throwing', () => {
+  it('returns null for unexpected hashes', () => {
     expect(choiceNameFromHash('#other-Archive')).toBeNull();
     expect(choiceNameFromHash('choice-Archive')).toBeNull();
-
-    expect(() => choiceNameFromHash('#choice-Incomplete%')).not.toThrow();
-    expect(choiceNameFromHash('#choice-Incomplete%')).toBeNull();
-    expect(() => choiceNameFromHash('#choice-%ZZ')).not.toThrow();
-    expect(choiceNameFromHash('#choice-%ZZ')).toBeNull();
   });
 });
