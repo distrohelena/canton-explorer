@@ -38,6 +38,48 @@ To simulate the published package locally from this repo:
 npm run pack:dry-run
 ```
 
+## Docker
+
+Deploy the published Explorer image with the standalone Compose file:
+
+```bash
+curl -O https://raw.githubusercontent.com/distrohelena/canton-explorer/main/compose.yaml
+mkdir -p config debug-dars
+curl -o .env https://raw.githubusercontent.com/distrohelena/canton-explorer/main/docker/.env.example
+curl -o config/nodes.local.json https://raw.githubusercontent.com/distrohelena/canton-explorer/main/backend/config/nodes.example.json
+# Edit .env and config/nodes.local.json with actual endpoint and credential values.
+docker compose up -d
+docker compose logs -f canton-explorer
+```
+
+The Explorer is available at `http://localhost:4600`. Compose creates the
+`explorer-data` volume for the persistent package-cache database. The
+`debug-dars` directory is mounted at `/app/debug-dars`; it is optional, but
+create it when following the commands above so local debug DARs can be added
+without changing the Compose file.
+
+When serving the Explorer below a reverse-proxy URL prefix, set
+`frontend.basePath` to that public prefix. For example, for
+`/canton-explorer/`, proxy `/canton-explorer/api` to the backend's `/api` path.
+
+### Publish a Docker release
+
+Docker images are published manually. After choosing the release version, log
+in and push the multi-architecture image:
+
+```bash
+docker login ghcr.io
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --build-arg VERSION=1.0.9 \
+  --push \
+  --tag ghcr.io/distrohelena/canton-explorer:1.0.9 \
+  --tag ghcr.io/distrohelena/canton-explorer:latest \
+  .
+```
+
+After its first push, make the GHCR package public in GitHub package settings.
+
 ## Local setup
 
 1. Copy `backend/config/nodes.example.json` to `backend/config/nodes.local.json`.
