@@ -50,6 +50,7 @@ describe('ModuleDetailView', () => {
           moduleName: 'Main.Module',
           entityName: 'Asset',
           createType: null,
+          choices: [],
         },
       ],
       dataTypes: [

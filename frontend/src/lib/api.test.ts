@@ -225,6 +225,7 @@ const typedPackageDetailFixture = {
           },
         ],
       },
+      choices: [],
     },
   ],
   dataTypes: [

@@ -450,6 +450,7 @@ export interface PackageTemplateSummary {
   moduleName: string;
   entityName: string;
   createType: PackageTypeNode | null;
+  choices: PackageInterfaceChoice[];
 }
 
 export interface PackageDataTypeSummary {

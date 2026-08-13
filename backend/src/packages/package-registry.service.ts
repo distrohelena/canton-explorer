@@ -15,7 +15,10 @@ import type {
   SdkRawType,
   SdkRawTypeSyn,
 } from './daml-decoder.types';
-import type { PackageTypeNode } from '../domain/node.types';
+import type {
+  PackageInterfaceChoice,
+  PackageTypeNode,
+} from '../domain/node.types';
 import {
   flattenRawTypeApplication,
   resolveRawBuiltinTypeName,
@@ -157,6 +160,23 @@ export class PackageRegistryService implements OnModuleInit {
               new Set<string>(),
             )
           : null,
+        choices: (template.template.choices ?? [])
+          .map((choice: SdkRawTemplateChoice): PackageInterfaceChoice => ({
+            name:
+              resolveRawInternedString(
+                resolvedPackage.rawPackage,
+                choice.nameInternedStr,
+              ) ?? 'Unknown',
+            consuming: choice.consuming,
+            argumentType: this.buildTypeNodeForType(
+              resolvedPackage,
+              choice.argBinder?.type,
+            ),
+            resultType: this.buildTypeNodeForType(resolvedPackage, choice.retType),
+          }))
+          .sort((left: PackageInterfaceChoice, right: PackageInterfaceChoice) =>
+            left.name.localeCompare(right.name),
+          ),
       }))
       .sort((left, right) => left.templateId.localeCompare(right.templateId));
 

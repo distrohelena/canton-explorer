@@ -49,6 +49,7 @@ describe('TemplateDetailView', () => {
             },
           ],
         },
+        choices: [],
       },
     });
 
