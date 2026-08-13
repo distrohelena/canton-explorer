@@ -20,8 +20,19 @@ import type {
   NodeTrafficPurchasesResponse,
   GlobalTrafficPurchasesResponse,
 } from '../types/nodes';
-import type { NamespaceDetailResponse, NamespacePartiesResponse } from '../types/namespaces';
-import type { PartyDetailResponse } from '../types/parties';
+import type {
+  NamespaceDetailResponse,
+  NamespaceNodesResponse,
+  NamespacePartiesResponse,
+  NamespaceSummaryResponse,
+  NamespaceTopologyResponse,
+} from '../types/namespaces';
+import type {
+  PartyDetailResponse,
+  PartyNodesResponse,
+  PartySummaryResponse,
+  PartyTopologyResponse,
+} from '../types/parties';
 import type { PartyContractsResponse } from '../types/parties';
 import type {
   PackageDetailDataTypesResponse,
@@ -57,7 +68,9 @@ export function resolveApiBaseUrl(
   envBaseUrl = import.meta.env.VITE_API_BASE_URL,
   isDev = import.meta.env.DEV,
   port = typeof window !== 'undefined' ? window.location.port : undefined,
-  hostname = typeof window !== 'undefined' ? window.location.hostname : undefined,
+  hostname = typeof window !== 'undefined'
+    ? window.location.hostname
+    : undefined,
 ): string {
   if (hostname === 'canton.sweetsquare.io') {
     return 'https://canton-server.sweetsquare.io/api';
@@ -121,7 +134,10 @@ async function postJson<T>(path: string, body?: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function appendNodeQueryParams(params: URLSearchParams, nodeIds?: string[]): void {
+function appendNodeQueryParams(
+  params: URLSearchParams,
+  nodeIds?: string[],
+): void {
   if (nodeIds === undefined) {
     return;
   }
@@ -150,20 +166,32 @@ export function fetchActiveParties(): Promise<ActivePartiesResponse> {
   return fetchJson<ActivePartiesResponse>('/parties');
 }
 
-export function fetchRecentActiveParties(hours = 24): Promise<RecentActivePartiesResponse> {
-  return fetchJson<RecentActivePartiesResponse>(`/parties/activity?hours=${hours}`);
+export function fetchRecentActiveParties(
+  hours = 24,
+): Promise<RecentActivePartiesResponse> {
+  return fetchJson<RecentActivePartiesResponse>(
+    `/parties/activity?hours=${hours}`,
+  );
 }
 
 export function fetchLocalParties(): Promise<ActivePartiesResponse> {
   return fetchJson<ActivePartiesResponse>('/parties/local');
 }
 
-export function fetchNodeActiveParties(id: string): Promise<ActivePartiesResponse['nodes'][number]> {
-  return fetchJson<ActivePartiesResponse['nodes'][number]>(`/nodes/${id}/parties`);
+export function fetchNodeActiveParties(
+  id: string,
+): Promise<ActivePartiesResponse['nodes'][number]> {
+  return fetchJson<ActivePartiesResponse['nodes'][number]>(
+    `/nodes/${id}/parties`,
+  );
 }
 
-export function fetchNodeLocalParties(id: string): Promise<ActivePartiesResponse['nodes'][number]> {
-  return fetchJson<ActivePartiesResponse['nodes'][number]>(`/nodes/${id}/parties/local`);
+export function fetchNodeLocalParties(
+  id: string,
+): Promise<ActivePartiesResponse['nodes'][number]> {
+  return fetchJson<ActivePartiesResponse['nodes'][number]>(
+    `/nodes/${id}/parties/local`,
+  );
 }
 
 export function fetchPartyFingerprints(options?: {
@@ -184,7 +212,11 @@ export function fetchPartyFingerprints(options?: {
     params.set('after', options.after);
   }
   appendNodeQueryParams(params, options?.nodeIds);
-  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (
+    typeof options?.limit === 'number' &&
+    Number.isFinite(options.limit) &&
+    options.limit > 0
+  ) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
   if (options?.publicKey?.trim()) {
@@ -223,7 +255,11 @@ export function fetchNodePartyFingerprints(
   if (options?.after) {
     params.set('after', options.after);
   }
-  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (
+    typeof options?.limit === 'number' &&
+    Number.isFinite(options.limit) &&
+    options.limit > 0
+  ) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
   if (options?.publicKey?.trim()) {
@@ -240,7 +276,9 @@ export function fetchNodePartyFingerprints(
   }
 
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
-  return fetchJson<NodePartyFingerprintsEntry>(`/nodes/${id}/parties/fingerprints${suffix}`);
+  return fetchJson<NodePartyFingerprintsEntry>(
+    `/nodes/${id}/parties/fingerprints${suffix}`,
+  );
 }
 
 export function fetchNodeContracts(
@@ -270,7 +308,11 @@ export function fetchNodeContracts(
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
   }
-  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (
+    typeof options?.limit === 'number' &&
+    Number.isFinite(options.limit) &&
+    options.limit > 0
+  ) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
 
@@ -327,12 +369,18 @@ export function fetchNodePackages(id: string): Promise<NodePackagesResponse> {
   return fetchJson<NodePackagesResponse>(`/nodes/${id}/packages`);
 }
 
-export function fetchNodeTemplates(id: string): Promise<TemplateFilterResponse> {
+export function fetchNodeTemplates(
+  id: string,
+): Promise<TemplateFilterResponse> {
   return fetchJson<TemplateFilterResponse>(`/nodes/${id}/templates`);
 }
 
-export function fetchNodeParticipantStatus(id: string): Promise<NodeParticipantStatusResponse> {
-  return fetchJson<NodeParticipantStatusResponse>(`/nodes/${id}/participant-status`);
+export function fetchNodeParticipantStatus(
+  id: string,
+): Promise<NodeParticipantStatusResponse> {
+  return fetchJson<NodeParticipantStatusResponse>(
+    `/nodes/${id}/participant-status`,
+  );
 }
 
 export interface NodeTrafficPurchasesQueryOptions {
@@ -380,7 +428,9 @@ export function fetchNodeTrafficPurchases(
     params.set('paidMax', options.paidMax);
   }
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
-  return fetchJson<NodeTrafficPurchasesResponse>(`/nodes/${id}/traffic-purchases${suffix}`);
+  return fetchJson<NodeTrafficPurchasesResponse>(
+    `/nodes/${id}/traffic-purchases${suffix}`,
+  );
 }
 
 export function fetchTrafficPurchases(options?: {
@@ -396,7 +446,11 @@ export function fetchTrafficPurchases(options?: {
   paidMax?: string;
 }): Promise<GlobalTrafficPurchasesResponse> {
   const params = new URLSearchParams();
-  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (
+    typeof options?.limit === 'number' &&
+    Number.isFinite(options.limit) &&
+    options.limit > 0
+  ) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
   if (options?.before) {
@@ -426,21 +480,33 @@ export function fetchTrafficPurchases(options?: {
   }
 
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
-  return fetchJson<GlobalTrafficPurchasesResponse>(`/traffic-purchases${suffix}`);
+  return fetchJson<GlobalTrafficPurchasesResponse>(
+    `/traffic-purchases${suffix}`,
+  );
 }
 
-export function fetchActivityHistory(days: 1 | 7 | 30 | 31 = 1): Promise<ActivityHistoryResponse> {
-  return fetchJson<ActivityHistoryResponse>(`/nodes/activity-history?days=${days}`);
+export function fetchActivityHistory(
+  days: 1 | 7 | 30 | 31 = 1,
+): Promise<ActivityHistoryResponse> {
+  return fetchJson<ActivityHistoryResponse>(
+    `/nodes/activity-history?days=${days}`,
+  );
 }
 
-export function fetchCantonCoinHistory(interval = '1D'): Promise<CantonCoinHistoryResponse> {
+export function fetchCantonCoinHistory(
+  interval = '1D',
+): Promise<CantonCoinHistoryResponse> {
   return fetchJson<CantonCoinHistoryResponse>(
     `/market/canton-coin/history?interval=${encodeURIComponent(interval)}`,
   );
 }
 
-export function fetchSearchResults(query: string): Promise<SearchResultsResponse> {
-  return fetchJson<SearchResultsResponse>(`/search?q=${encodeURIComponent(query.trim())}`);
+export function fetchSearchResults(
+  query: string,
+): Promise<SearchResultsResponse> {
+  return fetchJson<SearchResultsResponse>(
+    `/search?q=${encodeURIComponent(query.trim())}`,
+  );
 }
 
 export function createDebuggerSession(
@@ -457,18 +523,27 @@ export function createSimulatedDebuggerSession(request: {
   templateId: string;
   argument: unknown;
 }): Promise<DebuggerSessionResponse> {
-  return postJson<DebuggerSessionResponse>('/debugger/sessions/simulate', request);
+  return postJson<DebuggerSessionResponse>(
+    '/debugger/sessions/simulate',
+    request,
+  );
 }
 
 export function fetchDebuggerSessions(): Promise<DebuggerSessionSummary[]> {
   return fetchJson<DebuggerSessionSummary[]>('/debugger/sessions');
 }
 
-export function fetchDebuggerSession(sessionId: string): Promise<DebuggerSessionResponse> {
-  return fetchJson<DebuggerSessionResponse>(`/debugger/sessions/${encodeURIComponent(sessionId)}`);
+export function fetchDebuggerSession(
+  sessionId: string,
+): Promise<DebuggerSessionResponse> {
+  return fetchJson<DebuggerSessionResponse>(
+    `/debugger/sessions/${encodeURIComponent(sessionId)}`,
+  );
 }
 
-export function fetchDebuggerEvents(sessionId: string): Promise<DebuggerEventListResponse> {
+export function fetchDebuggerEvents(
+  sessionId: string,
+): Promise<DebuggerEventListResponse> {
   return fetchJson<DebuggerEventListResponse>(
     `/debugger/sessions/${encodeURIComponent(sessionId)}/events`,
   );
@@ -522,7 +597,11 @@ export function fetchTokens(options?: {
       params.append('issuer', issuer.trim());
     }
   }
-  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (
+    typeof options?.limit === 'number' &&
+    Number.isFinite(options.limit) &&
+    options.limit > 0
+  ) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
 
@@ -530,8 +609,12 @@ export function fetchTokens(options?: {
   return fetchJson<TokensResponse>(`/tokens${suffix}`);
 }
 
-export function fetchTokenDetail(tokenId: string): Promise<TokenDetailResponse> {
-  return fetchJson<TokenDetailResponse>(`/tokens/${encodeURIComponent(tokenId)}`);
+export function fetchTokenDetail(
+  tokenId: string,
+): Promise<TokenDetailResponse> {
+  return fetchJson<TokenDetailResponse>(
+    `/tokens/${encodeURIComponent(tokenId)}`,
+  );
 }
 
 export function fetchTokenHolders(
@@ -598,7 +681,9 @@ export function fetchLatestTokenTransfers(
   }
   params.set('limit', String(Math.max(1, Math.trunc(limit))));
 
-  return fetchJson<TokenTransfersResponse>(`/tokens/transfers?${params.toString()}`);
+  return fetchJson<TokenTransfersResponse>(
+    `/tokens/transfers?${params.toString()}`,
+  );
 }
 
 export function fetchTokenTransfers(
@@ -649,7 +734,9 @@ export function fetchTokenTransfers(
   );
 }
 
-export function fetchTokenTransferDetail(updateId: string): Promise<TokenTransfersResponse['transfers'][number]> {
+export function fetchTokenTransferDetail(
+  updateId: string,
+): Promise<TokenTransfersResponse['transfers'][number]> {
   return fetchJson<TokenTransfersResponse['transfers'][number]>(
     `/tokens/transfers/${encodeURIComponent(updateId)}`,
   );
@@ -729,7 +816,11 @@ export function fetchNodeUpdates(
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
   }
-  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (
+    typeof options?.limit === 'number' &&
+    Number.isFinite(options.limit) &&
+    options.limit > 0
+  ) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
 
@@ -741,38 +832,62 @@ export function fetchNodeUpdateDetail(
   id: string,
   eventOffset: string,
 ): Promise<NodeUpdateDetailResponse> {
-  return fetchJson<NodeUpdateDetailResponse>(`/nodes/${id}/updates/${eventOffset}`);
+  return fetchJson<NodeUpdateDetailResponse>(
+    `/nodes/${id}/updates/${eventOffset}`,
+  );
 }
 
 export function fetchNodeContractDetail(
   id: string,
   contractId: string,
 ): Promise<NodeContractDetailResponse> {
-  return fetchJson<NodeContractDetailResponse>(`/nodes/${id}/contracts/${contractId}`);
+  return fetchJson<NodeContractDetailResponse>(
+    `/nodes/${id}/contracts/${contractId}`,
+  );
 }
 
-export function fetchPackageDetail(packageId: string): Promise<PackageDetailResponse> {
+export function fetchPackageDetail(
+  packageId: string,
+): Promise<PackageDetailResponse> {
   return fetchJson<PackageDetailResponse>(`/packages/${packageId}`);
 }
 
-export function fetchPackageSummary(packageId: string): Promise<PackageDetailSummaryResponse> {
-  return fetchJson<PackageDetailSummaryResponse>(`/packages/${packageId}/summary`);
+export function fetchPackageSummary(
+  packageId: string,
+): Promise<PackageDetailSummaryResponse> {
+  return fetchJson<PackageDetailSummaryResponse>(
+    `/packages/${packageId}/summary`,
+  );
 }
 
-export function fetchPackageNodes(packageId: string): Promise<PackageDetailNodesResponse> {
+export function fetchPackageNodes(
+  packageId: string,
+): Promise<PackageDetailNodesResponse> {
   return fetchJson<PackageDetailNodesResponse>(`/packages/${packageId}/nodes`);
 }
 
-export function fetchPackageModules(packageId: string): Promise<PackageDetailModulesResponse> {
-  return fetchJson<PackageDetailModulesResponse>(`/packages/${packageId}/modules`);
+export function fetchPackageModules(
+  packageId: string,
+): Promise<PackageDetailModulesResponse> {
+  return fetchJson<PackageDetailModulesResponse>(
+    `/packages/${packageId}/modules`,
+  );
 }
 
-export function fetchPackageTemplates(packageId: string): Promise<PackageDetailTemplatesResponse> {
-  return fetchJson<PackageDetailTemplatesResponse>(`/packages/${packageId}/templates`);
+export function fetchPackageTemplates(
+  packageId: string,
+): Promise<PackageDetailTemplatesResponse> {
+  return fetchJson<PackageDetailTemplatesResponse>(
+    `/packages/${packageId}/templates`,
+  );
 }
 
-export function fetchPackageDataTypes(packageId: string): Promise<PackageDetailDataTypesResponse> {
-  return fetchJson<PackageDetailDataTypesResponse>(`/packages/${packageId}/data-types`);
+export function fetchPackageDataTypes(
+  packageId: string,
+): Promise<PackageDetailDataTypesResponse> {
+  return fetchJson<PackageDetailDataTypesResponse>(
+    `/packages/${packageId}/data-types`,
+  );
 }
 
 export function fetchPackageModule(
@@ -797,16 +912,74 @@ export function fetchTemplates(): Promise<TemplateFilterResponse> {
   return fetchJson<TemplateFilterResponse>('/templates');
 }
 
-export function fetchPackagesByName(packageName: string): Promise<PackageFamilyResponse> {
-  return fetchJson<PackageFamilyResponse>(`/packages/by-name/${encodeURIComponent(packageName)}`);
+export function fetchPackagesByName(
+  packageName: string,
+): Promise<PackageFamilyResponse> {
+  return fetchJson<PackageFamilyResponse>(
+    `/packages/by-name/${encodeURIComponent(packageName)}`,
+  );
 }
 
-export function fetchPartyDetail(partyId: string): Promise<PartyDetailResponse> {
-  return fetchJson<PartyDetailResponse>(`/parties/${encodeURIComponent(partyId)}`);
+export function fetchPartyDetail(
+  partyId: string,
+): Promise<PartyDetailResponse> {
+  return fetchJson<PartyDetailResponse>(
+    `/parties/${encodeURIComponent(partyId)}`,
+  );
 }
 
-export function fetchNamespaceDetail(namespaceId: string): Promise<NamespaceDetailResponse> {
-  return fetchJson<NamespaceDetailResponse>(`/namespaces/${encodeURIComponent(namespaceId)}`);
+export function fetchPartySummary(
+  partyId: string,
+): Promise<PartySummaryResponse> {
+  return fetchJson<PartySummaryResponse>(
+    `/parties/${encodeURIComponent(partyId)}/summary`,
+  );
+}
+
+export function fetchPartyNodes(partyId: string): Promise<PartyNodesResponse> {
+  return fetchJson<PartyNodesResponse>(
+    `/parties/${encodeURIComponent(partyId)}/nodes`,
+  );
+}
+
+export function fetchPartyTopology(
+  partyId: string,
+): Promise<PartyTopologyResponse> {
+  return fetchJson<PartyTopologyResponse>(
+    `/parties/${encodeURIComponent(partyId)}/topology`,
+  );
+}
+
+export function fetchNamespaceDetail(
+  namespaceId: string,
+): Promise<NamespaceDetailResponse> {
+  return fetchJson<NamespaceDetailResponse>(
+    `/namespaces/${encodeURIComponent(namespaceId)}`,
+  );
+}
+
+export function fetchNamespaceSummary(
+  namespaceId: string,
+): Promise<NamespaceSummaryResponse> {
+  return fetchJson<NamespaceSummaryResponse>(
+    `/namespaces/${encodeURIComponent(namespaceId)}/summary`,
+  );
+}
+
+export function fetchNamespaceNodes(
+  namespaceId: string,
+): Promise<NamespaceNodesResponse> {
+  return fetchJson<NamespaceNodesResponse>(
+    `/namespaces/${encodeURIComponent(namespaceId)}/nodes`,
+  );
+}
+
+export function fetchNamespaceTopology(
+  namespaceId: string,
+): Promise<NamespaceTopologyResponse> {
+  return fetchJson<NamespaceTopologyResponse>(
+    `/namespaces/${encodeURIComponent(namespaceId)}/topology`,
+  );
 }
 
 export function fetchNamespaceParties(
@@ -824,7 +997,11 @@ export function fetchNamespaceParties(
   if (options?.after) {
     params.set('after', options.after);
   }
-  if (typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (
+    typeof options?.limit === 'number' &&
+    Number.isFinite(options.limit) &&
+    options.limit > 0
+  ) {
     params.set('limit', String(Math.trunc(options.limit)));
   }
 

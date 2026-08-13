@@ -331,10 +331,7 @@ export interface PackageSeenOnNode {
 }
 
 export type PackageDetailStatus =
-  | 'decoded'
-  | 'invalid_package'
-  | 'missing_package'
-  | 'not_available';
+  'decoded' | 'invalid_package' | 'missing_package' | 'not_available';
 
 export interface PackageDetailSummaryResponse {
   packageId: string;
@@ -759,6 +756,18 @@ export interface PartyDetailResponse {
   partyTopologyByNode: PartyTopologyNodeEntry[];
 }
 
+export type PartySummaryResponse = Pick<
+  PartyDetailResponse,
+  'partyId' | 'nodeCount' | 'recentUpdateCount' | 'recentContractCount'
+>;
+
+export type PartyNodesResponse = Pick<PartyDetailResponse, 'nodes'>;
+
+export type PartyTopologyResponse = Pick<
+  PartyDetailResponse,
+  'partyTopologyByNode'
+>;
+
 export interface NamespacePartySummary {
   partyId: string;
 }
@@ -790,3 +799,19 @@ export interface NamespaceDetailResponse {
   recentContracts: PartyRecentContract[];
   topologyByNode: PartyTopologyNodeEntry[];
 }
+
+export type NamespaceSummaryResponse = Pick<
+  NamespaceDetailResponse,
+  | 'namespaceId'
+  | 'partyCount'
+  | 'nodeCount'
+  | 'recentUpdateCount'
+  | 'recentContractCount'
+>;
+
+export type NamespaceNodesResponse = Pick<NamespaceDetailResponse, 'nodes'>;
+
+export type NamespaceTopologyResponse = Pick<
+  NamespaceDetailResponse,
+  'topologyByNode'
+>;

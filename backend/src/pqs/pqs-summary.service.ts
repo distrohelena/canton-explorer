@@ -15,11 +15,17 @@ import type {
   GlobalContractsResponse,
   GlobalRecentUpdatesResponse,
   NamespaceDetailResponse,
+  NamespaceNodesResponse,
   NamespacePartiesResponse,
+  NamespaceSummaryResponse,
+  NamespaceTopologyResponse,
   NodeContractsResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
   PartyDetailResponse,
+  PartyNodesResponse,
+  PartySummaryResponse,
+  PartyTopologyResponse,
   LedgerSummary,
   NodeDecodeFailureReason,
   NodeDecodeState,
@@ -3497,8 +3503,11 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchPackageSummary(packageId: string): Promise<PackageDetailSummaryResponse> {
-    const { metadata, inspection } = await this.inspectPackageDetailSection(packageId);
+  async fetchPackageSummary(
+    packageId: string,
+  ): Promise<PackageDetailSummaryResponse> {
+    const { metadata, inspection } =
+      await this.inspectPackageDetailSection(packageId);
 
     if (!inspection.ok) {
       return {
@@ -3527,12 +3536,16 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchPackageNodes(packageId: string): Promise<PackageDetailNodesResponse> {
+  async fetchPackageNodes(
+    packageId: string,
+  ): Promise<PackageDetailNodesResponse> {
     this.getPackageMetadataOrThrow(packageId);
 
     return {
       packageId,
-      seenOnNodes: (this.packageCacheService?.listNodesForPackage(packageId) ?? []).map((row) => ({
+      seenOnNodes: (
+        this.packageCacheService?.listNodesForPackage(packageId) ?? []
+      ).map((row) => ({
         nodeId: row.nodeId,
         packageName: row.packageName,
         packageVersion: row.packageVersion,
@@ -3541,7 +3554,9 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchPackageModules(packageId: string): Promise<PackageDetailModulesResponse> {
+  async fetchPackageModules(
+    packageId: string,
+  ): Promise<PackageDetailModulesResponse> {
     const { inspection } = await this.inspectPackageDetailSection(packageId);
 
     return {
@@ -3551,7 +3566,9 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchPackageTemplates(packageId: string): Promise<PackageDetailTemplatesResponse> {
+  async fetchPackageTemplates(
+    packageId: string,
+  ): Promise<PackageDetailTemplatesResponse> {
     const { inspection } = await this.inspectPackageDetailSection(packageId);
 
     return {
@@ -3561,7 +3578,9 @@ export class PqsSummaryService {
     };
   }
 
-  async fetchPackageDataTypes(packageId: string): Promise<PackageDetailDataTypesResponse> {
+  async fetchPackageDataTypes(
+    packageId: string,
+  ): Promise<PackageDetailDataTypesResponse> {
     const { inspection } = await this.inspectPackageDetailSection(packageId);
 
     return {
@@ -3575,7 +3594,8 @@ export class PqsSummaryService {
     packageId: string,
     moduleName: string,
   ): Promise<PackageModuleDetailResponse> {
-    const { metadata, inspection } = await this.inspectPackageDetailSection(packageId);
+    const { metadata, inspection } =
+      await this.inspectPackageDetailSection(packageId);
 
     return {
       packageId: metadata.packageId,
@@ -3586,10 +3606,14 @@ export class PqsSummaryService {
       status: this.packageDetailStatus(inspection),
       moduleName,
       templates: inspection.ok
-        ? inspection.definition.templates.filter((template) => template.moduleName === moduleName)
+        ? inspection.definition.templates.filter(
+            (template) => template.moduleName === moduleName,
+          )
         : [],
       dataTypes: inspection.ok
-        ? inspection.definition.dataTypes.filter((dataType) => dataType.moduleName === moduleName)
+        ? inspection.definition.dataTypes.filter(
+            (dataType) => dataType.moduleName === moduleName,
+          )
         : [],
     };
   }
@@ -3598,7 +3622,8 @@ export class PqsSummaryService {
     packageId: string,
     templateId: string,
   ): Promise<PackageTemplateDetailResponse> {
-    const { metadata, inspection } = await this.inspectPackageDetailSection(packageId);
+    const { metadata, inspection } =
+      await this.inspectPackageDetailSection(packageId);
 
     return {
       packageId: metadata.packageId,
@@ -3608,13 +3633,16 @@ export class PqsSummaryService {
       packageSize: metadata.packageSize,
       status: this.packageDetailStatus(inspection),
       template: inspection.ok
-        ? inspection.definition.templates.find((template) => template.templateId === templateId) ?? null
+        ? (inspection.definition.templates.find(
+            (template) => template.templateId === templateId,
+          ) ?? null)
         : null,
     };
   }
 
   private getPackageMetadataOrThrow(packageId: string) {
-    const metadata = this.packageCacheService?.getPackageMetadata(packageId) ?? null;
+    const metadata =
+      this.packageCacheService?.getPackageMetadata(packageId) ?? null;
     if (!metadata) {
       throw new Error('Package not found');
     }
@@ -3624,7 +3652,8 @@ export class PqsSummaryService {
 
   private async inspectPackageDetailSection(packageId: string) {
     const metadata = this.getPackageMetadataOrThrow(packageId);
-    const inspection: PackageRegistryResult<ResolvedPackageInspection> = this.packageRegistryService
+    const inspection: PackageRegistryResult<ResolvedPackageInspection> = this
+      .packageRegistryService
       ? await this.packageRegistryService.inspectPackage(packageId)
       : { ok: false, reason: 'missing_package' };
 
@@ -3638,7 +3667,9 @@ export class PqsSummaryService {
       return 'decoded';
     }
 
-    return inspection.reason === 'missing_package' ? 'not_available' : 'invalid_package';
+    return inspection.reason === 'missing_package'
+      ? 'not_available'
+      : 'invalid_package';
   }
 
   async fetchPackagesByName(
@@ -3742,7 +3773,8 @@ export class PqsSummaryService {
     );
     const parties = new Set<string>();
     const successfulNodeCount = results.filter(
-      (result): result is PromiseFulfilledResult<string[]> => result.status === 'fulfilled',
+      (result): result is PromiseFulfilledResult<string[]> =>
+        result.status === 'fulfilled',
     ).length;
     const failures = results.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
@@ -3801,10 +3833,11 @@ export class PqsSummaryService {
     }
   }
 
-  async fetchPartyDetail(
+  private async fetchPartySectionData(
     nodes: NodeConfig[],
     partyId: string,
-  ): Promise<PartyDetailResponse> {
+    includeRecentData = true,
+  ) {
     const normalizedPartyId = this.normalizePartyIdentifier(partyId);
     const grpcOperationsService = this.grpcOperationsService;
     const activePartiesByNode = (
@@ -3824,52 +3857,58 @@ export class PqsSummaryService {
         }> => result.status === 'fulfilled',
       )
       .map((result) => result.value);
-    const recentUpdatesByNode = (
-      await Promise.allSettled(
-        nodes.map(async (node) => ({
-          node,
-          updates: await this.fetchPartyRecentUpdatesForNode(
-            node,
-            normalizedPartyId,
-            15,
-          ),
-        })),
-      )
-    )
-      .filter(
-        (
-          result,
-        ): result is PromiseFulfilledResult<{
-          node: NodeConfig;
-          updates: Awaited<
-            ReturnType<PqsSummaryService['fetchPartyRecentUpdatesForNode']>
-          >;
-        }> => result.status === 'fulfilled',
-      )
-      .map((result) => result.value);
-    const recentContractsByNode = (
-      await Promise.allSettled(
-        nodes.map(async (node) => ({
-          node,
-          contracts: await this.fetchPartyRecentContractsForNode(
-            node,
-            normalizedPartyId,
-            15,
-          ),
-        })),
-      )
-    )
-      .filter(
-        (
-          result,
-        ): result is PromiseFulfilledResult<{
-          node: NodeConfig;
-          contracts: Awaited<
-            ReturnType<PqsSummaryService['fetchPartyRecentContractsForNode']>
-          >;
-        }> => result.status === 'fulfilled',
-      )
-      .map((result) => result.value);
+    const recentUpdatesByNode = includeRecentData
+      ? (
+          await Promise.allSettled(
+            nodes.map(async (node) => ({
+              node,
+              updates: await this.fetchPartyRecentUpdatesForNode(
+                node,
+                normalizedPartyId,
+                15,
+              ),
+            })),
+          )
+        )
+          .filter(
+            (
+              result,
+            ): result is PromiseFulfilledResult<{
+              node: NodeConfig;
+              updates: Awaited<
+                ReturnType<PqsSummaryService['fetchPartyRecentUpdatesForNode']>
+              >;
+            }> => result.status === 'fulfilled',
+          )
+          .map((result) => result.value)
+      : [];
+    const recentContractsByNode = includeRecentData
+      ? (
+          await Promise.allSettled(
+            nodes.map(async (node) => ({
+              node,
+              contracts: await this.fetchPartyRecentContractsForNode(
+                node,
+                normalizedPartyId,
+                15,
+              ),
+            })),
+          )
+        )
+          .filter(
+            (
+              result,
+            ): result is PromiseFulfilledResult<{
+              node: NodeConfig;
+              contracts: Awaited<
+                ReturnType<
+                  PqsSummaryService['fetchPartyRecentContractsForNode']
+                >
+              >;
+            }> => result.status === 'fulfilled',
+          )
+          .map((result) => result.value)
+      : [];
     const localPartiesByNode = grpcOperationsService
       ? await Promise.all(
           nodes.map(async (node) => {
@@ -3988,51 +4027,121 @@ export class PqsSummaryService {
       throw new Error('Party not found');
     }
 
-    const partyTopologyByNode = grpcOperationsService
-      ? (
-          await Promise.all(
-            observedNodes.map(async (observedNode) => {
-              const node = nodes.find(
-                (candidate) => candidate.id === observedNode.nodeId,
-              );
-              if (!node) {
-                return null;
-              }
-
-              const topology = await grpcOperationsService.fetchPartyTopology(
-                node,
-                normalizedPartyId,
-              );
-              return {
-                ...topology,
-                isLocalParty:
-                  localPartyPresenceByNodeId.get(node.id) ??
-                  topology.isLocalParty ??
-                  null,
-              };
-            }),
-          )
-        )
-          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-          .sort((left, right) => left.label.localeCompare(right.label))
-      : [];
-
     return {
       partyId: normalizedPartyId,
-      nodeCount: observedNodes.length,
-      recentUpdateCount: recentUpdates.length,
-      recentContractCount: recentContracts.length,
       nodes: observedNodes,
       recentUpdates,
       recentContracts,
-      partyTopologyByNode,
+      localPartyPresenceByNodeId,
     };
   }
 
-  async fetchNamespaceDetail(
+  async fetchPartySummary(
+    nodes: NodeConfig[],
+    partyId: string,
+  ): Promise<PartySummaryResponse> {
+    const sectionData = await this.fetchPartySectionData(nodes, partyId);
+
+    return {
+      partyId: sectionData.partyId,
+      nodeCount: sectionData.nodes.length,
+      recentUpdateCount: sectionData.recentUpdates.length,
+      recentContractCount: sectionData.recentContracts.length,
+    };
+  }
+
+  async fetchPartyNodes(
+    nodes: NodeConfig[],
+    partyId: string,
+  ): Promise<PartyNodesResponse> {
+    const sectionData = await this.fetchPartySectionData(nodes, partyId);
+
+    return { nodes: sectionData.nodes };
+  }
+
+  async fetchPartyTopology(
+    nodes: NodeConfig[],
+    partyId: string,
+  ): Promise<PartyTopologyResponse> {
+    const sectionData = await this.fetchPartySectionData(nodes, partyId, false);
+
+    return {
+      partyTopologyByNode: await this.fetchPartyTopologyForObservedNodes(
+        nodes,
+        sectionData.partyId,
+        sectionData.nodes,
+        sectionData.localPartyPresenceByNodeId,
+      ),
+    };
+  }
+
+  async fetchPartyDetail(
+    nodes: NodeConfig[],
+    partyId: string,
+  ): Promise<PartyDetailResponse> {
+    const sectionData = await this.fetchPartySectionData(nodes, partyId);
+
+    return {
+      partyId: sectionData.partyId,
+      nodeCount: sectionData.nodes.length,
+      recentUpdateCount: sectionData.recentUpdates.length,
+      recentContractCount: sectionData.recentContracts.length,
+      nodes: sectionData.nodes,
+      recentUpdates: sectionData.recentUpdates,
+      recentContracts: sectionData.recentContracts,
+      partyTopologyByNode: await this.fetchPartyTopologyForObservedNodes(
+        nodes,
+        sectionData.partyId,
+        sectionData.nodes,
+        sectionData.localPartyPresenceByNodeId,
+      ),
+    };
+  }
+
+  private async fetchPartyTopologyForObservedNodes(
+    nodes: NodeConfig[],
+    partyId: string,
+    observedNodes: PartyDetailResponse['nodes'],
+    localPartyPresenceByNodeId: Map<string, boolean>,
+  ): Promise<PartyDetailResponse['partyTopologyByNode']> {
+    const grpcOperationsService = this.grpcOperationsService;
+    if (!grpcOperationsService) {
+      return [];
+    }
+
+    return (
+      await Promise.all(
+        observedNodes.map(async (observedNode) => {
+          const node = nodes.find(
+            (candidate) => candidate.id === observedNode.nodeId,
+          );
+          if (!node) {
+            return null;
+          }
+
+          const topology = await grpcOperationsService.fetchPartyTopology(
+            node,
+            partyId,
+          );
+          return {
+            ...topology,
+            isLocalParty:
+              localPartyPresenceByNodeId.get(node.id) ??
+              topology.isLocalParty ??
+              null,
+          };
+        }),
+      )
+    )
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }
+
+  private async fetchNamespaceSectionData(
     nodes: NodeConfig[],
     namespaceId: string,
-  ): Promise<NamespaceDetailResponse> {
+    includeRecentData = true,
+  ) {
     const normalizedNamespaceId = namespaceId.trim();
     const grpcOperationsService = this.grpcOperationsService;
     const activePartiesByNode = (
@@ -4117,18 +4226,18 @@ export class PqsSummaryService {
       throw new Error('Namespace not found');
     }
 
-    const recentUpdatesResponse = await this.fetchGlobalRecentUpdates(
-      nodes,
-      15,
-      {
-        parties: matchingParties,
-        partyMode: 'or',
-      },
-    );
-    const recentContractsResponse = await this.fetchGlobalContracts(nodes, 15, {
-      parties: matchingParties,
-      partyMode: 'or',
-    });
+    const recentUpdatesResponse = includeRecentData
+      ? await this.fetchGlobalRecentUpdates(nodes, 15, {
+          parties: matchingParties,
+          partyMode: 'or',
+        })
+      : { updates: [] };
+    const recentContractsResponse = includeRecentData
+      ? await this.fetchGlobalContracts(nodes, 15, {
+          parties: matchingParties,
+          partyMode: 'or',
+        })
+      : { contracts: [] };
 
     for (const update of recentUpdatesResponse.updates) {
       const existing = nodesById.get(update.nodeId);
@@ -4162,29 +4271,93 @@ export class PqsSummaryService {
     const observedNodes = Array.from(nodesById.values()).sort((left, right) =>
       left.label.localeCompare(right.label),
     );
-    const topologyByNode = grpcOperationsService
-      ? await this.fetchNamespaceTopologyByNode(
-          nodes,
-          observedNodes.map((node) => node.nodeId),
-          partiesById,
-        )
-      : [];
-
     return {
       namespaceId: normalizedNamespaceId,
-      partyCount: matchingParties.length,
-      nodeCount: observedNodes.length,
-      recentUpdateCount: recentUpdatesResponse.updates.length,
-      recentContractCount: recentContractsResponse.contracts.length,
       nodes: observedNodes,
       recentUpdates: recentUpdatesResponse.updates,
-      recentContracts: recentContractsResponse.contracts.map((contract) => ({
+      recentContracts: recentContractsResponse.contracts,
+      matchingParties,
+      partiesById,
+    };
+  }
+
+  async fetchNamespaceSummary(
+    nodes: NodeConfig[],
+    namespaceId: string,
+  ): Promise<NamespaceSummaryResponse> {
+    const sectionData = await this.fetchNamespaceSectionData(
+      nodes,
+      namespaceId,
+    );
+
+    return {
+      namespaceId: sectionData.namespaceId,
+      partyCount: sectionData.matchingParties.length,
+      nodeCount: sectionData.nodes.length,
+      recentUpdateCount: sectionData.recentUpdates.length,
+      recentContractCount: sectionData.recentContracts.length,
+    };
+  }
+
+  async fetchNamespaceNodes(
+    nodes: NodeConfig[],
+    namespaceId: string,
+  ): Promise<NamespaceNodesResponse> {
+    const sectionData = await this.fetchNamespaceSectionData(
+      nodes,
+      namespaceId,
+    );
+
+    return { nodes: sectionData.nodes };
+  }
+
+  async fetchNamespaceTopology(
+    nodes: NodeConfig[],
+    namespaceId: string,
+  ): Promise<NamespaceTopologyResponse> {
+    const sectionData = await this.fetchNamespaceSectionData(
+      nodes,
+      namespaceId,
+      false,
+    );
+
+    return {
+      topologyByNode: await this.fetchNamespaceTopologyByNode(
+        nodes,
+        sectionData.nodes.map((node) => node.nodeId),
+        sectionData.partiesById,
+      ),
+    };
+  }
+
+  async fetchNamespaceDetail(
+    nodes: NodeConfig[],
+    namespaceId: string,
+  ): Promise<NamespaceDetailResponse> {
+    const sectionData = await this.fetchNamespaceSectionData(
+      nodes,
+      namespaceId,
+    );
+
+    return {
+      namespaceId: sectionData.namespaceId,
+      partyCount: sectionData.matchingParties.length,
+      nodeCount: sectionData.nodes.length,
+      recentUpdateCount: sectionData.recentUpdates.length,
+      recentContractCount: sectionData.recentContracts.length,
+      nodes: sectionData.nodes,
+      recentUpdates: sectionData.recentUpdates,
+      recentContracts: sectionData.recentContracts.map((contract) => ({
         ...contract,
         packageId: null,
         packageName: null,
         packageVersion: null,
       })),
-      topologyByNode,
+      topologyByNode: await this.fetchNamespaceTopologyByNode(
+        nodes,
+        sectionData.nodes.map((node) => node.nodeId),
+        sectionData.partiesById,
+      ),
     };
   }
 
@@ -7755,14 +7928,16 @@ export class PqsSummaryService {
     }
 
     try {
-      const shortChoice = this.normalizeChoiceIdentifier(rawChoice) ?? rawChoice;
+      const shortChoice =
+        this.normalizeChoiceIdentifier(rawChoice) ?? rawChoice;
       const templateName = input.templateId.split(':').at(-1);
       const choices = [
         rawChoice,
         templateName ? `${templateName}_${shortChoice}` : null,
         shortChoice,
-      ].filter((candidate, index, all): candidate is string =>
-        Boolean(candidate) && all.indexOf(candidate) === index,
+      ].filter(
+        (candidate, index, all): candidate is string =>
+          Boolean(candidate) && all.indexOf(candidate) === index,
       );
 
       let choiceResult: Awaited<

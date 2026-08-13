@@ -1,4 +1,10 @@
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { NodeCacheService } from '../cache/node-cache.service';
 import { NodeConfigService } from '../config/node-config.service';
 import { describeGrpcError } from '../grpc/grpc-error.util';
@@ -34,7 +40,9 @@ export class NodesController {
     );
 
     const history = this.cacheService.listActivityHistory(
-      parsedDays && Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : undefined,
+      parsedDays && Number.isFinite(parsedDays) && parsedDays > 0
+        ? parsedDays
+        : undefined,
     );
 
     return {
@@ -66,9 +74,14 @@ export class NodesController {
         before,
         after,
         parties: Array.isArray(party) ? party : party ? [party] : undefined,
-        templates: Array.isArray(template) ? template : template ? [template] : undefined,
+        templates: Array.isArray(template)
+          ? template
+          : template
+            ? [template]
+            : undefined,
         partyMode: partyMode ?? mode,
-        hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+        hideSplice:
+          hideSplice === 'true' || hideSplice === '1' ? true : undefined,
       },
     );
   }
@@ -93,11 +106,17 @@ export class NodesController {
       {
         before,
         after,
-        nodeIds: node === undefined ? undefined : Array.isArray(node) ? node : [node],
+        nodeIds:
+          node === undefined ? undefined : Array.isArray(node) ? node : [node],
         parties: Array.isArray(party) ? party : party ? [party] : undefined,
-        templates: Array.isArray(template) ? template : template ? [template] : undefined,
+        templates: Array.isArray(template)
+          ? template
+          : template
+            ? [template]
+            : undefined,
         partyMode: partyMode ?? mode,
-        hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+        hideSplice:
+          hideSplice === 'true' || hideSplice === '1' ? true : undefined,
       },
     );
   }
@@ -123,7 +142,8 @@ export class NodesController {
       {
         before,
         after,
-        nodeIds: node === undefined ? undefined : Array.isArray(node) ? node : [node],
+        nodeIds:
+          node === undefined ? undefined : Array.isArray(node) ? node : [node],
         minDate,
         maxDate,
         purchasedMin,
@@ -211,8 +231,16 @@ export class NodesController {
       {
         before,
         after,
-        fromParties: Array.isArray(fromParty) ? fromParty : fromParty ? [fromParty] : undefined,
-        toParties: Array.isArray(toParty) ? toParty : toParty ? [toParty] : undefined,
+        fromParties: Array.isArray(fromParty)
+          ? fromParty
+          : fromParty
+            ? [fromParty]
+            : undefined,
+        toParties: Array.isArray(toParty)
+          ? toParty
+          : toParty
+            ? [toParty]
+            : undefined,
         movementTypes: Array.isArray(movementType)
           ? movementType
           : movementType
@@ -236,7 +264,10 @@ export class NodesController {
         }
       ).fetchTokenTransferDetail(this.configService.list(), updateId);
     } catch (error) {
-      if (error instanceof Error && error.message === 'Token transfer not found') {
+      if (
+        error instanceof Error &&
+        error.message === 'Token transfer not found'
+      ) {
         throw new NotFoundException(`Unknown token transfer: ${updateId}`);
       }
 
@@ -283,8 +314,16 @@ export class NodesController {
         {
           before,
           after,
-          fromParties: Array.isArray(fromParty) ? fromParty : fromParty ? [fromParty] : undefined,
-          toParties: Array.isArray(toParty) ? toParty : toParty ? [toParty] : undefined,
+          fromParties: Array.isArray(fromParty)
+            ? fromParty
+            : fromParty
+              ? [fromParty]
+              : undefined,
+          toParties: Array.isArray(toParty)
+            ? toParty
+            : toParty
+              ? [toParty]
+              : undefined,
           movementTypes: Array.isArray(movementType)
             ? movementType
             : movementType
@@ -415,7 +454,9 @@ export class NodesController {
     const node = this.getNodeConfig(id);
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
     const historyLimit =
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 30;
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, 100)
+        : 30;
 
     const [currentResult, historyResult] = await Promise.allSettled([
       node.mode === 'pqs_with_grpc'
@@ -504,9 +545,14 @@ export class NodesController {
       before,
       after,
       parties: Array.isArray(party) ? party : party ? [party] : undefined,
-      templates: Array.isArray(template) ? template : template ? [template] : undefined,
+      templates: Array.isArray(template)
+        ? template
+        : template
+          ? [template]
+          : undefined,
       partyMode: partyMode ?? mode,
-      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      hideSplice:
+        hideSplice === 'true' || hideSplice === '1' ? true : undefined,
     });
   }
 
@@ -568,14 +614,22 @@ export class NodesController {
       before,
       after,
       parties: Array.isArray(party) ? party : party ? [party] : undefined,
-      templates: Array.isArray(template) ? template : template ? [template] : undefined,
+      templates: Array.isArray(template)
+        ? template
+        : template
+          ? [template]
+          : undefined,
       partyMode: partyMode ?? mode,
-      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      hideSplice:
+        hideSplice === 'true' || hideSplice === '1' ? true : undefined,
     });
   }
 
   @Get('/nodes/:id/updates/:updateId')
-  async getNodeUpdateDetail(@Param('id') id: string, @Param('updateId') updateId: string) {
+  async getNodeUpdateDetail(
+    @Param('id') id: string,
+    @Param('updateId') updateId: string,
+  ) {
     const node = this.getNodeConfig(id);
 
     try {
@@ -590,7 +644,10 @@ export class NodesController {
   }
 
   @Get('/nodes/:id/contracts/:contractId')
-  async getNodeContractDetail(@Param('id') id: string, @Param('contractId') contractId: string) {
+  async getNodeContractDetail(
+    @Param('id') id: string,
+    @Param('contractId') contractId: string,
+  ) {
     const node = this.getNodeConfig(id);
 
     try {
@@ -629,7 +686,9 @@ export class NodesController {
   @Get('/parties/local')
   async listLocalParties() {
     const nodes = await Promise.all(
-      this.configService.list().map(async (node) => this.buildLocalPartiesEntry(node)),
+      this.configService
+        .list()
+        .map(async (node) => this.buildLocalPartiesEntry(node)),
     );
 
     return { nodes };
@@ -649,11 +708,15 @@ export class NodesController {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 15;
     const configuredNodes = this.configService.list();
     const requestedNodeIds =
-      node === undefined ? undefined : new Set(Array.isArray(node) ? node : [node]);
+      node === undefined
+        ? undefined
+        : new Set(Array.isArray(node) ? node : [node]);
     const selectedNodes =
       requestedNodeIds === undefined
         ? configuredNodes
-        : configuredNodes.filter((configuredNode) => requestedNodeIds.has(configuredNode.id));
+        : configuredNodes.filter((configuredNode) =>
+            requestedNodeIds.has(configuredNode.id),
+          );
 
     return this.buildGlobalPartyFingerprintsEntry(selectedNodes, {
       limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 15,
@@ -666,13 +729,112 @@ export class NodesController {
     });
   }
 
-  @Get('/parties/:partyId')
-  async getPartyDetail(@Param('partyId') partyId: string) {
+  @Get('/parties/:partyId/summary')
+  async getPartySummary(@Param('partyId') partyId: string) {
     try {
-      return await this.pqsSummaryService.fetchPartyDetail(this.configService.list(), partyId);
+      return await this.pqsSummaryService.fetchPartySummary(
+        this.configService.list(),
+        partyId,
+      );
     } catch (error) {
       if (error instanceof Error && error.message === 'Party not found') {
         throw new NotFoundException(`Unknown party: ${partyId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/parties/:partyId/nodes')
+  async getPartyNodes(@Param('partyId') partyId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPartyNodes(
+        this.configService.list(),
+        partyId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Party not found') {
+        throw new NotFoundException(`Unknown party: ${partyId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/parties/:partyId/topology')
+  async getPartyTopology(@Param('partyId') partyId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPartyTopology(
+        this.configService.list(),
+        partyId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Party not found') {
+        throw new NotFoundException(`Unknown party: ${partyId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/parties/:partyId')
+  async getPartyDetail(@Param('partyId') partyId: string) {
+    try {
+      return await this.pqsSummaryService.fetchPartyDetail(
+        this.configService.list(),
+        partyId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Party not found') {
+        throw new NotFoundException(`Unknown party: ${partyId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/namespaces/:namespaceId/summary')
+  async getNamespaceSummary(@Param('namespaceId') namespaceId: string) {
+    try {
+      return await this.pqsSummaryService.fetchNamespaceSummary(
+        this.configService.list(),
+        namespaceId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Namespace not found') {
+        throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/namespaces/:namespaceId/nodes')
+  async getNamespaceNodes(@Param('namespaceId') namespaceId: string) {
+    try {
+      return await this.pqsSummaryService.fetchNamespaceNodes(
+        this.configService.list(),
+        namespaceId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Namespace not found') {
+        throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/namespaces/:namespaceId/topology')
+  async getNamespaceTopology(@Param('namespaceId') namespaceId: string) {
+    try {
+      return await this.pqsSummaryService.fetchNamespaceTopology(
+        this.configService.list(),
+        namespaceId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Namespace not found') {
+        throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
       }
 
       throw error;
@@ -709,7 +871,8 @@ export class NodesController {
         this.configService.list(),
         namespaceId,
         {
-          limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
+          limit:
+            Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
           before,
           after,
         },
@@ -736,14 +899,24 @@ export class NodesController {
   ) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
-    return this.pqsSummaryService.fetchPartyUpdates(this.configService.list(), partyId, {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
-      before,
-      after,
-      templates: Array.isArray(template) ? template : template ? [template] : undefined,
-      partyMode: partyMode ?? mode,
-      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
-    });
+    return this.pqsSummaryService.fetchPartyUpdates(
+      this.configService.list(),
+      partyId,
+      {
+        limit:
+          Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
+        before,
+        after,
+        templates: Array.isArray(template)
+          ? template
+          : template
+            ? [template]
+            : undefined,
+        partyMode: partyMode ?? mode,
+        hideSplice:
+          hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      },
+    );
   }
 
   @Get('/parties/:partyId/contracts')
@@ -757,13 +930,23 @@ export class NodesController {
   ) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
-    return this.pqsSummaryService.fetchPartyContracts(this.configService.list(), partyId, {
-      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
-      before,
-      after,
-      templates: Array.isArray(template) ? template : template ? [template] : undefined,
-      hideSplice: hideSplice === 'true' || hideSplice === '1' ? true : undefined,
-    });
+    return this.pqsSummaryService.fetchPartyContracts(
+      this.configService.list(),
+      partyId,
+      {
+        limit:
+          Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
+        before,
+        after,
+        templates: Array.isArray(template)
+          ? template
+          : template
+            ? [template]
+            : undefined,
+        hideSplice:
+          hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      },
+    );
   }
 
   @Get('/packages/by-name/:packageName')
@@ -771,7 +954,10 @@ export class NodesController {
     try {
       return await this.pqsSummaryService.fetchPackagesByName(packageName);
     } catch (error) {
-      if (error instanceof Error && error.message === 'Package family not found') {
+      if (
+        error instanceof Error &&
+        error.message === 'Package family not found'
+      ) {
         throw new NotFoundException(`Unknown package name: ${packageName}`);
       }
 
@@ -850,7 +1036,10 @@ export class NodesController {
     @Param('moduleName') moduleName: string,
   ) {
     try {
-      return await this.pqsSummaryService.fetchPackageModule(packageId, moduleName);
+      return await this.pqsSummaryService.fetchPackageModule(
+        packageId,
+        moduleName,
+      );
     } catch (error) {
       if (error instanceof Error && error.message === 'Package not found') {
         throw new NotFoundException(`Unknown package: ${packageId}`);
@@ -866,7 +1055,10 @@ export class NodesController {
     @Param('templateId') templateId: string,
   ) {
     try {
-      return await this.pqsSummaryService.fetchPackageTemplate(packageId, templateId);
+      return await this.pqsSummaryService.fetchPackageTemplate(
+        packageId,
+        templateId,
+      );
     } catch (error) {
       if (error instanceof Error && error.message === 'Package not found') {
         throw new NotFoundException(`Unknown package: ${packageId}`);
@@ -895,7 +1087,9 @@ export class NodesController {
   }
 
   private getNodeConfig(id: string) {
-    const node = this.configService.list().find((candidate) => candidate.id === id);
+    const node = this.configService
+      .list()
+      .find((candidate) => candidate.id === id);
     if (!node) {
       throw new NotFoundException(`Unknown node: ${id}`);
     }
@@ -903,7 +1097,9 @@ export class NodesController {
     return node;
   }
 
-  private async buildLocalPartiesEntry(node: ReturnType<NodesController['getNodeConfig']>) {
+  private async buildLocalPartiesEntry(
+    node: ReturnType<NodesController['getNodeConfig']>,
+  ) {
     if (node.mode !== 'pqs_with_grpc') {
       return {
         nodeId: node.id,
@@ -947,7 +1143,9 @@ export class NodesController {
     }
   }
 
-  private async buildParticipantStatusEntry(node: ReturnType<NodesController['getNodeConfig']>) {
+  private async buildParticipantStatusEntry(
+    node: ReturnType<NodesController['getNodeConfig']>,
+  ) {
     if (node.mode !== 'pqs_with_grpc') {
       return {
         nodeId: node.id,
@@ -964,7 +1162,8 @@ export class NodesController {
     }
 
     try {
-      const result = await this.grpcOperationsService.fetchParticipantStatus(node);
+      const result =
+        await this.grpcOperationsService.fetchParticipantStatus(node);
 
       return {
         nodeId: node.id,
@@ -1014,7 +1213,8 @@ export class NodesController {
 
     if (node.mode === 'pqs_with_grpc') {
       try {
-        const fingerprints = await this.grpcOperationsService.listKnownPartyFingerprints(node);
+        const fingerprints =
+          await this.grpcOperationsService.listKnownPartyFingerprints(node);
         return {
           nodeId: node.id,
           label: node.label,
@@ -1039,7 +1239,10 @@ export class NodesController {
       mode: node.mode,
       source: 'pqs' as const,
       ...this.paginateFingerprints(
-        this.filterFingerprints(this.extractFingerprintsFromParties(parties), exactFingerprint),
+        this.filterFingerprints(
+          this.extractFingerprintsFromParties(parties),
+          exactFingerprint,
+        ),
         options,
       ),
     };
@@ -1066,7 +1269,9 @@ export class NodesController {
 
     const exactFingerprint = await this.resolveNamespaceFilter(options);
 
-    const canUseGrpcForAll = nodes.every((node) => node.mode === 'pqs_with_grpc');
+    const canUseGrpcForAll = nodes.every(
+      (node) => node.mode === 'pqs_with_grpc',
+    );
 
     if (canUseGrpcForAll) {
       try {
@@ -1074,7 +1279,9 @@ export class NodesController {
           new Set(
             (
               await Promise.all(
-                nodes.map((node) => this.grpcOperationsService.listKnownPartyFingerprints(node)),
+                nodes.map((node) =>
+                  this.grpcOperationsService.listKnownPartyFingerprints(node),
+                ),
               )
             ).flat(),
           ),
@@ -1094,7 +1301,11 @@ export class NodesController {
 
     const response = await this.pqsSummaryService.fetchActiveParties(nodes);
     const fingerprints = Array.from(
-      new Set(response.nodes.flatMap((node) => this.extractFingerprintsFromParties(node.parties))),
+      new Set(
+        response.nodes.flatMap((node) =>
+          this.extractFingerprintsFromParties(node.parties),
+        ),
+      ),
     ).sort((left, right) => left.localeCompare(right));
 
     return {
@@ -1131,14 +1342,17 @@ export class NodesController {
       after?: string;
     },
   ) {
-    const sortedFingerprints = Array.from(new Set(fingerprints)).sort((left, right) =>
-      left.localeCompare(right),
+    const sortedFingerprints = Array.from(new Set(fingerprints)).sort(
+      (left, right) => left.localeCompare(right),
     );
     const limit = Math.max(1, options.limit);
 
     if (options.after) {
-      const endIndex = sortedFingerprints.findIndex((value) => value === options.after);
-      const normalizedEndIndex = endIndex >= 0 ? endIndex : sortedFingerprints.length;
+      const endIndex = sortedFingerprints.findIndex(
+        (value) => value === options.after,
+      );
+      const normalizedEndIndex =
+        endIndex >= 0 ? endIndex : sortedFingerprints.length;
       const startIndex = Math.max(0, normalizedEndIndex - limit);
       const page = sortedFingerprints.slice(startIndex, normalizedEndIndex);
 
@@ -1155,7 +1369,9 @@ export class NodesController {
 
     const startIndex = options.before
       ? (() => {
-          const index = sortedFingerprints.findIndex((value) => value === options.before);
+          const index = sortedFingerprints.findIndex(
+            (value) => value === options.before,
+          );
           return index >= 0 ? index + 1 : 0;
         })()
       : 0;
@@ -1190,11 +1406,16 @@ export class NodesController {
     });
   }
 
-  private filterFingerprints(fingerprints: string[], exactFingerprint: string | null): string[] {
+  private filterFingerprints(
+    fingerprints: string[],
+    exactFingerprint: string | null,
+  ): string[] {
     if (!exactFingerprint) {
       return fingerprints;
     }
 
-    return fingerprints.filter((fingerprint) => fingerprint === exactFingerprint);
+    return fingerprints.filter(
+      (fingerprint) => fingerprint === exactFingerprint,
+    );
   }
 }

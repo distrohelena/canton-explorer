@@ -54,7 +54,7 @@ export interface PartyTopologyKeyMapping {
 }
 
 export type PartyTopologyNodeStatus =
-  "ok" | "grpc_not_configured" | "grpc_error";
+  'ok' | 'grpc_not_configured' | 'grpc_error';
 
 export interface PartyTopologyNodeEntry {
   nodeId: string;
@@ -76,3 +76,15 @@ export interface PartyDetailResponse {
   recentContracts: PartyRecentContract[];
   partyTopologyByNode: PartyTopologyNodeEntry[];
 }
+
+export type PartySummaryResponse = Pick<
+  PartyDetailResponse,
+  'partyId' | 'nodeCount' | 'recentUpdateCount' | 'recentContractCount'
+>;
+
+export type PartyNodesResponse = Pick<PartyDetailResponse, 'nodes'>;
+
+export type PartyTopologyResponse = Pick<
+  PartyDetailResponse,
+  'partyTopologyByNode'
+>;

@@ -1,4 +1,4 @@
-import type { PartyTopologyNodeEntry } from "./parties";
+import type { PartyTopologyNodeEntry } from './parties';
 
 export interface NamespacePartySummary {
   partyId: string;
@@ -53,3 +53,19 @@ export interface NamespaceDetailResponse {
   recentContracts: NamespaceRecentContract[];
   topologyByNode: PartyTopologyNodeEntry[];
 }
+
+export type NamespaceSummaryResponse = Pick<
+  NamespaceDetailResponse,
+  | 'namespaceId'
+  | 'partyCount'
+  | 'nodeCount'
+  | 'recentUpdateCount'
+  | 'recentContractCount'
+>;
+
+export type NamespaceNodesResponse = Pick<NamespaceDetailResponse, 'nodes'>;
+
+export type NamespaceTopologyResponse = Pick<
+  NamespaceDetailResponse,
+  'topologyByNode'
+>;

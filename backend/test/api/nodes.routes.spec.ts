@@ -66,7 +66,16 @@ describe('NodesController routes', () => {
             fetchPackagesByName: jest.fn(),
             fetchNodePackages: jest.fn(),
             fetchActiveParties: jest.fn(),
-            fetchPartyDetail: jest.fn().mockRejectedValue(new Error('Party not found')),
+            fetchPartyDetail: jest
+              .fn()
+              .mockRejectedValue(new Error('Party not found')),
+            fetchPartySummary: jest.fn(),
+            fetchPartyNodes: jest.fn(),
+            fetchPartyTopology: jest.fn(),
+            fetchNamespaceDetail: jest.fn(),
+            fetchNamespaceSummary: jest.fn(),
+            fetchNamespaceNodes: jest.fn(),
+            fetchNamespaceTopology: jest.fn(),
           },
         },
         {
@@ -90,9 +99,71 @@ describe('NodesController routes', () => {
         .map((layer) => layer.route?.path) ?? [];
 
     expect(routePaths.indexOf('/api/parties/local')).toBeGreaterThanOrEqual(0);
-    expect(routePaths.indexOf('/api/parties/:partyId')).toBeGreaterThanOrEqual(0);
+    expect(routePaths.indexOf('/api/parties/:partyId')).toBeGreaterThanOrEqual(
+      0,
+    );
     expect(routePaths.indexOf('/api/parties/local')).toBeLessThan(
       routePaths.indexOf('/api/parties/:partyId'),
     );
   });
+
+  it.each([
+    ['/api/parties/:partyId/summary', '/api/parties/:partyId'],
+    ['/api/parties/:partyId/nodes', '/api/parties/:partyId'],
+    ['/api/parties/:partyId/topology', '/api/parties/:partyId'],
+    ['/api/namespaces/:namespaceId/summary', '/api/namespaces/:namespaceId'],
+    ['/api/namespaces/:namespaceId/nodes', '/api/namespaces/:namespaceId'],
+    ['/api/namespaces/:namespaceId/topology', '/api/namespaces/:namespaceId'],
+  ])(
+    'registers literal section route %s before aggregate route %s',
+    async (sectionPath, aggregatePath) => {
+      const moduleRef = await Test.createTestingModule({
+        controllers: [NodesController],
+        providers: [
+          {
+            provide: NodeCacheService,
+            useValue: {
+              list: jest.fn(),
+              get: jest.fn(),
+              listActivityHistory: jest.fn(),
+            },
+          },
+          {
+            provide: NodeConfigService,
+            useValue: { list: jest.fn().mockReturnValue([]) },
+          },
+          { provide: GrpcOperationsService, useValue: {} },
+          { provide: NamespaceFingerprintService, useValue: {} },
+          {
+            provide: PqsSummaryService,
+            useValue: {
+              fetchPartyDetail: jest.fn(),
+              fetchPartySummary: jest.fn(),
+              fetchPartyNodes: jest.fn(),
+              fetchPartyTopology: jest.fn(),
+              fetchNamespaceDetail: jest.fn(),
+              fetchNamespaceSummary: jest.fn(),
+              fetchNamespaceNodes: jest.fn(),
+              fetchNamespaceTopology: jest.fn(),
+            },
+          },
+        ],
+      }).compile();
+      app = moduleRef.createNestApplication();
+      await app.init();
+      const routePaths = (
+        (
+          app.getHttpAdapter().getInstance() as {
+            router?: { stack?: Array<{ route?: { path?: string } }> };
+          }
+        ).router?.stack ?? []
+      ).flatMap((layer) => (layer.route?.path ? [layer.route.path] : []));
+
+      expect(routePaths.indexOf(sectionPath)).toBeGreaterThanOrEqual(0);
+      expect(routePaths.indexOf(aggregatePath)).toBeGreaterThanOrEqual(0);
+      expect(routePaths.indexOf(sectionPath)).toBeLessThan(
+        routePaths.indexOf(aggregatePath),
+      );
+    },
+  );
 });
