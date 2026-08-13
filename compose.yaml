@@ -1,0 +1,20 @@
+services:
+  canton-explorer:
+    image: ghcr.io/distrohelena/canton-explorer:${CANTON_EXPLORER_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - ${CANTON_EXPLORER_PORT:-4600}:4600
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4600"
+      NODE_CONFIG_PATH: /app/config/nodes.local.json
+      PACKAGE_CACHE_DB_PATH: /app/data/package-cache.sqlite
+    volumes:
+      - ./config/nodes.local.json:/app/config/nodes.local.json:ro
+      - ./debug-dars:/app/debug-dars:ro
+      - explorer-data:/app/data
+
+volumes:
+  explorer-data:

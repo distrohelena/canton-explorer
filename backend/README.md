@@ -12,6 +12,10 @@ npx @distrohelena/canton-explorer --config ./config/nodes.local.json
 
 By default the explorer binds to `0.0.0.0:4600`.
 
+For container deployment and manual image publishing, see the
+[root Docker section](../README.md#docker). The supplied Compose deployment
+mounts the node configuration at `/app/config/nodes.local.json`.
+
 ## CLI Options
 
 ```bash

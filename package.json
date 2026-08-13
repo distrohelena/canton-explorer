@@ -22,7 +22,9 @@
     "build:package": "npm run build:package --workspace backend",
     "pack:dry-run": "npm run pack:dry-run --workspace backend",
     "screenshots": "node scripts/capture-screenshots.mjs",
-    "test:screenshots": "node --test scripts/*.test.mjs"
+    "test:screenshots": "node --test scripts/capture-screenshots.test.mjs scripts/screenshot-*.test.mjs",
+    "test:docker:image": "node --test scripts/docker-image.test.mjs",
+    "test:docker:compose": "node --test scripts/docker-compose.test.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.0"

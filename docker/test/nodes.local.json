@@ -1,0 +1,13 @@
+{
+  "branding": {
+    "applicationTitle": "Docker Test Explorer",
+    "headerTitle": "Docker Test Explorer"
+  },
+  "nodes": [{
+    "id": "docker-test-node",
+    "label": "Docker Test Node",
+    "role": "participant",
+    "mode": "pqs_only",
+    "pqs": { "connectionUriEnv": "TEST_PQS_URL" }
+  }]
+}
