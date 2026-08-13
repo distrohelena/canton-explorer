@@ -583,7 +583,7 @@ describe('fetchNodes', () => {
       applicationTitle: 'Configured App',
       headerTitle: 'Configured Header',
     });
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/branding');
+    expect(fetchMock).toHaveBeenCalledWith('api/branding');
   });
 
   it('loads node summaries from the backend API', async () => {
@@ -632,7 +632,7 @@ describe('fetchNodes', () => {
 
     expect(history.nodes[0].nodeId).toBe('participant-1');
     expect(history.nodes[0].samples[0].activityValue).toBe(3);
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/nodes/activity-history?days=7');
+    expect(fetchMock).toHaveBeenCalledWith('api/nodes/activity-history?days=7');
   });
 
   it('loads active parties grouped by node from the backend API', async () => {
@@ -646,7 +646,7 @@ describe('fetchNodes', () => {
 
     expect(result.nodes[0].nodeId).toBe('participant-1');
     expect(result.nodes[0].parties).toEqual(['Alice', 'Bob']);
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/parties');
+    expect(fetchMock).toHaveBeenCalledWith('api/parties');
   });
 
   it('loads recent active parties for a requested rolling window', async () => {
@@ -666,7 +666,7 @@ describe('fetchNodes', () => {
 
     expect(result.count).toBe(4);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/activity?hours=24',
+      'api/parties/activity?hours=24',
     );
   });
 
@@ -680,7 +680,7 @@ describe('fetchNodes', () => {
     const result = await fetchLocalParties();
 
     expect(result.nodes[0].localPartiesStatus).toBe('grpc_not_configured');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/parties/local');
+    expect(fetchMock).toHaveBeenCalledWith('api/parties/local');
   });
 
   it('loads active parties for a single node from the backend API', async () => {
@@ -693,7 +693,7 @@ describe('fetchNodes', () => {
     const result = await fetchNodeActiveParties('participant-1');
 
     expect(result.nodeId).toBe('participant-1');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/nodes/participant-1/parties');
+    expect(fetchMock).toHaveBeenCalledWith('api/nodes/participant-1/parties');
   });
 
   it('loads local parties for a single node from the backend API', async () => {
@@ -706,7 +706,7 @@ describe('fetchNodes', () => {
     const result = await fetchNodeLocalParties('participant-2');
 
     expect(result.nodeId).toBe('participant-2');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/nodes/participant-2/parties/local');
+    expect(fetchMock).toHaveBeenCalledWith('api/nodes/participant-2/parties/local');
   });
 
   it('loads party fingerprints for a single node from the backend API', async () => {
@@ -730,7 +730,7 @@ describe('fetchNodes', () => {
     expect(result.nodeId).toBe('participant-2');
     expect(result.fingerprints[0]).toBe('1220abc');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-2/parties/fingerprints',
+      'api/nodes/participant-2/parties/fingerprints',
     );
   });
 
@@ -757,7 +757,7 @@ describe('fetchNodes', () => {
 
     expect(result.limit).toBe(50);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-2/parties/fingerprints?before=1220aaa&limit=50',
+      'api/nodes/participant-2/parties/fingerprints?before=1220aaa&limit=50',
     );
   });
 
@@ -786,7 +786,7 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-2/parties/fingerprints?limit=15&publicKey=302a300506032b6570032100abc&encoding=hex&keyFormat=derX509SubjectPublicKeyInfo&keyType=ed25519',
+      'api/nodes/participant-2/parties/fingerprints?limit=15&publicKey=302a300506032b6570032100abc&encoding=hex&keyFormat=derX509SubjectPublicKeyInfo&keyType=ed25519',
     );
   });
 
@@ -807,7 +807,7 @@ describe('fetchNodes', () => {
 
     expect(result.source).toBe('pqs');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/fingerprints?after=1220999&limit=30',
+      'api/parties/fingerprints?after=1220999&limit=30',
     );
   });
 
@@ -827,7 +827,7 @@ describe('fetchNodes', () => {
     await fetchPartyFingerprints({ nodeIds: ['participant-2', 'participant-1'], limit: 30 });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/fingerprints?node=participant-2&node=participant-1&limit=30',
+      'api/parties/fingerprints?node=participant-2&node=participant-1&limit=30',
     );
   });
 
@@ -847,7 +847,7 @@ describe('fetchNodes', () => {
     await fetchPartyFingerprints({ nodeIds: [] });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/fingerprints?node=',
+      'api/parties/fingerprints?node=',
     );
   });
 
@@ -863,7 +863,7 @@ describe('fetchNodes', () => {
     expect(result.nodeId).toBe('participant-2');
     expect(result.participantStatus?.uid).toBe('participant2::1220abc');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-2/participant-status',
+      'api/nodes/participant-2/participant-status',
     );
   });
 
@@ -877,7 +877,7 @@ describe('fetchNodes', () => {
     const result = await fetchTokens();
 
     expect(result.tokens[0]?.tokenId).toBe('canton-coin');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/tokens');
+    expect(fetchMock).toHaveBeenCalledWith('api/tokens');
   });
 
   it('loads discovered tokens with cursor pagination from the backend API', async () => {
@@ -891,7 +891,7 @@ describe('fetchNodes', () => {
 
     expect(result.tokens[0]?.tokenId).toBe('canton-coin');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens?before=tokens-cursor-before-1&limit=50',
+      'api/tokens?before=tokens-cursor-before-1&limit=50',
     );
   });
 
@@ -911,7 +911,7 @@ describe('fetchNodes', () => {
 
     expect(result.tokens[0]?.tokenId).toBe('canton-coin');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens?name=Vault&excludeName=Beta&issuer=Issuer-A&limit=30',
+      'api/tokens?name=Vault&excludeName=Beta&issuer=Issuer-A&limit=30',
     );
   });
 
@@ -926,7 +926,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?before=cursor-token-0&limit=30',
+      'api/tokens/transfers?before=cursor-token-0&limit=30',
     );
   });
 
@@ -944,7 +944,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?fromParty=Alice&fromParty=Carol&toParty=Bob&limit=30',
+      'api/tokens/transfers?fromParty=Alice&fromParty=Carol&toParty=Bob&limit=30',
     );
   });
 
@@ -962,7 +962,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?amountGt=10.5&amountLt=100.0&limit=30',
+      'api/tokens/transfers?amountGt=10.5&amountLt=100.0&limit=30',
     );
   });
 
@@ -979,7 +979,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers?movementType=Create&movementType=Mint&limit=30',
+      'api/tokens/transfers?movementType=Create&movementType=Mint&limit=30',
     );
   });
 
@@ -993,7 +993,7 @@ describe('fetchNodes', () => {
     const result = await fetchTokenDetail('canton-coin');
 
     expect(result.token.tokenId).toBe('canton-coin');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/tokens/canton-coin');
+    expect(fetchMock).toHaveBeenCalledWith('api/tokens/canton-coin');
   });
 
   it('loads token holders by token id from the backend API', async () => {
@@ -1006,7 +1006,7 @@ describe('fetchNodes', () => {
     const result = await fetchTokenHolders('canton-coin');
 
     expect(result.holders[0]?.partyId).toBe('Alice');
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/tokens/canton-coin/holders?limit=30');
+    expect(fetchMock).toHaveBeenCalledWith('api/tokens/canton-coin/holders?limit=30');
   });
 
   it('loads token holders by token id with cursor pagination from the backend API', async () => {
@@ -1020,7 +1020,7 @@ describe('fetchNodes', () => {
 
     expect(result.holders[0]?.partyId).toBe('Alice');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/canton-coin/holders?before=holders-cursor-1&limit=30',
+      'api/tokens/canton-coin/holders?before=holders-cursor-1&limit=30',
     );
   });
 
@@ -1035,7 +1035,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?before=token-cursor-before-2&limit=30',
+      'api/tokens/validator-license/transfers?before=token-cursor-before-2&limit=30',
     );
   });
 
@@ -1053,7 +1053,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?fromParty=Issuer&toParty=Alice&toParty=Bob&limit=30',
+      'api/tokens/validator-license/transfers?fromParty=Issuer&toParty=Alice&toParty=Bob&limit=30',
     );
   });
 
@@ -1071,7 +1071,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?amountGt=20&amountLt=50&limit=30',
+      'api/tokens/validator-license/transfers?amountGt=20&amountLt=50&limit=30',
     );
   });
 
@@ -1088,7 +1088,7 @@ describe('fetchNodes', () => {
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/validator-license/transfers?movementType=Transfer&movementType=Mint&limit=30',
+      'api/tokens/validator-license/transfers?movementType=Transfer&movementType=Mint&limit=30',
     );
   });
 
@@ -1103,7 +1103,7 @@ describe('fetchNodes', () => {
 
     expect(result.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/tokens/transfers/token-update-2',
+      'api/tokens/transfers/token-update-2',
     );
   });
 
@@ -1119,7 +1119,7 @@ describe('fetchNodes', () => {
     expect(result.nodeId).toBe('participant-1');
     expect(result.contracts[0].contractId).toBe('00abc');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-1/contracts?before=000000000000000099',
+      'api/nodes/participant-1/contracts?before=000000000000000099',
     );
   });
 
@@ -1140,7 +1140,7 @@ describe('fetchNodes', () => {
 
     expect(result.nodeId).toBe('participant-1');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-1/contracts?before=cursor-1&party=Alice&party=Bob&template=Main%3AAsset&partyMode=and&hideSplice=true',
+      'api/nodes/participant-1/contracts?before=cursor-1&party=Alice&party=Bob&template=Main%3AAsset&partyMode=and&hideSplice=true',
     );
   });
 
@@ -1154,7 +1154,7 @@ describe('fetchNodes', () => {
     await fetchLatestContracts(15, { nodeIds: ['participant-1', 'participant-2'] });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/contracts?node=participant-1&node=participant-2&limit=15',
+      'api/contracts?node=participant-1&node=participant-2&limit=15',
     );
   });
 
@@ -1167,7 +1167,7 @@ describe('fetchNodes', () => {
 
     await fetchLatestContracts(15, { nodeIds: [] });
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/contracts?node=&limit=15');
+    expect(fetchMock).toHaveBeenCalledWith('api/contracts?node=&limit=15');
   });
 
   it('loads recent updates for a node from the backend API', async () => {
@@ -1206,7 +1206,7 @@ describe('fetchNodes', () => {
     expect(updates.updates[0].eventOffset).toBe('000000000000000001');
     expect(updates.updates[0].updateId).toBe('00000000000000000000000000000001');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-1/updates?before=000000000000000025&party=Alice&party=Bob&template=Main%3AAsset&partyMode=and',
+      'api/nodes/participant-1/updates?before=000000000000000025&party=Alice&party=Bob&template=Main%3AAsset&partyMode=and',
     );
   });
 
@@ -1301,7 +1301,7 @@ describe('fetchNodes', () => {
         },
       ],
     });
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/updates?limit=30');
+    expect(fetchMock).toHaveBeenCalledWith('api/updates?limit=30');
   });
 
   it('loads globally merged recent updates with cursor params from the backend API', async () => {
@@ -1341,7 +1341,7 @@ describe('fetchNodes', () => {
       updates: [],
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/updates?before=000000000000000010&after=000000000000000020&limit=30',
+      'api/updates?before=000000000000000010&after=000000000000000020&limit=30',
     );
   });
 
@@ -1391,7 +1391,7 @@ describe('fetchNodes', () => {
       updates: [],
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/updates?party=Alice&party=Bob&template=Main%3AAsset&template=Main%3AWallet&partyMode=and&hideSplice=true&limit=30',
+      'api/updates?party=Alice&party=Bob&template=Main%3AAsset&template=Main%3AWallet&partyMode=and&hideSplice=true&limit=30',
     );
   });
 
@@ -1493,7 +1493,7 @@ describe('fetchNodes', () => {
 
     const contractDetail = await fetchNodeContractDetail?.('participant-1', '00abc');
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/nodes/participant-1/contracts/00abc');
+    expect(fetchMock).toHaveBeenCalledWith('api/nodes/participant-1/contracts/00abc');
     expect(contractDetail).toEqual(
       expect.objectContaining({
         nodeId: 'participant-1',
@@ -1520,7 +1520,7 @@ describe('fetchNodes', () => {
 
     const packageDetail = await fetchPackageDetail?.('splice-amulet');
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/packages/splice-amulet');
+    expect(fetchMock).toHaveBeenCalledWith('api/packages/splice-amulet');
     expect(packageDetail).toEqual(
       expect.objectContaining({
         packageId: 'splice-amulet',
@@ -1548,11 +1548,11 @@ describe('fetchNodes', () => {
     ]);
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      'http://localhost:4600/api/packages/pkg/summary',
-      'http://localhost:4600/api/packages/pkg/nodes',
-      'http://localhost:4600/api/packages/pkg/modules',
-      'http://localhost:4600/api/packages/pkg/templates',
-      'http://localhost:4600/api/packages/pkg/data-types',
+      'api/packages/pkg/summary',
+      'api/packages/pkg/nodes',
+      'api/packages/pkg/modules',
+      'api/packages/pkg/templates',
+      'api/packages/pkg/data-types',
     ]);
   });
 
@@ -1567,7 +1567,7 @@ describe('fetchNodes', () => {
       expect.objectContaining({ packageId: 'pkg', moduleName: 'Main.Module' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/packages/pkg/modules/Main.Module',
+      'api/packages/pkg/modules/Main.Module',
     );
   });
 
@@ -1582,7 +1582,7 @@ describe('fetchNodes', () => {
       expect.objectContaining({ packageId: 'pkg' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/packages/pkg/templates/Main.Module%3AAsset',
+      'api/packages/pkg/templates/Main.Module%3AAsset',
     );
   });
 
@@ -1604,7 +1604,7 @@ describe('fetchNodes', () => {
     const packageFamily = await fetchPackagesByName?.('splice-amulet');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/packages/by-name/splice-amulet',
+      'api/packages/by-name/splice-amulet',
     );
     expect(packageFamily).toEqual(typedPackageFamilyFixture);
   });
@@ -1627,7 +1627,7 @@ describe('fetchNodes', () => {
     const nodePackages = await fetchNodePackages?.('participant-1');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/nodes/participant-1/packages',
+      'api/nodes/participant-1/packages',
     );
     expect(nodePackages).toEqual(typedNodePackagesFixture);
   });
@@ -1649,7 +1649,7 @@ describe('fetchNodes', () => {
 
     const partyDetail = await fetchPartyDetail?.('Alice');
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/parties/Alice');
+    expect(fetchMock).toHaveBeenCalledWith('api/parties/Alice');
     expect(partyDetail).toEqual(typedPartyDetailFixture);
   });
 
@@ -1673,7 +1673,7 @@ describe('fetchNodes', () => {
     const namespaceDetail = await fetchNamespaceDetail?.('1220abcd');
 
     expect(namespaceDetail).toEqual(typedNamespaceDetailFixture);
-    expect(fetch).toHaveBeenCalledWith('http://localhost:4600/api/namespaces/1220abcd');
+    expect(fetch).toHaveBeenCalledWith('api/namespaces/1220abcd');
   });
 
   it('loads paginated namespace parties from the backend API', async () => {
@@ -1703,7 +1703,7 @@ describe('fetchNodes', () => {
 
     expect(namespaceParties).toEqual(typedNamespacePartiesFixture);
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:4600/api/namespaces/1220abcd/parties?before=Bob%3A%3A1220abcd&limit=30',
+      'api/namespaces/1220abcd/parties?before=Bob%3A%3A1220abcd&limit=30',
     );
   });
 
@@ -1751,7 +1751,7 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/Alice/updates?before=cursor-before-0&template=Main%3AAsset&hideSplice=true&limit=30',
+      'api/parties/Alice/updates?before=cursor-before-0&template=Main%3AAsset&hideSplice=true&limit=30',
     );
     expect(updates).toEqual({
       limit: 30,
@@ -1813,7 +1813,7 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/Alice/contracts?before=cursor-contract-0&limit=30',
+      'api/parties/Alice/contracts?before=cursor-contract-0&limit=30',
     );
     expect(contracts).toEqual({
       limit: 30,
@@ -1868,7 +1868,7 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/parties/Alice/contracts?before=cursor-contract-0&template=Main%3AAsset&hideSplice=true&limit=30',
+      'api/parties/Alice/contracts?before=cursor-contract-0&template=Main%3AAsset&hideSplice=true&limit=30',
     );
   });
 
@@ -1928,7 +1928,7 @@ describe('fetchNodes', () => {
 
     const results = await fetchSearchResults?.(' Alice ');
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/search?q=Alice');
+    expect(fetchMock).toHaveBeenCalledWith('api/search?q=Alice');
     expect(results).toEqual({
       query: 'Alice',
       updates: {
@@ -2003,11 +2003,11 @@ describe('fetchNodes', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:4600/api/traffic-purchases?limit=15&node=participant-1&node=participant-2&minDate=2026-07-01&maxDate=2026-07-31&purchasedMin=100&paidMax=20',
+      'api/traffic-purchases?limit=15&node=participant-1&node=participant-2&minDate=2026-07-01&maxDate=2026-07-31&purchasedMin=100&paidMax=20',
     );
 
     fetchMock.mockClear();
     await fetchTrafficPurchases?.({ nodeIds: [] });
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4600/api/traffic-purchases?node=');
+    expect(fetchMock).toHaveBeenCalledWith('api/traffic-purchases?node=');
   });
 });
