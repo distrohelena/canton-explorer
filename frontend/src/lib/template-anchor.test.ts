@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { choiceAnchorId, choiceHash, choiceNameFromHash } from './template-anchor';
 
 describe('choice template anchors', () => {
@@ -28,5 +29,22 @@ describe('choice template anchors', () => {
   it('returns null for unexpected hashes', () => {
     expect(choiceNameFromHash('#other-Archive')).toBeNull();
     expect(choiceNameFromHash('choice-Archive')).toBeNull();
+  });
+
+  it('round-trips literal percent signs through Vue Router', () => {
+    const choice = '100%25';
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/packages/:packageId/templates/:templateId', component: {} }],
+    });
+    const resolved = router.resolve(
+      `/packages/pkg/templates/Module%3ATemplate${choiceHash(choice)}`,
+    );
+
+    expect(resolved.hash).toBe('#choice-100%25');
+    expect(resolved.href).toBe(
+      '/packages/pkg/templates/Module%3ATemplate#choice-100%2525',
+    );
+    expect(choiceNameFromHash(resolved.hash)).toBe(choice);
   });
 });

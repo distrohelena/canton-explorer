@@ -6,7 +6,7 @@ export function choiceHash(choiceName: string): string | null {
     return null;
   }
 
-  return `${CHOICE_HASH_PREFIX}${choiceName}`;
+  return `${CHOICE_HASH_PREFIX}${choiceName.replace(/%/g, '%25')}`;
 }
 
 export function choiceAnchorId(choiceName: string): string | null {
