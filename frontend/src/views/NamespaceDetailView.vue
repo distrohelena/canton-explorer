@@ -11,12 +11,10 @@ import {
   fetchNamespaceUpdates,
 } from "../lib/api";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "../lib/pagination";
-import type { NamespacePartiesResponse } from "../types/namespaces";
 import type { PartyTopologyNodeEntry } from "../types/parties";
 
 const props = defineProps<{ namespaceId: string }>();
 
-const namespaceParties = ref<NamespacePartiesResponse | null>(null);
 const partiesPageSize = ref(DEFAULT_PAGE_SIZE);
 const partiesBeforeCursor = ref<string | null>(null);
 const partiesAfterCursor = ref<string | null>(null);
@@ -24,14 +22,13 @@ const partiesAfterCursor = ref<string | null>(null);
 const summary = useSectionLoad(() => fetchNamespaceSummary(props.namespaceId));
 const nodes = useSectionLoad(() => fetchNamespaceNodes(props.namespaceId));
 const topology = useSectionLoad(() => fetchNamespaceTopology(props.namespaceId));
-const parties = useSectionLoad(async () => {
-  namespaceParties.value = await fetchNamespaceParties(props.namespaceId, {
+const parties = useSectionLoad(() =>
+  fetchNamespaceParties(props.namespaceId, {
     limit: partiesPageSize.value,
     before: partiesBeforeCursor.value ?? undefined,
     after: partiesAfterCursor.value ?? undefined,
-  });
-  return namespaceParties.value;
-});
+  }),
+);
 const updates = useSectionLoad(() =>
   fetchNamespaceUpdates(props.namespaceId, { limit: DEFAULT_PAGE_SIZE }),
 );
@@ -67,6 +64,7 @@ const nodesError = nodes.error;
 const topologyData = topology.data;
 const topologyLoading = topology.loading;
 const topologyError = topology.error;
+const partiesData = parties.data;
 const partiesLoading = parties.loading;
 const partiesError = parties.error;
 const updatesLoading = updates.loading;
@@ -244,7 +242,7 @@ function resetPartyPagination() {
 }
 
 async function showOlderParties() {
-  const cursor = namespaceParties.value?.nextBefore;
+  const cursor = partiesData.value?.nextBefore;
   if (!cursor) {
     return;
   }
@@ -255,7 +253,7 @@ async function showOlderParties() {
 }
 
 async function showNewerParties() {
-  const cursor = namespaceParties.value?.nextAfter;
+  const cursor = partiesData.value?.nextAfter;
   if (!cursor) {
     return;
   }
@@ -374,7 +372,7 @@ watch(
                 <button
                   type="button"
                   class="dashboard__refresh"
-                  :disabled="!namespaceParties?.nextAfter || partiesLoading"
+                  :disabled="!partiesData?.nextAfter || partiesLoading"
                   @click="showNewerParties"
                 >
                   Newer
@@ -382,7 +380,7 @@ watch(
                 <button
                   type="button"
                   class="dashboard__refresh"
-                  :disabled="!namespaceParties?.nextBefore || partiesLoading"
+                  :disabled="!partiesData?.nextBefore || partiesLoading"
                   @click="showOlderParties"
                 >
                   Older
@@ -391,7 +389,7 @@ watch(
             </div>
             <div class="package-detail__list">
               <div
-                v-for="party in namespaceParties?.parties ?? []"
+                v-for="party in partiesData?.parties ?? []"
                 :key="party.partyId"
                 class="package-detail__list-row"
               >
@@ -411,7 +409,7 @@ watch(
               <p
                 v-else-if="
                   partiesLoading &&
-                  (namespaceParties?.parties.length ?? 0) === 0
+                  (partiesData?.parties.length ?? 0) === 0
                 "
                 class="update-detail__empty inline-loading"
                 role="status"
@@ -420,7 +418,7 @@ watch(
                 <span>Loading observed parties...</span>
               </p>
               <p
-                v-else-if="(namespaceParties?.parties.length ?? 0) === 0"
+                v-else-if="(partiesData?.parties.length ?? 0) === 0"
                 class="update-detail__empty"
               >
                 No parties observed for this namespace.

@@ -208,4 +208,31 @@ describe('NamespaceDetailView', () => {
       expect(api.fetchNamespaceContracts).toHaveBeenLastCalledWith('1220efgh', { limit: 15 });
     });
   });
+
+  it('keeps new namespace parties visible when the old namespace request resolves late', async () => {
+    let resolveOldParties: (value: NamespacePartiesResponse) => void;
+    const oldParties = new Promise<NamespacePartiesResponse>((resolve) => {
+      resolveOldParties = resolve;
+    });
+    const newParties = {
+      ...parties,
+      namespaceId: '1220efgh',
+      parties: [{ partyId: 'Carol::1220efgh' }],
+    };
+    vi.mocked(api.fetchNamespaceParties).mockImplementation((namespaceId) =>
+      namespaceId === '1220abcd' ? oldParties : Promise.resolve(newParties),
+    );
+
+    const { router } = await renderAt('/namespaces/1220abcd');
+    await waitFor(() => expect(api.fetchNamespaceParties).toHaveBeenCalledWith('1220abcd', { limit: 15 }));
+    await router.push('/namespaces/1220efgh');
+    expect(await screen.findByRole('link', { name: 'Carol::1220efgh' })).toBeInTheDocument();
+
+    resolveOldParties!({ ...parties, parties: [{ partyId: 'Alice::1220abcd' }] });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.getByRole('link', { name: 'Carol::1220efgh' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Alice::1220abcd' })).not.toBeInTheDocument();
+  });
 });
