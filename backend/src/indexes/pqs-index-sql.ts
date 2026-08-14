@@ -213,7 +213,7 @@ export const activeContractsIndexSql = (
   schema: string,
   relation: string,
 ): string =>
-  `create index concurrently if not exists ${quoteIdentifier(indexName(relation, 'active_created_ix'))} on ${qualified(schema, relation)} (created_at_ix desc, create_event_pk desc) where archived_at_ix is null`;
+  `create index concurrently if not exists ${quoteIdentifier(indexName(relation, 'active_created_ix'))} on ${qualified(schema, relation)} (created_at_ix desc, create_event_pk desc, contract_id desc) where archived_at_ix is null`;
 
 export function activeContractsIndex(
   schema: string,
@@ -224,10 +224,10 @@ export function activeContractsIndex(
     schema,
     relation,
     accessMethod: 'btree',
-    keyExpressions: ['created_at_ix', 'create_event_pk'],
+    keyExpressions: ['created_at_ix', 'create_event_pk', 'contract_id'],
     includedExpressions: [],
-    operatorClasses: ['int8_ops', 'int8_ops'],
-    sortOptions: [3, 3],
+    operatorClasses: ['int8_ops', 'int8_ops', 'text_ops'],
+    sortOptions: [3, 3, 3],
     predicate: 'archived_at_ix IS NULL',
     isUnique: false,
     createSql: activeContractsIndexSql(schema, relation),
@@ -266,7 +266,7 @@ export const representativeExplainSql = (
   select create_event_pk
   from ${qualified(schema, relation)}
   where archived_at_ix is null and created_at_ix is not null and create_event_pk is not null
-  order by created_at_ix desc, create_event_pk desc
+  order by created_at_ix desc, create_event_pk desc, contract_id desc
   limit 31`;
 
 export const advisoryLockSql = 'select pg_advisory_lock(hashtext($1))';

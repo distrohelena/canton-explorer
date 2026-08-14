@@ -200,6 +200,7 @@ interface ActiveContractCursor {
   eventOffset: string;
   createdAtIx: string;
   createEventPk: string;
+  contractId: string;
 }
 
 type DecodedActiveContractCursor =
@@ -1567,7 +1568,8 @@ function pqsActiveContractsQuery(
     selectedCursor?.kind === 'compound'
       ? `cursor_boundary as (
       select ${selectedCursor.value.createdAtIx}::bigint as cursor_ix,
-        ${selectedCursor.value.createEventPk}::bigint as cursor_event_pk
+        ${selectedCursor.value.createEventPk}::bigint as cursor_event_pk,
+        '${escapeSqlLiteral(selectedCursor.value.contractId)}'::text as cursor_contract_id
     )`
       : useAfterCursor && normalizedAfter?.kind === 'legacy'
         ? `cursor_boundary as (
@@ -1581,7 +1583,8 @@ function pqsActiveContractsQuery(
         ),
         -1::bigint
       ) as cursor_ix,
-      9223372036854775807::bigint as cursor_event_pk
+      9223372036854775807::bigint as cursor_event_pk,
+      ''::text as cursor_contract_id
     )`
         : normalizedBefore?.kind === 'legacy'
           ? `cursor_boundary as (
@@ -1595,15 +1598,16 @@ function pqsActiveContractsQuery(
         ),
         9223372036854775807::bigint
       ) as cursor_ix,
-      -9223372036854775808::bigint as cursor_event_pk
+      -9223372036854775808::bigint as cursor_event_pk,
+      ''::text as cursor_contract_id
     )`
           : null;
   const cursorFilter = useAfterCursor
-    ? `(contract_row.created_at_ix, contract_row.create_event_pk) >
-        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary))`
+    ? `(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) >
+        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary), (select cursor_contract_id from cursor_boundary))`
     : normalizedBefore
-      ? `(contract_row.created_at_ix, contract_row.create_event_pk) <
-        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary))`
+      ? `(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) <
+        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary), (select cursor_contract_id from cursor_boundary))`
       : null;
   const whereConditions = [
     'contract_row.archived_at_ix is null',
@@ -1627,7 +1631,7 @@ function pqsActiveContractsQuery(
         contract_row.create_event_pk
       from ${relations.contracts} contract_row
       ${whereClause}
-      order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}
+      order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}, contract_row.contract_id ${orderDirection}
       limit ${queryLimit}
     )`,
   ].filter((value): value is string => Boolean(value));
@@ -1646,7 +1650,7 @@ function pqsActiveContractsQuery(
       on contract_tpe_row.pk = contract_row.tpe_pk
     join ${relations.transactions} tx
       on tx.ix = contract_row.created_at_ix
-    order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}
+    order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}, contract_row.contract_id ${orderDirection}
   `;
 }
 
@@ -2357,6 +2361,10 @@ function normalizeActiveContractCursorPart(
   return normalized;
 }
 
+function normalizeActiveContractIdCursorPart(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 function encodeActiveContractCursor(row: ActiveContractRow): string | null {
   const eventOffset = normalizeActiveContractCursorPart(
     row.created_event_offset,
@@ -2367,7 +2375,8 @@ function encodeActiveContractCursor(row: ActiveContractRow): string | null {
 
   const createdAtIx = normalizeActiveContractCursorPart(row.created_at_ix);
   const createEventPk = normalizeActiveContractCursorPart(row.create_event_pk);
-  if (createdAtIx === null || createEventPk === null) {
+  const contractId = normalizeActiveContractIdCursorPart(row.contract_id);
+  if (createdAtIx === null || createEventPk === null || contractId === null) {
     // Compatibility for older PQS-shaped test doubles and pre-compound API
     // cursors. Real supported PQS schemas always return both event keys.
     return eventOffset;
@@ -2378,6 +2387,7 @@ function encodeActiveContractCursor(row: ActiveContractRow): string | null {
       eventOffset,
       createdAtIx,
       createEventPk,
+      contractId,
     } satisfies ActiveContractCursor),
     'utf8',
   ).toString('base64url')}`;
@@ -2404,11 +2414,15 @@ function decodeActiveContractCursor(
       const createEventPk = normalizeActiveContractCursorPart(
         decoded.createEventPk,
       );
-      if (eventOffset && createdAtIx && createEventPk) {
+      const contractId = normalizeActiveContractIdCursorPart(decoded.contractId);
+      if (eventOffset && createdAtIx && createEventPk && contractId) {
         return {
           kind: 'compound',
-          value: { eventOffset, createdAtIx, createEventPk },
+          value: { eventOffset, createdAtIx, createEventPk, contractId },
         };
+      }
+      if (eventOffset) {
+        return { kind: 'legacy', eventOffset };
       }
     } catch {
       return null;

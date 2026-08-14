@@ -168,6 +168,7 @@ const requiredColumns: Readonly<
     create_event_pk: 'bigint',
     created_at_ix: 'bigint',
     archived_at_ix: 'bigint',
+    contract_id: 'text',
     witnesses: 'text[]',
   },
   __exercises: {

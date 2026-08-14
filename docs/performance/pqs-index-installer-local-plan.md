@@ -22,7 +22,7 @@ from public.__contracts_29
 where archived_at_ix is null
   and created_at_ix is not null
   and create_event_pk is not null
-order by created_at_ix desc, create_event_pk desc
+order by created_at_ix desc, create_event_pk desc, contract_id desc
 limit 31;
 ```
 
@@ -50,7 +50,7 @@ The installed partial index is:
 ```sql
 create index concurrently
   canton_explorer_contracts_29_active_created_ix
-on public.__contracts_29 (created_at_ix desc, create_event_pk desc)
+on public.__contracts_29 (created_at_ix desc, create_event_pk desc, contract_id desc)
 where archived_at_ix is null;
 ```
 

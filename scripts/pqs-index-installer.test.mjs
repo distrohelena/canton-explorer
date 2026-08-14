@@ -334,7 +334,7 @@ test("apply is non-destructive, repair is explicit, and reruns are idempotent", 
     psql(
       "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'canton_explorer_contracts_29_active_created_ix'",
     ),
-    /created_at_ix DESC, create_event_pk DESC/i,
+    /created_at_ix DESC, create_event_pk DESC, contract_id DESC/i,
   );
   assert.match(
     psql(

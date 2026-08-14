@@ -39,6 +39,7 @@ function supportedSchemaRows() {
     ['__contracts', 'p', 'LIST (tpe_pk)', 'create_event_pk', 'bigint'],
     ['__contracts', 'p', 'LIST (tpe_pk)', 'created_at_ix', 'bigint'],
     ['__contracts', 'p', 'LIST (tpe_pk)', 'archived_at_ix', 'bigint'],
+    ['__contracts', 'p', 'LIST (tpe_pk)', 'contract_id', 'text'],
     ['__contracts', 'p', 'LIST (tpe_pk)', 'witnesses', 'text[]'],
     ['__exercises', 'p', 'LIST (tpe_pk)', 'tpe_pk', 'bigint'],
     ['__exercises', 'p', 'LIST (tpe_pk)', 'witnesses', 'text[]'],
@@ -86,15 +87,15 @@ function inferredIndexStatus(
   const keyExpressions = witness
     ? ['witnesses']
     : active
-      ? ['created_at_ix', 'create_event_pk']
+      ? ['created_at_ix', 'create_event_pk', 'contract_id']
       : ['transaction_id'];
   const operatorClasses = witness
     ? ['array_ops']
     : active
-      ? ['int8_ops', 'int8_ops']
+      ? ['int8_ops', 'int8_ops', 'text_ops']
       : ['text_pattern_ops'];
   const predicate = active ? 'archived_at_ix IS NULL' : null;
-  const sortOptions = active ? [3, 3] : [0];
+  const sortOptions = active ? [3, 3, 3] : [0];
 
   return {
     index_name: indexName,

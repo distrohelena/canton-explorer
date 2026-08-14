@@ -6,6 +6,7 @@ import {
   contractWitnessIndexSql,
   migrationTableSql,
   quoteIdentifier,
+  representativeExplainSql,
   transactionIdPatternIndex,
   transactionIdPatternIndexSql,
 } from '../../src/indexes/pqs-index-sql';
@@ -25,7 +26,7 @@ describe('PQS index SQL', () => {
 
   it('creates the active-contract and transaction-id access paths concurrently', () => {
     expect(activeContractsIndexSql('public', '__contracts_42')).toBe(
-      'create index concurrently if not exists "canton_explorer_contracts_42_active_created_ix" on "public"."__contracts_42" (created_at_ix desc, create_event_pk desc) where archived_at_ix is null',
+      'create index concurrently if not exists "canton_explorer_contracts_42_active_created_ix" on "public"."__contracts_42" (created_at_ix desc, create_event_pk desc, contract_id desc) where archived_at_ix is null',
     );
     expect(transactionIdPatternIndexSql('public')).toBe(
       'create index concurrently if not exists "canton_explorer_transactions_transaction_id_pattern_ops" on "public"."__transactions" (transaction_id text_pattern_ops)',
@@ -45,8 +46,8 @@ describe('PQS index SQL', () => {
       name: 'canton_explorer_contracts_42_active_created_ix',
       relation: '__contracts_42',
       accessMethod: 'btree',
-      keyExpressions: ['created_at_ix', 'create_event_pk'],
-      operatorClasses: ['int8_ops', 'int8_ops'],
+      keyExpressions: ['created_at_ix', 'create_event_pk', 'contract_id'],
+      operatorClasses: ['int8_ops', 'int8_ops', 'text_ops'],
       predicate: 'archived_at_ix IS NULL',
     });
     expect(transactionIdPatternIndex('public')).toMatchObject({
@@ -62,6 +63,12 @@ describe('PQS index SQL', () => {
   it('creates the Explorer-owned migration table in the requested schema', () => {
     expect(migrationTableSql('public')).toBe(
       'create table if not exists "public"."canton_explorer_index_migrations" (version text primary key, applied_at timestamptz not null default current_timestamp)',
+    );
+  });
+
+  it('explains the same total active-contract order used by pagination', () => {
+    expect(representativeExplainSql('public', '__contracts_42')).toContain(
+      'order by created_at_ix desc, create_event_pk desc, contract_id desc',
     );
   });
 
