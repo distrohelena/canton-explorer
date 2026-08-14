@@ -48,6 +48,30 @@ describe('ContractsView', () => {
     vi.restoreAllMocks();
   });
 
+  it('retries node discovery locally before mounting the contracts browser', async () => {
+    vi.mocked(fetchNodes)
+      .mockRejectedValueOnce(new Error('nodes unavailable'))
+      .mockRejectedValueOnce(new Error('nodes unavailable'))
+      .mockResolvedValueOnce([{ id: 'participant-1', label: 'Participant 1' }] as never);
+    vi.mocked(fetchLatestContracts).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    await renderAt('/contracts');
+
+    expect(await screen.findByText('nodes unavailable')).toBeInTheDocument();
+    expect(fetchNodes).toHaveBeenCalledTimes(2);
+    expect(fetchLatestContracts).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry node discovery' }));
+
+    await waitFor(() => expect(fetchNodes).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledTimes(1));
+  });
+
   it('shows a loading state before contracts resolve', async () => {
     vi.mocked(fetchNodes).mockResolvedValue([
       {
@@ -82,7 +106,7 @@ describe('ContractsView', () => {
         },
       },
     ]);
-    vi.mocked(fetchNodeContracts).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(fetchLatestContracts).mockReturnValue(new Promise(() => undefined));
 
     await renderAt('/contracts');
 
@@ -223,8 +247,8 @@ describe('ContractsView', () => {
     expect(screen.getByRole('heading', { name: 'Contracts', level: 3 })).toBeInTheDocument();
     expect(container.querySelector('.parties-page__results')).toBeNull();
     const contractsTable = await screen.findByRole('table', { name: 'All node contracts' });
-    expect(within(contractsTable).getByText('Participant 2')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '00def' })).toHaveAttribute(
+    expect(await within(contractsTable).findByText('Participant 2')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '00def' })).toHaveAttribute(
       'href',
       '/nodes/participant-2/contracts/00def',
     );
@@ -455,7 +479,9 @@ describe('ContractsView', () => {
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getAllByText('Main:Asset').length).toBeGreaterThan(0);
-    expect(container.querySelector('a[href="/nodes/participant-2/contracts/00def"]')).not.toBeNull();
+    await waitFor(() =>
+      expect(container.querySelector('a[href="/nodes/participant-2/contracts/00def"]')).not.toBeNull(),
+    );
 
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
 

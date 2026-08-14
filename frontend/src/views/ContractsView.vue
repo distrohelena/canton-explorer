@@ -1,29 +1,35 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 import ContractsBrowser from '../components/ContractsBrowser.vue';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import { fetchNodes } from '../lib/api';
-import type { NodeSnapshot } from '../types/nodes';
 
-const nodes = ref<NodeSnapshot[] | null>(null);
-const error = ref<string | null>(null);
+const {
+  data: nodes,
+  loading: nodesLoading,
+  error: nodesError,
+  load: loadNodes,
+  retry: retryNodes,
+} = useSectionLoad(fetchNodes);
 
-onMounted(async () => {
-  try {
-    nodes.value = await fetchNodes();
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
-  }
+onMounted(() => {
+  void loadNodes();
 });
 </script>
 
 <template>
   <section class="dashboard">
-    <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
-    <p v-else-if="!nodes" class="dashboard__message inline-loading" role="status">
+    <div v-if="nodesError" class="dashboard__message dashboard__message--error" role="alert">
+      <p>{{ nodesError }}</p>
+      <button type="button" class="button button--secondary" @click="retryNodes">
+        Retry node discovery
+      </button>
+    </div>
+    <p v-else-if="nodesLoading" class="dashboard__message inline-loading" role="status">
       <span class="node-updates__spinner" aria-hidden="true"></span>
       <span>Loading contracts...</span>
     </p>
-    <div v-else class="contracts-page">
+    <div v-else-if="nodes" class="contracts-page">
       <section class="activity-home__updates-section">
         <ContractsBrowser
           scope="global"
