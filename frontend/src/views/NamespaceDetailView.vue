@@ -1,24 +1,43 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import QuerySourcePill from "../components/QuerySourcePill.vue";
-import { fetchNamespaceDetail, fetchNamespaceParties } from "../lib/api";
+import { useSectionLoad } from "../composables/useSectionLoad";
+import {
+  fetchNamespaceContracts,
+  fetchNamespaceNodes,
+  fetchNamespaceParties,
+  fetchNamespaceSummary,
+  fetchNamespaceTopology,
+  fetchNamespaceUpdates,
+} from "../lib/api";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "../lib/pagination";
-import type {
-  NamespaceDetailResponse,
-  NamespacePartiesResponse,
-} from "../types/namespaces";
+import type { NamespacePartiesResponse } from "../types/namespaces";
 import type { PartyTopologyNodeEntry } from "../types/parties";
 
 const props = defineProps<{ namespaceId: string }>();
 
-const namespaceDetail = ref<NamespaceDetailResponse | null>(null);
 const namespaceParties = ref<NamespacePartiesResponse | null>(null);
-const detailError = ref<string | null>(null);
-const partiesError = ref<string | null>(null);
-const partiesLoading = ref(false);
 const partiesPageSize = ref(DEFAULT_PAGE_SIZE);
 const partiesBeforeCursor = ref<string | null>(null);
 const partiesAfterCursor = ref<string | null>(null);
+
+const summary = useSectionLoad(() => fetchNamespaceSummary(props.namespaceId));
+const nodes = useSectionLoad(() => fetchNamespaceNodes(props.namespaceId));
+const topology = useSectionLoad(() => fetchNamespaceTopology(props.namespaceId));
+const parties = useSectionLoad(async () => {
+  namespaceParties.value = await fetchNamespaceParties(props.namespaceId, {
+    limit: partiesPageSize.value,
+    before: partiesBeforeCursor.value ?? undefined,
+    after: partiesAfterCursor.value ?? undefined,
+  });
+  return namespaceParties.value;
+});
+const updates = useSectionLoad(() =>
+  fetchNamespaceUpdates(props.namespaceId, { limit: DEFAULT_PAGE_SIZE }),
+);
+const contracts = useSectionLoad(() =>
+  fetchNamespaceContracts(props.namespaceId, { limit: DEFAULT_PAGE_SIZE }),
+);
 
 const partyPurposeLabels: Record<string, string> = {
   namespace: "Namespace",
@@ -39,15 +58,31 @@ const partyPermissionLabels: Record<string, string> = {
   observation: "Observation",
 };
 
+const summaryData = summary.data;
+const summaryLoading = summary.loading;
+const summaryError = summary.error;
+const nodesData = nodes.data;
+const nodesLoading = nodes.loading;
+const nodesError = nodes.error;
+const topologyData = topology.data;
+const topologyLoading = topology.loading;
+const topologyError = topology.error;
+const partiesLoading = parties.loading;
+const partiesError = parties.error;
+const updatesLoading = updates.loading;
+const updatesError = updates.error;
+const contractsLoading = contracts.loading;
+const contractsError = contracts.error;
+
 const renderedUpdates = computed(() =>
-  (namespaceDetail.value?.recentUpdates ?? []).map((update) => ({
+  (updates.data.value?.updates ?? []).map((update) => ({
     ...update,
     recordTimeLines: formatRecordTime(update.recordTime),
   })),
 );
 
 const renderedContracts = computed(() =>
-  (namespaceDetail.value?.recentContracts ?? []).map((contract) => ({
+  (contracts.data.value?.contracts ?? []).map((contract) => ({
     ...contract,
     recordTimeLines: formatRecordTime(contract.recordTime),
   })),
@@ -203,39 +238,6 @@ function resolvePartyKeyThreshold(
   return thresholds[0] ?? null;
 }
 
-async function loadNamespaceParties() {
-  partiesLoading.value = true;
-  partiesError.value = null;
-
-  try {
-    namespaceParties.value = await fetchNamespaceParties(props.namespaceId, {
-      limit: partiesPageSize.value,
-      before: partiesBeforeCursor.value ?? undefined,
-      after: partiesAfterCursor.value ?? undefined,
-    });
-  } catch (err) {
-    partiesError.value = err instanceof Error ? err.message : "Unknown error";
-    namespaceParties.value = null;
-  } finally {
-    partiesLoading.value = false;
-  }
-}
-
-async function loadNamespaceDetail() {
-  detailError.value = null;
-  namespaceDetail.value = null;
-
-  try {
-    const [detail] = await Promise.all([
-      fetchNamespaceDetail(props.namespaceId),
-      loadNamespaceParties(),
-    ]);
-    namespaceDetail.value = detail;
-  } catch (err) {
-    detailError.value = err instanceof Error ? err.message : "Unknown error";
-  }
-}
-
 function resetPartyPagination() {
   partiesBeforeCursor.value = null;
   partiesAfterCursor.value = null;
@@ -249,7 +251,7 @@ async function showOlderParties() {
 
   partiesBeforeCursor.value = cursor;
   partiesAfterCursor.value = null;
-  await loadNamespaceParties();
+  await parties.load();
 }
 
 async function showNewerParties() {
@@ -260,7 +262,7 @@ async function showNewerParties() {
 
   partiesAfterCursor.value = cursor;
   partiesBeforeCursor.value = null;
-  await loadNamespaceParties();
+  await parties.load();
 }
 
 async function handlePartyPageSizeChange(event: Event) {
@@ -272,7 +274,7 @@ async function handlePartyPageSizeChange(event: Event) {
   partiesPageSize.value =
     Number.parseInt(target.value, 10) || DEFAULT_PAGE_SIZE;
   resetPartyPagination();
-  await loadNamespaceParties();
+  await parties.load();
 }
 
 watch(
@@ -280,7 +282,18 @@ watch(
   () => {
     resetPartyPagination();
     partiesPageSize.value = DEFAULT_PAGE_SIZE;
-    void loadNamespaceDetail();
+    summary.reset();
+    nodes.reset();
+    topology.reset();
+    parties.reset();
+    updates.reset();
+    contracts.reset();
+    void summary.load();
+    void nodes.load();
+    void topology.load();
+    void parties.load();
+    void updates.load();
+    void contracts.load();
   },
   { immediate: true },
 );
@@ -288,22 +301,12 @@ watch(
 
 <template>
   <section class="party-detail">
-    <p
-      v-if="detailError"
-      class="node-detail__message node-detail__message--error"
-    >
-      {{ detailError }}
-    </p>
-    <p v-else-if="!namespaceDetail" class="node-detail__message inline-loading" role="status">
-      <span class="node-updates__spinner" aria-hidden="true"></span>
-      <span>Loading namespace detail...</span>
-    </p>
-    <div v-else class="node-page">
+    <div class="node-page">
       <div class="node-page__main node-detail__content">
         <header class="node-detail__hero">
           <div>
             <h2 class="party-detail__title">
-              {{ namespaceDetail.namespaceId }} Namespace
+              {{ summaryData?.namespaceId ?? props.namespaceId }} Namespace
             </h2>
           </div>
         </header>
@@ -311,30 +314,38 @@ watch(
         <div class="node-detail__sections party-detail__sections">
           <section class="node-detail__section party-detail__section--summary">
             <h3>Overview</h3>
-            <dl class="detail-grid party-detail__summary-grid">
+            <p v-if="summaryError" class="node-detail__message node-detail__message--error">
+              {{ summaryError }}
+              <button type="button" class="dashboard__refresh" @click="summary.load">Retry</button>
+            </p>
+            <p v-else-if="summaryLoading" class="node-detail__message inline-loading" role="status">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading namespace summary...</span>
+            </p>
+            <dl v-else-if="summaryData" class="detail-grid party-detail__summary-grid">
               <div
                 class="party-detail__summary-item party-detail__summary-item--full-row"
               >
                 <dt>Namespace ID</dt>
                 <dd class="update-detail__id">
-                  {{ namespaceDetail.namespaceId }}
+                  {{ summaryData.namespaceId }}
                 </dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Observed Parties</dt>
-                <dd>{{ namespaceDetail.partyCount }}</dd>
+                <dd>{{ summaryData.partyCount }}</dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Observed Nodes</dt>
-                <dd>{{ namespaceDetail.nodeCount }}</dd>
+                <dd>{{ summaryData.nodeCount }}</dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Recent Updates</dt>
-                <dd>{{ namespaceDetail.recentUpdateCount }}</dd>
+                <dd>{{ summaryData.recentUpdateCount }}</dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Recent Contracts</dt>
-                <dd>{{ namespaceDetail.recentContractCount }}</dd>
+                <dd>{{ summaryData.recentContractCount }}</dd>
               </div>
             </dl>
           </section>
@@ -393,8 +404,9 @@ watch(
                   </RouterLink>
                 </div>
               </div>
-              <p v-if="partiesError" class="update-detail__empty">
+              <p v-if="partiesError" class="update-detail__empty node-detail__message--error">
                 {{ partiesError }}
+                <button type="button" class="dashboard__refresh" @click="parties.load">Retry</button>
               </p>
               <p
                 v-else-if="
@@ -416,34 +428,85 @@ watch(
             </div>
           </section>
 
+          <section class="node-detail__section party-detail__section--nodes">
+            <h3>Observed Nodes</h3>
+            <p
+              v-if="nodesError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Observed Nodes error"
+            >
+              <span>{{ nodesError }}</span>
+              <button type="button" class="dashboard__refresh" @click="nodes.retry">Retry</button>
+            </p>
+            <p
+              v-else-if="nodesLoading"
+              class="node-detail__message inline-loading"
+              role="status"
+            >
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading observed nodes...</span>
+            </p>
+            <div v-else-if="nodesData" class="package-detail__list">
+              <div
+                v-for="node in nodesData.nodes"
+                :key="node.nodeId"
+                class="package-detail__list-row"
+              >
+                <div class="party-detail__row-main">
+                  <RouterLink
+                    class="contract-detail__link"
+                    :to="`/nodes/${node.nodeId}`"
+                  >
+                    {{ node.label }}
+                  </RouterLink>
+                </div>
+                <span class="party-detail__meta party-detail__row-text">
+                  {{ node.recentUpdateCount }} updates / {{ node.recentContractCount }} contracts
+                </span>
+              </div>
+              <p v-if="nodesData.nodes.length === 0" class="update-detail__empty">
+                No nodes observed for this namespace.
+              </p>
+            </div>
+          </section>
+
           <section class="node-detail__section party-detail__section--topology">
             <h3>Namespace Topology</h3>
-            <div class="party-topology__list">
+            <p v-if="topologyError" class="node-detail__message node-detail__message--error">
+              {{ topologyError }}
+              <button type="button" class="dashboard__refresh" @click="topology.load">Retry</button>
+            </p>
+            <p v-else-if="topologyLoading" class="node-detail__message inline-loading" role="status">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading namespace topology...</span>
+            </p>
+            <div v-else-if="topologyData" class="party-topology__list">
               <article
-                v-for="topology in namespaceDetail.topologyByNode"
-                :key="topology.nodeId"
+                v-for="nodeTopology in topologyData.topologyByNode"
+                :key="nodeTopology.nodeId"
                 class="party-topology__card"
               >
                 <div class="party-topology__header">
-                  <p class="party-topology__node">{{ topology.label }}</p>
+                  <p class="party-topology__node">{{ nodeTopology.label }}</p>
                   <QuerySourcePill source="grpc" />
                 </div>
 
                 <p
-                  v-if="topology.status === 'grpc_not_configured'"
+                  v-if="nodeTopology.status === 'grpc_not_configured'"
                   class="party-topology__state"
                 >
                   gRPC not configured for this node.
                 </p>
                 <p
-                  v-else-if="topology.status === 'grpc_error'"
+                  v-else-if="nodeTopology.status === 'grpc_error'"
                   class="party-topology__state party-topology__state--error"
                 >
-                  {{ topology.errorMessage ?? "Topology read failed." }}
+                  {{ nodeTopology.errorMessage ?? "Topology read failed." }}
                 </p>
                 <template v-else>
                   <div
-                    v-if="topology.partyToParticipants.length > 0"
+                    v-if="nodeTopology.partyToParticipants.length > 0"
                     class="party-topology__group"
                   >
                     <div class="party-topology__group-title-row">
@@ -451,7 +514,7 @@ watch(
                       <span
                         v-if="
                           resolvePartyParticipantThreshold(
-                            topology.partyToParticipants,
+                            nodeTopology.partyToParticipants,
                           ) !== null
                         "
                         class="party-topology__threshold"
@@ -459,13 +522,13 @@ watch(
                         Threshold
                         {{
                           resolvePartyParticipantThreshold(
-                            topology.partyToParticipants,
+                            nodeTopology.partyToParticipants,
                           )
                         }}
                       </span>
                     </div>
                     <div
-                      v-for="participant in topology.partyToParticipants"
+                      v-for="participant in nodeTopology.partyToParticipants"
                       :key="`${participant.participantUid ?? participant.participantId ?? 'participant'}-${participant.permission ?? 'none'}`"
                       class="party-topology__mapping"
                     >
@@ -500,7 +563,7 @@ watch(
                   </div>
 
                   <div
-                    v-if="topology.partyToKeyMappings.length > 0"
+                    v-if="nodeTopology.partyToKeyMappings.length > 0"
                     class="party-topology__group"
                   >
                     <div class="party-topology__group-title-row">
@@ -508,19 +571,19 @@ watch(
                       <span
                         v-if="
                           resolvePartyKeyThreshold(
-                            topology.partyToKeyMappings,
+                            nodeTopology.partyToKeyMappings,
                           ) !== null
                         "
                         class="party-topology__threshold"
                       >
                         Threshold
                         {{
-                          resolvePartyKeyThreshold(topology.partyToKeyMappings)
+                          resolvePartyKeyThreshold(nodeTopology.partyToKeyMappings)
                         }}
                       </span>
                     </div>
                     <div
-                      v-for="keyMapping in topology.partyToKeyMappings"
+                      v-for="keyMapping in nodeTopology.partyToKeyMappings"
                       :key="`${keyMapping.keyFingerprint ?? keyMapping.publicKey ?? 'key'}-${keyMapping.purpose ?? 'none'}`"
                       class="party-topology__mapping"
                     >
@@ -596,7 +659,24 @@ watch(
 
           <section class="node-detail__section party-detail__section--nodes">
             <h3>Recent Updates</h3>
-            <div class="package-detail__list">
+            <p
+              v-if="updatesError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Recent Updates error"
+            >
+              <span>{{ updatesError }}</span>
+              <button type="button" class="dashboard__refresh" @click="updates.retry">Retry</button>
+            </p>
+            <p
+              v-else-if="updatesLoading"
+              class="node-detail__message inline-loading"
+              role="status"
+            >
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading recent updates...</span>
+            </p>
+            <div v-else class="package-detail__list">
               <RouterLink
                 v-for="update in renderedUpdates"
                 :key="`${update.nodeId}:${update.eventOffset}`"
@@ -645,7 +725,24 @@ watch(
 
           <section class="node-detail__section party-detail__section--nodes">
             <h3>Recent Contracts</h3>
-            <div class="package-detail__list">
+            <p
+              v-if="contractsError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Recent Contracts error"
+            >
+              <span>{{ contractsError }}</span>
+              <button type="button" class="dashboard__refresh" @click="contracts.retry">Retry</button>
+            </p>
+            <p
+              v-else-if="contractsLoading"
+              class="node-detail__message inline-loading"
+              role="status"
+            >
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading recent contracts...</span>
+            </p>
+            <div v-else class="package-detail__list">
               <RouterLink
                 v-for="contract in renderedContracts"
                 :key="`${contract.nodeId}:${contract.contractId}`"
