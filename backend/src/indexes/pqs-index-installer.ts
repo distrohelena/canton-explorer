@@ -1,11 +1,10 @@
-import type { PqsRawExecutor } from '../pqs/pqs-manager.factory';
 import {
   advisoryLockSql,
   advisoryUnlockSql,
   contractPartitionsSql,
+  dropIndexSql,
   exercisesExistsSql,
-  existingExplorerIndexesSql,
-  inspectionExplainSql,
+  expectedIndexStatusSql,
   insertMigrationSql,
   migrationTableSql,
   migrationVersionsSql,
@@ -18,16 +17,40 @@ type PartitionRow = { table_name: string };
 type ExistsRow = { exists: boolean };
 type TransactionIdTypeRow = { column_type: string };
 type MigrationVersionRow = { version: string };
-type IndexNameRow = { indexname: string };
+type IndexStatusRow = { index_name: string; is_valid: boolean; is_ready: boolean };
+
+type DirectPostgresClient = {
+  connect(): Promise<void>;
+  end(): Promise<void>;
+  query(sql: string, values?: unknown[]): Promise<{ rows: unknown[] }>;
+};
+
+type DirectPostgresClientFactory = (connectionString: string) => DirectPostgresClient;
+
+export interface PqsIndexDatabase {
+  query<TRow>(sql: string, values?: readonly unknown[]): Promise<{ rows: TRow[] }>;
+  end(): Promise<void>;
+}
+
+export type PqsIndexDatabaseFactory = (connectionString: string) => Promise<PqsIndexDatabase>;
+
+export type PqsIndexInstallerDependencies = {
+  createDatabase?: PqsIndexDatabaseFactory;
+};
+
+export type PqsIndexStatus = {
+  name: string;
+  isValid: boolean;
+  isReady: boolean;
+};
 
 export type PqsIndexInspection = {
   schema: string;
   contractPartitions: readonly string[];
   hasExercises: boolean;
   transactionIdIsText: boolean;
-  existingIndexes: readonly string[];
+  indexStatuses: readonly PqsIndexStatus[];
   proposedSql: readonly string[];
-  explainResults: readonly unknown[];
 };
 
 export type PqsIndexApplyResult = {
@@ -38,6 +61,37 @@ export type PqsIndexApplyResult = {
   appliedStatements: number;
 };
 
+function directPostgresClientFactory(connectionString: string): DirectPostgresClient {
+  // The Explorer SDK intentionally blocks mutations in $queryRaw. The installer
+  // owns this narrowly scoped direct connection so ordinary Explorer reads stay
+  // on the SDK's read-only path.
+  const { Client } = require('pg') as {
+    Client: new (options: { connectionString: string }) => DirectPostgresClient;
+  };
+  return new Client({ connectionString });
+}
+
+export async function createPqsIndexDatabase(
+  connectionString: string,
+  createClient: DirectPostgresClientFactory = directPostgresClientFactory,
+): Promise<PqsIndexDatabase> {
+  const client = createClient(connectionString);
+  try {
+    await client.connect();
+  } catch (error) {
+    await client.end();
+    throw error;
+  }
+
+  return {
+    query: async <TRow>(sql: string, values: readonly unknown[] = []) => {
+      const result = await client.query(sql, [...values]);
+      return { rows: result.rows as TRow[] };
+    },
+    end: () => client.end(),
+  };
+}
+
 function indexNameFromStatement(statement: string): string {
   const match = statement.match(/if not exists "([^"]+)"/);
   if (!match) {
@@ -47,13 +101,13 @@ function indexNameFromStatement(statement: string): string {
 }
 
 async function inspectSchema(
-  executor: PqsRawExecutor,
+  database: PqsIndexDatabase,
   schema: string,
 ): Promise<PqsIndexContext> {
   const [partitionsResult, exercisesResult, transactionIdTypeResult] = await Promise.all([
-    executor.query<PartitionRow>(contractPartitionsSql(schema), [schema]),
-    executor.query<ExistsRow>(exercisesExistsSql(), [schema]),
-    executor.query<TransactionIdTypeRow>(transactionIdTypeSql(), [schema]),
+    database.query<PartitionRow>(contractPartitionsSql(schema), [schema]),
+    database.query<ExistsRow>(exercisesExistsSql(), [schema]),
+    database.query<TransactionIdTypeRow>(transactionIdTypeSql(), [schema]),
   ]);
 
   return {
@@ -68,90 +122,141 @@ function plannedStatements(context: PqsIndexContext): readonly string[] {
   return pqsIndexMigrations.flatMap((migration) => migration.apply(context));
 }
 
-export async function inspectPqsIndexes(
-  executor: PqsRawExecutor,
+async function indexStatuses(
+  database: PqsIndexDatabase,
   schema: string,
-): Promise<PqsIndexInspection> {
-  const [context, existingIndexesResult] = await Promise.all([
-    inspectSchema(executor, schema),
-    executor.query<IndexNameRow>(existingExplorerIndexesSql(), [schema]),
-  ]);
-  const existingIndexes = existingIndexesResult.rows.map((row) => row.indexname);
-  const existingIndexNames = new Set(existingIndexes);
-  const proposedSql = plannedStatements(context).filter(
-    (statement) => !existingIndexNames.has(indexNameFromStatement(statement)),
-  );
-  const explainResults = await Promise.all(
-    context.contractPartitions.map(async (relation) => {
-      const result = await executor.query<unknown>(inspectionExplainSql(schema, relation));
-      return result.rows;
-    }),
-  );
+  expectedIndexNames: readonly string[],
+): Promise<Map<string, PqsIndexStatus>> {
+  if (expectedIndexNames.length === 0) {
+    return new Map();
+  }
 
-  return {
+  const result = await database.query<IndexStatusRow>(expectedIndexStatusSql(), [
     schema,
-    contractPartitions: context.contractPartitions,
-    hasExercises: context.hasExercises,
-    transactionIdIsText: context.transactionIdIsText,
-    existingIndexes,
-    proposedSql,
-    explainResults,
-  };
+    expectedIndexNames,
+  ]);
+  return new Map(
+    result.rows.map((row) => [
+      row.index_name,
+      { name: row.index_name, isValid: row.is_valid, isReady: row.is_ready },
+    ]),
+  );
 }
 
-export async function applyPqsIndexes(
-  executor: PqsRawExecutor,
-  schema: string,
-): Promise<PqsIndexApplyResult> {
-  const lockKey = `canton-explorer-indexes:${schema}`;
-  let lockAcquired = false;
-
+async function withPqsIndexDatabase<TResult>(
+  connectionString: string,
+  dependencies: PqsIndexInstallerDependencies,
+  operation: (database: PqsIndexDatabase) => Promise<TResult>,
+): Promise<TResult> {
+  const database = await (dependencies.createDatabase ?? createPqsIndexDatabase)(connectionString);
   try {
-    await executor.query(advisoryLockSql, [lockKey]);
-    lockAcquired = true;
+    return await operation(database);
+  } finally {
+    await database.end();
+  }
+}
 
-    await executor.query(migrationTableSql(schema));
-    const [appliedResult, context] = await Promise.all([
-      executor.query<MigrationVersionRow>(migrationVersionsSql(schema)),
-      inspectSchema(executor, schema),
-    ]);
-    const appliedVersions = new Set(appliedResult.rows.map((row) => row.version));
-    const newlyAppliedVersions: string[] = [];
-    const skippedVersions: string[] = [];
-    let appliedStatements = 0;
-
-    for (const migration of pqsIndexMigrations) {
-      if (appliedVersions.has(migration.version)) {
-        skippedVersions.push(migration.version);
-        continue;
-      }
-
-      const statements = migration.apply(context);
-      if (statements.length === 0) {
-        skippedVersions.push(migration.version);
-        continue;
-      }
-
-      for (const statement of statements) {
-        await executor.query(statement);
-        appliedStatements += 1;
-      }
-
-      await executor.query(insertMigrationSql(schema), [migration.version]);
-      appliedVersions.add(migration.version);
-      newlyAppliedVersions.push(migration.version);
-    }
+export async function inspectPqsIndexes(
+  connectionString: string,
+  schema: string,
+  dependencies: PqsIndexInstallerDependencies = {},
+): Promise<PqsIndexInspection> {
+  return withPqsIndexDatabase(connectionString, dependencies, async (database) => {
+    const context = await inspectSchema(database, schema);
+    const statements = plannedStatements(context);
+    const statuses = await indexStatuses(
+      database,
+      schema,
+      statements.map(indexNameFromStatement),
+    );
 
     return {
       schema,
-      appliedVersions: [...appliedVersions].sort(),
-      newlyAppliedVersions,
-      skippedVersions,
-      appliedStatements,
+      contractPartitions: context.contractPartitions,
+      hasExercises: context.hasExercises,
+      transactionIdIsText: context.transactionIdIsText,
+      indexStatuses: [...statuses.values()],
+      proposedSql: statements.filter((statement) => {
+        const status = statuses.get(indexNameFromStatement(statement));
+        return status?.isValid !== true || status.isReady !== true;
+      }),
     };
-  } finally {
-    if (lockAcquired) {
-      await executor.query(advisoryUnlockSql, [lockKey]);
+  });
+}
+
+export async function applyPqsIndexes(
+  connectionString: string,
+  schema: string,
+  dependencies: PqsIndexInstallerDependencies = {},
+): Promise<PqsIndexApplyResult> {
+  return withPqsIndexDatabase(connectionString, dependencies, async (database) => {
+    const lockKey = `canton-explorer-indexes:${schema}`;
+    let lockAcquired = false;
+
+    try {
+      await database.query(advisoryLockSql, [lockKey]);
+      lockAcquired = true;
+
+      await database.query(migrationTableSql(schema));
+      const [appliedResult, context] = await Promise.all([
+        database.query<MigrationVersionRow>(migrationVersionsSql(schema)),
+        inspectSchema(database, schema),
+      ]);
+      const appliedVersions = new Set(appliedResult.rows.map((row) => row.version));
+      const newlyAppliedVersions: string[] = [];
+      const skippedVersions: string[] = [];
+      let appliedStatements = 0;
+
+      for (const migration of pqsIndexMigrations) {
+        const statements = migration.apply(context);
+        if (statements.length === 0) {
+          skippedVersions.push(migration.version);
+          continue;
+        }
+
+        const expectedIndexNames = statements.map(indexNameFromStatement);
+        const currentStatuses = await indexStatuses(database, schema, expectedIndexNames);
+
+        for (const statement of statements) {
+          const indexName = indexNameFromStatement(statement);
+          const status = currentStatuses.get(indexName);
+          if (status && (!status.isValid || !status.isReady)) {
+            await database.query(dropIndexSql(schema, indexName));
+            appliedStatements += 1;
+          }
+          if (!status || !status.isValid || !status.isReady) {
+            await database.query(statement);
+            appliedStatements += 1;
+          }
+        }
+
+        const reconciledStatuses = await indexStatuses(database, schema, expectedIndexNames);
+        const invalidIndex = expectedIndexNames.find((indexName) => {
+          const status = reconciledStatuses.get(indexName);
+          return status?.isValid !== true || status.isReady !== true;
+        });
+        if (invalidIndex) {
+          throw new Error(`Index ${invalidIndex} is not valid and ready after reconciliation`);
+        }
+
+        if (!appliedVersions.has(migration.version)) {
+          await database.query(insertMigrationSql(schema), [migration.version]);
+          appliedVersions.add(migration.version);
+          newlyAppliedVersions.push(migration.version);
+        }
+      }
+
+      return {
+        schema,
+        appliedVersions: [...appliedVersions].sort(),
+        newlyAppliedVersions,
+        skippedVersions,
+        appliedStatements,
+      };
+    } finally {
+      if (lockAcquired) {
+        await database.query(advisoryUnlockSql, [lockKey]);
+      }
     }
-  }
+  });
 }

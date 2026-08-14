@@ -60,11 +60,15 @@ export const transactionIdTypeSql = (): string => `
     and attribute.attnum > 0
     and not attribute.attisdropped`;
 
-export const existingExplorerIndexesSql = (): string => `
-  select indexname
-  from pg_indexes
-  where schemaname = $1 and indexname like 'canton_explorer_%'
-  order by indexname`;
+export const expectedIndexStatusSql = (): string => `
+  select index_relation.relname as index_name,
+    index_metadata.indisvalid as is_valid,
+    index_metadata.indisready as is_ready
+  from pg_index index_metadata
+  join pg_class index_relation on index_relation.oid = index_metadata.indexrelid
+  join pg_namespace index_schema on index_schema.oid = index_relation.relnamespace
+  where index_schema.nspname = $1 and index_relation.relname = any($2::text[])
+  order by index_relation.relname`;
 
 export const migrationVersionsSql = (schema: string): string =>
   `select version from ${qualified(schema, 'canton_explorer_index_migrations')} order by version`;
@@ -78,8 +82,8 @@ export const activeContractsIndexSql = (schema: string, relation: string): strin
 export const transactionIdPatternIndexSql = (schema: string): string =>
   `create index concurrently if not exists ${quoteIdentifier('canton_explorer_transactions_transaction_id_pattern_ops')} on ${qualified(schema, '__transactions')} (transaction_id text_pattern_ops)`;
 
-export const inspectionExplainSql = (schema: string, relation: string): string =>
-  `explain (format json) select 1 from ${qualified(schema, relation)}`;
+export const dropIndexSql = (schema: string, indexName: string): string =>
+  `drop index concurrently if exists ${qualified(schema, indexName)}`;
 
 export const insertMigrationSql = (schema: string): string =>
   `insert into ${qualified(schema, 'canton_explorer_index_migrations')} (version) values ($1) on conflict (version) do nothing`;

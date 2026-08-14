@@ -63,6 +63,7 @@
         "@nestjs/core": "^11.0.1",
         "@nestjs/platform-express": "^11.1.28",
         "dotenv": "^17.4.2",
+        "pg": "^8.22.0",
         "protobufjs": "^7.6.5",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.1",
