@@ -292,6 +292,11 @@ interface CachedNodeObservedTokens {
   tokens: TokenSummary[];
 }
 
+interface LoadedNodeObservedTokens {
+  refreshing: boolean;
+  tokens: TokenSummary[];
+}
+
 interface NodeTokenHolderObservation {
   contractId: string | null;
   nodeId: string;
@@ -2195,6 +2200,14 @@ export class PqsSummaryService {
   private readonly observedTokensByNode = new Map<
     string,
     CachedNodeObservedTokens
+  >();
+  private readonly grpcObservedTokensByNode = new Map<
+    string,
+    CachedNodeObservedTokens
+  >();
+  private readonly grpcObservedTokenRefreshesByNode = new Map<
+    string,
+    Promise<TokenSummary[]>
   >();
   private readonly tokenHoldersByNode = new Map<
     string,
@@ -4892,7 +4905,7 @@ export class PqsSummaryService {
     const refreshResults = await Promise.allSettled(
       nodes.map(async (node) => ({
         node,
-        tokens: await this.loadCachedObservedTokens(node),
+        observedTokens: await this.loadCachedObservedTokens(node),
       })),
     );
     const successfulTokens = refreshResults
@@ -4901,10 +4914,14 @@ export class PqsSummaryService {
           result,
         ): result is PromiseFulfilledResult<{
           node: NodeConfig;
-          tokens: TokenSummary[];
+          observedTokens: LoadedNodeObservedTokens;
         }> => result.status === 'fulfilled',
       )
-      .flatMap((result) => result.value.tokens);
+      .flatMap((result) => result.value.observedTokens.tokens);
+    const refreshing = refreshResults.some(
+      (result) =>
+        result.status === 'fulfilled' && result.value.observedTokens.refreshing,
+    );
 
     if (successfulTokens.length === 0) {
       const firstFailure = refreshResults.find(
@@ -4928,11 +4945,14 @@ export class PqsSummaryService {
       options,
     );
 
-    return this.paginateTokens(
-      filteredTokens.sort(compareGlobalTokens),
-      limit,
-      options,
-    );
+    return {
+      ...this.paginateTokens(
+        filteredTokens.sort(compareGlobalTokens),
+        limit,
+        options,
+      ),
+      refreshing,
+    };
   }
 
   async fetchLatestTokenTransfers(
@@ -5171,6 +5191,7 @@ export class PqsSummaryService {
             : beforeCursor
               ? encodeGlobalTokenCursor(pagedTokens[0])
               : null,
+      refreshing: false,
       tokens: pagedTokens,
     };
   }
@@ -5804,35 +5825,118 @@ export class PqsSummaryService {
 
   private async loadCachedObservedTokens(
     node: NodeConfig,
+  ): Promise<LoadedNodeObservedTokens> {
+    const grpcTokens = this.loadGrpcObservedTokens(node);
+    const pqsTokens = await this.loadCachedPqsObservedTokens(node);
+
+    if (pqsTokens.length === 0 && grpcTokens) {
+      try {
+        return {
+          refreshing: false,
+          tokens: this.mergePqsFirst(pqsTokens, await grpcTokens.promise),
+        };
+      } catch (error) {
+        if (grpcTokens.cachedTokens.length > 0) {
+          return {
+            refreshing: false,
+            tokens: this.mergePqsFirst(pqsTokens, grpcTokens.cachedTokens),
+          };
+        }
+        throw error;
+      }
+    }
+
+    return {
+      refreshing: grpcTokens?.refreshing ?? false,
+      tokens: this.mergePqsFirst(pqsTokens, grpcTokens?.cachedTokens ?? []),
+    };
+  }
+
+  private async loadCachedPqsObservedTokens(
+    node: NodeConfig,
   ): Promise<TokenSummary[]> {
     const cached = this.observedTokensByNode.get(node.id);
     if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
       return cached.tokens;
     }
 
-    const useGrpcHoldingViews =
-      node.mode === 'pqs_with_grpc' && this.grpcOperationsService !== undefined;
-    const [pqsTokens, grpcTokens, builtinTokens] = await Promise.all([
+    const [pqsTokens, builtinTokens] = await Promise.all([
       this.fetchObservedTokensForNode(node, TOKEN_TRANSFER_CACHE_LIMIT),
-      useGrpcHoldingViews
-        ? this.grpcOperationsService.fetchHoldingV2Tokens(node)
-        : Promise.resolve([] as TokenSummary[]),
       this.fetchBuiltinTokensForNode(node),
     ]);
-    const dedupedTokens = new Map<string, TokenSummary>();
-
-    for (const token of [...pqsTokens, ...grpcTokens, ...builtinTokens]) {
-      if (!dedupedTokens.has(token.tokenId)) {
-        dedupedTokens.set(token.tokenId, token);
-      }
-    }
-
-    const tokens = Array.from(dedupedTokens.values()).sort(compareGlobalTokens);
+    const tokens = this.mergePqsFirst(pqsTokens, builtinTokens);
     this.observedTokensByNode.set(node.id, {
       cachedAt: Date.now(),
       tokens,
     });
     return tokens;
+  }
+
+  private loadGrpcObservedTokens(node: NodeConfig): {
+    cachedTokens: TokenSummary[];
+    promise: Promise<TokenSummary[]>;
+    refreshing: boolean;
+  } | null {
+    if (
+      node.mode !== 'pqs_with_grpc' ||
+      this.grpcOperationsService === undefined
+    ) {
+      return null;
+    }
+
+    const cached = this.grpcObservedTokensByNode.get(node.id);
+    if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
+      return {
+        cachedTokens: cached.tokens,
+        promise: Promise.resolve(cached.tokens),
+        refreshing: false,
+      };
+    }
+
+    const inFlight = this.grpcObservedTokenRefreshesByNode.get(node.id);
+    if (inFlight) {
+      return {
+        cachedTokens: cached?.tokens ?? [],
+        promise: inFlight,
+        refreshing: true,
+      };
+    }
+
+    const refresh = this.grpcOperationsService
+      .fetchHoldingV2Tokens(node)
+      .then((tokens) => {
+        const sortedTokens = [...tokens].sort(compareGlobalTokens);
+        this.grpcObservedTokensByNode.set(node.id, {
+          cachedAt: Date.now(),
+          tokens: sortedTokens,
+        });
+        return sortedTokens;
+      })
+      .finally(() => {
+        this.grpcObservedTokenRefreshesByNode.delete(node.id);
+      });
+    this.grpcObservedTokenRefreshesByNode.set(node.id, refresh);
+    void refresh.catch(() => undefined);
+
+    return {
+      cachedTokens: cached?.tokens ?? [],
+      promise: refresh,
+      refreshing: true,
+    };
+  }
+
+  private mergePqsFirst(
+    pqsTokens: TokenSummary[],
+    grpcTokens: TokenSummary[],
+  ): TokenSummary[] {
+    const dedupedTokens = new Map<string, TokenSummary>();
+    for (const token of [...pqsTokens, ...grpcTokens]) {
+      if (!dedupedTokens.has(token.tokenId)) {
+        dedupedTokens.set(token.tokenId, token);
+      }
+    }
+
+    return Array.from(dedupedTokens.values()).sort(compareGlobalTokens);
   }
 
   private async fetchBuiltinTokensForNode(
@@ -5916,7 +6020,7 @@ export class PqsSummaryService {
     const refreshResults = await Promise.allSettled(
       nodes.map(async (node) => ({
         node,
-        tokens: await this.loadCachedObservedTokens(node),
+        tokens: (await this.loadCachedObservedTokens(node)).tokens,
       })),
     );
     const successfulTokens = refreshResults
@@ -5940,9 +6044,25 @@ export class PqsSummaryService {
       }
     }
 
-    const token = successfulTokens.find(
+    let token = successfulTokens.find(
       (candidate) => candidate.tokenId === tokenId,
     );
+
+    if (!token) {
+      const grpcFallbacks = await Promise.allSettled(
+        nodes.map(async (node) => {
+          const grpcTokens = this.loadGrpcObservedTokens(node);
+          return grpcTokens ? grpcTokens.promise : [];
+        }),
+      );
+      token = grpcFallbacks
+        .filter(
+          (result): result is PromiseFulfilledResult<TokenSummary[]> =>
+            result.status === 'fulfilled',
+        )
+        .flatMap((result) => result.value)
+        .find((candidate) => candidate.tokenId === tokenId);
+    }
 
     if (!token) {
       throw new Error('Token not found');

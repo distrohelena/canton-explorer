@@ -5728,6 +5728,181 @@ describe('PqsSummaryService', () => {
     );
   });
 
+  it('returns PQS tokens while gRPC enrichment is still pending', async () => {
+    let resolveGrpc: (tokens: TokensResponse['tokens']) => void;
+    const grpcTokens = new Promise<TokensResponse['tokens']>((resolve) => {
+      resolveGrpc = resolve;
+    });
+    const grpcOperationsService = {
+      fetchHoldingV2Tokens: jest.fn().mockReturnValue(grpcTokens),
+    };
+    const service = new PqsSummaryService(
+      {} as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      grpcOperationsService as never,
+    );
+    jest
+      .spyOn(service as never, 'fetchObservedTokensForNode')
+      .mockResolvedValue([
+        {
+          tokenId: 'Issuer::PqsToken',
+          name: 'PQS Token',
+          symbol: null,
+          issuer: 'Issuer',
+          source: 'pqs',
+        },
+      ]);
+    jest
+      .spyOn(service as never, 'fetchBuiltinTokensForNode')
+      .mockResolvedValue([]);
+
+    const response = await Promise.race([
+      (service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: Array<{
+            id: string;
+            label: string;
+            mode: 'pqs_with_grpc';
+          }>,
+        ) => Promise<TokensResponse>;
+      }).fetchTokens([
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          mode: 'pqs_with_grpc',
+        },
+      ]),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('PQS response waited for gRPC enrichment')),
+          100,
+        ),
+      ),
+    ]);
+
+    expect(response).toMatchObject({
+      refreshing: true,
+      tokens: [
+        expect.objectContaining({
+          tokenId: 'Issuer::PqsToken',
+          source: 'pqs',
+        }),
+      ],
+    });
+    expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledTimes(1);
+
+    resolveGrpc!([]);
+    await grpcTokens;
+  });
+
+  it('shares a pending gRPC enrichment refresh across concurrent token requests', async () => {
+    let resolveGrpc: (tokens: TokensResponse['tokens']) => void;
+    const grpcTokens = new Promise<TokensResponse['tokens']>((resolve) => {
+      resolveGrpc = resolve;
+    });
+    const grpcOperationsService = {
+      fetchHoldingV2Tokens: jest.fn().mockReturnValue(grpcTokens),
+    };
+    const service = new PqsSummaryService(
+      {} as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      grpcOperationsService as never,
+    );
+    jest
+      .spyOn(service as never, 'fetchObservedTokensForNode')
+      .mockResolvedValue([
+        {
+          tokenId: 'Issuer::PqsToken',
+          name: 'PQS Token',
+          symbol: null,
+          issuer: 'Issuer',
+          source: 'pqs',
+        },
+      ]);
+    jest
+      .spyOn(service as never, 'fetchBuiltinTokensForNode')
+      .mockResolvedValue([]);
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      mode: 'pqs_with_grpc' as const,
+    };
+
+    await Promise.all([
+      (service as PqsSummaryService & {
+        fetchTokens: (nodes: typeof node[]) => Promise<TokensResponse>;
+      }).fetchTokens([node]),
+      (service as PqsSummaryService & {
+        fetchTokens: (nodes: typeof node[]) => Promise<TokensResponse>;
+      }).fetchTokens([node]),
+    ]);
+
+    expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledTimes(1);
+
+    resolveGrpc!([]);
+    await grpcTokens;
+  });
+
+  it('awaits the shared gRPC fallback when PQS finds no tokens', async () => {
+    let resolveGrpc: (tokens: TokensResponse['tokens']) => void;
+    const grpcTokens = new Promise<TokensResponse['tokens']>((resolve) => {
+      resolveGrpc = resolve;
+    });
+    const grpcOperationsService = {
+      fetchHoldingV2Tokens: jest.fn().mockReturnValue(grpcTokens),
+    };
+    const service = new PqsSummaryService(
+      {} as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      grpcOperationsService as never,
+    );
+    jest
+      .spyOn(service as never, 'fetchObservedTokensForNode')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(service as never, 'fetchBuiltinTokensForNode')
+      .mockResolvedValue([]);
+    const responsePromise = (service as PqsSummaryService & {
+      fetchTokens: (
+        nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
+      ) => Promise<TokensResponse>;
+    }).fetchTokens([
+      { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
+    ]);
+    let settled = false;
+    void responsePromise.then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+
+    resolveGrpc!([
+      {
+        tokenId: 'Issuer::GrpcToken',
+        name: 'gRPC Token',
+        symbol: null,
+        issuer: 'Issuer',
+        source: 'grpc',
+      },
+    ]);
+
+    await expect(responsePromise).resolves.toMatchObject({
+      refreshing: false,
+      tokens: [expect.objectContaining({ tokenId: 'Issuer::GrpcToken' })],
+    });
+  });
+
   it('returns Canton Coin in the discovered token list', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [
@@ -5760,6 +5935,7 @@ describe('PqsSummaryService', () => {
       limit: 30,
       nextBefore: null,
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'canton-coin',
@@ -5844,6 +6020,7 @@ describe('PqsSummaryService', () => {
       limit: 30,
       nextBefore: null,
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'Issuer::validator-license',
@@ -5914,6 +6091,7 @@ describe('PqsSummaryService', () => {
       limit: 30,
       nextBefore: null,
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'canton-coin',
@@ -5949,6 +6127,7 @@ describe('PqsSummaryService', () => {
       limit: 30,
       nextBefore: null,
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'canton-coin',
@@ -6110,6 +6289,7 @@ describe('PqsSummaryService', () => {
       limit: 30,
       nextBefore: null,
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'Issuer::USDCx',
@@ -6378,6 +6558,7 @@ describe('PqsSummaryService', () => {
       limit: 30,
       nextBefore: null,
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'Issuer-1::USDCx',
@@ -6531,6 +6712,7 @@ describe('PqsSummaryService', () => {
       limit: 1,
       nextBefore: expect.any(String),
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'Issuer-A::Alpha',
@@ -6558,6 +6740,7 @@ describe('PqsSummaryService', () => {
       limit: 1,
       nextBefore: null,
       nextAfter: expect.any(String),
+      refreshing: false,
       tokens: [
         {
           tokenId: 'Issuer-B::Beta',
@@ -6674,6 +6857,7 @@ describe('PqsSummaryService', () => {
       limit: 30,
       nextBefore: null,
       nextAfter: null,
+      refreshing: false,
       tokens: [
         {
           tokenId: 'Issuer-A::ALPHA',
