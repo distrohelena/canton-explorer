@@ -305,4 +305,26 @@ describe('SettingsView', () => {
     refresh.resolve([healthyNode]);
     await waitFor(() => expect(screen.queryByText('Refreshing…')).not.toBeInTheDocument());
   });
+
+  it('keeps the last successful indexing cards visible and retries a failed refresh locally', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchNodes)
+      .mockResolvedValueOnce([healthyNode])
+      .mockRejectedValueOnce(new Error('refresh unavailable'))
+      .mockRejectedValueOnce(new Error('refresh unavailable'))
+      .mockResolvedValueOnce([healthyNode]);
+
+    renderSettings();
+    expect(await screen.findByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(screen.getByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+    expect(await screen.findByText(/Refresh failed: refresh unavailable/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(screen.queryByText(/Refresh failed: refresh unavailable/)).not.toBeInTheDocument());
+    expect(fetchNodes).toHaveBeenCalledTimes(4);
+    expect(screen.getByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+  });
 });
