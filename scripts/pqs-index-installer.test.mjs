@@ -462,9 +462,13 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
     await import("../backend/dist/src/pqs/pqs-summary.service.js");
   const client = new Client({ connectionString });
   await client.connect();
+  const queries = [];
   const service = new PqsSummaryService({
     getRawExecutor: async () => ({
-      query: (sql) => client.query(sql),
+      query: async (sql) => {
+        queries.push(sql);
+        return client.query(sql);
+      },
     }),
   });
   const node = {
@@ -487,6 +491,59 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
     assert.deepEqual(
       forwardOr.updates.map((update) => update.eventOffset),
       ["100002", "100001"],
+    );
+
+    const filteredSql = queries.find((sql) =>
+      sql.includes("filtered_update_ix as materialized"),
+    );
+    assert.ok(
+      filteredSql,
+      "fetchRecentUpdates should issue a filtered SQL query",
+    );
+    assert.match(filteredSql, /party_0_update_ix as materialized/);
+    assert.match(filteredSql, /party_1_update_ix as materialized/);
+    assert.match(filteredSql, /template_update_ix as materialized/);
+    assert.match(
+      filteredSql,
+      /from filtered_update_ix\s+join "public"\."__transactions" tx\s+on tx\.ix = filtered_update_ix\.update_ix/,
+    );
+    assert.doesNotMatch(filteredSql, /contract_row\.created_at_ix = tx\.ix/);
+    assert.doesNotMatch(filteredSql, /contract_row\.archived_at_ix = tx\.ix/);
+    assert.doesNotMatch(filteredSql, /exercise_row\.exercised_at_ix = tx\.ix/);
+
+    const explain = await client.query(
+      `explain (analyze, format json) ${filteredSql}`,
+    );
+    const plan = explain.rows[0]?.["QUERY PLAN"]?.[0]?.Plan;
+    assert.ok(plan, "EXPLAIN should return a JSON plan");
+    const planNodes = [];
+    const collectPlanNodes = (planNode) => {
+      planNodes.push(planNode);
+      for (const child of planNode.Plans ?? []) {
+        collectPlanNodes(child);
+      }
+    };
+    collectPlanNodes(plan);
+    const eventOrderScans = planNodes.filter(
+      (planNode) =>
+        typeof planNode["Index Name"] === "string" &&
+        planNode["Index Name"].includes(
+          "canton_explorer_contracts_29_created_at_ix_order",
+        ),
+    );
+    assert.ok(
+      eventOrderScans.some(
+        (planNode) =>
+          planNode["Actual Rows"] <= 3 && planNode["Actual Loops"] === 1,
+      ),
+      "the generated candidate SQL should use the physical event-order index for bounded work",
+    );
+    assert.ok(
+      planNodes.some(
+        (planNode) =>
+          planNode["Node Type"] === "Limit" && planNode["Actual Rows"] <= 3,
+      ),
+      "the generated candidate SQL should retain per-branch top-N limits",
     );
 
     const backwardAnd = await service.fetchRecentUpdates(node, {

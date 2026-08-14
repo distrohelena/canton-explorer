@@ -1433,7 +1433,7 @@ describe('PqsSummaryService', () => {
   it('returns a party summary aggregated across nodes', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -1480,7 +1480,7 @@ describe('PqsSummaryService', () => {
 
     const participant2Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -1850,7 +1850,7 @@ describe('PqsSummaryService', () => {
     const prefixedPartyId = `p|${strippedPartyId}`;
     const participantQuery = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes(
           "'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'",
         ) &&
@@ -2565,7 +2565,7 @@ describe('PqsSummaryService', () => {
   it('keeps party detail available when topology fails for one node', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -2723,7 +2723,7 @@ describe('PqsSummaryService', () => {
   it('keeps party detail available when PQS fails for one node', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -3529,7 +3529,7 @@ describe('PqsSummaryService', () => {
     });
   });
 
-  it('drives party event probes from a bounded ordered transaction page', async () => {
+  it('builds uncorrelated bounded party candidates before loading transactions', async () => {
     const query = jest.fn().mockResolvedValueOnce({ rows: [] });
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
@@ -3548,12 +3548,23 @@ describe('PqsSummaryService', () => {
     );
 
     const sql = String(query.mock.calls[0]?.[0]);
-    expect(sql).toContain('with party_update_ix as materialized');
-    expect(sql).toContain('contract_row.created_at_ix as update_ix');
-    expect(sql).toContain('contract_row.archived_at_ix as update_ix');
-    expect(sql).toContain('exercise_row.exercised_at_ix as update_ix');
-    expect(sql).toContain('join party_update_ix');
-    expect(sql).toContain('where exists');
+    expect(sql).toContain('with party_0_update_ix as materialized');
+    expect(sql).toContain('party_update_ix as materialized');
+    expect(sql).toContain(
+      'select distinct contract_row.created_at_ix as update_ix',
+    );
+    expect(sql).toContain(
+      'select distinct contract_row.archived_at_ix as update_ix',
+    );
+    expect(sql).toContain(
+      'select distinct exercise_row.exercised_at_ix as update_ix',
+    );
+    expect(sql).toMatch(
+      /from party_update_ix\s+join "public"\."__transactions" tx\s+on tx\.ix = party_update_ix\.update_ix/,
+    );
+    expect(sql).not.toContain('contract_row.created_at_ix = tx.ix');
+    expect(sql).not.toContain('contract_row.archived_at_ix = tx.ix');
+    expect(sql).not.toContain('exercise_row.exercised_at_ix = tx.ix');
     expect(sql).toContain('order by contract_row.created_at_ix desc');
     expect(sql).toContain('order by contract_row.archived_at_ix desc');
     expect(sql).toContain('order by exercise_row.exercised_at_ix desc');
@@ -3612,6 +3623,10 @@ describe('PqsSummaryService', () => {
       );
 
       const sql = String(query.mock.calls[1]?.[0]);
+      expect(sql).toContain('party_0_update_ix as materialized');
+      expect(sql).toContain('party_1_update_ix as materialized');
+      expect(sql).toContain('party_update_ix as materialized');
+      expect(sql).toContain('template_update_ix as materialized');
       expect(sql).toContain('filtered_update_ix as materialized');
       expect(sql).toContain(cursorLookup);
 
@@ -3638,6 +3653,9 @@ describe('PqsSummaryService', () => {
           ),
         ).toHaveLength(3);
       }
+      expect(sql).not.toContain('contract_row.created_at_ix = tx.ix');
+      expect(sql).not.toContain('contract_row.archived_at_ix = tx.ix');
+      expect(sql).not.toContain('exercise_row.exercised_at_ix = tx.ix');
     },
   );
 
@@ -3704,7 +3722,7 @@ describe('PqsSummaryService', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('from "public"."__transactions" tx'),
+      expect.stringContaining('from party_update_ix'),
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
@@ -3918,9 +3936,11 @@ describe('PqsSummaryService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining(
-        "update_event_templates.template_id not like 'Splice.%'",
-      ),
+      expect.stringContaining('visible_update_ix as materialized'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("not like 'Splice.%'"),
     );
     expect(fetchEventsSpy).not.toHaveBeenCalled();
   });
@@ -4975,7 +4995,7 @@ describe('PqsSummaryService', () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('from "public"."__transactions" tx'),
+      expect.stringContaining('from party_update_ix'),
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
@@ -4991,8 +5011,10 @@ describe('PqsSummaryService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Bob'"));
     const sql = String(query.mock.calls[0]?.[0]);
-    expect(sql.match(/exists \(/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
-    expect(sql).toMatch(/\band exists \(/);
+    expect(sql).toContain('party_0_update_ix as materialized');
+    expect(sql).toContain('party_1_update_ix as materialized');
+    expect(sql).toContain('intersect');
+    expect(sql).not.toContain('where exists');
     expect(sql).not.toContain('having count(distinct party_filter)');
     expect(updates).toEqual({
       nodeId: 'participant-1',

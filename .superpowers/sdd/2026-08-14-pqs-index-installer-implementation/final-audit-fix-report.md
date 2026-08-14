@@ -180,3 +180,69 @@ were present; neither caused a test failure.
   historical matching event rows up front; each event branch is cursor-bounded,
   index-backed, and top-N limited. The 20,000-row exactness regression completed
   successfully.
+
+## Final-audit round 4: genuine event candidate bounds (P1 re-review)
+
+Date: 2026-08-14
+
+### Investigation and correction
+
+The scoped re-review was correct: round 3's `filtered_update_ix` first scanned
+`__transactions`, and every supposed event candidate branch included
+`event_ix = tx.ix`. Its branch ordering and limit therefore only applied to the
+already selected transaction rows; it was not a historical event-candidate
+bound.
+
+The replacement builds uncorrelated event candidates directly from
+`__contracts` (create and archive) and `__exercises`. Every branch now applies
+the event-index cursor window, its party/template/visibility match, `select
+distinct ... as update_ix`, direction-specific event ordering, and the branch
+top-N limit before any transaction join. Party filters produce an independent
+candidate CTE per party and use `union` for OR or `intersect` for AND. Template
+filters produce a separate candidate CTE; combined filters join those CTEs.
+When template and/or `hideSplice` filters are present, their bounded candidate
+set also seeds the party branches, preventing the selected visibility/template
+window from being crowded out before the party intersection. `hideSplice` is
+now selected through a bounded `visible_update_ix` CTE rather than an outer
+per-transaction event lookup. The outer update query starts at the final
+candidate CTE and then joins `__transactions` by ix.
+
+The safe-repair change from round 3 remains intact and was not modified.
+
+### TDD and integration evidence
+
+- RED before production changes: `npm test --workspace backend -- --runInBand
+  test/pqs/pqs-summary.service.spec.ts` failed 4 new assertions. The generated
+  SQL had only `party_update_ix`, scanned transactions first, and still
+  contained `contract_row.created_at_ix = tx.ix` (and the archive/exercise
+  equivalents).
+- The first PostgreSQL pass exposed an AND exactness case on the 20,000-row
+  fixture: Alice's newest bulk rows initially hid the older Alice+Bob update.
+  Template/visibility candidate seeding was added before the per-party
+  intersection; the exact backward combined-filter assertion then returned the
+  expected offset 1000 with both parties.
+- The integration regression captures the actual filtered SQL issued by
+  `fetchRecentUpdates`, verifies that it starts from `filtered_update_ix`, and
+  rejects every former `event_ix = tx.ix` correlation. It runs `EXPLAIN
+  (ANALYZE, FORMAT JSON)` against that exact SQL, asserts physical use of
+  `canton_explorer_contracts_29_created_at_ix_order`, and asserts an event-index
+  scan and a `Limit` node each produce no more than the three candidate rows.
+
+### Round-4 verification
+
+| Command | Result |
+| --- | --- |
+| New focused regression before implementation | RED: 1 suite, 4 failing new assertions (expected) |
+| `npm test --workspace backend -- --runInBand test/pqs/pqs-summary.service.spec.ts` | 1 suite, 127 tests passed |
+| `npm test --workspace backend -- --runInBand test/indexes/pqs-index-sql.spec.ts test/indexes/pqs-index-installer.spec.ts test/pqs/pqs-summary.service.spec.ts` | 3 suites, 148 tests passed |
+| `npm run build --workspace backend` | passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 3 tests passed; captured-query EXPLAIN/index/bounded-work regression passed |
+| `npm test --workspace backend -- --runInBand` | 36 suites, 436 tests passed |
+| `npm test --workspace frontend` | 55 files, 445 tests passed |
+
+### Round-4 changed paths
+
+- `backend/src/pqs/pqs-summary.service.ts`
+- `backend/test/pqs/pqs-summary.service.spec.ts`
+- `scripts/pqs-index-installer.test.mjs`
+- `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`

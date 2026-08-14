@@ -1131,13 +1131,12 @@ function templateTypePkFilterClause(
 type PqsUpdateCandidateWindow = {
   direction: 'asc' | 'desc';
   limit: number;
-  transactionCursorCondition: string | null;
   eventCursorOperator: '>' | '<' | null;
   cursorCte: string | null;
 };
 
 type PqsUpdateCandidateCte = {
-  name: 'party_update_ix' | 'template_update_ix' | 'filtered_update_ix';
+  name: string;
   sql: string;
 };
 
@@ -1154,7 +1153,6 @@ function buildPqsUpdateCandidateWindow(
     return {
       direction: 'asc',
       limit,
-      transactionCursorCondition: `tx.offset > ${after}`,
       eventCursorOperator: '>',
       cursorCte: `update_cursor as (
         select coalesce(
@@ -1175,7 +1173,6 @@ function buildPqsUpdateCandidateWindow(
     return {
       direction: 'desc',
       limit,
-      transactionCursorCondition: `tx.offset < ${before}`,
       eventCursorOperator: '<',
       cursorCte: `update_cursor as (
         select coalesce(
@@ -1195,22 +1192,20 @@ function buildPqsUpdateCandidateWindow(
   return {
     direction: 'desc',
     limit,
-    transactionCursorCondition: null,
     eventCursorOperator: null,
     cursorCte: null,
   };
 }
 
 function buildPqsUpdateEventCandidateBranch(
-  relation: string,
-  rowAlias: 'contract_row' | 'exercise_row',
+  source: string,
   eventColumn: string,
   matchCondition: string,
   window: PqsUpdateCandidateWindow,
   additionalCondition?: string,
 ): string {
   const conditions = [
-    `${eventColumn} = tx.ix`,
+    `${eventColumn} is not null`,
     window.eventCursorOperator
       ? `${eventColumn} ${window.eventCursorOperator} (select cursor_ix from update_cursor)`
       : null,
@@ -1218,50 +1213,96 @@ function buildPqsUpdateEventCandidateBranch(
     matchCondition,
   ].filter((condition): condition is string => Boolean(condition));
 
-  return `(select ${eventColumn} as update_ix
-        from ${relation} ${rowAlias}
+  return `(select distinct ${eventColumn} as update_ix
+        from ${source}
         where ${conditions.join('\n          and ')}
         order by ${eventColumn} ${window.direction}
         limit ${window.limit})`;
 }
 
-function buildPqsUpdateEventExistsCondition(
+function buildPqsUpdateEventCandidateSet(
   node: NodeConfig,
   window: PqsUpdateCandidateWindow,
   contractMatch: string,
   exerciseMatch: string,
+  candidateSourceName?: string,
 ): string {
   const relations = pqsCoreRelations(node);
+  const candidateCondition = candidateSourceName
+    ? (eventColumn: string) =>
+        `${eventColumn} in (select update_ix from ${candidateSourceName})`
+    : undefined;
 
-  return `exists (
-      select 1
-      from (
-        ${[
-          buildPqsUpdateEventCandidateBranch(
-            relations.contracts,
-            'contract_row',
-            'contract_row.created_at_ix',
-            contractMatch,
-            window,
-          ),
-          buildPqsUpdateEventCandidateBranch(
-            relations.contracts,
-            'contract_row',
-            'contract_row.archived_at_ix',
-            contractMatch,
-            window,
-            'contract_row.archived_at_ix is not null',
-          ),
-          buildPqsUpdateEventCandidateBranch(
-            relations.exercises,
-            'exercise_row',
-            'exercise_row.exercised_at_ix',
-            exerciseMatch,
-            window,
-          ),
-        ].join('\n\n        union all\n\n        ')}
-      ) matched_update_events
-    )`;
+  return `select distinct update_ix
+    from (
+      ${[
+        buildPqsUpdateEventCandidateBranch(
+          `${relations.contracts} contract_row`,
+          'contract_row.created_at_ix',
+          contractMatch,
+          window,
+          candidateCondition?.('contract_row.created_at_ix'),
+        ),
+        buildPqsUpdateEventCandidateBranch(
+          `${relations.contracts} contract_row`,
+          'contract_row.archived_at_ix',
+          contractMatch,
+          window,
+          candidateCondition?.('contract_row.archived_at_ix'),
+        ),
+        buildPqsUpdateEventCandidateBranch(
+          `${relations.exercises} exercise_row`,
+          'exercise_row.exercised_at_ix',
+          exerciseMatch,
+          window,
+          candidateCondition?.('exercise_row.exercised_at_ix'),
+        ),
+      ].join('\n\n      union all\n\n      ')}
+    ) matched_update_events`;
+}
+
+function buildPqsHideSpliceUpdateCandidateSet(
+  node: NodeConfig,
+  window: PqsUpdateCandidateWindow,
+): string {
+  const relations = pqsCoreRelations(node);
+  const contractTemplateId =
+    contractTemplateIdentifierExpression('contract_tpe_row');
+  const exerciseTemplateId = contractTemplateIdentifierExpression(
+    'exercise_contract_tpe_row',
+  );
+  const contractVisible = `(${contractTemplateId} is null or ${contractTemplateId} not like 'Splice.%')`;
+  const exerciseVisible = `(${exerciseTemplateId} is null or ${exerciseTemplateId} not like 'Splice.%')`;
+
+  return `select distinct update_ix
+    from (
+      ${[
+        buildPqsUpdateEventCandidateBranch(
+          `${relations.contracts} contract_row
+        join ${relations.contractTpe} contract_tpe_row
+          on contract_tpe_row.pk = contract_row.tpe_pk`,
+          'contract_row.created_at_ix',
+          contractVisible,
+          window,
+        ),
+        buildPqsUpdateEventCandidateBranch(
+          `${relations.contracts} contract_row
+        join ${relations.contractTpe} contract_tpe_row
+          on contract_tpe_row.pk = contract_row.tpe_pk`,
+          'contract_row.archived_at_ix',
+          contractVisible,
+          window,
+        ),
+        buildPqsUpdateEventCandidateBranch(
+          `${relations.exercises} exercise_row
+        join ${relations.contractTpe} exercise_contract_tpe_row
+          on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk`,
+          'exercise_row.exercised_at_ix',
+          exerciseVisible,
+          window,
+        ),
+      ].join('\n\n      union all\n\n      ')}
+    ) visible_update_events`;
 }
 
 function buildPqsUpdateCandidateCte(
@@ -1272,109 +1313,113 @@ function buildPqsUpdateCandidateCte(
   partyMode?: string,
   hideSplice?: boolean,
 ): PqsUpdateCandidateCte | null {
-  const relations = pqsCoreRelations(node);
   const normalizedParties = normalizePartyFilters(parties);
   const hasTemplateFilter = templateTypePks !== undefined;
 
-  if (normalizedParties.length === 0 && !hasTemplateFilter) {
+  if (normalizedParties.length === 0 && !hasTemplateFilter && !hideSplice) {
     return null;
   }
 
-  const partyConditions = normalizedParties.map((partyId) =>
-    buildPqsUpdateEventExistsCondition(
+  const ctes: string[] = [];
+  let partyCandidateName: string | null = null;
+  let templateCandidateName: string | null = null;
+  let visibleCandidateName: string | null = null;
+
+  if (templateTypePks) {
+    templateCandidateName = 'template_update_ix';
+    ctes.push(`${templateCandidateName} as materialized (
+    ${buildPqsUpdateEventCandidateSet(
+      node,
+      window,
+      templateTypePkFilterClause(
+        'contract_row.tpe_pk',
+        templateTypePks.contract,
+      ),
+      templateTypePkFilterClause(
+        'exercise_row.tpe_pk',
+        templateTypePks.exercise,
+      ),
+    )}
+  )`);
+  }
+
+  if (hideSplice) {
+    visibleCandidateName = 'visible_update_ix';
+    ctes.push(`${visibleCandidateName} as materialized (
+    ${buildPqsHideSpliceUpdateCandidateSet(node, window)}
+  )`);
+  }
+
+  const partyCandidateSourceNames = [
+    templateCandidateName,
+    visibleCandidateName,
+  ].filter((name): name is string => Boolean(name));
+  const partyCandidateSourceName =
+    partyCandidateSourceNames.length === 2
+      ? 'visible_filtered_update_ix'
+      : partyCandidateSourceNames[0];
+
+  if (partyCandidateSourceNames.length === 2) {
+    const [templateName, visibleName] = partyCandidateSourceNames;
+    ctes.push(`${partyCandidateSourceName} as materialized (
+    select ${templateName}.update_ix
+    from ${templateName}
+    join ${visibleName}
+      on ${visibleName}.update_ix = ${templateName}.update_ix
+  )`);
+  }
+
+  if (normalizedParties.length > 0) {
+    const partyCandidateNames = normalizedParties.map((partyId, index) => {
+      const name = `party_${index}_update_ix`;
+      ctes.push(`${name} as materialized (
+    ${buildPqsUpdateEventCandidateSet(
       node,
       window,
       partyWitnessArrayMatchCondition('contract_row.witnesses', partyId),
       partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId),
-    ),
-  );
-  const partyJoiner =
-    normalizePartyFilterMode(partyMode) === 'and'
-      ? '\n      and '
-      : '\n      or ';
-  const partyCondition =
-    partyConditions.length === 0
-      ? null
-      : partyConditions.length === 1
-        ? partyConditions[0]
-        : `(\n      ${partyConditions.join(partyJoiner)}\n    )`;
-  const templateCondition = templateTypePks
-    ? buildPqsUpdateEventExistsCondition(
-        node,
-        window,
-        templateTypePkFilterClause(
-          'contract_row.tpe_pk',
-          templateTypePks.contract,
-        ),
-        templateTypePkFilterClause(
-          'exercise_row.tpe_pk',
-          templateTypePks.exercise,
-        ),
-      )
-    : null;
-  const conditions = [
-    window.transactionCursorCondition,
-    partyCondition,
-    templateCondition,
-    hideSplice ? buildPqsHideSpliceUpdatesClause(node) : null,
-  ].filter((condition): condition is string => Boolean(condition));
+      partyCandidateSourceName,
+    )}
+  )`);
+      return name;
+    });
+    partyCandidateName = 'party_update_ix';
+    const partySetOperator =
+      normalizePartyFilterMode(partyMode) === 'and' ? 'intersect' : 'union';
+    ctes.push(`${partyCandidateName} as materialized (
+    ${partyCandidateNames
+      .map((name) => `select update_ix from ${name}`)
+      .join(`\n    ${partySetOperator}\n    `)}
+  )`);
+  }
+
+  const candidateNames = [
+    partyCandidateName,
+    templateCandidateName,
+    visibleCandidateName,
+  ].filter((name): name is string => Boolean(name));
   const name =
-    partyCondition && templateCondition
-      ? 'filtered_update_ix'
-      : partyCondition
-        ? 'party_update_ix'
-        : 'template_update_ix';
+    candidateNames.length === 1 ? candidateNames[0] : 'filtered_update_ix';
+
+  if (candidateNames.length > 1) {
+    const [firstCandidateName, ...remainingCandidateNames] = candidateNames;
+    ctes.push(`${name} as materialized (
+    select ${firstCandidateName}.update_ix
+    from ${firstCandidateName}
+    ${remainingCandidateNames
+      .map(
+        (candidateName) =>
+          `join ${candidateName}
+      on ${candidateName}.update_ix = ${firstCandidateName}.update_ix`,
+      )
+      .join('\n    ')}
+  )`);
+  }
 
   return {
     name,
-    sql: `${name} as materialized (
-    select tx.ix as update_ix
-    from ${relations.transactions} tx
-    where ${conditions.join('\n      and ')}
-    order by tx.offset ${window.direction}
-    limit ${window.limit}
-  )`,
+    sql: ctes.join(',\n'),
   };
-}
-
-function buildPqsHideSpliceUpdatesClause(node: NodeConfig): string {
-  const relations = pqsCoreRelations(node);
-  const contractTemplateId =
-    contractTemplateIdentifierExpression('contract_tpe_row');
-  const exerciseTemplateId = contractTemplateIdentifierExpression(
-    'exercise_contract_tpe_row',
-  );
-
-  return `
-    exists (
-      select 1
-      from (
-        select ${contractTemplateId} as template_id
-        from ${relations.contracts} contract_row
-        join ${relations.contractTpe} contract_tpe_row
-          on contract_tpe_row.pk = contract_row.tpe_pk
-        where contract_row.created_at_ix = tx.ix
-
-        union all
-
-        select ${contractTemplateId} as template_id
-        from ${relations.contracts} contract_row
-        join ${relations.contractTpe} contract_tpe_row
-          on contract_tpe_row.pk = contract_row.tpe_pk
-        where contract_row.archived_at_ix = tx.ix
-
-        union all
-
-        select ${exerciseTemplateId} as template_id
-        from ${relations.exercises} exercise_row
-        join ${relations.contractTpe} exercise_contract_tpe_row
-          on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk
-        where exercise_row.exercised_at_ix = tx.ix
-      ) update_event_templates
-      where update_event_templates.template_id is null
-        or update_event_templates.template_id not like 'Splice.%'
-    )
-  `;
 }
 
 function pqsRecentUpdatesQuery(
@@ -1410,19 +1455,16 @@ function pqsRecentUpdatesQuery(
     candidateCte?.sql,
   ].filter((value): value is string => Boolean(value));
   const withClause = ctes.length > 0 ? `with ${ctes.join(',\n')}` : '';
-  const joinClause = candidateCte
-    ? `join ${candidateCte.name} on ${candidateCte.name}.update_ix = tx.ix`
-    : '';
-  const hideSpliceClause = hideSplice
-    ? buildPqsHideSpliceUpdatesClause(node)
-    : null;
+  const fromClause = candidateCte
+    ? `from ${candidateCte.name}
+      join ${relations.transactions} tx
+        on tx.ix = ${candidateCte.name}.update_ix`
+    : `from ${relations.transactions} tx`;
   const afterFilters = [
     normalizedAfter ? `tx.offset > ${normalizedAfter}` : null,
-    candidateCte ? null : hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
   const olderFilters = [
     normalizedBefore ? `tx.offset < ${normalizedBefore}` : null,
-    candidateCte ? null : hideSpliceClause,
   ].filter((value): value is string => Boolean(value));
 
   if (normalizedAfter && !normalizedBefore) {
@@ -1437,8 +1479,7 @@ function pqsRecentUpdatesQuery(
         tx.offset::text as event_offset,
         ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
         tx.paid_traffic_cost::text as paid_traffic_cost
-      from ${relations.transactions} tx
-      ${joinClause}
+      ${fromClause}
       ${whereClause}
       order by tx.offset asc
       limit ${queryLimit}
@@ -1455,8 +1496,7 @@ function pqsRecentUpdatesQuery(
       tx.offset::text as event_offset,
       ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
       tx.paid_traffic_cost::text as paid_traffic_cost
-    from ${relations.transactions} tx
-    ${joinClause}
+    ${fromClause}
     ${whereClause}
     order by tx.offset desc
     limit ${queryLimit}
@@ -1607,11 +1647,13 @@ function pqsPartyRecentUpdatesQuery(
       tx.offset::text as event_offset,
       ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
       tx.paid_traffic_cost::text as paid_traffic_cost
-    from ${relations.transactions} tx
     ${
       partyUpdateIxCte
-        ? `join ${partyUpdateIxCte.name} on ${partyUpdateIxCte.name}.update_ix = tx.ix`
-        : 'where false'
+        ? `from ${partyUpdateIxCte.name}
+    join ${relations.transactions} tx
+      on tx.ix = ${partyUpdateIxCte.name}.update_ix`
+        : `from ${relations.transactions} tx
+    where false`
     }
     order by tx.offset desc
     limit ${limit}
