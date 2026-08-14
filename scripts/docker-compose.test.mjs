@@ -53,3 +53,17 @@ test('client environment example provides safe placeholders for the configured n
   assert.doesNotMatch(environmentExample, /^TEST_PQS_URL=/m);
   assert.doesNotMatch(environmentExample, /https:\/\//);
 });
+
+test('documented Compose index commands preserve the indexes subcommand', () => {
+  const readme = readFileSync(path.join(projectRoot, 'README.md'), 'utf8');
+
+  assert.match(
+    readme,
+    /docker compose --profile indexes run --rm canton-explorer-indexes indexes inspect/,
+  );
+  assert.match(
+    readme,
+    /docker compose --profile indexes run --rm canton-explorer-indexes indexes apply/,
+  );
+  assert.match(readme, /no trailing arguments uses its default\n`indexes apply` command/);
+});

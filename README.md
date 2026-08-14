@@ -112,11 +112,12 @@ npx @distrohelena/canton-explorer indexes apply --config ./config/nodes.local.js
 
 The published Docker image exposes the same command. The default Compose
 service continues to start the HTTP Explorer only; the profile-gated service
-must be run manually:
+must be run manually. Running it with no trailing arguments uses its default
+`indexes apply` command:
 
 ```bash
-docker compose --profile indexes run --rm canton-explorer-indexes inspect
-docker compose --profile indexes run --rm canton-explorer-indexes apply
+docker compose --profile indexes run --rm canton-explorer-indexes indexes inspect
+docker compose --profile indexes run --rm canton-explorer-indexes indexes apply
 ```
 
 The index command needs PQS availability, not a gRPC connection. Each valid
