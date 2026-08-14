@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/vue';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import HomeView from './HomeView.vue';
 
@@ -7,6 +7,14 @@ const fetchLatestTokenTransfersMock = vi.hoisted(() => vi.fn());
 const fetchActivityHistoryMock = vi.hoisted(() => vi.fn());
 const fetchCantonCoinHistoryMock = vi.hoisted(() => vi.fn());
 const fetchRecentActivePartiesMock = vi.hoisted(() => vi.fn());
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
 
 vi.mock('../lib/api', () => ({
   fetchLatestUpdates: fetchLatestUpdatesMock,
@@ -117,8 +125,10 @@ describe('HomeView', () => {
     expect(screen.getByRole('heading', { name: 'CC price over time' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Latest Updates' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Latest Trades' })).toBeInTheDocument();
-    expect(within(updatesTable).getAllByRole('row')).toHaveLength(8);
-    expect(within(tradesTable).getAllByRole('row')).toHaveLength(8);
+    await waitFor(() => {
+      expect(within(updatesTable).getAllByRole('row')).toHaveLength(8);
+      expect(within(tradesTable).getAllByRole('row')).toHaveLength(8);
+    });
     expect(within(updatesTable).getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
       'Node',
       'Offset',
@@ -145,5 +155,25 @@ describe('HomeView', () => {
     expect(fetchActivityHistoryMock).toHaveBeenCalledWith(1);
     expect(fetchCantonCoinHistoryMock).toHaveBeenCalledWith('1D');
     expect(fetchRecentActivePartiesMock).toHaveBeenCalledWith(24);
+  });
+
+  it('keeps the latest tables visible while dashboard activity is pending', async () => {
+    const pendingActivity = deferred<Awaited<ReturnType<typeof fetchActivityHistoryMock>>>();
+    fetchActivityHistoryMock.mockReturnValueOnce(pendingActivity.promise);
+
+    render(HomeView, {
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(await screen.findByRole('table', { name: 'Latest updates' })).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: 'Latest trades' })).toBeInTheDocument();
+    expect(screen.getByText('Loading transaction activity…')).toBeInTheDocument();
   });
 });
