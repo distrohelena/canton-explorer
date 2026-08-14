@@ -95,10 +95,12 @@ interface SummaryRow {
 }
 
 interface UpdateMetaRow {
-  update_id: string;
+  update_id: string | null;
+  update_ix?: string | number | null;
   event_offset?: string | number | null;
   record_time: string | null;
   paid_traffic_cost?: string | null;
+  candidate_frontier_ix?: string | number | null;
 }
 
 interface ActivityBucketRow {
@@ -192,7 +194,20 @@ interface ActiveContractRow {
   template_id: string | null;
   created_record_time: string | null;
   created_event_offset: string | number | null;
+  created_at_ix?: string | number | null;
+  create_event_pk?: string | number | null;
 }
+
+interface ActiveContractCursor {
+  eventOffset: string;
+  createdAtIx: string;
+  createEventPk: string;
+  contractId: string;
+}
+
+type DecodedActiveContractCursor =
+  | { kind: 'compound'; value: ActiveContractCursor }
+  | { kind: 'legacy'; eventOffset: string };
 
 interface GlobalUpdateCursor {
   recordTime: string | null;
@@ -308,6 +323,16 @@ interface TokenTemplateTypeRow {
   module_name: string | null;
   entity_name: string | null;
 }
+
+interface TemplateTypePkRow {
+  type_source?: 'contract' | 'exercise';
+  pk: string | number | bigint | null;
+}
+
+type TemplateTypePks = {
+  contract: readonly bigint[];
+  exercise: readonly bigint[];
+};
 
 interface LoadedNodeObservedTokens {
   refreshing: boolean;
@@ -1082,161 +1107,365 @@ function pqsActivityBucketsQuery(
   `;
 }
 
-function buildPqsUpdatePartyExistsCondition(
-  node: NodeConfig,
-  partyId: string,
-): string {
-  const relations = pqsCoreRelations(node);
-  const contractMatch = partyWitnessArrayMatchCondition(
-    'contract_row.witnesses',
-    partyId,
+function normalizeTemplateTypePks(
+  templateTypePks: readonly bigint[],
+): bigint[] {
+  return Array.from(
+    new Set(
+      templateTypePks
+        .filter((templateTypePk) => templateTypePk > 0n)
+        .map((templateTypePk) => templateTypePk.toString()),
+    ),
+    (templateTypePk) => BigInt(templateTypePk),
   );
-  const exerciseMatch = partyWitnessArrayMatchCondition(
-    'exercise_row.witnesses',
-    partyId,
-  );
-
-  return `(
-    exists (
-      select 1
-      from ${relations.contracts} contract_row
-      where (contract_row.created_at_ix = tx.ix or contract_row.archived_at_ix = tx.ix)
-        and ${contractMatch}
-    )
-    or exists (
-      select 1
-      from ${relations.exercises} exercise_row
-      where exercise_row.exercised_at_ix = tx.ix
-        and ${exerciseMatch}
-    )
-  )`;
 }
 
-function buildPqsUpdateTemplateExistsCondition(
-  node: NodeConfig,
-  templateId: string,
+function templateTypePkFilterClause(
+  column: string,
+  templateTypePks: readonly bigint[],
 ): string {
+  const normalizedTemplateTypePks = normalizeTemplateTypePks(templateTypePks);
+  return normalizedTemplateTypePks.length > 0
+    ? `${column} in (${normalizedTemplateTypePks.join(', ')})`
+    : 'false';
+}
+
+type PqsUpdateCandidateWindow = {
+  direction: 'asc' | 'desc';
+  limit: number;
+  eventCursorOperator: '>' | '<' | null;
+  cursorCte: string | null;
+};
+
+type PqsUpdateCandidateCte = {
+  name: string;
+  sql: string;
+  frontierSql: string;
+};
+
+type PqsUpdateEventCandidateBranch = {
+  sql: string;
+  frontierSql: string;
+};
+
+type PqsUpdateEventCandidateSet = {
+  sql: string;
+  frontierSql: string;
+};
+
+function buildPqsUpdateCandidateWindow(
+  node: NodeConfig,
+  limit: number,
+  before: string | null,
+  after: string | null,
+): PqsUpdateCandidateWindow {
   const relations = pqsCoreRelations(node);
-  const normalizedTemplateId = normalizeTemplateFilterValue(templateId);
-  const quotedTemplateId = `'${escapeSqlLiteral(normalizedTemplateId)}'`;
+  const useAfterCursor = Boolean(after && !before);
+
+  if (useAfterCursor && after) {
+    return {
+      direction: 'asc',
+      limit,
+      eventCursorOperator: '>',
+      cursorCte: `update_cursor as (
+        select coalesce(
+          (
+            select cursor_tx.ix
+            from ${relations.transactions} cursor_tx
+            where cursor_tx.offset <= ${after}
+            order by cursor_tx.offset desc
+            limit 1
+          ),
+          -1::bigint
+        ) as cursor_ix
+      )`,
+    };
+  }
+
+  if (before) {
+    return {
+      direction: 'desc',
+      limit,
+      eventCursorOperator: '<',
+      cursorCte: `update_cursor as (
+        select coalesce(
+          (
+            select cursor_tx.ix
+            from ${relations.transactions} cursor_tx
+            where cursor_tx.offset >= ${before}
+            order by cursor_tx.offset asc
+            limit 1
+          ),
+          9223372036854775807::bigint
+        ) as cursor_ix
+      )`,
+    };
+  }
+
+  return {
+    direction: 'desc',
+    limit,
+    eventCursorOperator: null,
+    cursorCte: null,
+  };
+}
+
+function buildPqsUpdateEventCandidateBranch(
+  source: string,
+  eventColumn: string,
+  matchCondition: string,
+  window: PqsUpdateCandidateWindow,
+  additionalCondition?: string,
+): PqsUpdateEventCandidateBranch {
+  const conditions = [
+    `${eventColumn} is not null`,
+    window.eventCursorOperator
+      ? `${eventColumn} ${window.eventCursorOperator} (select cursor_ix from update_cursor)`
+      : null,
+    additionalCondition,
+    matchCondition,
+  ].filter((condition): condition is string => Boolean(condition));
+
+  return {
+    sql: `(select distinct ${eventColumn} as update_ix
+        from ${source}
+        where ${conditions.join('\n          and ')}
+        order by ${eventColumn} ${window.direction}
+        limit ${window.limit})`,
+    frontierSql: `select update_ix
+      from (
+        select distinct ${eventColumn} as update_ix
+        from ${source}
+        where ${conditions.join('\n          and ')}
+        order by ${eventColumn} ${window.direction}
+        offset ${window.limit}
+        limit 1
+      ) event_candidate_frontier`,
+  };
+}
+
+function buildPqsUpdateEventCandidateSet(
+  node: NodeConfig,
+  window: PqsUpdateCandidateWindow,
+  contractMatch: string,
+  exerciseMatch: string,
+  candidateSourceName?: string,
+): PqsUpdateEventCandidateSet {
+  const relations = pqsCoreRelations(node);
+  const candidateCondition = candidateSourceName
+    ? (eventColumn: string) =>
+        `${eventColumn} in (select update_ix from ${candidateSourceName})`
+    : undefined;
+
+  const branches = [
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row`,
+      'contract_row.created_at_ix',
+      contractMatch,
+      window,
+      candidateCondition?.('contract_row.created_at_ix'),
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row`,
+      'contract_row.archived_at_ix',
+      contractMatch,
+      window,
+      candidateCondition?.('contract_row.archived_at_ix'),
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.exercises} exercise_row`,
+      'exercise_row.exercised_at_ix',
+      exerciseMatch,
+      window,
+      candidateCondition?.('exercise_row.exercised_at_ix'),
+    ),
+  ];
+
+  return {
+    sql: `select distinct update_ix
+    from (
+      ${branches.map((branch) => branch.sql).join('\n\n      union all\n\n      ')}
+    ) matched_update_events`,
+    frontierSql: branches
+      .map((branch) => branch.frontierSql)
+      .join('\n      union all\n      '),
+  };
+}
+
+function buildPqsHideSpliceUpdateCandidateSet(
+  node: NodeConfig,
+  window: PqsUpdateCandidateWindow,
+): PqsUpdateEventCandidateSet {
+  const relations = pqsCoreRelations(node);
   const contractTemplateId =
     contractTemplateIdentifierExpression('contract_tpe_row');
   const exerciseTemplateId = contractTemplateIdentifierExpression(
     'exercise_contract_tpe_row',
   );
+  const contractVisible = `(${contractTemplateId} is null or ${contractTemplateId} not like 'Splice.%')`;
+  const exerciseVisible = `(${exerciseTemplateId} is null or ${exerciseTemplateId} not like 'Splice.%')`;
 
-  return `(
-    exists (
-      select 1
-      from (
-        select ${contractTemplateId} as template_id
-        from ${relations.contracts} contract_row
+  const branches = [
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row
         join ${relations.contractTpe} contract_tpe_row
-          on contract_tpe_row.pk = contract_row.tpe_pk
-        where contract_row.created_at_ix = tx.ix
-
-        union all
-
-        select ${contractTemplateId} as template_id
-        from ${relations.contracts} contract_row
+          on contract_tpe_row.pk = contract_row.tpe_pk`,
+      'contract_row.created_at_ix',
+      contractVisible,
+      window,
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row
         join ${relations.contractTpe} contract_tpe_row
-          on contract_tpe_row.pk = contract_row.tpe_pk
-        where contract_row.archived_at_ix = tx.ix
-
-        union all
-
-        select ${exerciseTemplateId} as template_id
-        from ${relations.exercises} exercise_row
+          on contract_tpe_row.pk = contract_row.tpe_pk`,
+      'contract_row.archived_at_ix',
+      contractVisible,
+      window,
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.exercises} exercise_row
         join ${relations.contractTpe} exercise_contract_tpe_row
-          on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk
-        where exercise_row.exercised_at_ix = tx.ix
-      ) update_event_templates
-      where update_event_templates.template_id = ${quotedTemplateId}
-    )
-  )`;
+          on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk`,
+      'exercise_row.exercised_at_ix',
+      exerciseVisible,
+      window,
+    ),
+  ];
+
+  return {
+    sql: `select distinct update_ix
+    from (
+      ${branches.map((branch) => branch.sql).join('\n\n      union all\n\n      ')}
+    ) visible_update_events`,
+    frontierSql: branches
+      .map((branch) => branch.frontierSql)
+      .join('\n      union all\n      '),
+  };
 }
 
-function buildPqsUpdatesFilterClause(
+function buildPqsUpdateCandidateCte(
   node: NodeConfig,
+  window: PqsUpdateCandidateWindow,
   parties?: string[],
-  templates?: string[],
+  templateTypePks?: TemplateTypePks,
   partyMode?: string,
-): string | null {
-  const partyConditions = normalizePartyFilters(parties).map((party) =>
-    buildPqsUpdatePartyExistsCondition(node, party),
-  );
-  const templateConditions = normalizeTemplateFilters(templates).map(
-    (templateId) => buildPqsUpdateTemplateExistsCondition(node, templateId),
-  );
-  const groups: string[] = [];
+  hideSplice?: boolean,
+): PqsUpdateCandidateCte | null {
+  const normalizedParties = normalizePartyFilters(parties);
+  const hasTemplateFilter = templateTypePks !== undefined;
 
-  if (partyConditions.length > 0) {
-    const partyJoiner =
-      normalizePartyFilterMode(partyMode) === 'and'
-        ? '\n      and '
-        : '\n      or ';
-    groups.push(
-      partyConditions.length === 1
-        ? partyConditions[0]
-        : `(\n      ${partyConditions.join(partyJoiner)}\n    )`,
-    );
-  }
-
-  if (templateConditions.length > 0) {
-    groups.push(
-      templateConditions.length === 1
-        ? templateConditions[0]
-        : `(\n      ${templateConditions.join('\n      or ')}\n    )`,
-    );
-  }
-
-  if (groups.length === 0) {
+  if (normalizedParties.length === 0 && !hasTemplateFilter && !hideSplice) {
     return null;
   }
 
-  return groups.length === 1
-    ? groups[0]
-    : `(\n      ${groups.join('\n      and ')}\n    )`;
-}
+  const ctes: string[] = [];
+  const frontierQueries: string[] = [];
+  let partyCandidateName: string | null = null;
+  let templateCandidateName: string | null = null;
+  let visibleCandidateName: string | null = null;
 
-function buildPqsHideSpliceUpdatesClause(node: NodeConfig): string {
-  const relations = pqsCoreRelations(node);
-  const contractTemplateId =
-    contractTemplateIdentifierExpression('contract_tpe_row');
-  const exerciseTemplateId = contractTemplateIdentifierExpression(
-    'exercise_contract_tpe_row',
-  );
+  if (templateTypePks) {
+    templateCandidateName = 'template_update_ix';
+    const templateCandidates = buildPqsUpdateEventCandidateSet(
+      node,
+      window,
+      templateTypePkFilterClause(
+        'contract_row.tpe_pk',
+        templateTypePks.contract,
+      ),
+      templateTypePkFilterClause(
+        'exercise_row.tpe_pk',
+        templateTypePks.exercise,
+      ),
+    );
+    ctes.push(`${templateCandidateName} as materialized (
+    ${templateCandidates.sql}
+  )`);
+    frontierQueries.push(templateCandidates.frontierSql);
+  }
 
-  return `
-    exists (
-      select 1
-      from (
-        select ${contractTemplateId} as template_id
-        from ${relations.contracts} contract_row
-        join ${relations.contractTpe} contract_tpe_row
-          on contract_tpe_row.pk = contract_row.tpe_pk
-        where contract_row.created_at_ix = tx.ix
+  if (hideSplice) {
+    visibleCandidateName = 'visible_update_ix';
+    const visibleCandidates = buildPqsHideSpliceUpdateCandidateSet(node, window);
+    ctes.push(`${visibleCandidateName} as materialized (
+    ${visibleCandidates.sql}
+  )`);
+    frontierQueries.push(visibleCandidates.frontierSql);
+  }
 
-        union all
+  const partyCandidateSourceNames = [
+    templateCandidateName,
+    visibleCandidateName,
+  ].filter((name): name is string => Boolean(name));
+  const partyCandidateSourceName =
+    partyCandidateSourceNames.length === 2
+      ? 'visible_filtered_update_ix'
+      : partyCandidateSourceNames[0];
 
-        select ${contractTemplateId} as template_id
-        from ${relations.contracts} contract_row
-        join ${relations.contractTpe} contract_tpe_row
-          on contract_tpe_row.pk = contract_row.tpe_pk
-        where contract_row.archived_at_ix = tx.ix
+  if (partyCandidateSourceNames.length === 2) {
+    const [templateName, visibleName] = partyCandidateSourceNames;
+    ctes.push(`${partyCandidateSourceName} as materialized (
+    select ${templateName}.update_ix
+    from ${templateName}
+    join ${visibleName}
+      on ${visibleName}.update_ix = ${templateName}.update_ix
+  )`);
+  }
 
-        union all
+  if (normalizedParties.length > 0) {
+    const partyCandidateNames = normalizedParties.map((partyId, index) => {
+      const name = `party_${index}_update_ix`;
+      const partyCandidates = buildPqsUpdateEventCandidateSet(
+        node,
+        window,
+        partyWitnessArrayMatchCondition('contract_row.witnesses', partyId),
+        partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId),
+        partyCandidateSourceName,
+      );
+      ctes.push(`${name} as materialized (
+    ${partyCandidates.sql}
+  )`);
+      frontierQueries.push(partyCandidates.frontierSql);
+      return name;
+    });
+    partyCandidateName = 'party_update_ix';
+    const partySetOperator =
+      normalizePartyFilterMode(partyMode) === 'and' ? 'intersect' : 'union';
+    ctes.push(`${partyCandidateName} as materialized (
+    ${partyCandidateNames
+      .map((name) => `select update_ix from ${name}`)
+      .join(`\n    ${partySetOperator}\n    `)}
+  )`);
+  }
 
-        select ${exerciseTemplateId} as template_id
-        from ${relations.exercises} exercise_row
-        join ${relations.contractTpe} exercise_contract_tpe_row
-          on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk
-        where exercise_row.exercised_at_ix = tx.ix
-      ) update_event_templates
-      where update_event_templates.template_id is null
-        or update_event_templates.template_id not like 'Splice.%'
-    )
-  `;
+  const candidateNames = [
+    partyCandidateName,
+    templateCandidateName,
+    visibleCandidateName,
+  ].filter((name): name is string => Boolean(name));
+  const name =
+    candidateNames.length === 1 ? candidateNames[0] : 'filtered_update_ix';
+
+  if (candidateNames.length > 1) {
+    const [firstCandidateName, ...remainingCandidateNames] = candidateNames;
+    ctes.push(`${name} as materialized (
+    select ${firstCandidateName}.update_ix
+    from ${firstCandidateName}
+    ${remainingCandidateNames
+      .map(
+        (candidateName) =>
+          `join ${candidateName}
+      on ${candidateName}.update_ix = ${firstCandidateName}.update_ix`,
+      )
+      .join('\n    ')}
+  )`);
+  }
+
+  return {
+    name,
+    sql: ctes.join(',\n'),
+    frontierSql: frontierQueries.join('\n      union all\n      '),
+  };
 }
 
 function pqsRecentUpdatesQuery(
@@ -1245,32 +1474,60 @@ function pqsRecentUpdatesQuery(
   before?: string,
   after?: string,
   parties?: string[],
-  templates?: string[],
+  templateTypePks?: TemplateTypePks,
   partyMode?: string,
   hideSplice?: boolean,
+  candidateLimit?: number,
 ): string {
   const relations = pqsCoreRelations(node);
   const normalizedBefore = normalizeEventOffsetCursor(before);
   const normalizedAfter = normalizeEventOffsetCursor(after);
-  const filterClause = buildPqsUpdatesFilterClause(
-    node,
-    parties,
-    templates,
-    partyMode,
-  );
-  const hideSpliceClause = hideSplice
-    ? buildPqsHideSpliceUpdatesClause(node)
-    : null;
   const queryLimit = limit + 1;
+  const candidateWindow = buildPqsUpdateCandidateWindow(
+    node,
+    candidateLimit ?? queryLimit,
+    normalizedBefore,
+    normalizedAfter,
+  );
+  const candidateCte = buildPqsUpdateCandidateCte(
+    node,
+    candidateWindow,
+    parties,
+    templateTypePks,
+    partyMode,
+    hideSplice,
+  );
+  const ctes = [
+    candidateCte ? candidateWindow.cursorCte : null,
+    candidateCte?.sql,
+    candidateCte
+      ? `candidate_progress as (
+        select ${candidateWindow.direction === 'desc' ? 'max' : 'min'}(update_ix) as frontier_update_ix
+        from (
+          ${candidateCte.frontierSql}
+        ) candidate_frontiers
+      )`
+      : null,
+  ].filter((value): value is string => Boolean(value));
+  const withClause = ctes.length > 0 ? `with ${ctes.join(',\n')}` : '';
+  const fromClause = candidateCte
+    ? `from ${candidateCte.name}
+      join ${relations.transactions} tx
+        on tx.ix = ${candidateCte.name}.update_ix
+        ${
+          normalizedAfter && !normalizedBefore
+            ? `and tx.offset > ${normalizedAfter}`
+            : normalizedBefore
+              ? `and tx.offset < ${normalizedBefore}`
+              : ''
+        }
+      right join candidate_progress on true`
+    : `from ${relations.transactions} tx`;
   const afterFilters = [
-    normalizedAfter ? `tx.offset > ${normalizedAfter}` : null,
-    filterClause,
-    hideSpliceClause,
+    candidateCte || !normalizedAfter ? null : `tx.offset > ${normalizedAfter}`,
   ].filter((value): value is string => Boolean(value));
   const olderFilters = [
-    normalizedBefore ? `tx.offset < ${normalizedBefore}` : null,
-    filterClause,
-    hideSpliceClause,
+    candidateCte || !normalizedBefore ? null : `tx.offset < ${normalizedBefore}`,
   ].filter((value): value is string => Boolean(value));
 
   if (normalizedAfter && !normalizedBefore) {
@@ -1279,12 +1536,15 @@ function pqsRecentUpdatesQuery(
         ? `where ${afterFilters.join('\n      and ')}`
         : '';
     return `
+      ${withClause}
       select
         tx.transaction_id::text as update_id,
+        tx.ix::text as update_ix,
         tx.offset::text as event_offset,
         ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
-        tx.paid_traffic_cost::text as paid_traffic_cost
-      from ${relations.transactions} tx
+        tx.paid_traffic_cost::text as paid_traffic_cost,
+        ${candidateCte ? 'candidate_progress.frontier_update_ix::text' : 'null::text'} as candidate_frontier_ix
+      ${fromClause}
       ${whereClause}
       order by tx.offset asc
       limit ${queryLimit}
@@ -1295,12 +1555,15 @@ function pqsRecentUpdatesQuery(
     olderFilters.length > 0 ? `where ${olderFilters.join('\n      and ')}` : '';
 
   return `
+    ${withClause}
     select
       tx.transaction_id::text as update_id,
+      tx.ix::text as update_ix,
       tx.offset::text as event_offset,
       ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
-      tx.paid_traffic_cost::text as paid_traffic_cost
-    from ${relations.transactions} tx
+      tx.paid_traffic_cost::text as paid_traffic_cost,
+      ${candidateCte ? 'candidate_progress.frontier_update_ix::text' : 'null::text'} as candidate_frontier_ix
+    ${fromClause}
     ${whereClause}
     order by tx.offset desc
     limit ${queryLimit}
@@ -1434,55 +1697,45 @@ function pqsPartyRecentUpdatesQuery(
   limit: number,
 ): string {
   const relations = pqsCoreRelations(node);
-  const contractMatch = partyWitnessArrayMatchCondition(
-    'contract_row.witnesses',
-    partyId,
+  const candidateWindow = buildPqsUpdateCandidateWindow(
+    node,
+    limit,
+    null,
+    null,
   );
-  const exerciseMatch = partyWitnessArrayMatchCondition(
-    'exercise_row.witnesses',
+  const partyUpdateIxCte = buildPqsUpdateCandidateCte(node, candidateWindow, [
     partyId,
-  );
+  ]);
 
   return `
+    ${partyUpdateIxCte ? `with ${partyUpdateIxCte.sql}` : ''}
     select
       tx.transaction_id::text as update_id,
       tx.offset::text as event_offset,
       ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
       tx.paid_traffic_cost::text as paid_traffic_cost
-    from ${relations.transactions} tx
-    where exists (
-      select 1
-      from ${relations.contracts} contract_row
-      where (contract_row.created_at_ix = tx.ix or contract_row.archived_at_ix = tx.ix)
-        and ${contractMatch}
-    )
-    or exists (
-      select 1
-      from ${relations.exercises} exercise_row
-      where exercise_row.exercised_at_ix = tx.ix
-        and ${exerciseMatch}
-    )
+    ${
+      partyUpdateIxCte
+        ? `from ${partyUpdateIxCte.name}
+    join ${relations.transactions} tx
+      on tx.ix = ${partyUpdateIxCte.name}.update_ix`
+        : `from ${relations.transactions} tx
+    where false`
+    }
     order by tx.offset desc
     limit ${limit}
   `;
 }
 
 function buildPqsActiveContractsFilterClause(
+  node: NodeConfig,
   parties?: string[],
-  templates?: string[],
+  templateTypePks?: readonly bigint[],
   partyMode?: string,
   hideSplice?: boolean,
 ): string | null {
   const partyConditions = normalizePartyFilters(parties).map((party) =>
     partyWitnessArrayMatchCondition('contract_row.witnesses', party),
-  );
-  const templateExpression =
-    contractTemplateIdentifierExpression('contract_tpe_row');
-  const templateConditions = normalizeTemplateFilters(templates).map(
-    (templateId) => {
-      const quotedTemplateId = `'${escapeSqlLiteral(templateId)}'`;
-      return `${templateExpression} = ${quotedTemplateId}`;
-    },
   );
   const groups: string[] = [];
 
@@ -1498,16 +1751,20 @@ function buildPqsActiveContractsFilterClause(
     );
   }
 
-  if (templateConditions.length > 0) {
+  if (templateTypePks !== undefined) {
     groups.push(
-      templateConditions.length === 1
-        ? templateConditions[0]
-        : `(\n      ${templateConditions.join('\n      or ')}\n    )`,
+      templateTypePkFilterClause('contract_row.tpe_pk', templateTypePks),
     );
   }
 
   if (hideSplice) {
-    groups.push(`${templateExpression} not like 'Splice.%'`);
+    const relations = pqsCoreRelations(node);
+    groups.push(`contract_row.tpe_pk in (
+      select visible_contract_tpe.pk
+      from ${relations.contractTpe} visible_contract_tpe
+      where visible_contract_tpe.module_name not like 'Splice.%'
+        and visible_contract_tpe.entity_name is not null
+    )`);
   }
 
   if (groups.length === 0) {
@@ -1525,29 +1782,73 @@ function pqsActiveContractsQuery(
   before?: string,
   after?: string,
   parties?: string[],
-  templates?: string[],
+  templateTypePks?: readonly bigint[],
   partyMode?: string,
   hideSplice?: boolean,
 ): string {
   const relations = pqsCoreRelations(node);
-  const normalizedBefore = normalizeEventOffsetCursor(before);
-  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const normalizedBefore = decodeActiveContractCursor(before);
+  const normalizedAfter = decodeActiveContractCursor(after);
   const queryLimit = limit + 1;
   const useAfterCursor = Boolean(normalizedAfter && !normalizedBefore);
-  const cursorFilter = useAfterCursor
-    ? `tx.offset > ${normalizedAfter}`
-    : normalizedBefore
-      ? `tx.offset < ${normalizedBefore}`
-      : null;
   const orderDirection = useAfterCursor ? 'asc' : 'desc';
   const filterClause = buildPqsActiveContractsFilterClause(
+    node,
     parties,
-    templates,
+    templateTypePks,
     partyMode,
     hideSplice,
   );
+  const selectedCursor = useAfterCursor ? normalizedAfter : normalizedBefore;
+  const cursorBoundary =
+    selectedCursor?.kind === 'compound'
+      ? `cursor_boundary as (
+      select ${selectedCursor.value.createdAtIx}::bigint as cursor_ix,
+        ${selectedCursor.value.createEventPk}::bigint as cursor_event_pk,
+        '${escapeSqlLiteral(selectedCursor.value.contractId)}'::text as cursor_contract_id
+    )`
+      : useAfterCursor && normalizedAfter?.kind === 'legacy'
+        ? `cursor_boundary as (
+      select coalesce(
+        (
+          select cursor_tx.ix
+          from ${relations.transactions} cursor_tx
+          where cursor_tx.offset <= ${normalizedAfter.eventOffset}
+          order by cursor_tx.offset desc
+          limit 1
+        ),
+        -1::bigint
+      ) as cursor_ix,
+      9223372036854775807::bigint as cursor_event_pk,
+      ''::text as cursor_contract_id
+    )`
+        : normalizedBefore?.kind === 'legacy'
+          ? `cursor_boundary as (
+      select coalesce(
+        (
+          select cursor_tx.ix
+          from ${relations.transactions} cursor_tx
+          where cursor_tx.offset >= ${normalizedBefore.eventOffset}
+          order by cursor_tx.offset asc
+          limit 1
+        ),
+        9223372036854775807::bigint
+      ) as cursor_ix,
+      -9223372036854775808::bigint as cursor_event_pk,
+      ''::text as cursor_contract_id
+    )`
+          : null;
+  const cursorFilter = useAfterCursor
+    ? `(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) >
+        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary), (select cursor_contract_id from cursor_boundary))`
+    : normalizedBefore
+      ? `(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) <
+        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary), (select cursor_contract_id from cursor_boundary))`
+      : null;
   const whereConditions = [
     'contract_row.archived_at_ix is null',
+    'contract_row.created_at_ix is not null',
+    'contract_row.create_event_pk is not null',
     cursorFilter,
     filterClause,
   ].filter((value): value is string => Boolean(value));
@@ -1556,20 +1857,36 @@ function pqsActiveContractsQuery(
       ? `where ${whereConditions.join('\n      and ')}`
       : '';
 
+  const ctes = [
+    cursorBoundary,
+    `active_contract_page as materialized (
+      select
+        contract_row.contract_id,
+        contract_row.tpe_pk,
+        contract_row.created_at_ix,
+        contract_row.create_event_pk
+      from ${relations.contracts} contract_row
+      ${whereClause}
+      order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}, contract_row.contract_id ${orderDirection}
+      limit ${queryLimit}
+    )`,
+  ].filter((value): value is string => Boolean(value));
+
   return `
+    with ${ctes.join(',\n')}
     select
       contract_row.contract_id::text as contract_id,
       ${contractTemplateIdentifierExpression('contract_tpe_row')} as template_id,
       ${isoUtcTimestampExpression('tx.effective_at')} as created_record_time,
-      tx.offset::text as created_event_offset
-    from ${relations.contracts} contract_row
+      tx.offset::text as created_event_offset,
+      contract_row.created_at_ix::text as created_at_ix,
+      contract_row.create_event_pk::text as create_event_pk
+    from active_contract_page contract_row
     join ${relations.contractTpe} contract_tpe_row
       on contract_tpe_row.pk = contract_row.tpe_pk
     join ${relations.transactions} tx
       on tx.ix = contract_row.created_at_ix
-    ${whereClause}
-    order by tx.offset ${orderDirection}
-    limit ${queryLimit}
+    order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}, contract_row.contract_id ${orderDirection}
   `;
 }
 
@@ -1674,7 +1991,7 @@ function partyWitnessArrayMatchCondition(
 
 function singleUpdateQuery(node: NodeConfig, eventOffset: string): string {
   const relations = pqsCoreRelations(node);
-  const quotedOffset = `'${escapeSqlLiteral(eventOffset)}'`;
+  const normalizedOffset = requireEventOffsetLiteral(eventOffset);
 
   return `
     select
@@ -1688,7 +2005,7 @@ function singleUpdateQuery(node: NodeConfig, eventOffset: string): string {
         'record_time', ${isoUtcTimestampExpression('tx.effective_at')}
       ) as meta
     from ${relations.transactions} tx
-    where tx.offset::text = ${quotedOffset}
+    where tx.offset = ${normalizedOffset}
     order by tx.offset desc
     limit 1
   `;
@@ -2099,6 +2416,44 @@ function tokenRowsQuery(
   `;
 }
 
+function templateTypePksQuery(
+  node: NodeConfig,
+  templateIds: readonly string[],
+): string {
+  const relations = pqsCoreRelations(node);
+  const normalizedTemplateIds = normalizeTemplateFilters([...templateIds]);
+  const clausesFor = (alias: string) => normalizedTemplateIds.flatMap(
+    (templateId) => {
+      const separatorIndex = templateId.lastIndexOf(':');
+      if (separatorIndex <= 0 || separatorIndex === templateId.length - 1) {
+        return [];
+      }
+
+      const moduleName = templateId.slice(0, separatorIndex);
+      const entityName = templateId.slice(separatorIndex + 1);
+      return [
+        `(${alias}.module_name = '${escapeSqlLiteral(moduleName)}'
+        and ${alias}.entity_name = '${escapeSqlLiteral(entityName)}')`,
+      ];
+    },
+  );
+  const contractClauses = clausesFor('contract_tpe_row');
+  const exerciseClauses = clausesFor('exercise_tpe_row');
+
+  return `
+    select 'contract'::text as type_source, contract_tpe_row.pk::text as pk
+    from ${relations.contractTpe} contract_tpe_row
+    where ${contractClauses.length > 0 ? contractClauses.join('\n      or ') : 'false'}
+
+    union all
+
+    select 'exercise'::text as type_source, exercise_tpe_row.pk::text as pk
+    from ${relations.exerciseTpe} exercise_tpe_row
+    where ${exerciseClauses.length > 0 ? exerciseClauses.join('\n      or ') : 'false'}
+    order by type_source, pk
+  `;
+}
+
 function tokenTemplateTypesQuery(node: NodeConfig): string {
   const relations = pqsCoreRelations(node);
   const exactTemplateClauses = TOKEN_DISCOVERY_TEMPLATE_IDS.map(
@@ -2224,6 +2579,107 @@ function normalizeEventOffsetCursor(value?: string): string | null {
   }
 
   return trimmed.replace(/^0+(?=\d)/, '');
+}
+
+function normalizeActiveContractCursorPart(
+  value: string | number | null | undefined,
+): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const normalized = normalizeEventOffsetCursor(String(value));
+  if (
+    normalized === null ||
+    BigInt(normalized) > 9223372036854775807n
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function normalizeActiveContractIdCursorPart(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function encodeActiveContractCursor(row: ActiveContractRow): string | null {
+  const eventOffset = normalizeActiveContractCursorPart(
+    row.created_event_offset,
+  );
+  if (eventOffset === null) {
+    return null;
+  }
+
+  const createdAtIx = normalizeActiveContractCursorPart(row.created_at_ix);
+  const createEventPk = normalizeActiveContractCursorPart(row.create_event_pk);
+  const contractId = normalizeActiveContractIdCursorPart(row.contract_id);
+  if (createdAtIx === null || createEventPk === null || contractId === null) {
+    // Compatibility for older PQS-shaped test doubles and pre-compound API
+    // cursors. Real supported PQS schemas always return both event keys.
+    return eventOffset;
+  }
+
+  return `acs1.${Buffer.from(
+    JSON.stringify({
+      eventOffset,
+      createdAtIx,
+      createEventPk,
+      contractId,
+    } satisfies ActiveContractCursor),
+    'utf8',
+  ).toString('base64url')}`;
+}
+
+function decodeActiveContractCursor(
+  cursor?: string,
+): DecodedActiveContractCursor | null {
+  if (!cursor || !cursor.trim()) {
+    return null;
+  }
+
+  if (cursor.startsWith('acs1.')) {
+    try {
+      const decoded = JSON.parse(
+        Buffer.from(cursor.slice('acs1.'.length), 'base64url').toString('utf8'),
+      ) as Partial<ActiveContractCursor>;
+      const eventOffset = normalizeActiveContractCursorPart(
+        decoded.eventOffset,
+      );
+      const createdAtIx = normalizeActiveContractCursorPart(
+        decoded.createdAtIx,
+      );
+      const createEventPk = normalizeActiveContractCursorPart(
+        decoded.createEventPk,
+      );
+      const contractId = normalizeActiveContractIdCursorPart(decoded.contractId);
+      if (eventOffset && createdAtIx && createEventPk && contractId) {
+        return {
+          kind: 'compound',
+          value: { eventOffset, createdAtIx, createEventPk, contractId },
+        };
+      }
+      if (eventOffset) {
+        return { kind: 'legacy', eventOffset };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  const eventOffset = normalizeEventOffsetCursor(cursor);
+  return eventOffset ? { kind: 'legacy', eventOffset } : null;
+}
+
+function requireEventOffsetLiteral(value: string): string {
+  const normalizedOffset = normalizeEventOffsetCursor(value);
+  if (
+    normalizedOffset === null ||
+    BigInt(normalizedOffset) > 9223372036854775807n
+  ) {
+    throw new Error('Invalid event offset');
+  }
+
+  return normalizedOffset;
 }
 
 function normalizeByteaHex(value: string): string {
@@ -2699,6 +3155,11 @@ export class PqsSummaryService {
       typeof options === 'object' ? options.hideSplice === true : false;
     const useAfterCursor = Boolean(after && !before);
     const query = client.query.bind(client);
+    const normalizedTemplates = normalizeTemplateFilters(templates);
+    const templateTypePks =
+      normalizedTemplates.length > 0
+        ? await this.resolveTemplateTypePks(node, query, normalizedTemplates)
+        : undefined;
     const rawMetaRows = await this.queryRecentUpdateMetaRows(
       node,
       query,
@@ -2706,7 +3167,7 @@ export class PqsSummaryService {
       before,
       after,
       parties,
-      templates,
+      templateTypePks,
       partyMode,
       hideSplice,
     );
@@ -3359,6 +3820,39 @@ export class PqsSummaryService {
     return (result.rows as UpdateMetaRow[]) ?? [];
   }
 
+  private async resolveTemplateTypePks(
+    node: NodeConfig,
+    query: (sql: string) => Promise<{ rows: unknown[] }>,
+    templateIds: readonly string[],
+  ): Promise<TemplateTypePks> {
+    const result = await query(templateTypePksQuery(node, templateIds));
+    const contract: bigint[] = [];
+    const exercise: bigint[] = [];
+
+    for (const row of result.rows as TemplateTypePkRow[]) {
+      const value = row.pk?.toString();
+      if (!value || !/^\d+$/.test(value)) {
+        continue;
+      }
+
+      const templateTypePk = BigInt(value);
+      if (templateTypePk <= 0n) {
+        continue;
+      }
+
+      if (row.type_source === 'exercise') {
+        exercise.push(templateTypePk);
+      } else {
+        contract.push(templateTypePk);
+      }
+    }
+
+    return {
+      contract: normalizeTemplateTypePks(contract),
+      exercise: normalizeTemplateTypePks(exercise),
+    };
+  }
+
   private async queryRecentUpdateMetaRows(
     node: NodeConfig,
     query: (sql: string) => Promise<{ rows: unknown[] }>,
@@ -3366,23 +3860,69 @@ export class PqsSummaryService {
     before?: string,
     after?: string,
     parties?: string[],
-    templates?: string[],
+    templateTypePks?: TemplateTypePks,
     mode?: string,
     hideSplice?: boolean,
   ): Promise<UpdateMetaRow[]> {
-    const result = await query(
-      pqsRecentUpdatesQuery(
-        node,
-        limit,
-        before,
-        after,
-        parties,
-        templates,
-        mode,
-        hideSplice,
-      ),
-    );
-    return (result.rows as UpdateMetaRow[]) ?? [];
+    let candidateLimit = limit + 1;
+    const candidateDirection =
+      normalizeEventOffsetCursor(after) && !normalizeEventOffsetCursor(before)
+        ? 'asc'
+        : 'desc';
+
+    for (;;) {
+      const result = await query(
+        pqsRecentUpdatesQuery(
+          node,
+          limit,
+          before,
+          after,
+          parties,
+          templateTypePks,
+          mode,
+          hideSplice,
+          candidateLimit,
+        ),
+      );
+      const rows = (result.rows as UpdateMetaRow[]) ?? [];
+      const updates = rows.filter(
+        (row): row is UpdateMetaRow & { update_id: string } =>
+          typeof row.update_id === 'string',
+      );
+      const candidateFrontierValue = rows.find(
+        (row) =>
+          row.candidate_frontier_ix !== null &&
+          row.candidate_frontier_ix !== undefined,
+      )?.candidate_frontier_ix;
+      const candidateFrontierIx =
+        candidateFrontierValue === null || candidateFrontierValue === undefined
+          ? null
+          : BigInt(String(candidateFrontierValue));
+
+      if (candidateFrontierIx === null) {
+        return updates;
+      }
+
+      if (updates.length >= limit + 1) {
+        const pageBoundaryValue = updates[limit - 1]?.update_ix;
+        if (pageBoundaryValue === null || pageBoundaryValue === undefined) {
+          throw new Error(
+            'PQS recent update query omitted update index metadata at the page boundary',
+          );
+        }
+        const pageBoundaryIx = BigInt(String(pageBoundaryValue));
+        const frontierCouldOutrankBoundary =
+          candidateDirection === 'asc'
+            ? candidateFrontierIx < pageBoundaryIx
+            : candidateFrontierIx > pageBoundaryIx;
+
+        if (!frontierCouldOutrankBoundary) {
+          return updates;
+        }
+      }
+
+      candidateLimit *= 2;
+    }
   }
 
   async fetchNodeContracts(
@@ -3410,15 +3950,23 @@ export class PqsSummaryService {
     const templates = options?.templates;
     const partyMode = options?.partyMode;
     const hideSplice = options?.hideSplice === true;
-    const useAfterCursor = Boolean(after && !before);
-    const result = await client.query(
+    const useAfterCursor = Boolean(
+      decodeActiveContractCursor(after) && !decodeActiveContractCursor(before),
+    );
+    const query = client.query.bind(client);
+    const normalizedTemplates = normalizeTemplateFilters(templates);
+    const templateTypePks =
+      normalizedTemplates.length > 0
+        ? await this.resolveTemplateTypePks(node, query, normalizedTemplates)
+        : undefined;
+    const result = await query(
       pqsActiveContractsQuery(
         node,
         normalizedLimit,
         before,
         after,
         parties,
-        templates,
+        templateTypePks?.contract,
         partyMode,
         hideSplice,
       ),
@@ -3432,9 +3980,7 @@ export class PqsSummaryService {
       contractId: row.contract_id,
       templateId: this.normalizeTemplateIdentifier(row.template_id),
       createdRecordTime: row.created_record_time ?? null,
-      createdEventOffset: this.normalizeOptionalScalar(
-        row.created_event_offset,
-      ),
+      cursor: encodeActiveContractCursor(row),
     }));
 
     return {
@@ -3444,17 +3990,17 @@ export class PqsSummaryService {
       nextBefore:
         orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
           ? (orderedContracts[orderedContracts.length - 1]
-              ?.createdEventOffset ?? null)
+              ?.cursor ?? null)
           : null,
       nextAfter:
         orderedContracts.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInQuery
-              ? (orderedContracts[0]?.createdEventOffset ?? null)
+              ? (orderedContracts[0]?.cursor ?? null)
               : null
             : before
-              ? (orderedContracts[0]?.createdEventOffset ?? null)
+              ? (orderedContracts[0]?.cursor ?? null)
               : null,
       contracts: orderedContracts.map((contract) => ({
         contractId: contract.contractId,

@@ -74,6 +74,15 @@ test('production image serves mounted branding as the node user', { timeout: 300
   assert.equal(uid.trim(), '1000');
 });
 
+test('production image exposes the explicit index command', { timeout: 300_000 }, async () => {
+  await docker('build', '--tag', imageTag, '.');
+
+  const inspect = await docker('run', '--rm', imageTag, 'indexes', 'inspect', '--help');
+
+  assert.match(inspect.stdout, /canton-explorer indexes inspect/);
+  assert.match(inspect.stdout, /canton-explorer indexes repair/);
+});
+
 test('Docker build context excludes local dotenv files but retains the packaged frontend config', { timeout: 300_000 }, async (t) => {
   const contextDirectory = mkdtempSync(path.join(os.tmpdir(), 'canton-explorer-dockerignore-'));
   const dockerfilePath = path.join(contextDirectory, 'Dockerfile');

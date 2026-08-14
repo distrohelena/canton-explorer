@@ -80,6 +80,73 @@ docker buildx build \
 
 After its first push, make the GHCR package public in GitHub package settings.
 
+### Install Explorer's PQS query indexes
+
+Explorer runs with PQS-only nodes as normal. The optional index command is a
+separate, explicit operator action for PQS PostgreSQL databases; it never
+changes PQS filters or PQS's Flyway schema history.
+
+Start by inspecting the configured nodes and their required indexes:
+
+```bash
+npx @distrohelena/canton-explorer indexes inspect --config ./config/nodes.local.json
+```
+
+Inspection is read-only. It validates the PQS table/column/partition shape,
+reports the latest PQS Flyway version without modifying its history, lists
+actual Explorer index definitions and sizes, summarizes relation/partition
+sizes, and runs one bounded `EXPLAIN (FORMAT JSON)` without `ANALYZE`.
+
+Apply indexes only after reviewing that output. Stage one node first when
+working with a large production ledger:
+
+```bash
+npx @distrohelena/canton-explorer indexes apply --config ./config/nodes.local.json --node participant-1
+```
+
+The database user in each node's `pqs.connectionUriEnv` must have `CREATE` on
+the PQS schema for Explorer's migration table, and must own the PQS relations
+that receive indexes (or use a role that does). Indexes are built concurrently
+so normal PQS reads and writes can continue, but the build still uses
+substantial disk and I/O on large databases. Use `--dry-run` to preview the
+DDL before changing a database:
+
+```bash
+npx @distrohelena/canton-explorer indexes apply --config ./config/nodes.local.json --dry-run
+```
+
+`indexes apply` never drops an index. It stops before applying changes when an
+existing valid index has an Explorer-owned name but a different table, access
+method, key expression, predicate, sort option, uniqueness, or operator class.
+Resolve that valid-name conflict manually after reviewing its full definition.
+
+An interrupted concurrent build can leave an invalid PostgreSQL index. Apply
+reports that state and requires the separately explicit repair command:
+
+```bash
+npx @distrohelena/canton-explorer indexes repair --config ./config/nodes.local.json --node participant-1
+```
+
+Repair is the only command that may run `DROP INDEX CONCURRENTLY`; it removes
+and rebuilds invalid expected Explorer indexes, then creates any still-missing
+indexes. It does not remove a valid mismatched index. Review the `inspect`
+output's `explicit-repair-sql` section and stage repair on one node first.
+
+The published Docker image exposes the same command. The default Compose
+service continues to start the HTTP Explorer only; the profile-gated service
+must be run manually. Running it with no trailing arguments uses its default
+`indexes apply` command:
+
+```bash
+docker compose --profile indexes run --rm canton-explorer-indexes indexes inspect
+docker compose --profile indexes run --rm canton-explorer-indexes indexes apply
+docker compose --profile indexes run --rm canton-explorer-indexes indexes repair
+```
+
+The index command needs PQS availability, not a gRPC connection. Each valid
+Explorer node configuration already includes a PQS connection, so it can run
+against `pqs_only` nodes as well as nodes that also use gRPC.
+
 ## Local setup
 
 1. Copy `backend/config/nodes.example.json` to `backend/config/nodes.local.json`.

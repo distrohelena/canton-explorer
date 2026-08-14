@@ -1,0 +1,153 @@
+import { describe, expect, it } from '@jest/globals';
+import {
+  activeContractsIndex,
+  activeContractsIndexSql,
+  contractWitnessIndex,
+  contractWitnessIndexSql,
+  migrationTableSql,
+  pqsIndexMigrations,
+  quoteIdentifier,
+  representativeExplainSql,
+  transactionIdPatternIndex,
+  transactionIdPatternIndexSql,
+} from '../../src/indexes/pqs-index-sql';
+
+describe('PQS index SQL', () => {
+  it('creates a concurrent GIN index for each discovered contracts partition', () => {
+    expect(contractWitnessIndexSql('public', '__contracts_42')).toBe(
+      'create index concurrently if not exists "canton_explorer_contracts_42_witnesses_gin" on "public"."__contracts_42" using gin (witnesses)',
+    );
+  });
+
+  it('creates the same witness index shape for an exercises child partition', () => {
+    expect(contractWitnessIndexSql('public', '__exercises_29')).toBe(
+      'create index concurrently if not exists "canton_explorer_exercises_29_witnesses_gin" on "public"."__exercises_29" using gin (witnesses)',
+    );
+  });
+
+  it('canonicalizes colliding-prefix partition index names within PostgreSQL limits', () => {
+    const alphaRelation =
+      '__contracts_partition_with_a_very_long_shared_prefix_alpha';
+    const bravoRelation =
+      '__contracts_partition_with_a_very_long_shared_prefix_bravo';
+    const alpha = contractWitnessIndex('public', alphaRelation);
+    const bravo = contractWitnessIndex('public', bravoRelation);
+
+    expect([alpha.name, bravo.name]).toEqual([
+      'canton_explorer_contracts_partition_with_a_ver_77542b8a1a49299a',
+      'canton_explorer_contracts_partition_with_a_ver_36ed37e931fd119e',
+    ]);
+    expect(Buffer.byteLength(alpha.name, 'utf8')).toBeLessThanOrEqual(63);
+    expect(Buffer.byteLength(bravo.name, 'utf8')).toBeLessThanOrEqual(63);
+    expect(alpha.name).not.toBe(bravo.name);
+    expect(alpha.createSql).toBe(
+      `create index concurrently if not exists "${alpha.name}" on "public"."${alphaRelation}" using gin (witnesses)`,
+    );
+    expect(bravo.createSql).toBe(
+      `create index concurrently if not exists "${bravo.name}" on "public"."${bravoRelation}" using gin (witnesses)`,
+    );
+  });
+
+  it('creates the active-contract and transaction-id access paths concurrently', () => {
+    expect(activeContractsIndexSql('public', '__contracts_42')).toBe(
+      'create index concurrently if not exists "canton_explorer_contracts_42_active_created_ix" on "public"."__contracts_42" (created_at_ix desc, create_event_pk desc, contract_id desc) where archived_at_ix is null',
+    );
+    expect(transactionIdPatternIndexSql('public')).toBe(
+      'create index concurrently if not exists "canton_explorer_transactions_transaction_id_pattern_ops" on "public"."__transactions" (transaction_id text_pattern_ops)',
+    );
+  });
+
+  it('creates order-capable update-event indexes on every physical partition', () => {
+    const migration = pqsIndexMigrations.find(
+      ({ version }) => version === '004-update-event-order',
+    );
+
+    expect(
+      migration?.indexes({
+        schema: 'public',
+        contractPartitions: ['__contracts_42', '__contracts_77'],
+        exercisePartitions: ['__exercises_29', '__exercises_83'],
+        transactionIdIsText: true,
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_42_created_at_ix_order',
+        relation: '__contracts_42',
+        keyExpressions: ['created_at_ix'],
+        sortOptions: [3],
+        createSql:
+          'create index concurrently if not exists "canton_explorer_contracts_42_created_at_ix_order" on "public"."__contracts_42" (created_at_ix desc)',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_42_archived_at_ix_order',
+        relation: '__contracts_42',
+        keyExpressions: ['archived_at_ix'],
+        sortOptions: [3],
+        createSql:
+          'create index concurrently if not exists "canton_explorer_contracts_42_archived_at_ix_order" on "public"."__contracts_42" (archived_at_ix desc)',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_77_created_at_ix_order',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_77_archived_at_ix_order',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_exercises_29_exercised_at_ix_order',
+        relation: '__exercises_29',
+        keyExpressions: ['exercised_at_ix'],
+        sortOptions: [3],
+        createSql:
+          'create index concurrently if not exists "canton_explorer_exercises_29_exercised_at_ix_order" on "public"."__exercises_29" (exercised_at_ix desc)',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_exercises_83_exercised_at_ix_order',
+      }),
+    ]);
+  });
+
+  it('describes every expected index independently of PostgreSQL display formatting', () => {
+    expect(contractWitnessIndex('public', '__contracts_42')).toMatchObject({
+      name: 'canton_explorer_contracts_42_witnesses_gin',
+      relation: '__contracts_42',
+      accessMethod: 'gin',
+      keyExpressions: ['witnesses'],
+      operatorClasses: ['array_ops'],
+      predicate: null,
+    });
+    expect(activeContractsIndex('public', '__contracts_42')).toMatchObject({
+      name: 'canton_explorer_contracts_42_active_created_ix',
+      relation: '__contracts_42',
+      accessMethod: 'btree',
+      keyExpressions: ['created_at_ix', 'create_event_pk', 'contract_id'],
+      operatorClasses: ['int8_ops', 'int8_ops', 'text_ops'],
+      predicate: 'archived_at_ix IS NULL',
+    });
+    expect(transactionIdPatternIndex('public')).toMatchObject({
+      name: 'canton_explorer_transactions_transaction_id_pattern_ops',
+      relation: '__transactions',
+      accessMethod: 'btree',
+      keyExpressions: ['transaction_id'],
+      operatorClasses: ['text_pattern_ops'],
+      predicate: null,
+    });
+  });
+
+  it('creates the Explorer-owned migration table in the requested schema', () => {
+    expect(migrationTableSql('public')).toBe(
+      'create table if not exists "public"."canton_explorer_index_migrations" (version text primary key, applied_at timestamptz not null default current_timestamp)',
+    );
+  });
+
+  it('explains the same total active-contract order used by pagination', () => {
+    expect(representativeExplainSql('public', '__contracts_42')).toContain(
+      'order by created_at_ix desc, create_event_pk desc, contract_id desc',
+    );
+  });
+
+  it('rejects a non-identifier schema rather than interpolating it', () => {
+    expect(() => quoteIdentifier('public; drop table x')).toThrow(
+      'Invalid PostgreSQL identifier',
+    );
+  });
+});

@@ -3313,7 +3313,7 @@ describe('NodesController', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('returns 404 for an unknown update id on a known node', async () => {
+  it('returns 404 for an unknown update offset on a known node', async () => {
     pqsSummaryService.fetchUpdateDetail.mockRejectedValueOnce(
       new Error('Update not found'),
     );
@@ -3326,7 +3326,7 @@ describe('NodesController', () => {
             updateId: string,
           ) => Promise<unknown>;
         }
-      ).getNodeUpdateDetail('participant-1', 'missing-update-id'),
+      ).getNodeUpdateDetail('participant-1', '999'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 

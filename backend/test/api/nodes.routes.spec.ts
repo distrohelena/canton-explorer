@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
+import request from 'supertest';
 import { NodesController } from '../../src/api/nodes.controller';
 import { NodeCacheService } from '../../src/cache/node-cache.service';
 import { NodeConfigService } from '../../src/config/node-config.service';
@@ -14,6 +15,46 @@ describe('NodesController routes', () => {
   afterEach(async () => {
     await app?.close();
     app = null;
+  });
+
+  it('returns 400 instead of 500 for a malformed update offset', async () => {
+    const fetchUpdateDetail = jest
+      .fn()
+      .mockRejectedValue(new Error('Invalid event offset'));
+    const moduleRef = await Test.createTestingModule({
+      controllers: [NodesController],
+      providers: [
+        { provide: NodeCacheService, useValue: {} },
+        {
+          provide: NodeConfigService,
+          useValue: {
+            list: jest.fn().mockReturnValue([
+              {
+                id: 'participant-1',
+                label: 'Participant 1',
+                role: 'participant',
+                mode: 'pqs_only',
+                pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+              },
+            ]),
+          },
+        },
+        { provide: GrpcOperationsService, useValue: {} },
+        { provide: NamespaceFingerprintService, useValue: {} },
+        { provide: PqsSummaryService, useValue: { fetchUpdateDetail } },
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    await app.init();
+
+    const response = await request(app.getHttpServer()).get(
+      '/api/nodes/participant-1/updates/not-a-numeric-offset',
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Invalid update offset');
+    expect(fetchUpdateDetail).not.toHaveBeenCalled();
   });
 
   it('registers /api/parties/local before /api/parties/:partyId', async () => {

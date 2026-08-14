@@ -1433,7 +1433,7 @@ describe('PqsSummaryService', () => {
   it('returns a party summary aggregated across nodes', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -1480,7 +1480,7 @@ describe('PqsSummaryService', () => {
 
     const participant2Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -1850,7 +1850,7 @@ describe('PqsSummaryService', () => {
     const prefixedPartyId = `p|${strippedPartyId}`;
     const participantQuery = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes(
           "'DSO::1220895c459e3ae6d768e9de8617299394051ab7748a1e5f858ec01ad4e5947076df'",
         ) &&
@@ -2565,7 +2565,7 @@ describe('PqsSummaryService', () => {
   it('keeps party detail available when topology fails for one node', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -2723,7 +2723,7 @@ describe('PqsSummaryService', () => {
   it('keeps party detail available when PQS fails for one node', async () => {
     const participant1Query = jest.fn(async (sql: string) => {
       if (
-        sql.includes('from "public"."__transactions" tx') &&
+        sql.includes('from party_update_ix') &&
         sql.includes('event_offset') &&
         sql.includes("'Alice'") &&
         sql.includes("'p|Alice'")
@@ -3529,6 +3529,237 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('builds uncorrelated bounded party candidates before loading transactions', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { parties: ['Alice'] },
+    );
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('with party_0_update_ix as materialized');
+    expect(sql).toContain('party_update_ix as materialized');
+    expect(sql).toContain(
+      'select distinct contract_row.created_at_ix as update_ix',
+    );
+    expect(sql).toContain(
+      'select distinct contract_row.archived_at_ix as update_ix',
+    );
+    expect(sql).toContain(
+      'select distinct exercise_row.exercised_at_ix as update_ix',
+    );
+    expect(sql).toMatch(
+      /from party_update_ix\s+join "public"\."__transactions" tx\s+on tx\.ix = party_update_ix\.update_ix/,
+    );
+    expect(sql).not.toContain('contract_row.created_at_ix = tx.ix');
+    expect(sql).not.toContain('contract_row.archived_at_ix = tx.ix');
+    expect(sql).not.toContain('exercise_row.exercised_at_ix = tx.ix');
+    expect(sql).toContain('order by contract_row.created_at_ix desc');
+    expect(sql).toContain('order by contract_row.archived_at_ix desc');
+    expect(sql).toContain('order by exercise_row.exercised_at_ix desc');
+    expect(sql).toContain('limit 31');
+  });
+
+  it.each([
+    {
+      name: 'forward OR',
+      cursor: { after: '40' },
+      partyMode: 'or',
+      operator: '>',
+      direction: 'asc',
+      frontierAggregate: 'min',
+      cursorLookup: 'cursor_tx.offset <= 40',
+    },
+    {
+      name: 'backward AND',
+      cursor: { before: '80' },
+      partyMode: 'and',
+      operator: '<',
+      direction: 'desc',
+      frontierAggregate: 'max',
+      cursorLookup: 'cursor_tx.offset >= 80',
+    },
+  ])(
+    'bounds every party/template event candidate branch for $name pagination',
+    async ({
+      cursor,
+      partyMode,
+      operator,
+      direction,
+      frontierAggregate,
+      cursorLookup,
+    }) => {
+      const query = jest
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [
+            { type_source: 'contract', pk: '17' },
+            { type_source: 'exercise', pk: '29' },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] });
+      const service = new PqsSummaryService({
+        getRawExecutor: async () => ({ query }),
+      } as never);
+
+      await service.fetchRecentUpdates(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        {
+          limit: 3,
+          ...cursor,
+          parties: ['Alice', 'Bob'],
+          partyMode,
+          templates: ['Main:Asset'],
+        },
+      );
+
+      const sql = String(query.mock.calls[1]?.[0]);
+      expect(sql).toContain('party_0_update_ix as materialized');
+      expect(sql).toContain('party_1_update_ix as materialized');
+      expect(sql).toContain('party_update_ix as materialized');
+      expect(sql).toContain('template_update_ix as materialized');
+      expect(sql).toContain('filtered_update_ix as materialized');
+      expect(sql).toContain('candidate_progress as');
+      expect(sql).toContain(
+        `select ${frontierAggregate}(update_ix) as frontier_update_ix`,
+      );
+      expect(sql).toContain('tx.ix::text as update_ix');
+      expect(sql).toContain(
+        'candidate_progress.frontier_update_ix::text as candidate_frontier_ix',
+      );
+      expect(sql).toContain(cursorLookup);
+
+      for (const eventColumn of [
+        'contract_row.created_at_ix',
+        'contract_row.archived_at_ix',
+        'exercise_row.exercised_at_ix',
+      ]) {
+        const escapedColumn = eventColumn.replace('.', '\\.');
+        expect(
+          sql.match(
+            new RegExp(
+              `${escapedColumn} \\${operator} \\(select cursor_ix from update_cursor\\)`,
+              'g',
+            ),
+          ),
+        ).toHaveLength(6);
+        expect(
+          sql.match(
+            new RegExp(
+              `order by ${escapedColumn} ${direction}\\s+limit 4`,
+              'g',
+            ),
+          ),
+        ).toHaveLength(3);
+        expect(
+          sql.match(
+            new RegExp(
+              `order by ${escapedColumn} ${direction}\\s+offset 4\\s+limit 1`,
+              'g',
+            ),
+          ),
+        ).toHaveLength(3);
+      }
+      expect(sql).not.toContain('contract_row.created_at_ix = tx.ix');
+      expect(sql).not.toContain('contract_row.archived_at_ix = tx.ix');
+      expect(sql).not.toContain('exercise_row.exercised_at_ix = tx.ix');
+    },
+  );
+
+  it('keeps visible frontiers in compound party/template/hide-splice candidate progress', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          { type_source: 'contract', pk: '17' },
+          { type_source: 'exercise', pk: '17' },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      {
+        limit: 2,
+        before: '170007',
+        parties: ['Alice', 'Bob'],
+        partyMode: 'and',
+        templates: ['Main:Asset'],
+        hideSplice: true,
+      },
+    );
+
+    const sql = String(query.mock.calls[1]?.[0]);
+    expect(sql).toContain('template_update_ix as materialized');
+    expect(sql).toContain('visible_update_ix as materialized');
+    expect(sql).toContain('visible_filtered_update_ix as materialized');
+    expect(sql).toContain("not like 'Splice.%'");
+    expect(sql).toContain('candidate_progress as');
+
+    for (const eventColumn of [
+      'contract_row.created_at_ix',
+      'contract_row.archived_at_ix',
+      'exercise_row.exercised_at_ix',
+    ]) {
+      const escapedColumn = eventColumn.replace('.', '\\.');
+      expect(
+        sql.match(new RegExp(`order by ${escapedColumn} desc\\s+limit 3`, 'g')),
+      ).toHaveLength(4);
+      expect(
+        sql.match(
+          new RegExp(
+            `\\(select distinct ${escapedColumn} as update_ix\\s+from[\\s\\S]*?order by ${escapedColumn} desc\\s+limit 3\\)`,
+            'g',
+          ),
+        ),
+      ).toHaveLength(4);
+      expect(
+        sql.match(
+          new RegExp(
+            `order by ${escapedColumn} desc\\s+offset 3\\s+limit 1`,
+            'g',
+          ),
+        ),
+      ).toHaveLength(4);
+      expect(
+        sql.match(
+          new RegExp(
+            `select update_ix\\s+from \\(\\s*select distinct ${escapedColumn} as update_ix\\s+from[\\s\\S]*?order by ${escapedColumn} desc\\s+offset 3\\s+limit 1\\s*\\) event_candidate_frontier`,
+            'g',
+          ),
+        ),
+      ).toHaveLength(4);
+    }
+  });
+
   it('applies party filters in schema-qualified recent update queries', async () => {
     const query = jest
       .fn()
@@ -3592,7 +3823,7 @@ describe('PqsSummaryService', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('from "public"."__transactions" tx'),
+      expect.stringContaining('from party_update_ix'),
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
@@ -3619,6 +3850,9 @@ describe('PqsSummaryService', () => {
   it('applies template filters when fetching recent updates from schema-qualified PQS tables', async () => {
     const query = jest
       .fn()
+      .mockResolvedValueOnce({
+        rows: [{ pk: '17' }],
+      })
       .mockResolvedValueOnce({
         rows: [
           {
@@ -3671,9 +3905,55 @@ describe('PqsSummaryService', () => {
     expect(query).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining(
-        "where update_event_templates.template_id = 'Splice.DsoRules:DsoRules'",
+        "contract_tpe_row.module_name = 'Splice.DsoRules'",
       ),
     );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('contract_row.tpe_pk in (17)'),
+    );
+  });
+
+  it('prunes contract partitions for template-filtered recent updates', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          { type_source: 'contract', pk: '17' },
+          { type_source: 'contract', pk: '29' },
+          { type_source: 'exercise', pk: '71' },
+          { type_source: 'exercise', pk: '83' },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { templates: ['Splice.Amulet:Amulet'] },
+    );
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("contract_tpe_row.module_name = 'Splice.Amulet'"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("exercise_tpe_row.module_name = 'Splice.Amulet'"),
+    );
+    const sql = String(query.mock.calls[1]?.[0]);
+    expect(sql).toContain('contract_row.tpe_pk in (17, 29)');
+    expect(sql).toContain('exercise_row.tpe_pk in (71, 83)');
+    expect(sql).not.toContain('update_event_templates.template_id');
   });
 
   it('pushes hide Splice filtering into schema-qualified recent updates queries without per-update event lookups', async () => {
@@ -3757,9 +4037,11 @@ describe('PqsSummaryService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining(
-        "update_event_templates.template_id not like 'Splice.%'",
-      ),
+      expect.stringContaining('visible_update_ix as materialized'),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("not like 'Splice.%'"),
     );
     expect(fetchEventsSpy).not.toHaveBeenCalled();
   });
@@ -4166,9 +4448,211 @@ describe('PqsSummaryService', () => {
     ).resolves.toEqual(typedNodeContractsFixture);
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('order by tx.offset desc'),
+      expect.stringContaining('order by contract_row.created_at_ix desc'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('contract_row.created_at_ix is not null'),
     );
     expect(query).toHaveBeenCalledWith(expect.stringContaining('limit 3'));
+  });
+
+  it('maps offset cursors to transaction indexes before paging active contracts', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { before: '3322' },
+    );
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('with cursor_boundary as');
+    expect(sql).toContain('where cursor_tx.offset >= 3322');
+    expect(sql).toContain(
+      '(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) <',
+    );
+    expect(sql).toContain('active_contract_page as');
+    expect(sql).toContain(
+      'order by contract_row.created_at_ix desc, contract_row.create_event_pk desc',
+    );
+  });
+
+  it('uses a total compound cursor when contracts share a creation event', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00z',
+            template_id: 'Main:Z',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '20',
+          },
+          {
+            contract_id: '00y',
+            template_id: 'Main:Y',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '20',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00y',
+            template_id: 'Main:Y',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '20',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00z',
+            template_id: 'Main:Z',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '20',
+          },
+        ],
+      });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    } as const;
+
+    const firstPage = await service.fetchNodeContracts(node, { limit: 1 });
+    expect(firstPage.contracts.map((contract) => contract.contractId)).toEqual([
+      '00z',
+    ]);
+    expect(firstPage.nextBefore).toMatch(/^acs1\./);
+    const cursorPayload = JSON.parse(
+      Buffer.from(firstPage.nextBefore!.slice('acs1.'.length), 'base64url').toString(
+        'utf8',
+      ),
+    );
+    expect(cursorPayload).toEqual({
+      eventOffset: '3322',
+      createdAtIx: '77',
+      createEventPk: '20',
+      contractId: '00z',
+    });
+
+    const secondPage = await service.fetchNodeContracts(node, {
+      limit: 1,
+      before: firstPage.nextBefore ?? undefined,
+    });
+    expect(secondPage.contracts.map((contract) => contract.contractId)).toEqual([
+      '00y',
+    ]);
+    expect([
+      ...firstPage.contracts.map((contract) => contract.contractId),
+      ...secondPage.contracts.map((contract) => contract.contractId),
+    ]).toEqual(['00z', '00y']);
+    const secondSql = String(query.mock.calls[1]?.[0]);
+    expect(secondSql).toContain('select 77::bigint as cursor_ix');
+    expect(secondSql).toContain('20::bigint as cursor_event_pk');
+    expect(secondSql).toContain("'00z'::text as cursor_contract_id");
+    expect(secondSql).toContain(
+      '(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) <',
+    );
+
+    const newerPage = await service.fetchNodeContracts(node, {
+      limit: 1,
+      after: secondPage.nextAfter ?? undefined,
+    });
+    expect(newerPage.contracts.map((contract) => contract.contractId)).toEqual([
+      '00z',
+    ]);
+    expect(String(query.mock.calls[2]?.[0])).toContain(
+      '(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) >',
+    );
+  });
+
+  it('treats a pre-total-order acs1 cursor as a legacy offset cursor', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+    const oldCursor = `acs1.${Buffer.from(
+      JSON.stringify({
+        eventOffset: '3322',
+        createdAtIx: '77',
+        createEventPk: '20',
+      }),
+      'utf8',
+    ).toString('base64url')}`;
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { before: oldCursor },
+    );
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('where cursor_tx.offset >= 3322');
+    expect(sql).not.toContain('select 77::bigint as cursor_ix');
+  });
+
+  it('prunes contract partitions for template-filtered active contracts', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ pk: '17' }, { pk: '29' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { templates: ['Splice.Amulet:Amulet'] },
+    );
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("contract_tpe_row.module_name = 'Splice.Amulet'"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('contract_row.tpe_pk in (17, 29)'),
+    );
   });
 
   it('returns global contracts from healthy nodes when another node PQS is unavailable', async () => {
@@ -4422,24 +4906,32 @@ describe('PqsSummaryService', () => {
     });
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('tx.offset > 101'),
+      expect.stringContaining('where cursor_tx.offset <= 101'),
     );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('order by tx.offset asc'),
+      expect.stringContaining(
+        '(contract_row.created_at_ix, contract_row.create_event_pk, contract_row.contract_id) >',
+      ),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('order by contract_row.created_at_ix asc'),
     );
   });
 
   it('adds template and hide-splice filters to the ACS query', async () => {
-    const query = jest.fn().mockResolvedValueOnce({
-      rows: [
-        {
-          contract_id: '00b',
-          template_id: 'Main:Asset',
-          created_record_time: '2026-07-01T12:01:00.000Z',
-          created_event_offset: '102',
-        },
-      ],
-    });
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ pk: '17' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00b',
+            template_id: 'Main:Asset',
+            created_record_time: '2026-07-01T12:01:00.000Z',
+            created_event_offset: '102',
+          },
+        ],
+      });
 
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
@@ -4457,11 +4949,15 @@ describe('PqsSummaryService', () => {
       { limit: 30, templates: ['Main:Asset'], hideSplice: true },
     );
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("end = 'Main:Asset'"),
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('contract_row.tpe_pk in (17)'),
     );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("end not like 'Splice.%'"),
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining(
+        "visible_contract_tpe.module_name not like 'Splice.%'",
+      ),
     );
   });
 
@@ -4600,7 +5096,7 @@ describe('PqsSummaryService', () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('from "public"."__transactions" tx'),
+      expect.stringContaining('from party_update_ix'),
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
@@ -4615,6 +5111,12 @@ describe('PqsSummaryService', () => {
       expect.stringContaining("'Alice'"),
     );
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Bob'"));
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('party_0_update_ix as materialized');
+    expect(sql).toContain('party_1_update_ix as materialized');
+    expect(sql).toContain('intersect');
+    expect(sql).not.toContain('where exists');
+    expect(sql).not.toContain('having count(distinct party_filter)');
     expect(updates).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -4866,7 +5368,7 @@ describe('PqsSummaryService', () => {
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
-        'missing-update-id',
+        '99999999',
       ),
     ).rejects.toThrow('Update not found');
   });
@@ -4918,6 +5420,75 @@ describe('PqsSummaryService', () => {
         events: [],
       }),
     );
+  });
+
+  it('looks up update details through the numeric offset index', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '00003322',
+      ),
+    ).rejects.toThrow('Update not found');
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('where tx.offset = 3322');
+    expect(sql).not.toContain('tx.offset::text =');
+  });
+
+  it('rejects malformed update offsets before querying PQS', async () => {
+    const query = jest.fn();
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '3322 or 1=1',
+      ),
+    ).rejects.toThrow('Invalid event offset');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('rejects update offsets outside the PQS bigint range before querying', async () => {
+    const query = jest.fn();
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '9223372036854775808',
+      ),
+    ).rejects.toThrow('Invalid event offset');
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('returns mixed normalized event rows on a single update detail', async () => {
@@ -5760,15 +6331,17 @@ describe('PqsSummaryService', () => {
       .mockResolvedValue([]);
 
     const response = await Promise.race([
-      (service as PqsSummaryService & {
-        fetchTokens: (
-          nodes: Array<{
-            id: string;
-            label: string;
-            mode: 'pqs_with_grpc';
-          }>,
-        ) => Promise<TokensResponse>;
-      }).fetchTokens([
+      (
+        service as PqsSummaryService & {
+          fetchTokens: (
+            nodes: Array<{
+              id: string;
+              label: string;
+              mode: 'pqs_with_grpc';
+            }>,
+          ) => Promise<TokensResponse>;
+        }
+      ).fetchTokens([
         {
           id: 'participant-1',
           label: 'Participant 1',
@@ -5835,12 +6408,16 @@ describe('PqsSummaryService', () => {
     };
 
     await Promise.all([
-      (service as PqsSummaryService & {
-        fetchTokens: (nodes: typeof node[]) => Promise<TokensResponse>;
-      }).fetchTokens([node]),
-      (service as PqsSummaryService & {
-        fetchTokens: (nodes: typeof node[]) => Promise<TokensResponse>;
-      }).fetchTokens([node]),
+      (
+        service as PqsSummaryService & {
+          fetchTokens: (nodes: (typeof node)[]) => Promise<TokensResponse>;
+        }
+      ).fetchTokens([node]),
+      (
+        service as PqsSummaryService & {
+          fetchTokens: (nodes: (typeof node)[]) => Promise<TokensResponse>;
+        }
+      ).fetchTokens([node]),
     ]);
 
     expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledTimes(1);
@@ -5871,11 +6448,13 @@ describe('PqsSummaryService', () => {
     jest
       .spyOn(service as never, 'fetchBuiltinTokensForNode')
       .mockResolvedValue([]);
-    const responsePromise = (service as PqsSummaryService & {
-      fetchTokens: (
-        nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
-      ) => Promise<TokensResponse>;
-    }).fetchTokens([
+    const responsePromise = (
+      service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
+        ) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([
       { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
     ]);
     let settled = false;
@@ -6018,7 +6597,9 @@ describe('PqsSummaryService', () => {
       expect.stringContaining('contract_row.tpe_pk in (12, 14, 43)'),
     );
     expect(tokenQuery?.slice(tokenQuery.indexOf('where'))).not.toEqual(
-      expect.stringContaining("contract_tpe_row.module_name || ':' || contract_tpe_row.entity_name"),
+      expect.stringContaining(
+        "contract_tpe_row.module_name || ':' || contract_tpe_row.entity_name",
+      ),
     );
   });
 

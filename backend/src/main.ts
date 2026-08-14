@@ -1,4 +1,4 @@
 import 'dotenv/config';
-import { bootstrap } from './app-bootstrap';
+import { bootstrapHttp } from './bootstrap-http';
 
-void bootstrap();
+void bootstrapHttp();

@@ -227,10 +227,9 @@ git commit -m "feat: add PQS index migration engine"
 - [ ] **Step 1: Write failing command tests**
 
 ```ts
-it('inspects every configured PQS node and skips grpc-only nodes', async () => {
-  const result = await runIndexCommand(['inspect'], dependenciesWithNodes([pqsNode, grpcNode]));
+it('invokes only the requested configured PQS node', async () => {
+  const result = await runIndexCommand(['inspect', '--node', 'pqs-node'], dependenciesWithNodes([pqsNode, secondPqsNode]));
   expect(result.inspectedNodeIds).toEqual(['pqs-node']);
-  expect(result.skipped).toEqual([{ nodeId: 'grpc-node', reason: 'PQS is not configured' }]);
 });
 
 it('dry-run never calls applyPqsIndexes', async () => {

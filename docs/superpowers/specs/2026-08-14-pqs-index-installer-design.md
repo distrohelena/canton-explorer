@@ -23,9 +23,9 @@ It uses the existing node configuration and environment-variable resolution,
 therefore it targets exactly the PQS databases Explorer uses. `inspect` is the
 default, is read-only, and reports the PQS version/schema shape, contract
 partitions, installed Explorer indexes, and the proposed changes. `apply`
-requires explicit operator action. `--node` allows a staged deployment to one
-participant before applying the same migration set to every configured PQS
-database. A node without a PQS connection is reported and skipped.
+requires explicit operator action. Every valid Explorer node configuration is
+PQS-backed. `--node` allows a staged deployment to one configured PQS node
+before applying the same migration set to every configured PQS database.
 
 The Docker image exposes the same entrypoint. The supplied Compose file adds a
 one-shot `canton-explorer-indexes` service using the Explorer image, the same
