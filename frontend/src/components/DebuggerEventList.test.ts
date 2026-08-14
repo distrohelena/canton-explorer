@@ -1,8 +1,25 @@
-import { fireEvent, render, screen } from '@testing-library/vue';
-import { describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
+import { afterEach, describe, expect, it } from 'vitest';
 import DebuggerEventList from './DebuggerEventList.vue';
 
 describe('DebuggerEventList', () => {
+  afterEach(cleanup);
+
+  it('renders a local retry after the events request fails', async () => {
+    const { emitted } = render(DebuggerEventList, {
+      props: {
+        currentStepId: null,
+        realEvents: [],
+        replayEvents: [],
+        error: 'Events unavailable',
+      },
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry events' }));
+
+    expect(emitted().retry).toEqual([[]]);
+  });
+
   it('renders ledger events and emits the selected step id', async () => {
     const { emitted } = render(DebuggerEventList, {
       props: {

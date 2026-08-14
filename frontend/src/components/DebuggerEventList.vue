@@ -7,10 +7,12 @@ const props = defineProps<{
   replayEvents: DebuggerReplayEventSummary[];
   currentStepId: string | null;
   loading?: boolean;
+  error?: string | null;
 }>();
 
 const emit = defineEmits<{
   selectStep: [stepId: string];
+  retry: [];
 }>();
 
 const activeTab = ref<'real' | 'replay'>('real');
@@ -115,6 +117,10 @@ watch(
     <p v-if="loading" class="debugger-event-list__empty inline-loading" role="status">
       <span class="node-updates__spinner" aria-hidden="true"></span>
       <span>Loading ledger events…</span>
+    </p>
+    <p v-else-if="error" class="debugger-event-list__empty debugger-template-picker__state--error" role="alert">
+      {{ error }}
+      <button type="button" class="button button--secondary" @click="emit('retry')">Retry events</button>
     </p>
     <p v-else-if="activeTab === 'real' && realEvents.length === 0" class="debugger-event-list__empty">
       No real ledger events are available for this update.

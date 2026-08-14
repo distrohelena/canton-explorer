@@ -67,6 +67,9 @@ const emit = defineEmits<{
   select: [selection: DebuggerTemplateSelection];
   nodeSelect: [nodeId: string, simulationKind: DebuggerSimulationKind];
   reset: [];
+  retryTemplates: [];
+  retryActiveContracts: [];
+  retryConstructor: [];
   constructorValue: [value: unknown | null];
   constructorValidity: [valid: boolean];
   createSession: [];
@@ -399,6 +402,9 @@ function handleSearchKeydown(event: KeyboardEvent) {
           </p>
           <p v-else-if="activeContractsError" class="debugger-template-picker__state debugger-template-picker__state--error">
             {{ activeContractsError }}
+            <button type="button" class="button button--secondary" @click.stop="emit('retryActiveContracts')">
+              Retry active contracts
+            </button>
           </p>
           <p v-else-if="!selectedNode" class="debugger-template-picker__state">Select a node to see its active contracts.</p>
           <p v-else-if="filteredContracts.length === 0" class="debugger-template-picker__state">
@@ -440,7 +446,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
           <span class="node-updates__spinner" aria-hidden="true"></span>
           <span>Loading available templates...</span>
         </p>
-        <p v-else-if="!isExerciseExisting && error" class="debugger-template-picker__state debugger-template-picker__state--error">{{ error }}</p>
+        <p v-else-if="!isExerciseExisting && error" class="debugger-template-picker__state debugger-template-picker__state--error">
+          {{ error }}
+          <button type="button" class="button button--secondary" @click.stop="emit('retryTemplates')">
+            Retry templates
+          </button>
+        </p>
       </section>
     <section
       v-if="modelValue?.simulationKind === 'create' && constructorFocus"
@@ -459,7 +470,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
         <span class="node-updates__spinner" aria-hidden="true"></span>
         <span>Loading template schema...</span>
       </p>
-      <p v-else-if="constructorError" class="debugger-template-picker__state debugger-template-picker__state--error">{{ constructorError }}</p>
+      <p v-else-if="constructorError" class="debugger-template-picker__state debugger-template-picker__state--error">
+        {{ constructorError }}
+        <button type="button" class="button button--secondary" @click.stop="emit('retryConstructor')">
+          Retry constructor schema
+        </button>
+      </p>
       <DebuggerValueForm
         v-else-if="constructorSchema"
         :schema="constructorSchema"
