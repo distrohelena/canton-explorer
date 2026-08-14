@@ -24,6 +24,7 @@ function readFlagValue(args, index, flag) {
 
 async function main() {
   const args = process.argv.slice(2);
+  const isIndexCommand = args[0] === 'indexes';
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -51,15 +52,18 @@ async function main() {
       continue;
     }
 
-    throw new Error(`Unknown argument: ${arg}`);
+    if (arg.startsWith('--') && !isIndexCommand) {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
   }
 
-  const entrypoint = resolve(__dirname, '..', 'dist', 'src', 'main.js');
+  const entrypoint = resolve(__dirname, '..', 'dist', 'src', 'cli.js');
   if (!existsSync(entrypoint)) {
     throw new Error('Built backend entrypoint not found. Reinstall or rebuild the package.');
   }
 
-  await import(entrypoint);
+  const { runCli } = await import(entrypoint);
+  await runCli(args);
 }
 
 main().catch((error) => {
