@@ -58,3 +58,32 @@ schema validation is invoked before `migrationTableSql`; the only runtime
 `dropIndexSql` invocation is guarded by the repair mode; valid full-definition
 mismatches stop both apply and repair; and the compound cursor keys are selected,
 ordered, encoded, decoded, and tested together.
+
+## Final-audit round 2: total active-contract order
+
+Implementation commit: `3998789 fix: complete active contract pagination order`
+
+The active-contract keyset is now the total order
+`(created_at_ix, create_event_pk, contract_id)`. New `acs1.` cursors include
+`contractId`; both `before` and `after` predicates and both query orderings use
+all three keys. A prior `acs1.` payload without `contractId` is treated as a
+legacy numeric-offset cursor rather than assigning a guessed text sentinel.
+
+The active-contract partial index and bounded inspect plan now cover the same
+three-key order. The schema validation requires PQS `__contracts.contract_id`
+to be `text` before managing that index.
+
+Round-2 evidence:
+
+| Command | Result |
+| --- | --- |
+| Initial new regression run | failed as expected: cursor lacked `contractId`, two-key index/order remained, and pre-total `acs1` did not use legacy fallback |
+| `npm test --workspace backend -- pqs-summary.service.spec.ts pqs-index-sql.spec.ts pqs-index-installer.spec.ts` | 3 suites, 144 tests passed |
+| `npm run build --workspace backend` | passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 2 tests passed, 0 failed, duration 6197 ms |
+| `git diff --check` | passed (no output, exit 0) |
+
+The pagination regression puts `00z` and `00y` in the same
+`(created_at_ix, create_event_pk)` pair with a page limit of one. It verifies
+the older page receives `00y` after `00z` without a duplicate or skip, then
+uses `after` to return to `00z` with the three-key greater-than predicate.
