@@ -3736,7 +3736,23 @@ describe('PqsSummaryService', () => {
       expect(
         sql.match(
           new RegExp(
+            `\\(select distinct ${escapedColumn} as update_ix\\s+from[\\s\\S]*?order by ${escapedColumn} desc\\s+limit 3\\)`,
+            'g',
+          ),
+        ),
+      ).toHaveLength(4);
+      expect(
+        sql.match(
+          new RegExp(
             `order by ${escapedColumn} desc\\s+offset 3\\s+limit 1`,
+            'g',
+          ),
+        ),
+      ).toHaveLength(4);
+      expect(
+        sql.match(
+          new RegExp(
+            `select update_ix\\s+from \\(\\s*select distinct ${escapedColumn} as update_ix\\s+from[\\s\\S]*?order by ${escapedColumn} desc\\s+offset 3\\s+limit 1\\s*\\) event_candidate_frontier`,
             'g',
           ),
         ),

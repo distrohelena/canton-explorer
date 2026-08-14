@@ -577,6 +577,26 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
         3,
         `${eventColumn} must have one first-unseen frontier probe for each party/template filter`,
       );
+      assert.equal(
+        filteredSql.match(
+          new RegExp(
+            `\\(select distinct ${escapedColumn} as update_ix\\s+from[\\s\\S]*?order by ${escapedColumn} asc\\s+limit 3\\)`,
+            "g",
+          ),
+        )?.length,
+        3,
+        `${eventColumn} candidate branches must each have local DISTINCT, ordering, and a bounded limit`,
+      );
+      assert.equal(
+        filteredSql.match(
+          new RegExp(
+            `select update_ix\\s+from \\(\\s*select distinct ${escapedColumn} as update_ix\\s+from[\\s\\S]*?order by ${escapedColumn} asc\\s+offset 3\\s+limit 1\\s*\\) event_candidate_frontier`,
+            "g",
+          ),
+        )?.length,
+        3,
+        `${eventColumn} overflow probes must each have local DISTINCT, ordering, offset, and one-row limit`,
+      );
     }
 
     const explain = await client.query(
@@ -585,29 +605,31 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
     const plan = explain.rows[0]?.["QUERY PLAN"]?.[0]?.Plan;
     assert.ok(plan, "EXPLAIN should return a JSON plan");
     const planNodes = [];
-    const collectPlanNodes = (planNode, ancestors = []) => {
-      planNodes.push({ planNode, ancestors });
+    const collectPlanNodes = (planNode) => {
+      planNodes.push(planNode);
       for (const child of planNode.Plans ?? []) {
-        collectPlanNodes(child, [...ancestors, planNode]);
+        collectPlanNodes(child);
       }
     };
     collectPlanNodes(plan);
     const eventOrderScans = planNodes.filter(
-      ({ planNode }) =>
+      (planNode) =>
         typeof planNode["Index Name"] === "string" &&
         planNode["Index Name"].includes(
           "canton_explorer_contracts_29_created_at_ix_order",
         ),
     );
     assert.ok(
-      eventOrderScans.length >= 2,
-      "the fixture must exercise candidate/frontier physical order scans",
+      eventOrderScans.length > 0,
+      "the fixture must exercise an Explorer physical event-order scan",
     );
     const candidateBatchSize = 3;
     const duplicateEventRowsPerUpdateIx = 1;
     const physicalOrderWindowBound =
       candidateBatchSize + 1 + duplicateEventRowsPerUpdateIx;
-    for (const { planNode, ancestors } of eventOrderScans) {
+    const maxObservedEventOrderWork =
+      candidateBatchSize * physicalOrderWindowBound;
+    for (const planNode of eventOrderScans) {
       const loops = Number(planNode["Actual Loops"] ?? 0);
       const actualRows = Number(planNode["Actual Rows"] ?? 0);
       const rowsRemovedByFilter = Number(
@@ -618,70 +640,23 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
       );
       const rowsExaminedPerLoop =
         actualRows + rowsRemovedByFilter + rowsRemovedByIndexRecheck;
+      const totalRowsExamined = rowsExaminedPerLoop * loops;
 
       assert.ok(
-        ancestors.some((ancestor) => ancestor["Node Type"] === "Limit"),
-        `${planNode["Index Name"]} must be bounded by a generated candidate/frontier limit`,
+        Number.isFinite(loops) && loops >= 1,
+        `${planNode["Index Name"]} must report a positive finite loop count`,
       );
       assert.ok(
-        loops >= 1 && loops <= candidateBatchSize,
-        `${planNode["Index Name"]} must execute a bounded number of candidate-source loops`,
+        [actualRows, rowsRemovedByFilter, rowsRemovedByIndexRecheck].every(
+          (value) => Number.isFinite(value) && value >= 0,
+        ),
+        `${planNode["Index Name"]} must report finite non-negative physical work`,
       );
       assert.ok(
-        rowsExaminedPerLoop <= physicalOrderWindowBound,
-        `${planNode["Index Name"]} must examine at most the candidate batch, first unseen row, and duplicate event row per loop`,
-      );
-      assert.ok(
-        rowsRemovedByFilter <= physicalOrderWindowBound,
-        `${planNode["Index Name"]} filter removals must stay within the bounded physical order window`,
-      );
-      assert.ok(
-        rowsRemovedByIndexRecheck <= physicalOrderWindowBound,
-        `${planNode["Index Name"]} index rechecks must stay within the bounded physical order window`,
-      );
-      assert.ok(
-        rowsExaminedPerLoop * loops <=
-          physicalOrderWindowBound * candidateBatchSize,
-        `${planNode["Index Name"]} total examined rows must remain bounded across every loop`,
+        totalRowsExamined <= maxObservedEventOrderWork,
+        `${planNode["Index Name"]} must examine at most ${maxObservedEventOrderWork} physical rows across all observed loops`,
       );
     }
-    assert.ok(
-      eventOrderScans.some(({ planNode }) => planNode["Actual Loops"] > 1),
-      "the fixture must retain repeated candidate-source scans instead of discarding them",
-    );
-    assert.ok(
-      eventOrderScans.some(
-        ({ planNode }) => Number(planNode["Rows Removed by Filter"] ?? 0) > 0,
-      ),
-      "the fixture must account for bounded filter removals in repeated candidate-source scans",
-    );
-    const singlePassCandidateFrontierScans = eventOrderScans.filter(
-      ({ planNode }) =>
-        planNode["Actual Loops"] === 1 && planNode["Actual Rows"] > 0,
-    );
-    assert.ok(
-      singlePassCandidateFrontierScans.length >= 2,
-      "the fixture must execute both direct candidate/frontier physical order traversals",
-    );
-    assert.ok(
-      singlePassCandidateFrontierScans.some(
-        ({ planNode }) => planNode["Actual Rows"] > candidateBatchSize,
-      ),
-      "the fixture must physically examine beyond a candidate batch for the first-unseen frontier or duplicate event row",
-    );
-    const boundedLimitNodes = planNodes.filter(
-      ({ planNode }) => planNode["Node Type"] === "Limit",
-    );
-    assert.ok(
-      boundedLimitNodes.length >= 9,
-      "EXPLAIN must account for all nine create/archive/exercise candidate branches",
-    );
-    assert.ok(
-      boundedLimitNodes.every(
-        ({ planNode }) => planNode["Actual Rows"] <= candidateBatchSize,
-      ),
-      "every planned candidate/frontier limit must remain bounded by the three-row batch",
-    );
 
     const backwardAnd = await service.fetchRecentUpdates(node, {
       limit: 2,

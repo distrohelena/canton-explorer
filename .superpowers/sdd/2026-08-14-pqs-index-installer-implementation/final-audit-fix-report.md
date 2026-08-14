@@ -454,3 +454,52 @@ prescribing unrelated PostgreSQL planner choices.
 - `backend/test/pqs/pqs-summary.service.spec.ts`
 - `scripts/pqs-index-installer.test.mjs`
 - `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
+
+## Final-audit round 8: planner-neutral frontier evidence
+
+Date: 2026-08-14
+
+### Re-review correction
+
+This round changes tests and this report only. Production source, npm behavior,
+Docker behavior, and the hide-Splice mutation regression are unchanged.
+
+The prior EXPLAIN assertion treated any `Limit` ancestor as evidence that a
+physical event-order scan was locally bounded. A deliberate RED ancestry
+diagnostic showed every observed scan started beneath the root page `Limit`
+(for example, `Limit > Unique > Merge Append > ...`), so that predicate could
+pass even if it learned nothing about the branch's local candidate window.
+The ancestry check and plan-node-count assertions were removed.
+
+Generated SQL now directly proves every physical branch shape. For each
+create/archive/exercise column, the tests require every candidate branch to be
+a local `SELECT DISTINCT ... ORDER BY ... LIMIT 3` and every overflow probe to
+be a local `SELECT DISTINCT ... ORDER BY ... OFFSET 3 LIMIT 1`. The compound
+party/template/hide-Splice service regression requires all four sources
+(template, visible, Alice, Bob) to have that local shape, preserving the
+visible-frontier deletion mutation coverage.
+
+The actual generated-query `EXPLAIN (ANALYZE, FORMAT JSON)` still identifies
+every observed Explorer event-order index scan. For each such scan it accepts
+one or many loops and zero or nonzero filter/recheck removals, validates all
+reported metrics are finite and non-negative, and bounds total examined work
+as `Actual Loops * (Actual Rows + Rows Removed by Filter + Rows Removed by
+Index Recheck)`. The explicit fixture bound remains 15 physical rows: a
+three-row candidate batch times its candidate/first-unseen/duplicate window of
+five rows. No assertion requires a repeated loop, a filter removal, or a
+specific number of plan `Limit` nodes.
+
+### Round-8 verification
+
+| Command | Result |
+| --- | --- |
+| Temporary ancestry diagnostic | RED: every observed order scan inherited the root page `Limit`, proving the prior ancestry assertion was vacuous |
+| `npm test --workspace backend -- --runInBand test/pqs/pqs-summary.service.spec.ts -t "keeps visible frontiers in compound party/template/hide-splice candidate progress"` | 1 focused test passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 5 tests passed; planner-neutral observed-scan accounting and hide-Splice page regression passed |
+| `npm test --workspace backend -- --runInBand` | 36 suites, 437 tests passed |
+
+### Round-8 changed paths
+
+- `backend/test/pqs/pqs-summary.service.spec.ts`
+- `scripts/pqs-index-installer.test.mjs`
+- `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
