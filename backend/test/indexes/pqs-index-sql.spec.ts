@@ -25,6 +25,29 @@ describe('PQS index SQL', () => {
     );
   });
 
+  it('canonicalizes colliding-prefix partition index names within PostgreSQL limits', () => {
+    const alphaRelation =
+      '__contracts_partition_with_a_very_long_shared_prefix_alpha';
+    const bravoRelation =
+      '__contracts_partition_with_a_very_long_shared_prefix_bravo';
+    const alpha = contractWitnessIndex('public', alphaRelation);
+    const bravo = contractWitnessIndex('public', bravoRelation);
+
+    expect([alpha.name, bravo.name]).toEqual([
+      'canton_explorer_contracts_partition_with_a_ver_77542b8a1a49299a',
+      'canton_explorer_contracts_partition_with_a_ver_36ed37e931fd119e',
+    ]);
+    expect(Buffer.byteLength(alpha.name, 'utf8')).toBeLessThanOrEqual(63);
+    expect(Buffer.byteLength(bravo.name, 'utf8')).toBeLessThanOrEqual(63);
+    expect(alpha.name).not.toBe(bravo.name);
+    expect(alpha.createSql).toBe(
+      `create index concurrently if not exists "${alpha.name}" on "public"."${alphaRelation}" using gin (witnesses)`,
+    );
+    expect(bravo.createSql).toBe(
+      `create index concurrently if not exists "${bravo.name}" on "public"."${bravoRelation}" using gin (witnesses)`,
+    );
+  });
+
   it('creates the active-contract and transaction-id access paths concurrently', () => {
     expect(activeContractsIndexSql('public', '__contracts_42')).toBe(
       'create index concurrently if not exists "canton_explorer_contracts_42_active_created_ix" on "public"."__contracts_42" (created_at_ix desc, create_event_pk desc, contract_id desc) where archived_at_ix is null',

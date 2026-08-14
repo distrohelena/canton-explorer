@@ -503,3 +503,72 @@ specific number of plan `Limit` nodes.
 - `backend/test/pqs/pqs-summary.service.spec.ts`
 - `scripts/pqs-index-installer.test.mjs`
 - `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
+
+## Final-audit round 9: PostgreSQL index-name limit repair
+
+Date: 2026-08-14
+
+### Root cause and repair
+
+Explorer generated each physical-partition index name by concatenating the
+Explorer prefix, the complete relation name, and the index suffix. PostgreSQL
+stores identifiers at a maximum of 63 bytes, but the installer retained the
+longer candidate in `ExpectedPqsIndex` and used it as the reconciliation key.
+PostgreSQL therefore created a truncated catalog name that the installer could
+not find after reconciliation. Long candidates with the same first 63 bytes
+also risked truncating to the same identifier.
+
+`pqs-index-sql.ts` now canonicalizes names at their single generation point.
+Candidates already at or below 63 bytes are returned unchanged. Longer ASCII
+candidates keep a readable prefix and append 16 hexadecimal characters from a
+SHA-256 digest of the complete original candidate, producing exactly 63 bytes.
+Because `ExpectedPqsIndex.name` and every generated `CREATE INDEX` use that
+same function, inspection/reconciliation and repair/drop SQL continue to use
+the same canonical name without installer changes.
+
+### RED/GREEN evidence
+
+- Unit RED: the new colliding-prefix regression received the two original
+  86-byte witness-index candidates instead of the required canonical names.
+  The focused run reported 1 failed and 8 passed tests.
+- PostgreSQL RED: with the unmodified implementation, applying the installer
+  after adding the two long physical partitions failed with
+  `Expected Explorer index is missing after reconciliation`, demonstrating the
+  catalog/expected name mismatch on PostgreSQL 14.
+- Unit GREEN: the focused SQL suite passed 9/9. The two names are 63 bytes,
+  deterministic, distinct despite a shared PostgreSQL truncation prefix, and
+  identical between `ExpectedPqsIndex.name` and `CREATE INDEX` SQL.
+- PostgreSQL GREEN: the new end-to-end test found eight distinct Explorer
+  indexes across the two intended relations, all at most 63 bytes, and the
+  next `indexes apply` completed with `statements=0`.
+
+### Round-9 verification
+
+| Command | Result |
+| --- | --- |
+| `npm test --workspace backend -- --runInBand test/indexes/pqs-index-sql.spec.ts` | 1 suite, 9 tests passed |
+| `npm run build --workspace backend` | passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 6 tests passed, including long-name catalog ownership and idempotency |
+| `npm test --workspace backend -- --runInBand` | 36 suites, 438 tests passed |
+| `git diff --check` | passed (no output) |
+
+The first full-backend run in the restricted sandbox could not bind the local
+Supertest listener (`listen EPERM`). The unchanged command passed with local
+listener permission. Expected Node experimental warnings and the existing
+mocked gRPC refresh log remained non-failing.
+
+### Round-9 changed paths
+
+- `backend/src/indexes/pqs-index-sql.ts`
+- `backend/test/indexes/pqs-index-sql.spec.ts`
+- `scripts/pqs-index-installer.test.mjs`
+- `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
+
+### Round-9 concerns
+
+- The canonical suffix is a 64-bit truncation of SHA-256. A collision remains
+  theoretically possible, but is negligible for the practical number of PQS
+  physical partitions; unlike PostgreSQL prefix truncation, shared prefixes do
+  not increase that probability.
+- Existing short names are deliberately unchanged. Only newly encountered
+  overlong generated candidates use the canonical form.

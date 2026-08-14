@@ -880,3 +880,55 @@ test("visible candidate frontiers complete compound party/template/hide-splice p
     await client.end();
   }
 });
+
+test("long physical partition names remain distinct and idempotent", async () => {
+  const relations = [
+    "__contracts_partition_with_a_very_long_shared_prefix_alpha",
+    "__contracts_partition_with_a_very_long_shared_prefix_bravo",
+  ];
+
+  psql(`
+    create table public.${relations[0]} partition of public.__contracts
+      for values in (97);
+    create table public.${relations[1]} partition of public.__contracts
+      for values in (98);
+  `);
+
+  assert.match(runInstaller("apply"), /apply statements=12/);
+
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const result = await client.query(
+      `select index_relation.relname as index_name,
+        table_relation.relname as relation_name
+      from pg_index index_metadata
+      join pg_class index_relation
+        on index_relation.oid = index_metadata.indexrelid
+      join pg_class table_relation
+        on table_relation.oid = index_metadata.indrelid
+      join pg_namespace table_schema
+        on table_schema.oid = table_relation.relnamespace
+      where table_schema.nspname = 'public'
+        and table_relation.relname = any($1::text[])
+        and index_relation.relname like 'canton_explorer_%'
+      order by table_relation.relname, index_relation.relname`,
+      [relations],
+    );
+    const names = result.rows.map((row) => row.index_name);
+
+    assert.equal(result.rows.length, 8);
+    assert.equal(new Set(names).size, 8);
+    assert.ok(names.every((name) => Buffer.byteLength(name, "utf8") <= 63));
+    for (const relation of relations) {
+      assert.equal(
+        result.rows.filter((row) => row.relation_name === relation).length,
+        4,
+      );
+    }
+  } finally {
+    await client.end();
+  }
+
+  assert.match(runInstaller("apply"), /apply statements=0/);
+});

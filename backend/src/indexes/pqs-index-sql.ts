@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export type PqsIndexContext = {
   schema: string;
   contractPartitions: readonly string[];
@@ -26,6 +28,8 @@ export type IndexMigration = {
 };
 
 const identifierPattern = /^[A-Za-z_][A-Za-z0-9_$]*$/;
+const postgresIdentifierByteLimit = 63;
+const indexNameHashLength = 16;
 
 export function quoteIdentifier(identifier: string): string {
   if (!identifierPattern.test(identifier)) {
@@ -40,7 +44,17 @@ export function qualified(schema: string, relation: string): string {
 }
 
 function indexName(relation: string, suffix: string): string {
-  return `canton_explorer_${relation.replace(/^__/, '')}_${suffix}`;
+  const candidate = `canton_explorer_${relation.replace(/^__/, '')}_${suffix}`;
+  if (Buffer.byteLength(candidate, 'utf8') <= postgresIdentifierByteLimit) {
+    return candidate;
+  }
+
+  const hash = createHash('sha256')
+    .update(candidate)
+    .digest('hex')
+    .slice(0, indexNameHashLength);
+  const prefixLength = postgresIdentifierByteLimit - indexNameHashLength - 1;
+  return `${candidate.slice(0, prefixLength)}_${hash}`;
 }
 
 export const migrationTableSql = (schema: string): string =>
