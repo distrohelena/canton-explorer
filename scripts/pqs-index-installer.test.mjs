@@ -236,7 +236,18 @@ before(async () => {
         (17, array['Bob'], 5, 100, null, 'contract-2'),
         (17, array['Alice'], 30001, 30001, null, 'alice-new-1'),
         (17, array['Alice'], 30002, 30002, null, 'alice-new-2'),
-        (17, array['Alice'], 30003, 30003, null, 'alice-new-3');
+        (17, array['Alice'], 30003, 30003, null, 'alice-new-3'),
+        (17, array['Alice', 'Bob'], 30000, 30000, null, 'shared-new-desc'),
+        (17, array['Alice', 'Bob'], 29001, 100, 29001, 'shared-old-desc-1'),
+        (17, array['Alice', 'Bob'], 29002, 100, 29002, 'shared-old-desc-2'),
+        (17, array['Alice', 'Bob'], 29003, 100, 29003, 'shared-old-desc-3'),
+        (17, array['Alice'], 40001, 40001, null, 'alice-early-asc-1'),
+        (17, array['Alice'], 40002, 40002, null, 'alice-early-asc-2'),
+        (17, array['Alice'], 40003, 40003, null, 'alice-early-asc-3'),
+        (17, array['Alice', 'Bob'], 40004, 40004, null, 'shared-early-asc'),
+        (17, array['Alice', 'Bob'], 41001, 100, 41001, 'shared-late-asc-1'),
+        (17, array['Alice', 'Bob'], 41002, 100, 41002, 'shared-late-asc-2'),
+        (17, array['Alice', 'Bob'], 41003, 100, 41003, 'shared-late-asc-3');
     insert into public.__contracts_29
       (tpe_pk, witnesses, create_event_pk, created_at_ix, archived_at_ix, contract_id)
       select 29, array['Alice'], 1000 + value, 1000 + value, null, 'bulk-' || value::text
@@ -267,9 +278,20 @@ before(async () => {
     insert into public.__transactions
       (ix, "offset", transaction_id, effective_at, paid_traffic_cost)
       values
+        (29001, 129001, 'shared-old-desc-update-1', '2026-08-14T05:00:01Z', null),
+        (29002, 129002, 'shared-old-desc-update-2', '2026-08-14T05:00:02Z', null),
+        (29003, 129003, 'shared-old-desc-update-3', '2026-08-14T05:00:03Z', null),
+        (30000, 130000, 'shared-new-desc-update', '2026-08-14T06:00:00Z', null),
         (30001, 130001, 'alice-new-update-1', '2026-08-14T06:00:01Z', null),
         (30002, 130002, 'alice-new-update-2', '2026-08-14T06:00:02Z', null),
-        (30003, 130003, 'alice-new-update-3', '2026-08-14T06:00:03Z', null);
+        (30003, 130003, 'alice-new-update-3', '2026-08-14T06:00:03Z', null),
+        (40001, 140001, 'alice-early-asc-update-1', '2026-08-14T07:00:01Z', null),
+        (40002, 140002, 'alice-early-asc-update-2', '2026-08-14T07:00:02Z', null),
+        (40003, 140003, 'alice-early-asc-update-3', '2026-08-14T07:00:03Z', null),
+        (40004, 140004, 'shared-early-asc-update', '2026-08-14T07:00:04Z', null),
+        (41001, 141001, 'shared-late-asc-update-1', '2026-08-14T08:00:01Z', null),
+        (41002, 141002, 'shared-late-asc-update-2', '2026-08-14T08:00:02Z', null),
+        (41003, 141003, 'shared-late-asc-update-3', '2026-08-14T08:00:03Z', null);
     analyze public.__transactions;
   `);
 
@@ -514,6 +536,15 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
     assert.match(filteredSql, /template_update_ix as materialized/);
     assert.match(
       filteredSql,
+      /candidate_progress as \(\s*select min\(update_ix\) as frontier_update_ix/,
+    );
+    assert.match(filteredSql, /tx\.ix::text as update_ix/);
+    assert.match(
+      filteredSql,
+      /candidate_progress\.frontier_update_ix::text as candidate_frontier_ix/,
+    );
+    assert.match(
+      filteredSql,
       /from filtered_update_ix\s+join "public"\."__transactions" tx\s+on tx\.ix = filtered_update_ix\.update_ix/,
     );
     assert.doesNotMatch(filteredSql, /contract_row\.created_at_ix = tx\.ix/);
@@ -537,7 +568,7 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
           new RegExp(`order by ${escapedColumn} asc\\s+offset 3\\s+limit 1`, "g"),
         )?.length,
         3,
-        `${eventColumn} must have one bounded overflow probe for each party/template filter`,
+        `${eventColumn} must have one first-unseen frontier probe for each party/template filter`,
       );
     }
 
@@ -561,12 +592,25 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
           "canton_explorer_contracts_29_created_at_ix_order",
         ),
     );
+    const eventOrderTraversals = eventOrderScans.filter(
+      (planNode) =>
+        planNode["Actual Loops"] === 1 && planNode["Actual Rows"] > 0,
+    );
     assert.ok(
-      eventOrderScans.some(
-        (planNode) =>
-          planNode["Actual Rows"] <= 3 && planNode["Actual Loops"] === 1,
-      ),
-      "the generated candidate SQL should use the physical event-order index for bounded work",
+      eventOrderTraversals.length >= 2,
+      "the fixture must exercise both candidate and frontier physical order scans",
+    );
+    assert.ok(
+      eventOrderTraversals.every((planNode) => planNode["Actual Rows"] <= 4),
+      "each physical order traversal must stop within the candidate batch plus its first-unseen row",
+    );
+    assert.ok(
+      eventOrderTraversals.some((planNode) => planNode["Actual Rows"] === 3),
+      "the fixture must exercise a complete three-row candidate batch",
+    );
+    assert.ok(
+      eventOrderTraversals.some((planNode) => planNode["Actual Rows"] === 4),
+      "the fixture must exercise the fourth row used as the exact first-unseen frontier",
     );
     const boundedLimitNodes = planNodes.filter(
       (planNode) => planNode["Node Type"] === "Limit",
@@ -577,7 +621,7 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
     );
     assert.ok(
       boundedLimitNodes.every((planNode) => planNode["Actual Rows"] <= 3),
-      "every planned candidate/overflow limit must remain bounded by the three-row batch",
+      "every planned candidate/frontier limit must remain bounded by the three-row batch",
     );
 
     const backwardAnd = await service.fetchRecentUpdates(node, {
@@ -594,64 +638,101 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
       })),
       [{ eventOffset: "1000", parties: ["Alice", "Bob"] }],
     );
+  } finally {
+    await client.end();
+  }
+});
 
-    const forwardAndBeyondThreeNewerCandidates =
-      await service.fetchRecentUpdates(node, {
-        limit: 2,
-        after: "999",
-        parties: ["Alice", "Bob"],
-        partyMode: "and",
-        templates: ["Main:Asset"],
-      });
-    assert.deepEqual(
-      forwardAndBeyondThreeNewerCandidates.updates.map((update) => ({
+test("candidate frontiers make intersected update pages complete in both directions", async () => {
+  const { PqsSummaryService } =
+    await import("../backend/dist/src/pqs/pqs-summary.service.js");
+  const client = new Client({ connectionString });
+  await client.connect();
+  const queries = [];
+  const service = new PqsSummaryService({
+    getRawExecutor: async () => ({
+      query: async (sql) => {
+        queries.push(sql);
+        return client.query(sql);
+      },
+    }),
+  });
+  const node = {
+    id: "postgresql-test",
+    label: "PostgreSQL test",
+    role: "participant",
+    mode: "pqs_only",
+    ledgerLabel: "PostgreSQL test ledger",
+    pqs: { connectionUriEnv: "PQS_INDEX_TEST_URL", schema: "public" },
+  };
+
+  try {
+    const forward = await service.fetchRecentUpdates(node, {
+      limit: 2,
+      after: "140000",
+      parties: ["Alice", "Bob"],
+      partyMode: "and",
+      templates: ["Main:Asset"],
+    });
+    const backward = await service.fetchRecentUpdates(node, {
+      limit: 2,
+      before: "130004",
+      parties: ["Alice", "Bob"],
+      partyMode: "and",
+      templates: ["Main:Asset"],
+    });
+    const summarize = (response) =>
+      response.updates.map((update) => ({
         eventOffset: update.eventOffset,
         parties: update.parties,
-      })),
-      [{ eventOffset: "1000", parties: ["Alice", "Bob"] }],
-      "forward AND pagination must expand past newer Alice-only template candidates",
-    );
-    const forwardAndCandidateBatches = queries.filter(
-      (sql) =>
-        sql.includes("cursor_tx.offset <= 999") &&
-        sql.includes("candidate_progress as"),
-    );
-    assert.equal(
-      forwardAndCandidateBatches.length,
-      2,
-      "forward AND pagination should issue a second bounded candidate batch",
-    );
-    assert.match(forwardAndCandidateBatches[0], /limit 3/);
-    assert.match(forwardAndCandidateBatches[1], /limit 6/);
+      }));
 
-    const backwardAndBeyondThreeNewerCandidates =
-      await service.fetchRecentUpdates(node, {
-        limit: 2,
-        before: "130004",
-        parties: ["Alice", "Bob"],
-        partyMode: "and",
-        templates: ["Main:Asset"],
-      });
     assert.deepEqual(
-      backwardAndBeyondThreeNewerCandidates.updates.map((update) => ({
-        eventOffset: update.eventOffset,
-        parties: update.parties,
-      })),
-      [{ eventOffset: "1000", parties: ["Alice", "Bob"] }],
-      "backward AND pagination must expand past newer Alice-only template candidates",
-    );
-    const backwardAndCandidateBatches = queries.filter(
-      (sql) =>
-        sql.includes("cursor_tx.offset >= 130004") &&
-        sql.includes("candidate_progress as"),
+      {
+        forward: summarize(forward),
+        backward: summarize(backward),
+      },
+      {
+        forward: [
+          { eventOffset: "141001", parties: ["Alice", "Bob"] },
+          { eventOffset: "140004", parties: ["Alice", "Bob"] },
+        ],
+        backward: [
+          { eventOffset: "130000", parties: ["Alice", "Bob"] },
+          { eventOffset: "129003", parties: ["Alice", "Bob"] },
+        ],
+      },
+      "both directions must include the shared create just beyond the first physical-branch frontier",
     );
     assert.equal(
-      backwardAndCandidateBatches.length,
-      2,
-      "backward AND pagination should issue a second bounded candidate batch",
+      forward.updates.filter((update) => update.eventOffset === "140004")
+        .length,
+      1,
+      "the forward page must include the frontier-crossing shared update exactly once",
     );
-    assert.match(backwardAndCandidateBatches[0], /limit 3/);
-    assert.match(backwardAndCandidateBatches[1], /limit 6/);
+    assert.equal(
+      backward.updates.filter((update) => update.eventOffset === "130000")
+        .length,
+      1,
+      "the backward page must include the frontier-crossing shared update exactly once",
+    );
+
+    for (const { cursorLookup, direction } of [
+      { cursorLookup: "cursor_tx.offset <= 140000", direction: "forward" },
+      { cursorLookup: "cursor_tx.offset >= 130004", direction: "backward" },
+    ]) {
+      const candidateBatches = queries.filter(
+        (sql) =>
+          sql.includes(cursorLookup) && sql.includes("candidate_progress as"),
+      );
+      assert.equal(
+        candidateBatches.length,
+        2,
+        `${direction} AND pagination should issue a second bounded candidate batch`,
+      );
+      assert.match(candidateBatches[0], /limit 3/);
+      assert.match(candidateBatches[1], /limit 6/);
+    }
   } finally {
     await client.end();
   }

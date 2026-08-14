@@ -3578,6 +3578,7 @@ describe('PqsSummaryService', () => {
       partyMode: 'or',
       operator: '>',
       direction: 'asc',
+      frontierAggregate: 'min',
       cursorLookup: 'cursor_tx.offset <= 40',
     },
     {
@@ -3586,11 +3587,19 @@ describe('PqsSummaryService', () => {
       partyMode: 'and',
       operator: '<',
       direction: 'desc',
+      frontierAggregate: 'max',
       cursorLookup: 'cursor_tx.offset >= 80',
     },
   ])(
     'bounds every party/template event candidate branch for $name pagination',
-    async ({ cursor, partyMode, operator, direction, cursorLookup }) => {
+    async ({
+      cursor,
+      partyMode,
+      operator,
+      direction,
+      frontierAggregate,
+      cursorLookup,
+    }) => {
       const query = jest
         .fn()
         .mockResolvedValueOnce({
@@ -3628,6 +3637,14 @@ describe('PqsSummaryService', () => {
       expect(sql).toContain('party_update_ix as materialized');
       expect(sql).toContain('template_update_ix as materialized');
       expect(sql).toContain('filtered_update_ix as materialized');
+      expect(sql).toContain('candidate_progress as');
+      expect(sql).toContain(
+        `select ${frontierAggregate}(update_ix) as frontier_update_ix`,
+      );
+      expect(sql).toContain('tx.ix::text as update_ix');
+      expect(sql).toContain(
+        'candidate_progress.frontier_update_ix::text as candidate_frontier_ix',
+      );
       expect(sql).toContain(cursorLookup);
 
       for (const eventColumn of [

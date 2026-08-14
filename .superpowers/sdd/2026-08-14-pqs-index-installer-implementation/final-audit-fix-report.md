@@ -305,3 +305,87 @@ Safe-repair/index-installation code remains untouched.
 - `backend/test/pqs/pqs-summary.service.spec.ts`
 - `scripts/pqs-index-installer.test.mjs`
 - `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
+
+## Final-audit round 6: exact frontier completeness
+
+Date: 2026-08-14
+
+### Root cause and repair
+
+The round-5 stop condition was still unsafe because it returned as soon as an
+intersection produced `limit + 1` transactions. A different physical event
+branch could already supply those older matches while a create/archive/exercise
+branch still had a first-unseen match that outranked the returned page boundary.
+
+Every distinct, cursor-windowed physical create/archive/exercise candidate
+branch now exposes its first unseen `update_ix` after the current candidate
+limit. `candidate_progress` combines the template, visible, and party branch
+frontiers, including the template/visible candidate sources that constrain the
+party branches, and selects the largest frontier for descending pages or the
+smallest frontier for ascending pages. The final transaction query returns both
+`tx.ix` and that aggregate frontier while retaining the transaction-offset
+cursor predicate at the final join.
+
+`queryRecentUpdateMetaRows` doubles the internal candidate batch when fewer than
+`limit + 1` updates are present and a frontier remains. For a full lookahead
+result, it compares the frontier with the actual `limit`-row page boundary and
+retries only when the frontier can still outrank that boundary. Equality and a
+frontier behind the boundary are complete. No arbitrary maximum batch was
+introduced.
+
+The safe-repair implementation, index definitions, npm command behavior,
+Docker/Compose behavior, and public API remain unchanged.
+
+### TDD evidence
+
+- RED unit SQL evidence:
+  `npm test --workspace backend -- --runInBand test/pqs/pqs-summary.service.spec.ts`
+  failed the forward and backward generated-query cases because the old SQL had
+  only boolean `has_more` metadata, not the required `min(update_ix)` /
+  `max(update_ix)` frontier and transaction ix metadata.
+- RED PostgreSQL evidence: `node --test scripts/pqs-index-installer.test.mjs`
+  reported 2 passed and 2 failed. The combined frontier regression showed both
+  unsafe pages in one assertion:
+  - ascending actual `141002, 141001`; required `141001, 140004`;
+  - descending actual `129003, 129002`; required `130000, 129003`.
+- GREEN: both direction-specific `limit: 2` queries issue candidate batches 3
+  then 6, return the frontier-crossing shared `Main:Asset` update exactly once,
+  and preserve the correct second update.
+
+### Generated-query and EXPLAIN evidence
+
+The existing 20,000-row PostgreSQL fixture remains in place. It now asserts all
+nine party/template create/archive/exercise candidate branches have `LIMIT 3`,
+all nine first-unseen probes have `OFFSET 3 LIMIT 1`, and the query emits the
+directional frontier plus transaction ix metadata. The actual generated query
+is still run with `EXPLAIN (ANALYZE, FORMAT JSON)`.
+
+The test does not require PostgreSQL to choose a universal plan. For this
+integration fixture it verifies that the Explorer-owned physical event-order
+index is exercised by both a complete three-row candidate traversal and the
+four-row traversal needed to expose the first unseen row, while every planned
+candidate/frontier `Limit` remains bounded.
+
+### Round-6 verification
+
+| Command | Result |
+| --- | --- |
+| `npm test --workspace backend -- --runInBand test/pqs/pqs-summary.service.spec.ts` | 1 suite, 127 tests passed |
+| `npm test --workspace backend -- --runInBand test/indexes/pqs-index-sql.spec.ts test/indexes/pqs-index-installer.spec.ts test/pqs/pqs-summary.service.spec.ts` | 3 suites, 148 tests passed |
+| `npm run build --workspace backend` | passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 4 tests passed; both-direction frontier regression and 20k-row generated-query EXPLAIN passed |
+| `npm test --workspace backend -- --runInBand` | 36 suites, 436 tests passed |
+| `npm test --workspace frontend` | 55 files, 445 tests passed |
+| Independent uncommitted-diff review | no actionable correctness findings |
+
+The first sandboxed full-backend attempt was blocked when Supertest tried to
+bind `0.0.0.0` (`listen EPERM`). The unchanged command passed when rerun with
+the required local-listener permission; this was an environment restriction,
+not a test failure.
+
+### Round-6 changed paths
+
+- `backend/src/pqs/pqs-summary.service.ts`
+- `backend/test/pqs/pqs-summary.service.spec.ts`
+- `scripts/pqs-index-installer.test.mjs`
+- `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`

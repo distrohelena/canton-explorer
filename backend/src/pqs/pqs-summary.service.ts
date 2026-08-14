@@ -96,10 +96,11 @@ interface SummaryRow {
 
 interface UpdateMetaRow {
   update_id: string | null;
+  update_ix?: string | number | null;
   event_offset?: string | number | null;
   record_time: string | null;
   paid_traffic_cost?: string | null;
-  candidate_has_more?: boolean | null;
+  candidate_frontier_ix?: string | number | null;
 }
 
 interface ActivityBucketRow {
@@ -1139,17 +1140,17 @@ type PqsUpdateCandidateWindow = {
 type PqsUpdateCandidateCte = {
   name: string;
   sql: string;
-  hasMoreSql: string;
+  frontierSql: string;
 };
 
 type PqsUpdateEventCandidateBranch = {
   sql: string;
-  hasMoreSql: string;
+  frontierSql: string;
 };
 
 type PqsUpdateEventCandidateSet = {
   sql: string;
-  hasMoreSql: string;
+  frontierSql: string;
 };
 
 function buildPqsUpdateCandidateWindow(
@@ -1231,8 +1232,7 @@ function buildPqsUpdateEventCandidateBranch(
         where ${conditions.join('\n          and ')}
         order by ${eventColumn} ${window.direction}
         limit ${window.limit})`,
-    hasMoreSql: `exists (
-      select 1
+    frontierSql: `select update_ix
       from (
         select distinct ${eventColumn} as update_ix
         from ${source}
@@ -1240,8 +1240,7 @@ function buildPqsUpdateEventCandidateBranch(
         order by ${eventColumn} ${window.direction}
         offset ${window.limit}
         limit 1
-      ) event_candidate_overflow
-    )`,
+      ) event_candidate_frontier`,
   };
 }
 
@@ -1287,9 +1286,9 @@ function buildPqsUpdateEventCandidateSet(
     from (
       ${branches.map((branch) => branch.sql).join('\n\n      union all\n\n      ')}
     ) matched_update_events`,
-    hasMoreSql: branches
-      .map((branch) => branch.hasMoreSql)
-      .join('\n      or '),
+    frontierSql: branches
+      .map((branch) => branch.frontierSql)
+      .join('\n      union all\n      '),
   };
 }
 
@@ -1338,9 +1337,9 @@ function buildPqsHideSpliceUpdateCandidateSet(
     from (
       ${branches.map((branch) => branch.sql).join('\n\n      union all\n\n      ')}
     ) visible_update_events`,
-    hasMoreSql: branches
-      .map((branch) => branch.hasMoreSql)
-      .join('\n      or '),
+    frontierSql: branches
+      .map((branch) => branch.frontierSql)
+      .join('\n      union all\n      '),
   };
 }
 
@@ -1360,7 +1359,7 @@ function buildPqsUpdateCandidateCte(
   }
 
   const ctes: string[] = [];
-  const hasMoreConditions: string[] = [];
+  const frontierQueries: string[] = [];
   let partyCandidateName: string | null = null;
   let templateCandidateName: string | null = null;
   let visibleCandidateName: string | null = null;
@@ -1382,7 +1381,7 @@ function buildPqsUpdateCandidateCte(
     ctes.push(`${templateCandidateName} as materialized (
     ${templateCandidates.sql}
   )`);
-    hasMoreConditions.push(templateCandidates.hasMoreSql);
+    frontierQueries.push(templateCandidates.frontierSql);
   }
 
   if (hideSplice) {
@@ -1391,7 +1390,7 @@ function buildPqsUpdateCandidateCte(
     ctes.push(`${visibleCandidateName} as materialized (
     ${visibleCandidates.sql}
   )`);
-    hasMoreConditions.push(visibleCandidates.hasMoreSql);
+    frontierQueries.push(visibleCandidates.frontierSql);
   }
 
   const partyCandidateSourceNames = [
@@ -1426,7 +1425,7 @@ function buildPqsUpdateCandidateCte(
       ctes.push(`${name} as materialized (
     ${partyCandidates.sql}
   )`);
-      hasMoreConditions.push(partyCandidates.hasMoreSql);
+      frontierQueries.push(partyCandidates.frontierSql);
       return name;
     });
     partyCandidateName = 'party_update_ix';
@@ -1465,7 +1464,7 @@ function buildPqsUpdateCandidateCte(
   return {
     name,
     sql: ctes.join(',\n'),
-    hasMoreSql: hasMoreConditions.join('\n      or '),
+    frontierSql: frontierQueries.join('\n      union all\n      '),
   };
 }
 
@@ -1503,7 +1502,10 @@ function pqsRecentUpdatesQuery(
     candidateCte?.sql,
     candidateCte
       ? `candidate_progress as (
-        select (${candidateCte.hasMoreSql}) as has_more
+        select ${candidateWindow.direction === 'desc' ? 'max' : 'min'}(update_ix) as frontier_update_ix
+        from (
+          ${candidateCte.frontierSql}
+        ) candidate_frontiers
       )`
       : null,
   ].filter((value): value is string => Boolean(value));
@@ -1537,10 +1539,11 @@ function pqsRecentUpdatesQuery(
       ${withClause}
       select
         tx.transaction_id::text as update_id,
+        tx.ix::text as update_ix,
         tx.offset::text as event_offset,
         ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
         tx.paid_traffic_cost::text as paid_traffic_cost,
-        ${candidateCte ? 'candidate_progress.has_more' : 'false'} as candidate_has_more
+        ${candidateCte ? 'candidate_progress.frontier_update_ix::text' : 'null::text'} as candidate_frontier_ix
       ${fromClause}
       ${whereClause}
       order by tx.offset asc
@@ -1555,10 +1558,11 @@ function pqsRecentUpdatesQuery(
     ${withClause}
     select
       tx.transaction_id::text as update_id,
+      tx.ix::text as update_ix,
       tx.offset::text as event_offset,
       ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
       tx.paid_traffic_cost::text as paid_traffic_cost,
-      ${candidateCte ? 'candidate_progress.has_more' : 'false'} as candidate_has_more
+      ${candidateCte ? 'candidate_progress.frontier_update_ix::text' : 'null::text'} as candidate_frontier_ix
     ${fromClause}
     ${whereClause}
     order by tx.offset desc
@@ -3861,6 +3865,10 @@ export class PqsSummaryService {
     hideSplice?: boolean,
   ): Promise<UpdateMetaRow[]> {
     let candidateLimit = limit + 1;
+    const candidateDirection =
+      normalizeEventOffsetCursor(after) && !normalizeEventOffsetCursor(before)
+        ? 'asc'
+        : 'desc';
 
     for (;;) {
       const result = await query(
@@ -3877,16 +3885,40 @@ export class PqsSummaryService {
         ),
       );
       const rows = (result.rows as UpdateMetaRow[]) ?? [];
-      const candidateHasMore = rows.some(
-        (row) => row.candidate_has_more === true,
-      );
       const updates = rows.filter(
         (row): row is UpdateMetaRow & { update_id: string } =>
           typeof row.update_id === 'string',
       );
+      const candidateFrontierValue = rows.find(
+        (row) =>
+          row.candidate_frontier_ix !== null &&
+          row.candidate_frontier_ix !== undefined,
+      )?.candidate_frontier_ix;
+      const candidateFrontierIx =
+        candidateFrontierValue === null || candidateFrontierValue === undefined
+          ? null
+          : BigInt(String(candidateFrontierValue));
 
-      if (updates.length >= limit + 1 || !candidateHasMore) {
+      if (candidateFrontierIx === null) {
         return updates;
+      }
+
+      if (updates.length >= limit + 1) {
+        const pageBoundaryValue = updates[limit - 1]?.update_ix;
+        if (pageBoundaryValue === null || pageBoundaryValue === undefined) {
+          throw new Error(
+            'PQS recent update query omitted update index metadata at the page boundary',
+          );
+        }
+        const pageBoundaryIx = BigInt(String(pageBoundaryValue));
+        const frontierCouldOutrankBoundary =
+          candidateDirection === 'asc'
+            ? candidateFrontierIx < pageBoundaryIx
+            : candidateFrontierIx > pageBoundaryIx;
+
+        if (!frontierCouldOutrankBoundary) {
+          return updates;
+        }
       }
 
       candidateLimit *= 2;
