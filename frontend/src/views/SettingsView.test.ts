@@ -94,6 +94,17 @@ const secondHealthyNode: NodeSnapshot = {
   label: 'Participant 2',
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 function renderSettings() {
   return render(SettingsView, {
     global: {
@@ -273,5 +284,25 @@ describe('SettingsView', () => {
     view.unmount();
     await vi.advanceTimersByTimeAsync(15000);
     expect(fetchNodes).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the last successful indexing cards visible while a periodic refresh is pending', async () => {
+    vi.useFakeTimers();
+    const refresh = deferred<NodeSnapshot[]>();
+    vi.mocked(fetchNodes)
+      .mockResolvedValueOnce([healthyNode])
+      .mockReturnValueOnce(refresh.promise);
+
+    renderSettings();
+    expect(await screen.findByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(screen.getByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+    expect(screen.getByText('Refreshing…')).toBeInTheDocument();
+    expect(screen.queryByText('Loading indexing status…')).not.toBeInTheDocument();
+
+    refresh.resolve([healthyNode]);
+    await waitFor(() => expect(screen.queryByText('Refreshing…')).not.toBeInTheDocument());
   });
 });

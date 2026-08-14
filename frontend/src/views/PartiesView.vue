@@ -26,14 +26,12 @@ const router = useRouter();
 const nodes = ref<NodeSnapshot[] | null>(null);
 const nodesLoading = ref(false);
 const nodesError = ref<string | null>(null);
-const error = ref<string | null>(null);
 const selectedMode = ref<PartiesMode>('active');
 const activeNodeFilters = ref<string[]>([]);
 const requestGeneration = ref(0);
 const partyPageSize = ref(DEFAULT_PAGE_SIZE);
 const partyBeforeCursor = ref<string | null>(null);
 const partyAfterCursor = ref<string | null>(null);
-const loadingNamespaces = ref(false);
 const showAdvancedFilter = ref(Object.prototype.hasOwnProperty.call(route.query, 'node'));
 const namespacePublicKeyDraft = ref('');
 const namespaceEncodingDraft = ref<'auto' | 'hex' | 'base64' | 'pem'>('auto');
@@ -48,7 +46,29 @@ const activeNamespaceFilter = ref<{
 const namespacePageSize = ref(DEFAULT_PAGE_SIZE);
 const namespaceBeforeCursor = ref<string | null>(null);
 const namespaceAfterCursor = ref<string | null>(null);
-const namespacesResponse = ref<NodePartyFingerprintsEntry | PartyFingerprintsResponse | null>(null);
+const {
+  data: namespacesResponse,
+  loading: namespacesLoading,
+  error: namespacesError,
+  load: loadNamespaceSection,
+  retry: retryNamespaceSection,
+  reset: resetNamespaceSection,
+} = useSectionLoad<NodePartyFingerprintsEntry | PartyFingerprintsResponse>(async () => {
+  const options: NonNullable<Parameters<typeof fetchPartyFingerprints>[0]> = {
+    before: namespaceBeforeCursor.value ?? undefined,
+    after: namespaceAfterCursor.value ?? undefined,
+    limit: namespacePageSize.value,
+    publicKey: activeNamespaceFilter.value?.publicKey,
+    encoding: activeNamespaceFilter.value?.encoding,
+    keyFormat: activeNamespaceFilter.value?.keyFormat,
+    keyType: activeNamespaceFilter.value?.keyType,
+  };
+  if (!allNodesSelected(activeNodeFilters.value)) {
+    options.nodeIds = activeNodeFilters.value;
+  }
+
+  return fetchPartyFingerprints(options);
+});
 
 type NodePartySection = ReturnType<typeof useSectionLoad<ActivePartiesNodeEntry>>;
 
@@ -172,7 +192,7 @@ const isSelectedNodeLoading = computed(() => {
     return selectableNodes.value.some((node) => localPartySections.get(node.id)?.loading.value);
   }
   if (selectedMode.value === 'fingerprints') {
-    return loadingNamespaces.value;
+    return false;
   }
   return selectableNodes.value.some((node) => nodePartySection(selectedMode.value, node.id).loading.value);
 });
@@ -283,16 +303,12 @@ function nodesForMode(mode: PartiesMode): NodeSnapshot[] {
 function selectMode(mode: PartiesMode): void {
   selectedMode.value = mode;
   const generation = beginRequestGeneration();
-  error.value = null;
+  resetNamespaceSection();
 
   if (mode === 'fingerprints') {
     resetNamespacePagination();
-    namespacesResponse.value = null;
-    loadingNamespaces.value = false;
   } else {
     resetPartyPagination();
-    loadingNamespaces.value = false;
-    namespacesResponse.value = null;
     clearPartyResults();
   }
 
@@ -362,7 +378,7 @@ async function loadNodes(): Promise<void> {
     if (Object.prototype.hasOwnProperty.call(route.query, 'node')) {
       showAdvancedFilter.value = true;
     }
-    await ensureAllNodesPartiesLoaded(selectedMode.value, requestGeneration.value);
+    void ensureAllNodesPartiesLoaded(selectedMode.value, requestGeneration.value);
   } catch (err) {
     nodesError.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
@@ -428,44 +444,16 @@ async function loadNamespaces(generation = requestGeneration.value): Promise<voi
     return;
   }
 
+  resetNamespaceSection();
   if (activeNodeFilters.value.length === 0) {
-    namespacesResponse.value = null;
-    loadingNamespaces.value = false;
-    error.value = null;
     return;
   }
 
-  loadingNamespaces.value = true;
-  error.value = null;
+  await loadNamespaceSection();
+}
 
-  try {
-    const options: NonNullable<Parameters<typeof fetchPartyFingerprints>[0]> = {
-      before: namespaceBeforeCursor.value ?? undefined,
-      after: namespaceAfterCursor.value ?? undefined,
-      limit: namespacePageSize.value,
-      publicKey: activeNamespaceFilter.value?.publicKey,
-      encoding: activeNamespaceFilter.value?.encoding,
-      keyFormat: activeNamespaceFilter.value?.keyFormat,
-      keyType: activeNamespaceFilter.value?.keyType,
-    };
-    if (!allNodesSelected(activeNodeFilters.value)) {
-      options.nodeIds = activeNodeFilters.value;
-    }
-
-    const response = await fetchPartyFingerprints(options);
-    if (generation === requestGeneration.value && selectedMode.value === 'fingerprints') {
-      namespacesResponse.value = response;
-    }
-  } catch (err) {
-    if (generation === requestGeneration.value && selectedMode.value === 'fingerprints') {
-      namespacesResponse.value = null;
-      error.value = err instanceof Error ? err.message : 'Unknown error';
-    }
-  } finally {
-    if (generation === requestGeneration.value) {
-      loadingNamespaces.value = false;
-    }
-  }
+function retryNamespaces(): void {
+  void retryNamespaceSection();
 }
 
 async function showOlderNamespaces(): Promise<void> {
@@ -534,10 +522,8 @@ async function setNodeFilters(nodeIds: string[]): Promise<void> {
   activeNodeFilters.value = uniqueValues(nodeIds).filter((nodeId) => availableNodeIds.has(nodeId));
   resetPartyPagination();
   resetNamespacePagination();
-  namespacesResponse.value = null;
-  loadingNamespaces.value = false;
+  resetNamespaceSection();
   clearPartyResults();
-  error.value = null;
 
   beginRequestGeneration();
   await router.push({
@@ -588,10 +574,8 @@ function syncNodeFiltersFromRoute(): void {
   activeNodeFilters.value = readNodeFilters(nodes.value);
   resetPartyPagination();
   resetNamespacePagination();
-  namespacesResponse.value = null;
-  loadingNamespaces.value = false;
+  resetNamespaceSection();
   clearPartyResults();
-  error.value = null;
 
   const generation = beginRequestGeneration();
   void ensureAllNodesPartiesLoaded(selectedMode.value, generation, true);
@@ -989,17 +973,30 @@ onMounted(() => {
         </div>
 
         <div v-if="selectedMode === 'fingerprints'" class="package-detail__list">
-          <RouterLink
-            v-for="fingerprint in selectedFingerprints"
-            :key="fingerprint"
-            class="package-detail__list-row contract-detail__link parties-page__party-link parties-page__fingerprint-row"
-            :to="`/namespaces/${encodeURIComponent(fingerprint)}`"
-          >
-            <span class="parties-page__fingerprint-value">{{ fingerprint }}</span>
-          </RouterLink>
-          <p v-if="selectedFingerprints.length === 0" class="update-detail__empty">
-            No known namespaces found across selected nodes.
-          </p>
+          <div v-if="namespacesLoading" class="inline-loading" role="status">
+            <span class="node-updates__spinner" aria-hidden="true"></span>
+            <span>Loading namespaces…</span>
+          </div>
+          <div v-else-if="namespacesError" class="dashboard__message dashboard__message--error" role="alert">
+            <strong>Unable to load namespaces.</strong>
+            <span>{{ namespacesError }}</span>
+            <button type="button" class="button button--secondary" aria-label="Retry namespaces" @click="retryNamespaces">
+              Retry
+            </button>
+          </div>
+          <template v-else>
+            <RouterLink
+              v-for="fingerprint in selectedFingerprints"
+              :key="fingerprint"
+              class="package-detail__list-row contract-detail__link parties-page__party-link parties-page__fingerprint-row"
+              :to="`/namespaces/${encodeURIComponent(fingerprint)}`"
+            >
+              <span class="parties-page__fingerprint-value">{{ fingerprint }}</span>
+            </RouterLink>
+            <p v-if="selectedFingerprints.length === 0" class="update-detail__empty">
+              No known namespaces found across selected nodes.
+            </p>
+          </template>
         </div>
       </div>
     </div>

@@ -359,6 +359,50 @@ describe('PartiesView', () => {
     expect(fetchNodeActiveParties).not.toHaveBeenCalled();
   });
 
+  it('ends node discovery loading before the independent party sections settle', async () => {
+    const parties = deferred<ReturnType<typeof makeActiveEntry>>();
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1')]);
+    vi.mocked(fetchNodeActiveParties).mockReturnValue(parties.promise);
+
+    await renderAt();
+
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Loading nodes...')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading parties across selected nodes' })).toBeInTheDocument();
+
+    parties.resolve(makeActiveEntry('participant-1', ['Alice']));
+    expect(await screen.findByRole('link', { name: 'Alice' })).toBeInTheDocument();
+  });
+
+  it('retries failed namespace requests and renders a local retry instead of an empty result', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1')]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue(makeActiveEntry('participant-1', ['Alice']));
+    vi.mocked(fetchPartyFingerprints)
+      .mockRejectedValueOnce(new Error('namespaces unavailable'))
+      .mockRejectedValueOnce(new Error('namespaces unavailable'))
+      .mockResolvedValueOnce({
+        source: 'grpc',
+        limit: 15,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: ['1220retry'],
+      });
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'Alice' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
+
+    expect(await screen.findByText('Unable to load namespaces.')).toBeInTheDocument();
+    expect(screen.getByText('namespaces unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('No known namespaces found across selected nodes.')).not.toBeInTheDocument();
+    expect(fetchPartyFingerprints).toHaveBeenCalledTimes(2);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry namespaces' }));
+
+    expect(await screen.findByRole('link', { name: '1220retry' })).toBeInTheDocument();
+    expect(fetchPartyFingerprints).toHaveBeenCalledTimes(3);
+  });
+
   it('reloads active parties immediately when a node is unchecked', async () => {
     vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
     vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) =>
@@ -898,7 +942,7 @@ describe('PartiesView', () => {
     await waitFor(() =>
       expect(fetchPartyFingerprints).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByText('1220alice')).toBeInTheDocument();
+    expect(await screen.findByText('1220alice')).toBeInTheDocument();
     expect(screen.getByText('1220carol')).toBeInTheDocument();
     expect(screen.queryByText('PQS')).not.toBeInTheDocument();
     expect(screen.queryAllByText('gRPC')).toHaveLength(0);
