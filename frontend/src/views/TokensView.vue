@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { LocationQueryRaw } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
 import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
@@ -28,6 +28,28 @@ const {
   retry: retryTokenSection,
   reset: resetTokenSection,
 } = useSectionLoad<TokensResponse>(() => fetchTokens(tokensRequest.value));
+let enrichmentReloadTimer: ReturnType<typeof setTimeout> | undefined;
+let enrichmentReloadScheduled = false;
+
+function clearEnrichmentReload(): void {
+  if (enrichmentReloadTimer !== undefined) {
+    clearTimeout(enrichmentReloadTimer);
+    enrichmentReloadTimer = undefined;
+  }
+  enrichmentReloadScheduled = false;
+}
+
+function scheduleEnrichmentReload(response: TokensResponse): void {
+  if (!response.refreshing || enrichmentReloadScheduled) {
+    return;
+  }
+
+  enrichmentReloadScheduled = true;
+  enrichmentReloadTimer = setTimeout(() => {
+    enrichmentReloadTimer = undefined;
+    void loadTokenSection();
+  }, 1000);
+}
 
 function readTokenCursor(key: 'tokensBefore' | 'tokensAfter'): string | undefined {
   const value = route.query[key];
@@ -123,6 +145,7 @@ async function pushTokenQuery(query: LocationQueryRaw) {
 }
 
 function loadTokens(): void {
+  clearEnrichmentReload();
   const before = readTokenCursor('tokensBefore');
   tokensRequest.value = {
     before,
@@ -272,6 +295,14 @@ watch(
   },
   { immediate: true },
 );
+
+watch(tokensResponse, (response) => {
+  if (response) {
+    scheduleEnrichmentReload(response);
+  }
+});
+
+onBeforeUnmount(clearEnrichmentReload);
 </script>
 
 <template>

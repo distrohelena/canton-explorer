@@ -491,6 +491,7 @@ const typedTokensFixture = {
   limit: 30,
   nextBefore: null,
   nextAfter: null,
+  refreshing: false,
   tokens: [
     {
       tokenId: 'canton-coin',

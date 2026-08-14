@@ -10,6 +10,7 @@ export interface TokensResponse {
   limit: number;
   nextBefore: string | null;
   nextAfter: string | null;
+  refreshing: boolean;
   tokens: TokenSummary[];
 }
 

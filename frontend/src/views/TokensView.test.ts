@@ -18,9 +18,19 @@ function makeTokensResponse(
     limit: 15,
     nextBefore: null,
     nextAfter: null,
+    refreshing: false,
     tokens,
     ...overrides,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
 }
 
 async function renderAt(path: string) {
@@ -62,6 +72,7 @@ function sectionForHeading(name: string): HTMLElement {
 describe('TokensView', () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.resetAllMocks();
     vi.restoreAllMocks();
   });
@@ -74,6 +85,104 @@ describe('TokensView', () => {
 
     expect(screen.getByText('Loading tokens...')).toBeInTheDocument();
     expect(screen.getByText('Loading latest token transfers...')).toBeInTheDocument();
+  });
+
+  it('reloads token enrichment once while keeping the initial rows visible', async () => {
+    vi.useFakeTimers();
+    const enriched = deferred<TokensResponse>();
+    const initial = makeTokensResponse([
+      {
+        tokenId: 'Issuer::validator-license',
+        name: 'Validator License',
+        symbol: null,
+        issuer: 'Issuer',
+        source: 'pqs',
+      },
+    ], { refreshing: true });
+    vi.mocked(fetchTokens)
+      .mockResolvedValueOnce(initial)
+      .mockReturnValueOnce(enriched.promise);
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    await renderAt('/tokens');
+
+    expect(await screen.findByText('Validator License')).toBeInTheDocument();
+    expect(fetchTokens).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchTokens).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Validator License')).toBeInTheDocument();
+
+    enriched.resolve(makeTokensResponse([
+      {
+        tokenId: 'Issuer::validator-license',
+        name: 'Validator License',
+        symbol: null,
+        issuer: 'Issuer',
+        source: 'pqs',
+      },
+      {
+        tokenId: 'canton-coin',
+        name: 'Canton Coin',
+        symbol: null,
+        issuer: null,
+        source: 'grpc',
+      },
+    ]));
+
+    expect(await screen.findByText('Canton Coin')).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchTokens).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reload tokens when enrichment is not refreshing', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([]));
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    await renderAt('/tokens');
+    await screen.findByText('No tokens discovered yet.');
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fetchTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a scheduled enrichment reload when the token route changes or unmounts', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchTokens)
+      .mockResolvedValueOnce(makeTokensResponse([], { refreshing: true }))
+      .mockResolvedValueOnce(makeTokensResponse([]))
+      .mockResolvedValueOnce(makeTokensResponse([], { refreshing: true }));
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    const view = await renderAt('/tokens');
+    await screen.findByText('No tokens discovered yet.');
+
+    await view.router.push('/tokens?tokensLimit=30');
+    await waitFor(() => expect(fetchTokens).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchTokens).toHaveBeenCalledTimes(2);
+
+    await view.router.push('/tokens?tokensLimit=50');
+    await waitFor(() => expect(fetchTokens).toHaveBeenCalledTimes(3));
+    view.unmount();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchTokens).toHaveBeenCalledTimes(3);
   });
 
   it('retries the known tokens section locally without affecting latest transfers', async () => {
