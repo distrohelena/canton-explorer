@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import PartiesView from './PartiesView.vue';
 import type { PartyFingerprintsResponse } from '../types/active-parties';
 import type { NodeSnapshot } from '../types/nodes';
@@ -140,7 +140,8 @@ describe('PartiesView', () => {
 
     await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(5));
     expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-2');
-    expect(fetchNodeActiveParties.mock.calls.filter(([nodeId]) => nodeId === 'participant-1')).toHaveLength(1);
+    const fetchNodeActivePartiesMock = fetchNodeActiveParties as unknown as Mock;
+    expect(fetchNodeActivePartiesMock.mock.calls.filter(([nodeId]) => nodeId === 'participant-1')).toHaveLength(1);
     expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
   });
 

@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 
 type SectionLoad<T> = {
   data: Ref<T | null>;
@@ -15,7 +15,7 @@ function message(caught: unknown): string {
 }
 
 export function useSectionLoad<T>(loader: () => Promise<T>): SectionLoad<T> {
-  const data = ref<T | null>(null);
+  const data = shallowRef<T | null>(null);
   const loading = ref(false);
   const retrying = ref(false);
   const error = ref<string | null>(null);

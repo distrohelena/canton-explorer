@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { nextTick, reactive } from 'vue';
+import type { LocationQueryRaw } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import UpdatesBrowser from './UpdatesBrowser.vue';
 
@@ -17,7 +18,7 @@ const route = vi.hoisted(() => ({
     template: 'Pkg:T',
     hideSplice: 'true',
     limit: '30',
-  },
+  } as LocationQueryRaw,
 }));
 
 vi.mock('../lib/api', () => ({
@@ -82,7 +83,9 @@ describe('UpdatesBrowser', () => {
     expect(await screen.findByText('old-update')).toBeInTheDocument();
 
     const reactiveRoute = reactive(route);
-    reactiveRoute.query = { party: 'Carol' };
+    reactiveRoute.query = {
+      before: '', party: ['Carol'], partyMode: '', template: '', hideSplice: '', limit: '30',
+    };
     reactiveRoute.fullPath = '/updates?party=Carol';
     await nextTick();
 

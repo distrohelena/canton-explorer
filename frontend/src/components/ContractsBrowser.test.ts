@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { nextTick, reactive } from 'vue';
+import type { LocationQueryRaw } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ContractsBrowser from './ContractsBrowser.vue';
 
@@ -19,7 +20,7 @@ const route = vi.hoisted(() => ({
     template: 'Pkg:T',
     hideSplice: 'true',
     limit: '30',
-  },
+  } as LocationQueryRaw,
 }));
 
 vi.mock('../lib/api', () => ({
@@ -86,7 +87,9 @@ describe('ContractsBrowser', () => {
     expect(await screen.findByText('old-contract')).toBeInTheDocument();
 
     const reactiveRoute = reactive(route);
-    reactiveRoute.query = { party: 'Carol' };
+    reactiveRoute.query = {
+      before: '', node: '', party: ['Carol'], partyMode: '', template: '', hideSplice: '', limit: '30',
+    };
     reactiveRoute.fullPath = '/contracts?party=Carol';
     await nextTick();
 

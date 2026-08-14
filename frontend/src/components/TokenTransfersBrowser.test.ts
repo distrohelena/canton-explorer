@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { nextTick, reactive } from 'vue';
+import type { LocationQueryRaw } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import TokenTransfersBrowser from './TokenTransfersBrowser.vue';
 
@@ -16,7 +17,7 @@ const route = vi.hoisted(() => ({
     amountGt: '10',
     amountLt: '20',
     limit: '30',
-  },
+  } as LocationQueryRaw,
 }));
 
 vi.mock('../lib/api', () => ({
@@ -78,7 +79,9 @@ describe('TokenTransfersBrowser', () => {
     expect(await screen.findByText('Old token')).toBeInTheDocument();
 
     const reactiveRoute = reactive(route);
-    reactiveRoute.query = { fromParty: 'Carol' };
+    reactiveRoute.query = {
+      before: '', fromParty: 'Carol', toParty: '', movementType: '', amountGt: '', amountLt: '', limit: '30',
+    };
     reactiveRoute.fullPath = '/tokens/transfers?fromParty=Carol';
     await nextTick();
 

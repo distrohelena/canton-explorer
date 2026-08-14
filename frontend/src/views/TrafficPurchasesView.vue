@@ -7,10 +7,6 @@ import {
 } from '../lib/api';
 import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import { useSectionLoad } from '../composables/useSectionLoad';
-import type {
-  GlobalTrafficPurchasesResponse,
-  NodeSnapshot,
-} from '../types/nodes';
 
 type TrafficPurchaseFilters = {
   minDate: string;
