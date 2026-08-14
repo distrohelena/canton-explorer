@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import PackageTypeTree from '../components/PackageTypeTree.vue';
 import { fetchPackageTemplate } from '../lib/api';
+import { choiceAnchorId, choiceNameFromHash } from '../lib/template-anchor';
 import type { PackageTemplateDetailResponse } from '../types/packages';
 
 const props = defineProps<{ packageId: string; templateId: string }>();
+const route = useRoute();
 
 const templateDetail = ref<PackageTemplateDetailResponse | null>(null);
 const error = ref<string | null>(null);
@@ -21,6 +24,25 @@ async function loadTemplateDetail() {
 }
 
 watch(() => [props.packageId, props.templateId], loadTemplateDetail, { immediate: true });
+
+watch([() => route.hash, templateDetail], async ([hash, detail]) => {
+  if (!detail) {
+    return;
+  }
+
+  const choiceName = choiceNameFromHash(hash);
+  const anchorId = choiceName ? choiceAnchorId(choiceName) : null;
+  if (!anchorId) {
+    return;
+  }
+
+  await nextTick();
+
+  const target = document.getElementById(anchorId);
+  if (target) {
+    target.scrollIntoView();
+  }
+});
 
 function formatPackageSize(packageSize: number | null): string {
   if (packageSize === null) {
@@ -114,6 +136,7 @@ function formatPackageSize(packageSize: number | null): string {
               <div
                 v-for="choice in templateDetail.template.choices"
                 :key="choice.name"
+                :id="choiceAnchorId(choice.name) ?? undefined"
                 class="package-detail__list-row package-detail__list-row--stacked"
               >
                 <div class="package-detail__entry-title">{{ choice.name }}</div>

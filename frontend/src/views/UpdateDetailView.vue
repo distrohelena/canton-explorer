@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import CopyToClipboardButton from "../components/CopyToClipboardButton.vue";
 import EventDataTable from "../components/EventDataTable.vue";
 import { fetchNodeUpdateDetail } from "../lib/api";
+import { choiceHash } from "../lib/template-anchor";
 import type { NodeUpdateDetailResponse } from "../types/updates";
 import {
   flattenDecodedValue as flattenEventDataValue,
@@ -68,6 +69,9 @@ const recordTimeLines = computed(() =>
   updateDetail.value ? formatRecordTime(updateDetail.value.recordTime) : null,
 );
 const renderedEvents = computed(() => updateDetail.value?.events ?? []);
+const choiceTargets = computed(() =>
+  renderedEvents.value.map((event) => choiceTarget(event)),
+);
 const debuggerTarget = computed(() => {
   if (!updateDetail.value) {
     return "/debugger";
@@ -80,6 +84,21 @@ const debuggerTarget = computed(() => {
 
 function templateTarget(packageId: string, templateId: string): string {
   return `/packages/${encodeURIComponent(packageId)}/templates/${encodeURIComponent(templateId)}`;
+}
+
+function choiceTarget(
+  event: NodeUpdateDetailResponse["events"][number],
+): string {
+  if (!event.packageId || !event.templateId || !event.choice) {
+    return "";
+  }
+
+  const hash = choiceHash(event.choice);
+  if (!hash) {
+    return "";
+  }
+
+  return `${templateTarget(event.packageId, event.templateId)}${hash}`;
 }
 
 function formatEventKind(
@@ -367,7 +386,16 @@ function getEventDataTables(
                 class="update-detail__event-item update-detail__event-item--choice"
               >
                 <dt>Choice</dt>
-                <dd>{{ event.choice ?? "n/a" }}</dd>
+                <dd>
+                  <RouterLink
+                    v-if="choiceTargets[eventIndex]"
+                    class="contract-detail__link"
+                    :to="choiceTargets[eventIndex]"
+                  >
+                    {{ event.choice }}
+                  </RouterLink>
+                  <span v-else>{{ event.choice ?? "n/a" }}</span>
+                </dd>
               </div>
               <div
                 class="update-detail__event-item update-detail__event-item--contract"
