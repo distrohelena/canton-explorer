@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, watch } from 'vue';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import { fetchNode, fetchNodePackages, fetchNodeParticipantStatus } from '../lib/api';
 import type {
   NodePackagesResponse,
@@ -9,25 +10,34 @@ import type {
 
 const props = defineProps<{ id: string }>();
 
-const node = ref<NodeSnapshot | null>(null);
-const nodePackages = ref<NodePackagesResponse | null>(null);
-const participantStatusResponse = ref<NodeParticipantStatusResponse | null>(null);
-const error = ref<string | null>(null);
+const nodeSection = useSectionLoad<NodeSnapshot>(() => fetchNode(props.id));
+const packagesSection = useSectionLoad<NodePackagesResponse>(() => fetchNodePackages(props.id));
+const participantStatusSection = useSectionLoad<NodeParticipantStatusResponse>(() =>
+  fetchNodeParticipantStatus(props.id),
+);
 
-onMounted(async () => {
-  try {
-    const [nodeResponse, packagesResponse, participantStatus] = await Promise.all([
-      fetchNode(props.id),
-      fetchNodePackages(props.id),
-      fetchNodeParticipantStatus(props.id),
-    ]);
-    node.value = nodeResponse;
-    nodePackages.value = packagesResponse;
-    participantStatusResponse.value = participantStatus;
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
-  }
-});
+const node = nodeSection.data;
+const nodePackages = packagesSection.data;
+const participantStatusResponse = participantStatusSection.data;
+const nodeLoading = nodeSection.loading;
+const nodeError = nodeSection.error;
+const packagesLoading = packagesSection.loading;
+const packagesError = packagesSection.error;
+const participantStatusLoading = participantStatusSection.loading;
+const participantStatusError = participantStatusSection.error;
+
+watch(
+  () => props.id,
+  () => {
+    nodeSection.reset();
+    packagesSection.reset();
+    participantStatusSection.reset();
+    void nodeSection.load();
+    void packagesSection.load();
+    void participantStatusSection.load();
+  },
+  { immediate: true },
+);
 
 const installedPackages = computed(() => nodePackages.value?.packagesByName ?? []);
 const participantStatus = computed(() => participantStatusResponse.value?.participantStatus ?? null);
@@ -95,23 +105,31 @@ function formatSynchronizerHealth(value: string) {
 </script>
 
 <template>
-  <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-  <p v-else-if="!node" class="node-detail__message inline-loading" role="status">
-    <span class="node-updates__spinner" aria-hidden="true"></span>
-    <span>Loading node detail...</span>
-  </p>
-  <div v-else class="node-page">
+  <div class="node-page">
     <div class="node-page__main node-detail__content">
       <header class="node-detail__hero">
         <div>
-          <h2 class="party-detail__title">Node {{ node.label }}</h2>
+          <h2 class="party-detail__title">Node {{ node?.label ?? props.id }}</h2>
         </div>
       </header>
 
       <div class="node-detail__sections">
         <section class="node-detail__section node-detail__section--full">
           <h3>Service Health</h3>
-          <dl class="detail-grid detail-grid--fixed-two-col">
+          <p v-if="nodeLoading" class="node-detail__message inline-loading" role="status">
+            <span class="node-updates__spinner" aria-hidden="true"></span>
+            <span>Loading node detail...</span>
+          </p>
+          <div
+            v-else-if="nodeError"
+            class="node-detail__message node-detail__message--error"
+            role="alert"
+            aria-label="Service Health error"
+          >
+            <span>{{ nodeError }}</span>
+            <button type="button" class="button button--secondary" @click="nodeSection.retry">Retry</button>
+          </div>
+          <dl v-else-if="node" class="detail-grid detail-grid--fixed-two-col">
             <div>
               <dt>Mode</dt>
               <dd>{{ modeLabel }}</dd>
@@ -147,7 +165,20 @@ function formatSynchronizerHealth(value: string) {
 
         <section class="node-detail__section node-detail__section--full">
           <h3>Ledger Snapshot</h3>
-          <dl class="detail-grid">
+          <p v-if="nodeLoading" class="node-detail__message inline-loading" role="status">
+            <span class="node-updates__spinner" aria-hidden="true"></span>
+            <span>Loading ledger snapshot...</span>
+          </p>
+          <div
+            v-else-if="nodeError"
+            class="node-detail__message node-detail__message--error"
+            role="alert"
+            aria-label="Ledger Snapshot error"
+          >
+            <span>{{ nodeError }}</span>
+            <button type="button" class="button button--secondary" @click="nodeSection.retry">Retry</button>
+          </div>
+          <dl v-else-if="node" class="detail-grid">
             <div>
               <dt>PQS database</dt>
               <dd>{{ node.ledgerSummary.pqsDatabase }}</dd>
@@ -169,7 +200,26 @@ function formatSynchronizerHealth(value: string) {
 
         <section class="node-detail__section node-detail__section--participant-status">
           <h3>Participant Status</h3>
-          <p v-if="participantStatusState === 'grpc_not_configured'" class="update-detail__empty">
+          <p
+            v-if="participantStatusLoading"
+            class="node-detail__message inline-loading"
+            role="status"
+          >
+            <span class="node-updates__spinner" aria-hidden="true"></span>
+            <span>Loading participant status...</span>
+          </p>
+          <div
+            v-else-if="participantStatusError"
+            class="node-detail__message node-detail__message--error"
+            role="alert"
+            aria-label="Participant Status error"
+          >
+            <span>{{ participantStatusError }}</span>
+            <button type="button" class="button button--secondary" @click="participantStatusSection.retry">
+              Retry
+            </button>
+          </div>
+          <p v-else-if="participantStatusState === 'grpc_not_configured'" class="update-detail__empty">
             Not configured
           </p>
           <div v-else-if="participantStatusState === 'grpc_error'" class="node-participant-status">
@@ -336,7 +386,26 @@ function formatSynchronizerHealth(value: string) {
 
         <section class="node-detail__section node-detail__section--packages">
           <h3>Installed Packages</h3>
-          <p v-if="installedPackages.length === 0" class="update-detail__empty">
+          <p
+            v-if="packagesLoading"
+            class="node-detail__message inline-loading"
+            role="status"
+          >
+            <span class="node-updates__spinner" aria-hidden="true"></span>
+            <span>Loading installed packages...</span>
+          </p>
+          <div
+            v-else-if="packagesError"
+            class="node-detail__message node-detail__message--error"
+            role="alert"
+            aria-label="Installed Packages error"
+          >
+            <span>{{ packagesError }}</span>
+            <button type="button" class="button button--secondary" @click="packagesSection.retry">
+              Retry
+            </button>
+          </div>
+          <p v-else-if="installedPackages.length === 0" class="update-detail__empty">
             No cached packages recorded for this node.
           </p>
           <div v-else class="node-packages">
