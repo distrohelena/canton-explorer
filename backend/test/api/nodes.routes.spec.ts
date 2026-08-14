@@ -76,6 +76,8 @@ describe('NodesController routes', () => {
             fetchNamespaceSummary: jest.fn(),
             fetchNamespaceNodes: jest.fn(),
             fetchNamespaceTopology: jest.fn(),
+            fetchNamespaceUpdates: jest.fn(),
+            fetchNamespaceContracts: jest.fn(),
           },
         },
         {
@@ -114,6 +116,8 @@ describe('NodesController routes', () => {
     ['/api/namespaces/:namespaceId/summary', '/api/namespaces/:namespaceId'],
     ['/api/namespaces/:namespaceId/nodes', '/api/namespaces/:namespaceId'],
     ['/api/namespaces/:namespaceId/topology', '/api/namespaces/:namespaceId'],
+    ['/api/namespaces/:namespaceId/updates', '/api/namespaces/:namespaceId'],
+    ['/api/namespaces/:namespaceId/contracts', '/api/namespaces/:namespaceId'],
   ])(
     'registers literal section route %s before aggregate route %s',
     async (sectionPath, aggregatePath) => {
@@ -145,6 +149,8 @@ describe('NodesController routes', () => {
               fetchNamespaceSummary: jest.fn(),
               fetchNamespaceNodes: jest.fn(),
               fetchNamespaceTopology: jest.fn(),
+              fetchNamespaceUpdates: jest.fn(),
+              fetchNamespaceContracts: jest.fn(),
             },
           },
         ],

@@ -6,6 +6,8 @@ import type {
   NamespaceNodesResponse,
   NamespaceSummaryResponse,
   NamespacePartiesResponse,
+  NamespaceUpdatesResponse,
+  NamespaceContractsResponse,
   NodeContractsResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
@@ -1740,6 +1742,106 @@ describe('PqsSummaryService', () => {
       ],
     });
     expect(grpcOperationsService.fetchPartyTopology).not.toHaveBeenCalled();
+  });
+
+  it('fetches paginated namespace updates and contracts for the namespace parties', async () => {
+    const service = new PqsSummaryService({} as never);
+    const privateService = service as unknown as {
+      fetchActivePartiesForNode: jest.Mock;
+      fetchGlobalRecentUpdates: jest.Mock;
+      fetchGlobalContracts: jest.Mock;
+    };
+    privateService.fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValue(['Alice::1220abcd', 'Bob::1220abcd']);
+    privateService.fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
+      limit: 25,
+      nextBefore: 'update-cursor-1',
+      nextAfter: null,
+      updates: typedNamespaceDetailFixture.recentUpdates,
+    });
+    privateService.fetchGlobalContracts = jest.fn().mockResolvedValue({
+      limit: 20,
+      nextBefore: null,
+      nextAfter: 'contract-cursor-0',
+      contracts: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          recordTime: '2026-07-09T12:00:00.000Z',
+        },
+      ],
+    });
+    const sections = service as unknown as {
+      fetchNamespaceUpdates: (
+        nodes: Array<{ id: string; label: string }>,
+        namespaceId: string,
+        options?: { limit?: number; before?: string; after?: string },
+      ) => Promise<NamespaceUpdatesResponse>;
+      fetchNamespaceContracts: (
+        nodes: Array<{ id: string; label: string }>,
+        namespaceId: string,
+        options?: { limit?: number; before?: string; after?: string },
+      ) => Promise<NamespaceContractsResponse>;
+    };
+    const nodes = [{ id: 'participant-2', label: 'Participant 2' }];
+
+    await expect(
+      sections.fetchNamespaceUpdates(nodes, '1220abcd', {
+        limit: 25,
+        before: 'update-cursor-0',
+      }),
+    ).resolves.toEqual({
+      limit: 25,
+      nextBefore: 'update-cursor-1',
+      nextAfter: null,
+      updates: typedNamespaceDetailFixture.recentUpdates,
+    });
+    expect(privateService.fetchGlobalRecentUpdates).toHaveBeenCalledWith(
+      nodes,
+      25,
+      {
+        before: 'update-cursor-0',
+        after: undefined,
+        parties: ['Alice::1220abcd', 'Bob::1220abcd'],
+        partyMode: 'or',
+      },
+    );
+
+    await expect(
+      sections.fetchNamespaceContracts(nodes, '1220abcd', {
+        limit: 20,
+        after: 'contract-cursor-1',
+      }),
+    ).resolves.toEqual({
+      limit: 20,
+      nextBefore: null,
+      nextAfter: 'contract-cursor-0',
+      contracts: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          packageId: null,
+          packageName: null,
+          packageVersion: null,
+          recordTime: '2026-07-09T12:00:00.000Z',
+        },
+      ],
+    });
+    expect(privateService.fetchGlobalContracts).toHaveBeenCalledWith(
+      nodes,
+      20,
+      {
+        before: undefined,
+        after: 'contract-cursor-1',
+        parties: ['Alice::1220abcd', 'Bob::1220abcd'],
+        partyMode: 'or',
+      },
+    );
   });
 
   it('matches both stripped and prefixed party identifiers for party detail lookups', async () => {

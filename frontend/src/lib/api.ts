@@ -26,6 +26,8 @@ import type {
   NamespacePartiesResponse,
   NamespaceSummaryResponse,
   NamespaceTopologyResponse,
+  NamespaceUpdatesResponse,
+  NamespaceContractsResponse,
 } from '../types/namespaces';
 import type {
   PartyDetailResponse,
@@ -979,6 +981,50 @@ export function fetchNamespaceTopology(
 ): Promise<NamespaceTopologyResponse> {
   return fetchJson<NamespaceTopologyResponse>(
     `/namespaces/${encodeURIComponent(namespaceId)}/topology`,
+  );
+}
+
+export function fetchNamespaceUpdates(
+  namespaceId: string,
+  options?: {
+    before?: string;
+    after?: string;
+    limit?: number;
+  },
+): Promise<NamespaceUpdatesResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 30))));
+
+  return fetchJson<NamespaceUpdatesResponse>(
+    `/namespaces/${encodeURIComponent(namespaceId)}/updates?${params.toString()}`,
+  );
+}
+
+export function fetchNamespaceContracts(
+  namespaceId: string,
+  options?: {
+    before?: string;
+    after?: string;
+    limit?: number;
+  },
+): Promise<NamespaceContractsResponse> {
+  const params = new URLSearchParams();
+  if (options?.before) {
+    params.set('before', options.before);
+  }
+  if (options?.after) {
+    params.set('after', options.after);
+  }
+  params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 30))));
+
+  return fetchJson<NamespaceContractsResponse>(
+    `/namespaces/${encodeURIComponent(namespaceId)}/contracts?${params.toString()}`,
   );
 }
 

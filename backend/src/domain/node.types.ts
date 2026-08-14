@@ -815,3 +815,17 @@ export type NamespaceTopologyResponse = Pick<
   NamespaceDetailResponse,
   'topologyByNode'
 >;
+
+export interface NamespaceUpdatesResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  updates: NamespaceDetailResponse['recentUpdates'];
+}
+
+export interface NamespaceContractsResponse {
+  limit: number;
+  nextBefore: string | null;
+  nextAfter: string | null;
+  contracts: NamespaceDetailResponse['recentContracts'];
+}

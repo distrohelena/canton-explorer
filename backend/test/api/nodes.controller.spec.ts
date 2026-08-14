@@ -16,6 +16,8 @@ import type {
   NamespaceSummaryResponse,
   NamespaceTopologyResponse,
   NamespacePartiesResponse,
+  NamespaceUpdatesResponse,
+  NamespaceContractsResponse,
   NodeContractsResponse,
   NodeParticipantStatusResponse,
   NodePackagesResponse,
@@ -426,6 +428,20 @@ const typedNamespacePartiesFixture = {
   ],
 } satisfies NamespacePartiesResponse;
 
+const typedNamespaceUpdatesFixture = {
+  limit: 30,
+  nextBefore: 'update-cursor-1',
+  nextAfter: null,
+  updates: typedNamespaceDetailFixture.recentUpdates,
+} satisfies NamespaceUpdatesResponse;
+
+const typedNamespaceContractsFixture = {
+  limit: 30,
+  nextBefore: 'contract-cursor-1',
+  nextAfter: null,
+  contracts: typedNamespaceDetailFixture.recentContracts,
+} satisfies NamespaceContractsResponse;
+
 const typedActivePartiesFixture = {
   nodes: [
     {
@@ -656,6 +672,8 @@ describe('NodesController', () => {
     fetchNamespaceNodes: jest.Mock;
     fetchNamespaceTopology: jest.Mock;
     fetchNamespaceParties: jest.Mock;
+    fetchNamespaceUpdates: jest.Mock;
+    fetchNamespaceContracts: jest.Mock;
     fetchPartyUpdates: jest.Mock;
     fetchPartyContracts: jest.Mock;
     fetchTrafficPurchases: jest.Mock;
@@ -912,6 +930,12 @@ describe('NodesController', () => {
       fetchNamespaceParties: jest
         .fn()
         .mockResolvedValue(typedNamespacePartiesFixture),
+      fetchNamespaceUpdates: jest
+        .fn()
+        .mockResolvedValue(typedNamespaceUpdatesFixture),
+      fetchNamespaceContracts: jest
+        .fn()
+        .mockResolvedValue(typedNamespaceContractsFixture),
       fetchPartyUpdates: jest.fn().mockResolvedValue({
         limit: 30,
         nextBefore: null,
@@ -2207,6 +2231,59 @@ describe('NodesController', () => {
     expect(response).toEqual(typedNamespacePartiesFixture);
   });
 
+  it('returns paginated namespace updates for a known namespace id', async () => {
+    const response = await (
+      controller as unknown as {
+        listNamespaceUpdates: (
+          namespaceId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<NamespaceUpdatesResponse>;
+      }
+    ).listNamespaceUpdates('1220abcd', '30', 'update-cursor-0', undefined);
+
+    expect(pqsSummaryService.fetchNamespaceUpdates).toHaveBeenCalledWith(
+      expect.any(Array),
+      '1220abcd',
+      {
+        limit: 30,
+        before: 'update-cursor-0',
+        after: undefined,
+      },
+    );
+    expect(response).toEqual(typedNamespaceUpdatesFixture);
+  });
+
+  it('returns paginated namespace contracts for a known namespace id', async () => {
+    const response = await (
+      controller as unknown as {
+        listNamespaceContracts: (
+          namespaceId: string,
+          limit?: string,
+          before?: string,
+          after?: string,
+        ) => Promise<NamespaceContractsResponse>;
+      }
+    ).listNamespaceContracts(
+      '1220abcd',
+      '30',
+      undefined,
+      'contract-cursor-0',
+    );
+
+    expect(pqsSummaryService.fetchNamespaceContracts).toHaveBeenCalledWith(
+      expect.any(Array),
+      '1220abcd',
+      {
+        limit: 30,
+        before: undefined,
+        after: 'contract-cursor-0',
+      },
+    );
+    expect(response).toEqual(typedNamespaceContractsFixture);
+  });
+
   it('returns party-scoped updates for a known party id', async () => {
     await (
       controller as unknown as {
@@ -2324,6 +2401,18 @@ describe('NodesController', () => {
     [
       'getNamespaceTopology',
       'fetchNamespaceTopology',
+      'Namespace not found',
+      'Unknown namespace: missing',
+    ],
+    [
+      'listNamespaceUpdates',
+      'fetchNamespaceUpdates',
+      'Namespace not found',
+      'Unknown namespace: missing',
+    ],
+    [
+      'listNamespaceContracts',
+      'fetchNamespaceContracts',
       'Namespace not found',
       'Unknown namespace: missing',
     ],

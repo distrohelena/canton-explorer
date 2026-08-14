@@ -841,6 +841,64 @@ export class NodesController {
     }
   }
 
+  @Get('/namespaces/:namespaceId/updates')
+  async listNamespaceUpdates(
+    @Param('namespaceId') namespaceId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
+
+    try {
+      return await this.pqsSummaryService.fetchNamespaceUpdates(
+        this.configService.list(),
+        namespaceId,
+        {
+          limit:
+            Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
+          before,
+          after,
+        },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Namespace not found') {
+        throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
+      }
+
+      throw error;
+    }
+  }
+
+  @Get('/namespaces/:namespaceId/contracts')
+  async listNamespaceContracts(
+    @Param('namespaceId') namespaceId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
+
+    try {
+      return await this.pqsSummaryService.fetchNamespaceContracts(
+        this.configService.list(),
+        namespaceId,
+        {
+          limit:
+            Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 30,
+          before,
+          after,
+        },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Namespace not found') {
+        throw new NotFoundException(`Unknown namespace: ${namespaceId}`);
+      }
+
+      throw error;
+    }
+  }
+
   @Get('/namespaces/:namespaceId')
   async getNamespaceDetail(@Param('namespaceId') namespaceId: string) {
     try {

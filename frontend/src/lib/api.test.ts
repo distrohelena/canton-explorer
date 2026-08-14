@@ -35,6 +35,8 @@ import {
   fetchNamespaceSummary,
   fetchNamespaceNodes,
   fetchNamespaceTopology,
+  fetchNamespaceUpdates,
+  fetchNamespaceContracts,
 } from './api';
 import type {
   NodeContractDetailResponse,
@@ -51,6 +53,8 @@ import type {
   NamespacePartiesResponse,
   NamespaceSummaryResponse,
   NamespaceTopologyResponse,
+  NamespaceUpdatesResponse,
+  NamespaceContractsResponse,
 } from '../types/namespaces';
 import type {
   PartyDetailResponse,
@@ -441,6 +445,20 @@ const typedNamespaceNodesFixture = {
 const typedNamespaceTopologyFixture = {
   topologyByNode: typedNamespaceDetailFixture.topologyByNode,
 } satisfies NamespaceTopologyResponse;
+
+const typedNamespaceUpdatesFixture = {
+  limit: 15,
+  nextBefore: 'update-cursor-1',
+  nextAfter: null,
+  updates: typedNamespaceDetailFixture.recentUpdates,
+} satisfies NamespaceUpdatesResponse;
+
+const typedNamespaceContractsFixture = {
+  limit: 15,
+  nextBefore: null,
+  nextAfter: 'contract-cursor-0',
+  contracts: typedNamespaceDetailFixture.recentContracts,
+} satisfies NamespaceContractsResponse;
 
 const typedActivePartiesFixture = {
   nodes: [
@@ -1903,6 +1921,44 @@ describe('fetchNodes', () => {
     expect(namespaceParties).toEqual(typedNamespacePartiesFixture);
     expect(fetch).toHaveBeenCalledWith(
       'api/namespaces/1220abcd/parties?before=Bob%3A%3A1220abcd&limit=30',
+    );
+  });
+
+  it('loads paginated namespace updates from the encoded backend path', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedNamespaceUpdatesFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchNamespaceUpdates('1220 ab/cd', {
+        before: 'update cursor/0?x=1',
+        limit: 15,
+      }),
+    ).resolves.toEqual(typedNamespaceUpdatesFixture);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/namespaces/1220%20ab%2Fcd/updates?before=update+cursor%2F0%3Fx%3D1&limit=15',
+    );
+  });
+
+  it('loads paginated namespace contracts from the encoded backend path', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedNamespaceContractsFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchNamespaceContracts('1220 ab/cd', {
+        after: 'contract cursor/1?x=2',
+        limit: 15,
+      }),
+    ).resolves.toEqual(typedNamespaceContractsFixture);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/namespaces/1220%20ab%2Fcd/contracts?after=contract+cursor%2F1%3Fx%3D2&limit=15',
     );
   });
 

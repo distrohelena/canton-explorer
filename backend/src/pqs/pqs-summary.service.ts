@@ -15,10 +15,12 @@ import type {
   GlobalContractsResponse,
   GlobalRecentUpdatesResponse,
   NamespaceDetailResponse,
+  NamespaceContractsResponse,
   NamespaceNodesResponse,
   NamespacePartiesResponse,
   NamespaceSummaryResponse,
   NamespaceTopologyResponse,
+  NamespaceUpdatesResponse,
   NodeContractsResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
@@ -4327,6 +4329,65 @@ export class PqsSummaryService {
         sectionData.nodes.map((node) => node.nodeId),
         sectionData.partiesById,
       ),
+    };
+  }
+
+  async fetchNamespaceUpdates(
+    nodes: NodeConfig[],
+    namespaceId: string,
+    options?: {
+      limit?: number;
+      before?: string;
+      after?: string;
+    },
+  ): Promise<NamespaceUpdatesResponse> {
+    const sectionData = await this.fetchNamespaceSectionData(
+      nodes,
+      namespaceId,
+      false,
+    );
+
+    return this.fetchGlobalRecentUpdates(nodes, options?.limit ?? 30, {
+      before: options?.before,
+      after: options?.after,
+      parties: sectionData.matchingParties,
+      partyMode: 'or',
+    });
+  }
+
+  async fetchNamespaceContracts(
+    nodes: NodeConfig[],
+    namespaceId: string,
+    options?: {
+      limit?: number;
+      before?: string;
+      after?: string;
+    },
+  ): Promise<NamespaceContractsResponse> {
+    const sectionData = await this.fetchNamespaceSectionData(
+      nodes,
+      namespaceId,
+      false,
+    );
+    const contracts = await this.fetchGlobalContracts(
+      nodes,
+      options?.limit ?? 30,
+      {
+        before: options?.before,
+        after: options?.after,
+        parties: sectionData.matchingParties,
+        partyMode: 'or',
+      },
+    );
+
+    return {
+      ...contracts,
+      contracts: contracts.contracts.map((contract) => ({
+        ...contract,
+        packageId: null,
+        packageName: null,
+        packageVersion: null,
+      })),
     };
   }
 
