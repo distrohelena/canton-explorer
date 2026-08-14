@@ -389,3 +389,68 @@ not a test failure.
 - `backend/test/pqs/pqs-summary.service.spec.ts`
 - `scripts/pqs-index-installer.test.mjs`
 - `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
+
+## Final-audit round 7: frontier evidence hardening
+
+Date: 2026-08-14
+
+### Scoped coverage repair
+
+This round changes only test coverage, the PostgreSQL test fixture, and this
+report. Production code, index definitions, npm behavior, and Docker behavior
+are unchanged.
+
+The focused service regression generates a descending compound query with
+party AND (`Alice`, `Bob`), `Main:Asset`, and `hideSplice`. It requires four
+candidate/frontier sources for every create/archive/exercise physical branch:
+template, visible, Alice, and Bob. In particular, it requires all four
+`OFFSET 3 LIMIT 1` first-unseen probes, so removing visible-frontier
+aggregation removes one probe per branch and fails the test.
+
+The end-to-end PostgreSQL regression adds three hidden `Splice.Hidden:*`
+events, then three newer visible `Other:Bulk` creates, then the shared
+`Main:Asset` create at ix 70000 as the visible-create branch's first unseen
+row. The page also has three older shared `Main:Asset` archives. For
+`before: 170007`, `limit: 2`, party AND, template, and `hideSplice`, the first
+candidate batch is deliberately capable of returning the older shared updates;
+only the visible frontier at 70000 outranks that page boundary. The service
+therefore retries from candidate limit 3 to 6 and returns offsets `170000`,
+`169003`, without exposing hidden Splice updates.
+
+The 20,000-row generated-query EXPLAIN fixture now includes a duplicate
+`Other:Bulk` event row at update ix 1001. It collects every scan of the
+Explorer physical created-at order index, preserves scans with `Actual Loops`
+greater than one, and confirms each scan has a generated `Limit` ancestor.
+For every scan it bounds loops, rows examined per loop, total rows examined,
+`Rows Removed by Filter`, and `Rows Removed by Index Recheck` by the candidate
+batch, first-unseen row, and the deliberate duplicate. It separately confirms
+the direct single-pass candidate/frontier order traversals while retaining the
+repeated scans in the same accounting. This asserts bounded work without
+prescribing unrelated PostgreSQL planner choices.
+
+### RED/GREEN evidence
+
+- RED focused SQL mutation: temporarily deleting
+  `frontierQueries.push(visibleCandidates.frontierSql)` made the service test
+  observe three first-unseen probes instead of the required four.
+- RED end-to-end mutation: rebuilding with that same temporary deletion made
+  the compound PostgreSQL page return `169003, 169002` instead of the required
+  `170000, 169003`.
+- GREEN: after restoring the existing aggregation, the focused service test,
+  complete backend suite, and all five PostgreSQL integration tests passed.
+
+### Round-7 verification
+
+| Command | Result |
+| --- | --- |
+| Focused mutation service test | RED: expected 4 probes, received 3 after deleting visible aggregation |
+| Targeted mutation integration test | RED: actual offsets `169003, 169002`; required `170000, 169003` |
+| `npm run build --workspace backend` | passed after restoration |
+| `npm test --workspace backend -- --runInBand` | 36 suites, 437 tests passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 5 tests passed; compound visible frontier and generated-query EXPLAIN checks passed |
+
+### Round-7 changed paths
+
+- `backend/test/pqs/pqs-summary.service.spec.ts`
+- `scripts/pqs-index-installer.test.mjs`
+- `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`

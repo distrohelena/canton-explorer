@@ -3684,6 +3684,66 @@ describe('PqsSummaryService', () => {
     },
   );
 
+  it('keeps visible frontiers in compound party/template/hide-splice candidate progress', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          { type_source: 'contract', pk: '17' },
+          { type_source: 'exercise', pk: '17' },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      {
+        limit: 2,
+        before: '170007',
+        parties: ['Alice', 'Bob'],
+        partyMode: 'and',
+        templates: ['Main:Asset'],
+        hideSplice: true,
+      },
+    );
+
+    const sql = String(query.mock.calls[1]?.[0]);
+    expect(sql).toContain('template_update_ix as materialized');
+    expect(sql).toContain('visible_update_ix as materialized');
+    expect(sql).toContain('visible_filtered_update_ix as materialized');
+    expect(sql).toContain("not like 'Splice.%'");
+    expect(sql).toContain('candidate_progress as');
+
+    for (const eventColumn of [
+      'contract_row.created_at_ix',
+      'contract_row.archived_at_ix',
+      'exercise_row.exercised_at_ix',
+    ]) {
+      const escapedColumn = eventColumn.replace('.', '\\.');
+      expect(
+        sql.match(new RegExp(`order by ${escapedColumn} desc\\s+limit 3`, 'g')),
+      ).toHaveLength(4);
+      expect(
+        sql.match(
+          new RegExp(
+            `order by ${escapedColumn} desc\\s+offset 3\\s+limit 1`,
+            'g',
+          ),
+        ),
+      ).toHaveLength(4);
+    }
+  });
+
   it('applies party filters in schema-qualified recent update queries', async () => {
     const query = jest
       .fn()
