@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   NotFoundException,
@@ -631,6 +632,10 @@ export class NodesController {
     @Param('updateId') updateId: string,
   ) {
     const node = this.getNodeConfig(id);
+
+    if (!isValidEventOffset(updateId)) {
+      throw new BadRequestException('Invalid update offset');
+    }
 
     try {
       return await this.pqsSummaryService.fetchUpdateDetail(node, updateId);
@@ -1476,4 +1481,11 @@ export class NodesController {
       (fingerprint) => fingerprint === exactFingerprint,
     );
   }
+}
+
+function isValidEventOffset(value: string): boolean {
+  const normalized = value.trim();
+  return (
+    /^\d+$/.test(normalized) && BigInt(normalized) <= 9223372036854775807n
+  );
 }

@@ -1,20 +1,18 @@
 import {
   advisoryLockSql,
   advisoryUnlockSql,
-  contractPartitionsSql,
   dropIndexSql,
-  exercisesExistsSql,
   expectedIndexStatusSql,
   insertMigrationSql,
   migrationTableSql,
   migrationVersionsSql,
   pqsIndexMigrations,
+  relationPartitionsSql,
   transactionIdTypeSql,
   type PqsIndexContext,
 } from './pqs-index-sql';
 
 type PartitionRow = { table_name: string };
-type ExistsRow = { exists: boolean };
 type TransactionIdTypeRow = { column_type: string };
 type MigrationVersionRow = { version: string };
 type IndexStatusRow = {
@@ -58,6 +56,7 @@ export type PqsIndexStatus = {
 export type PqsIndexInspection = {
   schema: string;
   contractPartitions: readonly string[];
+  exercisePartitions: readonly string[];
   hasExercises: boolean;
   transactionIdIsText: boolean;
   indexStatuses: readonly PqsIndexStatus[];
@@ -120,12 +119,12 @@ async function inspectSchema(
   schema: string,
 ): Promise<PqsIndexContext> {
   const partitionsResult = await database.query<PartitionRow>(
-    contractPartitionsSql(schema),
-    [schema],
+    relationPartitionsSql(),
+    [schema, '__contracts'],
   );
-  const exercisesResult = await database.query<ExistsRow>(
-    exercisesExistsSql(),
-    [schema],
+  const exercisesPartitionsResult = await database.query<PartitionRow>(
+    relationPartitionsSql(),
+    [schema, '__exercises'],
   );
   const transactionIdTypeResult = await database.query<TransactionIdTypeRow>(
     transactionIdTypeSql(),
@@ -135,7 +134,9 @@ async function inspectSchema(
   return {
     schema,
     contractPartitions: partitionsResult.rows.map((row) => row.table_name),
-    hasExercises: exercisesResult.rows[0]?.exists === true,
+    exercisePartitions: exercisesPartitionsResult.rows.map(
+      (row) => row.table_name,
+    ),
     transactionIdIsText:
       transactionIdTypeResult.rows[0]?.column_type === 'text',
   };
@@ -216,7 +217,8 @@ export async function inspectPqsIndexes(
       return {
         schema,
         contractPartitions: context.contractPartitions,
-        hasExercises: context.hasExercises,
+        exercisePartitions: context.exercisePartitions,
+        hasExercises: context.exercisePartitions.length > 0,
         transactionIdIsText: context.transactionIdIsText,
         indexStatuses: [...statuses.values()],
         proposedSql: reconciliationStatements(schema, statements, statuses),

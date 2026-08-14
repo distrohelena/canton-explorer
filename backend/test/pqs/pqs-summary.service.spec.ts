@@ -3713,7 +3713,14 @@ describe('PqsSummaryService', () => {
   it('prunes contract partitions for template-filtered recent updates', async () => {
     const query = jest
       .fn()
-      .mockResolvedValueOnce({ rows: [{ pk: '17' }, { pk: '29' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          { type_source: 'contract', pk: '17' },
+          { type_source: 'contract', pk: '29' },
+          { type_source: 'exercise', pk: '71' },
+          { type_source: 'exercise', pk: '83' },
+        ],
+      })
       .mockResolvedValueOnce({ rows: [] });
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
@@ -3735,9 +3742,13 @@ describe('PqsSummaryService', () => {
       1,
       expect.stringContaining("contract_tpe_row.module_name = 'Splice.Amulet'"),
     );
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("exercise_tpe_row.module_name = 'Splice.Amulet'"),
+    );
     const sql = String(query.mock.calls[1]?.[0]);
     expect(sql).toContain('contract_row.tpe_pk in (17, 29)');
-    expect(sql).toContain('exercise_row.contract_tpe_pk in (17, 29)');
+    expect(sql).toContain('exercise_row.tpe_pk in (71, 83)');
     expect(sql).not.toContain('update_event_templates.template_id');
   });
 

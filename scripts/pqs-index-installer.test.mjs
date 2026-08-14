@@ -104,7 +104,12 @@ before(async () => {
     ) partition by list (tpe_pk);
     create table public.__contracts_17 partition of public.__contracts for values in (17);
     create table public.__contracts_29 partition of public.__contracts for values in (29);
-    create table public.__exercises (witnesses text[] not null);
+    create table public.__exercises (
+      tpe_pk bigint not null,
+      witnesses text[] not null
+    ) partition by list (tpe_pk);
+    create table public.__exercises_17 partition of public.__exercises for values in (17);
+    create table public.__exercises_29 partition of public.__exercises for values in (29);
     create table public.__transactions (transaction_id text not null);
   `);
 
@@ -164,6 +169,27 @@ test("indexes apply installs every partition index and is idempotent", () => {
   );
   assert.match(
     psql(
+      "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'canton_explorer_exercises_17_witnesses_gin'",
+    ),
+    /gin/i,
+  );
+  assert.match(
+    psql(
+      "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'canton_explorer_exercises_29_witnesses_gin'",
+    ),
+    /gin/i,
+  );
+  assert.equal(
+    psql(
+      "select count(*) from pg_indexes where schemaname = 'public' and tablename = '__exercises' and indexname like 'canton_explorer_%'",
+    )
+      .split("\n")
+      .find((line) => /^\s*\d+\s*$/.test(line))
+      ?.trim(),
+    "0",
+  );
+  assert.match(
+    psql(
       "select version from public.canton_explorer_index_migrations order by version",
     ),
     /001-witnesses/,
@@ -185,6 +211,6 @@ test("indexes apply installs every partition index and is idempotent", () => {
       .split("\n")
       .find((line) => /^\s*\d+\s*$/.test(line))
       ?.trim(),
-    "6",
+    "7",
   );
 });

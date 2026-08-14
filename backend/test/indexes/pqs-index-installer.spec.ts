@@ -9,8 +9,8 @@ import {
 type FakeExecutorOptions = {
   appliedVersions?: readonly string[];
   failSql?: RegExp;
-  partitions?: readonly string[];
-  hasExercises?: boolean;
+  contractPartitions?: readonly string[];
+  exercisePartitions?: readonly string[];
   transactionIdType?: string | null;
   indexStatuses?: Record<string, { is_valid: boolean; is_ready: boolean }>;
 };
@@ -34,12 +34,11 @@ function fakeDatabase(options: FakeExecutorOptions = {}): PqsIndexDatabase & {
       if (statement.includes('from pg_inherits')) {
         return {
           rows: (
-            options.partitions ?? ['__contracts_42', '__contracts_43']
+            values[1] === '__exercises'
+              ? (options.exercisePartitions ?? ['__exercises_42', '__exercises_43'])
+              : (options.contractPartitions ?? ['__contracts_42', '__contracts_43'])
           ).map((table_name) => ({ table_name })) as TRow[],
         };
-      }
-      if (statement.includes("relname = '__exercises'")) {
-        return { rows: [{ exists: options.hasExercises ?? true }] as TRow[] };
       }
       if (statement.includes("attname = 'transaction_id'")) {
         return {
@@ -145,7 +144,7 @@ describe('PQS index installer', () => {
       applyPqsIndexes('postgres://pqs', 'public', {
         createDatabase: databaseFactory(database),
       }),
-    ).resolves.toMatchObject({ appliedStatements: 6 });
+    ).resolves.toMatchObject({ appliedStatements: 7 });
   });
 
   it('reconciles a later contracts partition even when the migration is recorded', async () => {
@@ -155,7 +154,7 @@ describe('PQS index installer', () => {
         '002-active-contracts',
         '003-transaction-id-pattern',
       ],
-      partitions: ['__contracts_42', '__contracts_77'],
+      contractPartitions: ['__contracts_42', '__contracts_77'],
     });
 
     await applyPqsIndexes('postgres://pqs', 'public', {
@@ -164,6 +163,26 @@ describe('PQS index installer', () => {
 
     expect(database.sql.join('\n')).toMatch(/contracts_77_witnesses_gin/);
     expect(database.sql.join('\n')).toMatch(/contracts_77_active_created_ix/);
+  });
+
+  it('reconciles individual exercises partitions without indexing their parent', async () => {
+    const database = fakeDatabase({
+      appliedVersions: [
+        '001-witnesses',
+        '002-active-contracts',
+        '003-transaction-id-pattern',
+      ],
+      exercisePartitions: ['__exercises_42', '__exercises_77'],
+    });
+
+    await applyPqsIndexes('postgres://pqs', 'public', {
+      createDatabase: databaseFactory(database),
+    });
+
+    const sql = database.sql.join('\n');
+    expect(sql).toMatch(/exercises_42_witnesses_gin/);
+    expect(sql).toMatch(/exercises_77_witnesses_gin/);
+    expect(sql).not.toMatch(/on "public"\."__exercises" using gin/);
   });
 
   it('drops an invalid same-name index concurrently before rebuilding it', async () => {

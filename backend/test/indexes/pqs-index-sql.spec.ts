@@ -14,6 +14,12 @@ describe('PQS index SQL', () => {
     );
   });
 
+  it('creates the same witness index shape for an exercises child partition', () => {
+    expect(contractWitnessIndexSql('public', '__exercises_29')).toBe(
+      'create index concurrently if not exists "canton_explorer_exercises_29_witnesses_gin" on "public"."__exercises_29" using gin (witnesses)',
+    );
+  });
+
   it('creates the active-contract and transaction-id access paths concurrently', () => {
     expect(activeContractsIndexSql('public', '__contracts_42')).toBe(
       'create index concurrently if not exists "canton_explorer_contracts_42_active_created_ix" on "public"."__contracts_42" (created_at_ix desc) where archived_at_ix is null',

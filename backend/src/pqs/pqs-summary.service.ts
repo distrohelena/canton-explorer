@@ -310,8 +310,14 @@ interface TokenTemplateTypeRow {
 }
 
 interface TemplateTypePkRow {
+  type_source?: 'contract' | 'exercise';
   pk: string | number | bigint | null;
 }
+
+type TemplateTypePks = {
+  contract: readonly bigint[];
+  exercise: readonly bigint[];
+};
 
 interface LoadedNodeObservedTokens {
   refreshing: boolean;
@@ -1171,7 +1177,7 @@ function buildPqsPartyUpdateIxCte(
 
 function buildPqsTemplateUpdateIxCte(
   node: NodeConfig,
-  templateTypePks?: readonly bigint[],
+  templateTypePks?: TemplateTypePks,
 ): string | null {
   if (templateTypePks === undefined) {
     return null;
@@ -1180,11 +1186,11 @@ function buildPqsTemplateUpdateIxCte(
   const relations = pqsCoreRelations(node);
   const contractFilter = templateTypePkFilterClause(
     'contract_row.tpe_pk',
-    templateTypePks,
+    templateTypePks.contract,
   );
   const exerciseFilter = templateTypePkFilterClause(
-    'exercise_row.contract_tpe_pk',
-    templateTypePks,
+    'exercise_row.tpe_pk',
+    templateTypePks.exercise,
   );
 
   return `template_update_ix as (
@@ -1253,7 +1259,7 @@ function pqsRecentUpdatesQuery(
   before?: string,
   after?: string,
   parties?: string[],
-  templateTypePks?: readonly bigint[],
+  templateTypePks?: TemplateTypePks,
   partyMode?: string,
   hideSplice?: boolean,
 ): string {
@@ -2148,7 +2154,8 @@ function templateTypePksQuery(
   templateIds: readonly string[],
 ): string {
   const relations = pqsCoreRelations(node);
-  const clauses = normalizeTemplateFilters([...templateIds]).flatMap(
+  const normalizedTemplateIds = normalizeTemplateFilters([...templateIds]);
+  const clausesFor = (alias: string) => normalizedTemplateIds.flatMap(
     (templateId) => {
       const separatorIndex = templateId.lastIndexOf(':');
       if (separatorIndex <= 0 || separatorIndex === templateId.length - 1) {
@@ -2158,17 +2165,25 @@ function templateTypePksQuery(
       const moduleName = templateId.slice(0, separatorIndex);
       const entityName = templateId.slice(separatorIndex + 1);
       return [
-        `(contract_tpe_row.module_name = '${escapeSqlLiteral(moduleName)}'
-        and contract_tpe_row.entity_name = '${escapeSqlLiteral(entityName)}')`,
+        `(${alias}.module_name = '${escapeSqlLiteral(moduleName)}'
+        and ${alias}.entity_name = '${escapeSqlLiteral(entityName)}')`,
       ];
     },
   );
+  const contractClauses = clausesFor('contract_tpe_row');
+  const exerciseClauses = clausesFor('exercise_tpe_row');
 
   return `
-    select contract_tpe_row.pk::text as pk
+    select 'contract'::text as type_source, contract_tpe_row.pk::text as pk
     from ${relations.contractTpe} contract_tpe_row
-    where ${clauses.length > 0 ? clauses.join('\n      or ') : 'false'}
-    order by contract_tpe_row.pk
+    where ${contractClauses.length > 0 ? contractClauses.join('\n      or ') : 'false'}
+
+    union all
+
+    select 'exercise'::text as type_source, exercise_tpe_row.pk::text as pk
+    from ${relations.exerciseTpe} exercise_tpe_row
+    where ${exerciseClauses.length > 0 ? exerciseClauses.join('\n      or ') : 'false'}
+    order by type_source, pk
   `;
 }
 
@@ -3453,21 +3468,33 @@ export class PqsSummaryService {
     node: NodeConfig,
     query: (sql: string) => Promise<{ rows: unknown[] }>,
     templateIds: readonly string[],
-  ): Promise<bigint[]> {
+  ): Promise<TemplateTypePks> {
     const result = await query(templateTypePksQuery(node, templateIds));
-    const templateTypePks = (result.rows as TemplateTypePkRow[]).flatMap(
-      (row) => {
-        const value = row.pk?.toString();
-        if (!value || !/^\d+$/.test(value)) {
-          return [];
-        }
+    const contract: bigint[] = [];
+    const exercise: bigint[] = [];
 
-        const templateTypePk = BigInt(value);
-        return templateTypePk > 0n ? [templateTypePk] : [];
-      },
-    );
+    for (const row of result.rows as TemplateTypePkRow[]) {
+      const value = row.pk?.toString();
+      if (!value || !/^\d+$/.test(value)) {
+        continue;
+      }
 
-    return normalizeTemplateTypePks(templateTypePks);
+      const templateTypePk = BigInt(value);
+      if (templateTypePk <= 0n) {
+        continue;
+      }
+
+      if (row.type_source === 'exercise') {
+        exercise.push(templateTypePk);
+      } else {
+        contract.push(templateTypePk);
+      }
+    }
+
+    return {
+      contract: normalizeTemplateTypePks(contract),
+      exercise: normalizeTemplateTypePks(exercise),
+    };
   }
 
   private async queryRecentUpdateMetaRows(
@@ -3477,7 +3504,7 @@ export class PqsSummaryService {
     before?: string,
     after?: string,
     parties?: string[],
-    templateTypePks?: readonly bigint[],
+    templateTypePks?: TemplateTypePks,
     mode?: string,
     hideSplice?: boolean,
   ): Promise<UpdateMetaRow[]> {
@@ -3535,7 +3562,7 @@ export class PqsSummaryService {
         before,
         after,
         parties,
-        templateTypePks,
+        templateTypePks?.contract,
         partyMode,
         hideSplice,
       ),

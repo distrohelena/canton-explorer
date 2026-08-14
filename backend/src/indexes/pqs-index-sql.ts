@@ -1,7 +1,7 @@
 export type PqsIndexContext = {
   schema: string;
   contractPartitions: readonly string[];
-  hasExercises: boolean;
+  exercisePartitions: readonly string[];
   transactionIdIsText: boolean;
 };
 
@@ -32,22 +32,14 @@ function indexName(relation: string, suffix: string): string {
 export const migrationTableSql = (schema: string): string =>
   `create table if not exists ${qualified(schema, 'canton_explorer_index_migrations')} (version text primary key, applied_at timestamptz not null default current_timestamp)`;
 
-export const contractPartitionsSql = (_schema: string): string => `
+export const relationPartitionsSql = (): string => `
   select child.relname as table_name
   from pg_inherits inheritance
   join pg_class parent on parent.oid = inheritance.inhparent
   join pg_namespace parent_schema on parent_schema.oid = parent.relnamespace
   join pg_class child on child.oid = inheritance.inhrelid
-  where parent_schema.nspname = $1 and parent.relname = '__contracts'
+  where parent_schema.nspname = $1 and parent.relname = $2
   order by child.relname`;
-
-export const exercisesExistsSql = (): string => `
-  select exists (
-    select 1
-    from pg_class relation
-    join pg_namespace relation_schema on relation_schema.oid = relation.relnamespace
-    where relation_schema.nspname = $1 and relation.relname = '__exercises'
-  ) as exists`;
 
 export const transactionIdTypeSql = (): string => `
   select attribute.atttypid::regtype::text as column_type
@@ -99,9 +91,9 @@ export const pqsIndexMigrations: readonly IndexMigration[] = [
       ...context.contractPartitions.map((relation) =>
         contractWitnessIndexSql(context.schema, relation),
       ),
-      ...(context.hasExercises
-        ? [contractWitnessIndexSql(context.schema, '__exercises')]
-        : []),
+      ...context.exercisePartitions.map((relation) =>
+        contractWitnessIndexSql(context.schema, relation),
+      ),
     ],
   },
   {

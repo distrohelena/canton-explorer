@@ -27,6 +27,7 @@ function dependenciesWithNodes(nodes: readonly NodeConfig[]) {
     .mockResolvedValue({
       schema: 'public',
       contractPartitions: ['__contracts_17'],
+      exercisePartitions: ['__exercises_17'],
       hasExercises: true,
       transactionIdIsText: true,
       indexStatuses: [],
