@@ -4,8 +4,6 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { fetchBranding } from './lib/api';
 import {
   navigationMenus,
-  resolveNavigationContext,
-  type NavigationMenu,
   type NavigationMenuId,
 } from './lib/navigation';
 import type { BrandingConfig } from './types/branding';
@@ -41,7 +39,6 @@ const resolvedTheme = computed<ResolvedTheme>(() =>
     : themePreference.value,
 );
 const isDebuggerRoute = computed(() => route.path === '/debugger');
-const navigationContext = computed(() => resolveNavigationContext(route.path));
 const themeToggleLabel = computed(() =>
   resolvedTheme.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
 );
@@ -75,12 +72,6 @@ function syncSystemThemePreference() {
 
 function toggleTheme() {
   themePreference.value = resolvedTheme.value === 'dark' ? 'light' : 'dark';
-}
-
-function displayNavigationLabel(menu: NavigationMenu): string {
-  return navigationContext.value.menuId === menu.id
-    ? navigationContext.value.title
-    : menu.label;
 }
 
 function setNavigationMenuTrigger(menuId: NavigationMenuId, element: unknown) {
@@ -263,14 +254,14 @@ onBeforeUnmount(() => {
                 class="app-navigation__button"
                 :aria-controls="`app-navigation-menu-${menu.id}`"
                 :aria-expanded="openNavigationMenuId === menu.id"
-                :title="displayNavigationLabel(menu)"
+                :title="menu.label"
                 :ref="(element) => setNavigationMenuTrigger(menu.id, element)"
                 @click="toggleNavigationMenu(menu.id)"
                 @keydown.enter.prevent="toggleNavigationMenu(menu.id)"
                 @keydown.space.prevent="toggleNavigationMenu(menu.id)"
                 @keydown.esc.prevent.stop="handleNavigationEscape(menu.id)"
               >
-                <span class="app-navigation__button-label">{{ displayNavigationLabel(menu) }}</span>
+                <span class="app-navigation__button-label">{{ menu.label }}</span>
                 <svg
                   class="app-navigation__arrow"
                   viewBox="0 0 16 16"

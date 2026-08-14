@@ -232,7 +232,7 @@ describe('App', () => {
     expect(screen.queryByRole('link', { name: 'Parties' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Contracts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Tokens' })).not.toBeInTheDocument();
-    const ledgerButton = screen.getByRole('button', { name: 'Home' });
+    const ledgerButton = screen.getByRole('button', { name: 'Ledger' });
     expect(ledgerButton).toHaveAttribute('aria-expanded', 'false');
     expect(container.querySelectorAll('svg.app-navigation__arrow')).toHaveLength(3);
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
@@ -269,7 +269,7 @@ describe('App', () => {
   it('renders the three navigation menus with exact direct link sets', async () => {
     await renderAt('/');
 
-    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+    const ledgerTrigger = screen.getByRole('button', { name: 'Ledger' });
     const networkTrigger = screen.getByRole('button', { name: 'Network' });
     const systemTrigger = screen.getByRole('button', { name: 'System' });
 
@@ -303,7 +303,7 @@ describe('App', () => {
 
     for (const [index, menuId] of ['ledger', 'network', 'system'].entries()) {
       const trigger = screen.getByRole('button', {
-        name: index === 0 ? 'Home' : index === 1 ? 'Network' : 'System',
+        name: index === 0 ? 'Ledger' : index === 1 ? 'Network' : 'System',
       });
       await fireEvent.click(trigger);
       const navigation = screen.getByRole('navigation', { name: `${menuId[0].toUpperCase()}${menuId.slice(1)} navigation` });
@@ -318,7 +318,7 @@ describe('App', () => {
   it('switches menus and supports keyboard dismissal without opening on focus alone', async () => {
     await renderAt('/');
 
-    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+    const ledgerTrigger = screen.getByRole('button', { name: 'Ledger' });
     const networkTrigger = screen.getByRole('button', { name: 'Network' });
 
     await fireEvent.focus(ledgerTrigger);
@@ -350,7 +350,7 @@ describe('App', () => {
 
   it('closes a menu when focus leaves its trigger and menu area', async () => {
     const { container } = await renderAt('/');
-    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+    const ledgerTrigger = screen.getByRole('button', { name: 'Ledger' });
     const navigationWrapper = container.querySelector('.app-navigation');
 
     await fireEvent.click(ledgerTrigger);
@@ -374,14 +374,14 @@ describe('App', () => {
     for (const [path, section, title] of cases) {
       cleanup();
       await renderAt(path);
-      expect(screen.getByRole('button', { name: title })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: section })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: section })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: title })).not.toBeInTheDocument();
     }
   });
 
   it('closes the active menu when the route changes', async () => {
     const { router } = await renderAt('/');
-    const ledgerTrigger = screen.getByRole('button', { name: 'Home' });
+    const ledgerTrigger = screen.getByRole('button', { name: 'Ledger' });
 
     await fireEvent.click(ledgerTrigger);
     expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
@@ -395,7 +395,7 @@ describe('App', () => {
   it('closes the active menu when clicking outside all navigation wrappers', async () => {
     await renderAt('/');
 
-    const ledgerButton = screen.getByRole('button', { name: 'Home' });
+    const ledgerButton = screen.getByRole('button', { name: 'Ledger' });
     await fireEvent.click(ledgerButton);
     expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
 
@@ -414,51 +414,41 @@ describe('App', () => {
     await fireEvent.pointerEnter(navigationArea!);
 
     expect(screen.getByRole('navigation', { name: 'Ledger navigation' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Ledger' })).toHaveAttribute('aria-expanded', 'true');
 
     await fireEvent.pointerLeave(navigationArea!);
 
     expect(screen.queryByRole('navigation', { name: 'Ledger navigation' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Ledger' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('updates the Explore label to the selected page title', async () => {
+  it('keeps the three top-level navigation labels unchanged across routes', async () => {
     const { router } = await renderAt('/');
 
-    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'System' })).toBeInTheDocument();
 
     await router.push('/updates');
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Updates' })).toBeInTheDocument();
-      expect(screen.getByText('Updates View')).toBeInTheDocument();
-    });
-
-    await router.push('/nodes/participant-1');
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Nodes' })).toBeInTheDocument();
-    });
-
-    await router.push('/nodes');
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Nodes' })).toBeInTheDocument();
-      expect(screen.getByText('Nodes View')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'System' })).toBeInTheDocument();
     });
   });
 
   it('keeps the shared shell on the nodes route', async () => {
     await renderAt('/nodes');
 
-    expect(screen.getByRole('button', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.getByText('Nodes View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on the parties route', async () => {
     await renderAt('/parties');
 
-    expect(screen.getByRole('button', { name: 'Parties' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Parties View')).toBeInTheDocument();
   });
@@ -466,7 +456,7 @@ describe('App', () => {
   it('keeps the shared shell on the contracts route', async () => {
     await renderAt('/contracts');
 
-    expect(screen.getByRole('button', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Contracts View')).toBeInTheDocument();
   });
@@ -474,7 +464,7 @@ describe('App', () => {
   it('keeps the shared shell on the tokens route', async () => {
     await renderAt('/tokens');
 
-    expect(screen.getByRole('button', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Tokens View')).toBeInTheDocument();
   });
@@ -482,7 +472,7 @@ describe('App', () => {
   it('renders the Traffic menu and keeps the shared shell on traffic purchases', async () => {
     const { router } = await renderAt('/traffic');
 
-    const networkButton = screen.getByRole('button', { name: 'Purchases' });
+    const networkButton = screen.getByRole('button', { name: 'Network' });
     await fireEvent.click(networkButton);
     expect(screen.getByRole('navigation', { name: 'Network navigation' })).toBeInTheDocument();
     expect(screen.getByText('Traffic', { selector: '.app-navigation__group-label' })).toBeInTheDocument();
@@ -494,26 +484,26 @@ describe('App', () => {
   it('keeps the shared shell on the debugger route', async () => {
     const { container } = await renderAt('/debugger');
 
-    expect(screen.getByRole('button', { name: 'Debugger' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'System' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Debugger' })).not.toBeInTheDocument();
     expect(screen.getByText('Debugger View')).toBeInTheDocument();
     expect(container.querySelector('.app-shell--debugger')).not.toBeNull();
     expect(container.querySelector('.app-frame--debugger')).not.toBeNull();
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Debugger' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'System' })).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a token transfer detail route', async () => {
     await renderAt('/tokens/transfers/token-update-2');
 
-    expect(screen.getByRole('button', { name: 'Tokens' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
     expect(screen.getByText('Token Transfer Detail View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a node detail route', async () => {
     await renderAt('/nodes/participant-1');
 
-    expect(screen.getByRole('button', { name: 'Nodes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Network' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Canton Explorer' })).toBeInTheDocument();
     expect(screen.queryByText('Current Node')).not.toBeInTheDocument();
   });
@@ -523,14 +513,14 @@ describe('App', () => {
       '/nodes/participant-1/updates/1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
     );
 
-    expect(screen.getByRole('button', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
     expect(screen.getByText('Update Detail View')).toBeInTheDocument();
   });
 
   it('keeps the shared shell on a contract detail route', async () => {
     await renderAt('/nodes/participant-1/contracts/00abc');
 
-    expect(screen.getByRole('button', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ledger' })).toBeInTheDocument();
     expect(screen.getByText('Contract Detail View')).toBeInTheDocument();
   });
 

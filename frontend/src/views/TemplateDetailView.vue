@@ -31,7 +31,12 @@ watch([() => route.hash, templateDetail], async ([hash, detail]) => {
   }
 
   const choiceName = choiceNameFromHash(hash);
-  const anchorId = choiceName ? choiceAnchorId(choiceName) : null;
+  const choices = detail.template?.choices ?? [];
+  const choice = choiceName
+    ? choices.find(({ name }) => name === choiceName) ??
+      choices.find(({ name }) => name.endsWith(`_${choiceName}`))
+    : null;
+  const anchorId = choice ? choiceAnchorId(choice.name) : null;
   if (!anchorId) {
     return;
   }

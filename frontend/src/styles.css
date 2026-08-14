@@ -3990,6 +3990,7 @@ h3 {
 }
 
 .update-detail {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -4021,7 +4022,7 @@ h3 {
 
 .update-detail__action-rail {
   position: absolute;
-  top: 2px;
+  top: -4px;
   right: 0;
 }
 

@@ -156,6 +156,20 @@ describe("styles.css", () => {
     expect(templateItemStyles).toContain("grid-column: 1 / -1;");
   });
 
+  it("anchors the Debug Offset rail to the update detail page", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles.css"),
+      "utf8",
+    );
+    const updateDetailStyles =
+      styles.match(/\.update-detail \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const actionRailStyles =
+      styles.match(/\.update-detail__action-rail \{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+    expect(updateDetailStyles).toContain("position: relative;");
+    expect(actionRailStyles).toContain("top: -4px;");
+  });
+
   it("keeps update event kinds on one line without clipping", () => {
     const styles = readFileSync(
       resolve(process.cwd(), "src/styles.css"),

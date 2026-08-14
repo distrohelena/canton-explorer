@@ -214,6 +214,30 @@ describe('TemplateDetailView', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
+  it('scrolls to a generated choice when the route uses its normalized name', async () => {
+    route.hash = '#choice-RecordValidatorLivenessActivity';
+    const scrollIntoView = mockScrollIntoView();
+    mockDecodedTemplate([
+      {
+        name: 'ValidatorLicense_RecordValidatorLivenessActivity',
+        consuming: true,
+        argumentType: null,
+        resultType: null,
+      },
+    ]);
+
+    render(TemplateDetailView, {
+      props: {
+        packageId: 'pkg',
+        templateId: 'Main.Module:Asset',
+      },
+    });
+
+    await screen.findByText('ValidatorLicense_RecordValidatorLivenessActivity');
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+  });
+
   it('scrolls to another choice when the route hash changes', async () => {
     const { container } = renderChoices();
 

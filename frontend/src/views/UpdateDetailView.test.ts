@@ -103,6 +103,16 @@ describe("UpdateDetailView", () => {
     );
   });
 
+  it("anchors the Debug Offset rail to the update detail page", async () => {
+    const { container } = renderUpdateEvents([]);
+
+    const debugLink = await screen.findByRole("link", { name: "Debug Offset" });
+    const updateDetail = container.querySelector(".update-detail");
+
+    expect(updateDetail).not.toBeNull();
+    expect(updateDetail).toContainElement(debugLink);
+  });
+
   it("preserves the encoded template path and logical special-character choice hash", async () => {
     renderUpdateEvents([
       {
