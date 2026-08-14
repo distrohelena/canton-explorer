@@ -166,6 +166,21 @@ async function indexStatuses(
   );
 }
 
+function reconciliationStatements(
+  schema: string,
+  statements: readonly string[],
+  statuses: ReadonlyMap<string, PqsIndexStatus>,
+): readonly string[] {
+  return statements.flatMap((statement) => {
+    const indexName = indexNameFromStatement(statement);
+    const status = statuses.get(indexName);
+    if (status?.isValid === true && status.isReady === true) {
+      return [];
+    }
+    return status ? [dropIndexSql(schema, indexName), statement] : [statement];
+  });
+}
+
 async function withPqsIndexDatabase<TResult>(
   connectionString: string,
   dependencies: PqsIndexInstallerDependencies,
@@ -204,10 +219,7 @@ export async function inspectPqsIndexes(
         hasExercises: context.hasExercises,
         transactionIdIsText: context.transactionIdIsText,
         indexStatuses: [...statuses.values()],
-        proposedSql: statements.filter((statement) => {
-          const status = statuses.get(indexNameFromStatement(statement));
-          return status?.isValid !== true || status.isReady !== true;
-        }),
+        proposedSql: reconciliationStatements(schema, statements, statuses),
       };
     },
   );
@@ -255,17 +267,13 @@ export async function applyPqsIndexes(
             expectedIndexNames,
           );
 
-          for (const statement of statements) {
-            const indexName = indexNameFromStatement(statement);
-            const status = currentStatuses.get(indexName);
-            if (status && (!status.isValid || !status.isReady)) {
-              await database.query(dropIndexSql(schema, indexName));
-              appliedStatements += 1;
-            }
-            if (!status || !status.isValid || !status.isReady) {
-              await database.query(statement);
-              appliedStatements += 1;
-            }
+          for (const statement of reconciliationStatements(
+            schema,
+            statements,
+            currentStatuses,
+          )) {
+            await database.query(statement);
+            appliedStatements += 1;
           }
 
           const reconciledStatuses = await indexStatuses(

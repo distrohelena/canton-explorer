@@ -189,6 +189,32 @@ describe('PQS index installer', () => {
     );
   });
 
+  it('previews an invalid-index repair in the same drop-then-create order as apply', async () => {
+    const database = fakeDatabase({
+      indexStatuses: {
+        canton_explorer_contracts_42_witnesses_gin: {
+          is_valid: false,
+          is_ready: false,
+        },
+      },
+    });
+
+    const inspection = await inspectPqsIndexes('postgres://pqs', 'public', {
+      createDatabase: databaseFactory(database),
+    });
+
+    const drop =
+      'drop index concurrently if exists "public"."canton_explorer_contracts_42_witnesses_gin"';
+    const create =
+      'create index concurrently if not exists "canton_explorer_contracts_42_witnesses_gin" on "public"."__contracts_42" using gin (witnesses)';
+    expect(inspection.proposedSql).toContain(drop);
+    expect(inspection.proposedSql).toContain(create);
+    expect(inspection.proposedSql.indexOf(drop)).toBeLessThan(
+      inspection.proposedSql.indexOf(create),
+    );
+    expect(database.sql.join('\n')).not.toMatch(/drop index|create index/i);
+  });
+
   it('inspects through a dedicated read connection using catalog queries only', async () => {
     const database = fakeDatabase();
 

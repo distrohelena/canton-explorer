@@ -11,17 +11,11 @@ import {
 
 type IndexAction = 'inspect' | 'apply';
 
-type SkippedNode = {
-  nodeId: string;
-  reason: string;
-};
-
 export type IndexCommandResult = {
   command: IndexAction;
   dryRun: boolean;
   inspectedNodeIds: string[];
   appliedNodeIds: string[];
-  skipped: SkippedNode[];
 };
 
 type PqsConnectionFactory = {
@@ -56,7 +50,7 @@ Usage:
 
 Options:
   --config <path>  Path to the node config JSON file
-  --node <id>      Process one configured node
+  --node <id>      Process one configured PQS node
   --dry-run        Inspect and print proposed SQL without applying it
   --help           Show this message`;
 
@@ -149,10 +143,6 @@ function assertUniqueNodeIds(nodes: readonly NodeConfig[]): void {
   }
 }
 
-function hasPqsConfiguration(node: NodeConfig): boolean {
-  return Boolean((node as NodeConfig & { pqs?: NodeConfig['pqs'] }).pqs);
-}
-
 function inspectOutput(
   nodeId: string,
   inspection: PqsIndexInspection,
@@ -180,7 +170,6 @@ export async function runIndexCommand(
     dryRun: parsed.dryRun,
     inspectedNodeIds: [],
     appliedNodeIds: [],
-    skipped: [],
   };
 
   if (parsed.help) {
@@ -207,15 +196,6 @@ export async function runIndexCommand(
     }
 
     for (const node of selectedNodes) {
-      if (!hasPqsConfiguration(node)) {
-        const skipped = { nodeId: node.id, reason: 'PQS is not configured' };
-        result.skipped.push(skipped);
-        dependencies.writeOutput(
-          `[indexes] node=${node.id} skipped reason=${skipped.reason}`,
-        );
-        continue;
-      }
-
       const { connectionString, schema } = factory.getPqsConnection(node);
       if (parsed.command === 'inspect' || parsed.dryRun) {
         const inspection = await dependencies.inspectPqsIndexes(

@@ -14,7 +14,7 @@
 - The installer is explicit: `inspect` is read-only and `apply` is never run by Explorer startup or `docker compose up`.
 - Use an Explorer-owned `canton_explorer_index_migrations` table and a per-database advisory lock.
 - Create index builds outside transactions and use `CREATE INDEX CONCURRENTLY` for existing physical partitions.
-- Support schema-qualified PQS relations and skip nodes without PQS configuration.
+- Support schema-qualified PQS relations; valid Explorer node configurations are PQS-backed.
 - Preserve the existing `canton-explorer --config/--host/--port` server invocation.
 - All query lists remain bounded and use keyset pagination; do not add `OFFSET` pagination.
 
@@ -227,10 +227,9 @@ git commit -m "feat: add PQS index migration engine"
 - [ ] **Step 1: Write failing command tests**
 
 ```ts
-it('inspects every configured PQS node and skips grpc-only nodes', async () => {
-  const result = await runIndexCommand(['inspect'], dependenciesWithNodes([pqsNode, grpcNode]));
+it('invokes only the requested configured PQS node', async () => {
+  const result = await runIndexCommand(['inspect', '--node', 'pqs-node'], dependenciesWithNodes([pqsNode, secondPqsNode]));
   expect(result.inspectedNodeIds).toEqual(['pqs-node']);
-  expect(result.skipped).toEqual([{ nodeId: 'grpc-node', reason: 'PQS is not configured' }]);
 });
 
 it('dry-run never calls applyPqsIndexes', async () => {

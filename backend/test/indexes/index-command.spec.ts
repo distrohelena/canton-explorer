@@ -13,19 +13,13 @@ const pqsNode = {
   pqs: { connectionUriEnv: 'PQS_NODE_URL', schema: 'public' },
 } satisfies NodeConfig;
 
-const grpcOnlyNode = {
-  id: 'grpc-node',
-  label: 'gRPC node',
+const secondPqsNode = {
+  id: 'second-pqs-node',
+  label: 'Second PQS node',
   role: 'participant',
-  mode: 'pqs_with_grpc',
-  grpc: {
-    ledgerTarget: 'localhost:6865',
-    ledgerAdminTarget: 'localhost:6865',
-    participantAdminTarget: 'localhost:6865',
-    useTls: false,
-    connectTimeoutMs: 5000,
-  },
-} as unknown as NodeConfig;
+  mode: 'pqs_only',
+  pqs: { connectionUriEnv: 'SECOND_PQS_NODE_URL', schema: 'second_schema' },
+} satisfies NodeConfig;
 
 function dependenciesWithNodes(nodes: readonly NodeConfig[]) {
   const inspectPqsIndexes = jest
@@ -74,20 +68,37 @@ function dependenciesWithNodes(nodes: readonly NodeConfig[]) {
 }
 
 describe('runIndexCommand', () => {
-  it('inspects every configured PQS node and skips grpc-only nodes', async () => {
-    const setup = dependenciesWithNodes([pqsNode, grpcOnlyNode]);
+  it('inspects every configured PQS node', async () => {
+    const setup = dependenciesWithNodes([pqsNode, secondPqsNode]);
 
     const result = await runIndexCommand(['inspect'], setup.dependencies);
 
-    expect(result.inspectedNodeIds).toEqual(['pqs-node']);
-    expect(result.skipped).toEqual([
-      { nodeId: 'grpc-node', reason: 'PQS is not configured' },
-    ]);
+    expect(result.inspectedNodeIds).toEqual(['pqs-node', 'second-pqs-node']);
     expect(setup.inspectPqsIndexes).toHaveBeenCalledWith(
       'postgres:///pqs-node',
       'public',
     );
+    expect(setup.inspectPqsIndexes).toHaveBeenCalledWith(
+      'postgres:///second-pqs-node',
+      'second_schema',
+    );
     expect(setup.onModuleDestroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('invokes only the requested configured PQS node', async () => {
+    const setup = dependenciesWithNodes([pqsNode, secondPqsNode]);
+
+    const result = await runIndexCommand(
+      ['inspect', '--node', 'second-pqs-node'],
+      setup.dependencies,
+    );
+
+    expect(result.inspectedNodeIds).toEqual(['second-pqs-node']);
+    expect(setup.inspectPqsIndexes).toHaveBeenCalledTimes(1);
+    expect(setup.inspectPqsIndexes).toHaveBeenCalledWith(
+      'postgres:///second-pqs-node',
+      'second_schema',
+    );
   });
 
   it('uses inspection for apply dry-runs and never applies indexes', async () => {
