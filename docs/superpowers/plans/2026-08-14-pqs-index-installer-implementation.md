@@ -14,7 +14,7 @@
 - The installer is explicit: `inspect` is read-only and `apply` is never run by Explorer startup or `docker compose up`.
 - Use an Explorer-owned `canton_explorer_index_migrations` table and a per-database advisory lock.
 - Create index builds outside transactions and use `CREATE INDEX CONCURRENTLY` for existing physical partitions.
-- Support schema-qualified PQS relations and skip nodes without PQS configuration.
+- Support schema-qualified PQS relations; valid Explorer node configurations are PQS-backed.
 - Preserve the existing `canton-explorer --config/--host/--port` server invocation.
 - All query lists remain bounded and use keyset pagination; do not add `OFFSET` pagination.
 
