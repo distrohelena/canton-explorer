@@ -430,6 +430,9 @@ describe('PartyDetailView', () => {
       }),
     );
 
+    await waitFor(() =>
+      expect(contractsTopPager.getByRole('button', { name: 'Older' })).not.toBeDisabled(),
+    );
     await fireEvent.click(contractsTopPager.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>

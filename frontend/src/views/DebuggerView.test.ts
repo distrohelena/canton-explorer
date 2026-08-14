@@ -450,6 +450,63 @@ describe('DebuggerView', () => {
     expect(fetchDebuggerSessions).toHaveBeenCalledTimes(sessionCatalogCalls);
   });
 
+  it('retries a failed node template request locally while retaining successful node templates', async () => {
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+      },
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant',
+        mode: 'pqs_only',
+      },
+    ] as never);
+    let participantTwoAttempts = 0;
+    vi.mocked(fetchNodeTemplates).mockImplementation(async (nodeId) => {
+      if (nodeId === 'participant-1') {
+        return {
+          templates: [{
+            templateId: 'Main:Asset',
+            packageId: 'pkg-a',
+            packageName: 'demo-package',
+            packageVersion: '1.0.0',
+          }],
+        };
+      }
+
+      participantTwoAttempts += 1;
+      if (participantTwoAttempts <= 2) {
+        throw new Error('participant-2 templates unavailable');
+      }
+
+      return {
+        templates: [{
+          templateId: 'Main:Holding',
+          packageId: 'pkg-b',
+          packageName: 'other-package',
+          packageVersion: '2.0.0',
+        }],
+      };
+    });
+    await renderAt('/debugger');
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+
+    expect(await screen.findByText('participant-2 templates unavailable')).toBeInTheDocument();
+    expect(fetchNodeTemplates).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('option', { name: /Participant 1.*PQS \+ gRPC/s })).toBeInTheDocument();
+    expect(screen.queryByText('No nodes available.')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry templates' }));
+
+    expect(await screen.findByRole('option', { name: /Participant 2.*PQS only/s })).toBeInTheDocument();
+    expect(screen.queryByText('participant-2 templates unavailable')).not.toBeInTheDocument();
+    expect(participantTwoAttempts).toBe(3);
+  });
+
   it('clears the active session when returning to the debugger session list', async () => {
     vi.mocked(fetchDebuggerSession).mockResolvedValue({
       sessionId: 'session-1',

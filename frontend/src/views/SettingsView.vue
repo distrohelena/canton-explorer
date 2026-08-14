@@ -171,6 +171,7 @@ onBeforeUnmount(() => {
       <template v-else>
         <p v-if="nodesError" class="settings-refresh-error" role="alert">
           Refresh failed: {{ nodesError }}. Showing the last successful snapshot.
+          <button type="button" class="button button--secondary" @click="retry">Retry</button>
         </p>
 
         <div class="settings-node-grid">

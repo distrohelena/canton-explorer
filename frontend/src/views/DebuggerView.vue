@@ -1020,24 +1020,30 @@ async function fetchTemplateCatalog(): Promise<DebuggerTemplateGroup[]> {
   const nodes = await fetchNodes();
   return Promise.all(
     nodes.map(async (node) => {
-      try {
-        const response = await fetchNodeTemplates(node.id);
-        return {
-          nodeId: node.id,
-          label: node.label,
-          mode: node.mode,
-          templates: response.templates,
-          error: null,
-        } satisfies DebuggerTemplateGroup;
-      } catch (err) {
-        return {
-          nodeId: node.id,
-          label: node.label,
-          mode: node.mode,
-          templates: [],
-          error: err instanceof Error ? err.message : 'Unable to load templates.',
-        } satisfies DebuggerTemplateGroup;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await fetchNodeTemplates(node.id);
+          return {
+            nodeId: node.id,
+            label: node.label,
+            mode: node.mode,
+            templates: response.templates,
+            error: null,
+          } satisfies DebuggerTemplateGroup;
+        } catch (err) {
+          if (attempt === 1) {
+            return {
+              nodeId: node.id,
+              label: node.label,
+              mode: node.mode,
+              templates: [],
+              error: err instanceof Error ? err.message : 'Unable to load templates.',
+            } satisfies DebuggerTemplateGroup;
+          }
+        }
       }
+
+      throw new Error('Unable to load templates.');
     }),
   );
 }
@@ -1128,12 +1134,15 @@ watch(debuggerSessionsSection.error, (nextError) => {
 
 watch(templateCatalogSection.data, (nextGroups) => {
   templateGroups.value = nextGroups ?? [];
+  templateError.value = nextGroups?.find((group) => group.error)?.error ?? null;
 });
 watch(templateCatalogSection.loading, (nextLoading) => {
   templateLoading.value = nextLoading;
 });
 watch(templateCatalogSection.error, (nextError) => {
-  templateError.value = nextError;
+  if (nextError) {
+    templateError.value = nextError;
+  }
 });
 
 watch(activeContractsSection.data, (nextContracts) => {
