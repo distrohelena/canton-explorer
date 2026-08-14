@@ -233,7 +233,10 @@ before(async () => {
       (tpe_pk, witnesses, create_event_pk, created_at_ix, archived_at_ix, contract_id)
       values
         (17, array['Alice'], 5, 100, null, 'contract-1'),
-        (17, array['Bob'], 5, 100, null, 'contract-2');
+        (17, array['Bob'], 5, 100, null, 'contract-2'),
+        (17, array['Alice'], 30001, 30001, null, 'alice-new-1'),
+        (17, array['Alice'], 30002, 30002, null, 'alice-new-2'),
+        (17, array['Alice'], 30003, 30003, null, 'alice-new-3');
     insert into public.__contracts_29
       (tpe_pk, witnesses, create_event_pk, created_at_ix, archived_at_ix, contract_id)
       select 29, array['Alice'], 1000 + value, 1000 + value, null, 'bulk-' || value::text
@@ -261,6 +264,12 @@ before(async () => {
         '2026-08-14T00:00:00Z'::timestamptz + value * interval '1 second',
         null
       from generate_series(1, 20000) value;
+    insert into public.__transactions
+      (ix, "offset", transaction_id, effective_at, paid_traffic_cost)
+      values
+        (30001, 130001, 'alice-new-update-1', '2026-08-14T06:00:01Z', null),
+        (30002, 130002, 'alice-new-update-2', '2026-08-14T06:00:02Z', null),
+        (30003, 130003, 'alice-new-update-3', '2026-08-14T06:00:03Z', null);
     analyze public.__transactions;
   `);
 
@@ -510,6 +519,27 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
     assert.doesNotMatch(filteredSql, /contract_row\.created_at_ix = tx\.ix/);
     assert.doesNotMatch(filteredSql, /contract_row\.archived_at_ix = tx\.ix/);
     assert.doesNotMatch(filteredSql, /exercise_row\.exercised_at_ix = tx\.ix/);
+    for (const eventColumn of [
+      "contract_row.created_at_ix",
+      "contract_row.archived_at_ix",
+      "exercise_row.exercised_at_ix",
+    ]) {
+      const escapedColumn = eventColumn.replace(".", "\\.");
+      assert.equal(
+        filteredSql.match(
+          new RegExp(`order by ${escapedColumn} asc\\s+limit 3`, "g"),
+        )?.length,
+        3,
+        `${eventColumn} must have one bounded candidate branch for each party/template filter`,
+      );
+      assert.equal(
+        filteredSql.match(
+          new RegExp(`order by ${escapedColumn} asc\\s+offset 3\\s+limit 1`, "g"),
+        )?.length,
+        3,
+        `${eventColumn} must have one bounded overflow probe for each party/template filter`,
+      );
+    }
 
     const explain = await client.query(
       `explain (analyze, format json) ${filteredSql}`,
@@ -538,12 +568,16 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
       ),
       "the generated candidate SQL should use the physical event-order index for bounded work",
     );
+    const boundedLimitNodes = planNodes.filter(
+      (planNode) => planNode["Node Type"] === "Limit",
+    );
     assert.ok(
-      planNodes.some(
-        (planNode) =>
-          planNode["Node Type"] === "Limit" && planNode["Actual Rows"] <= 3,
-      ),
-      "the generated candidate SQL should retain per-branch top-N limits",
+      boundedLimitNodes.length >= 9,
+      "EXPLAIN must account for all nine create/archive/exercise candidate branches",
+    );
+    assert.ok(
+      boundedLimitNodes.every((planNode) => planNode["Actual Rows"] <= 3),
+      "every planned candidate/overflow limit must remain bounded by the three-row batch",
     );
 
     const backwardAnd = await service.fetchRecentUpdates(node, {
@@ -560,6 +594,64 @@ test("bounded update candidates preserve OR/AND and combined filters across larg
       })),
       [{ eventOffset: "1000", parties: ["Alice", "Bob"] }],
     );
+
+    const forwardAndBeyondThreeNewerCandidates =
+      await service.fetchRecentUpdates(node, {
+        limit: 2,
+        after: "999",
+        parties: ["Alice", "Bob"],
+        partyMode: "and",
+        templates: ["Main:Asset"],
+      });
+    assert.deepEqual(
+      forwardAndBeyondThreeNewerCandidates.updates.map((update) => ({
+        eventOffset: update.eventOffset,
+        parties: update.parties,
+      })),
+      [{ eventOffset: "1000", parties: ["Alice", "Bob"] }],
+      "forward AND pagination must expand past newer Alice-only template candidates",
+    );
+    const forwardAndCandidateBatches = queries.filter(
+      (sql) =>
+        sql.includes("cursor_tx.offset <= 999") &&
+        sql.includes("candidate_progress as"),
+    );
+    assert.equal(
+      forwardAndCandidateBatches.length,
+      2,
+      "forward AND pagination should issue a second bounded candidate batch",
+    );
+    assert.match(forwardAndCandidateBatches[0], /limit 3/);
+    assert.match(forwardAndCandidateBatches[1], /limit 6/);
+
+    const backwardAndBeyondThreeNewerCandidates =
+      await service.fetchRecentUpdates(node, {
+        limit: 2,
+        before: "130004",
+        parties: ["Alice", "Bob"],
+        partyMode: "and",
+        templates: ["Main:Asset"],
+      });
+    assert.deepEqual(
+      backwardAndBeyondThreeNewerCandidates.updates.map((update) => ({
+        eventOffset: update.eventOffset,
+        parties: update.parties,
+      })),
+      [{ eventOffset: "1000", parties: ["Alice", "Bob"] }],
+      "backward AND pagination must expand past newer Alice-only template candidates",
+    );
+    const backwardAndCandidateBatches = queries.filter(
+      (sql) =>
+        sql.includes("cursor_tx.offset >= 130004") &&
+        sql.includes("candidate_progress as"),
+    );
+    assert.equal(
+      backwardAndCandidateBatches.length,
+      2,
+      "backward AND pagination should issue a second bounded candidate batch",
+    );
+    assert.match(backwardAndCandidateBatches[0], /limit 3/);
+    assert.match(backwardAndCandidateBatches[1], /limit 6/);
   } finally {
     await client.end();
   }

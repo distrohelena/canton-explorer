@@ -3643,11 +3643,19 @@ describe('PqsSummaryService', () => {
               'g',
             ),
           ),
-        ).toHaveLength(3);
+        ).toHaveLength(6);
         expect(
           sql.match(
             new RegExp(
               `order by ${escapedColumn} ${direction}\\s+limit 4`,
+              'g',
+            ),
+          ),
+        ).toHaveLength(3);
+        expect(
+          sql.match(
+            new RegExp(
+              `order by ${escapedColumn} ${direction}\\s+offset 4\\s+limit 1`,
               'g',
             ),
           ),

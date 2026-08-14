@@ -246,3 +246,62 @@ The safe-repair change from round 3 remains intact and was not modified.
 - `backend/test/pqs/pqs-summary.service.spec.ts`
 - `scripts/pqs-index-installer.test.mjs`
 - `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
+
+## Final-audit round 5: progressive exact update candidates
+
+Date: 2026-08-14
+
+### Root cause and repair
+
+The round-4 fixed candidate cap was not exact for intersections. If a bounded
+party/template stream contained newer Alice-only updates, an older update shared
+by Alice and Bob could be absent before the `intersect`, even though it was a
+valid result for the requested page.
+
+`fetchRecentUpdates` now coordinates progressive internal candidate batches.
+Every create/archive/exercise branch remains directly event-backed, cursor
+bounded, direction ordered, distinct by update ix, and top-N limited. Each
+branch also issues a bounded one-row overflow probe at its candidate boundary.
+The generated candidate CTE exposes whether any branch has another candidate;
+the service doubles only the internal candidate batch and reruns until it has a
+complete `limit + 1` page or every branch reports exhaustion. This is an
+internal multi-query detail: no public API/configuration behavior changed.
+
+The overflow probes use the same event-ordering access path and distinct update
+ix semantics as the candidate branches. This prevents multiple event rows in
+one update from falsely reporting an additional update candidate. The outer
+transaction selection continues to begin at the materialized candidate set.
+Safe-repair/index-installation code remains untouched.
+
+### TDD and plan evidence
+
+- RED: the PostgreSQL fixture now has three newer Alice-only `Main:Asset`
+  updates and one older Alice+Bob update at shared ix 100. With `limit: 2`, the
+  old fixed-cap SQL returned no result for backward pagination before 130004.
+- GREEN: both `after: 999` and `before: 130004` return the older offset 1000
+  exactly once with parties Alice and Bob. Each direction records two generated
+  candidate SQL batches (`limit 3`, then `limit 6`).
+- The generated-SQL integration captures the real filtered query, rejects the
+  former transaction correlation, verifies all nine party/template
+  create/archive/exercise candidate branches and all nine overflow probes, and
+  runs `EXPLAIN (ANALYZE, FORMAT JSON)`. The plan uses
+  `canton_explorer_contracts_29_created_at_ix_order`, contains at least nine
+  bounded `Limit` nodes, and every such node returns at most the three-row batch.
+
+### Round-5 verification
+
+| Command | Result |
+| --- | --- |
+| New PostgreSQL counterexample before implementation | RED: backward AND returned `[]` instead of offset 1000 |
+| `npm test --workspace backend -- --runInBand test/pqs/pqs-summary.service.spec.ts` | 1 suite, 127 tests passed |
+| `npm test --workspace backend -- --runInBand test/indexes/pqs-index-sql.spec.ts test/indexes/pqs-index-installer.spec.ts test/pqs/pqs-summary.service.spec.ts` | 3 suites, 148 tests passed |
+| `npm run build --workspace backend` | passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 3 tests passed; exact two-direction batching and all-branch EXPLAIN checks passed |
+| `npm test --workspace backend -- --runInBand` | 36 suites, 436 tests passed |
+
+### Round-5 changed paths
+
+- `backend/src/pqs/pqs-summary.service.ts`
+- `backend/test/pqs/pqs-summary.service.spec.ts`
+- `scripts/pqs-index-installer.test.mjs`
+- `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`

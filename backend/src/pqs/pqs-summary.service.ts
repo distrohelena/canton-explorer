@@ -95,10 +95,11 @@ interface SummaryRow {
 }
 
 interface UpdateMetaRow {
-  update_id: string;
+  update_id: string | null;
   event_offset?: string | number | null;
   record_time: string | null;
   paid_traffic_cost?: string | null;
+  candidate_has_more?: boolean | null;
 }
 
 interface ActivityBucketRow {
@@ -1138,6 +1139,17 @@ type PqsUpdateCandidateWindow = {
 type PqsUpdateCandidateCte = {
   name: string;
   sql: string;
+  hasMoreSql: string;
+};
+
+type PqsUpdateEventCandidateBranch = {
+  sql: string;
+  hasMoreSql: string;
+};
+
+type PqsUpdateEventCandidateSet = {
+  sql: string;
+  hasMoreSql: string;
 };
 
 function buildPqsUpdateCandidateWindow(
@@ -1203,7 +1215,7 @@ function buildPqsUpdateEventCandidateBranch(
   matchCondition: string,
   window: PqsUpdateCandidateWindow,
   additionalCondition?: string,
-): string {
+): PqsUpdateEventCandidateBranch {
   const conditions = [
     `${eventColumn} is not null`,
     window.eventCursorOperator
@@ -1213,11 +1225,24 @@ function buildPqsUpdateEventCandidateBranch(
     matchCondition,
   ].filter((condition): condition is string => Boolean(condition));
 
-  return `(select distinct ${eventColumn} as update_ix
+  return {
+    sql: `(select distinct ${eventColumn} as update_ix
         from ${source}
         where ${conditions.join('\n          and ')}
         order by ${eventColumn} ${window.direction}
-        limit ${window.limit})`;
+        limit ${window.limit})`,
+    hasMoreSql: `exists (
+      select 1
+      from (
+        select distinct ${eventColumn} as update_ix
+        from ${source}
+        where ${conditions.join('\n          and ')}
+        order by ${eventColumn} ${window.direction}
+        offset ${window.limit}
+        limit 1
+      ) event_candidate_overflow
+    )`,
+  };
 }
 
 function buildPqsUpdateEventCandidateSet(
@@ -1226,45 +1251,52 @@ function buildPqsUpdateEventCandidateSet(
   contractMatch: string,
   exerciseMatch: string,
   candidateSourceName?: string,
-): string {
+): PqsUpdateEventCandidateSet {
   const relations = pqsCoreRelations(node);
   const candidateCondition = candidateSourceName
     ? (eventColumn: string) =>
         `${eventColumn} in (select update_ix from ${candidateSourceName})`
     : undefined;
 
-  return `select distinct update_ix
+  const branches = [
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row`,
+      'contract_row.created_at_ix',
+      contractMatch,
+      window,
+      candidateCondition?.('contract_row.created_at_ix'),
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row`,
+      'contract_row.archived_at_ix',
+      contractMatch,
+      window,
+      candidateCondition?.('contract_row.archived_at_ix'),
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.exercises} exercise_row`,
+      'exercise_row.exercised_at_ix',
+      exerciseMatch,
+      window,
+      candidateCondition?.('exercise_row.exercised_at_ix'),
+    ),
+  ];
+
+  return {
+    sql: `select distinct update_ix
     from (
-      ${[
-        buildPqsUpdateEventCandidateBranch(
-          `${relations.contracts} contract_row`,
-          'contract_row.created_at_ix',
-          contractMatch,
-          window,
-          candidateCondition?.('contract_row.created_at_ix'),
-        ),
-        buildPqsUpdateEventCandidateBranch(
-          `${relations.contracts} contract_row`,
-          'contract_row.archived_at_ix',
-          contractMatch,
-          window,
-          candidateCondition?.('contract_row.archived_at_ix'),
-        ),
-        buildPqsUpdateEventCandidateBranch(
-          `${relations.exercises} exercise_row`,
-          'exercise_row.exercised_at_ix',
-          exerciseMatch,
-          window,
-          candidateCondition?.('exercise_row.exercised_at_ix'),
-        ),
-      ].join('\n\n      union all\n\n      ')}
-    ) matched_update_events`;
+      ${branches.map((branch) => branch.sql).join('\n\n      union all\n\n      ')}
+    ) matched_update_events`,
+    hasMoreSql: branches
+      .map((branch) => branch.hasMoreSql)
+      .join('\n      or '),
+  };
 }
 
 function buildPqsHideSpliceUpdateCandidateSet(
   node: NodeConfig,
   window: PqsUpdateCandidateWindow,
-): string {
+): PqsUpdateEventCandidateSet {
   const relations = pqsCoreRelations(node);
   const contractTemplateId =
     contractTemplateIdentifierExpression('contract_tpe_row');
@@ -1274,35 +1306,42 @@ function buildPqsHideSpliceUpdateCandidateSet(
   const contractVisible = `(${contractTemplateId} is null or ${contractTemplateId} not like 'Splice.%')`;
   const exerciseVisible = `(${exerciseTemplateId} is null or ${exerciseTemplateId} not like 'Splice.%')`;
 
-  return `select distinct update_ix
-    from (
-      ${[
-        buildPqsUpdateEventCandidateBranch(
-          `${relations.contracts} contract_row
+  const branches = [
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row
         join ${relations.contractTpe} contract_tpe_row
           on contract_tpe_row.pk = contract_row.tpe_pk`,
-          'contract_row.created_at_ix',
-          contractVisible,
-          window,
-        ),
-        buildPqsUpdateEventCandidateBranch(
-          `${relations.contracts} contract_row
+      'contract_row.created_at_ix',
+      contractVisible,
+      window,
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.contracts} contract_row
         join ${relations.contractTpe} contract_tpe_row
           on contract_tpe_row.pk = contract_row.tpe_pk`,
-          'contract_row.archived_at_ix',
-          contractVisible,
-          window,
-        ),
-        buildPqsUpdateEventCandidateBranch(
-          `${relations.exercises} exercise_row
+      'contract_row.archived_at_ix',
+      contractVisible,
+      window,
+    ),
+    buildPqsUpdateEventCandidateBranch(
+      `${relations.exercises} exercise_row
         join ${relations.contractTpe} exercise_contract_tpe_row
           on exercise_contract_tpe_row.pk = exercise_row.contract_tpe_pk`,
-          'exercise_row.exercised_at_ix',
-          exerciseVisible,
-          window,
-        ),
-      ].join('\n\n      union all\n\n      ')}
-    ) visible_update_events`;
+      'exercise_row.exercised_at_ix',
+      exerciseVisible,
+      window,
+    ),
+  ];
+
+  return {
+    sql: `select distinct update_ix
+    from (
+      ${branches.map((branch) => branch.sql).join('\n\n      union all\n\n      ')}
+    ) visible_update_events`,
+    hasMoreSql: branches
+      .map((branch) => branch.hasMoreSql)
+      .join('\n      or '),
+  };
 }
 
 function buildPqsUpdateCandidateCte(
@@ -1321,14 +1360,14 @@ function buildPqsUpdateCandidateCte(
   }
 
   const ctes: string[] = [];
+  const hasMoreConditions: string[] = [];
   let partyCandidateName: string | null = null;
   let templateCandidateName: string | null = null;
   let visibleCandidateName: string | null = null;
 
   if (templateTypePks) {
     templateCandidateName = 'template_update_ix';
-    ctes.push(`${templateCandidateName} as materialized (
-    ${buildPqsUpdateEventCandidateSet(
+    const templateCandidates = buildPqsUpdateEventCandidateSet(
       node,
       window,
       templateTypePkFilterClause(
@@ -1339,15 +1378,20 @@ function buildPqsUpdateCandidateCte(
         'exercise_row.tpe_pk',
         templateTypePks.exercise,
       ),
-    )}
+    );
+    ctes.push(`${templateCandidateName} as materialized (
+    ${templateCandidates.sql}
   )`);
+    hasMoreConditions.push(templateCandidates.hasMoreSql);
   }
 
   if (hideSplice) {
     visibleCandidateName = 'visible_update_ix';
+    const visibleCandidates = buildPqsHideSpliceUpdateCandidateSet(node, window);
     ctes.push(`${visibleCandidateName} as materialized (
-    ${buildPqsHideSpliceUpdateCandidateSet(node, window)}
+    ${visibleCandidates.sql}
   )`);
+    hasMoreConditions.push(visibleCandidates.hasMoreSql);
   }
 
   const partyCandidateSourceNames = [
@@ -1372,15 +1416,17 @@ function buildPqsUpdateCandidateCte(
   if (normalizedParties.length > 0) {
     const partyCandidateNames = normalizedParties.map((partyId, index) => {
       const name = `party_${index}_update_ix`;
+      const partyCandidates = buildPqsUpdateEventCandidateSet(
+        node,
+        window,
+        partyWitnessArrayMatchCondition('contract_row.witnesses', partyId),
+        partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId),
+        partyCandidateSourceName,
+      );
       ctes.push(`${name} as materialized (
-    ${buildPqsUpdateEventCandidateSet(
-      node,
-      window,
-      partyWitnessArrayMatchCondition('contract_row.witnesses', partyId),
-      partyWitnessArrayMatchCondition('exercise_row.witnesses', partyId),
-      partyCandidateSourceName,
-    )}
+    ${partyCandidates.sql}
   )`);
+      hasMoreConditions.push(partyCandidates.hasMoreSql);
       return name;
     });
     partyCandidateName = 'party_update_ix';
@@ -1419,6 +1465,7 @@ function buildPqsUpdateCandidateCte(
   return {
     name,
     sql: ctes.join(',\n'),
+    hasMoreSql: hasMoreConditions.join('\n      or '),
   };
 }
 
@@ -1431,6 +1478,7 @@ function pqsRecentUpdatesQuery(
   templateTypePks?: TemplateTypePks,
   partyMode?: string,
   hideSplice?: boolean,
+  candidateLimit?: number,
 ): string {
   const relations = pqsCoreRelations(node);
   const normalizedBefore = normalizeEventOffsetCursor(before);
@@ -1438,7 +1486,7 @@ function pqsRecentUpdatesQuery(
   const queryLimit = limit + 1;
   const candidateWindow = buildPqsUpdateCandidateWindow(
     node,
-    queryLimit,
+    candidateLimit ?? queryLimit,
     normalizedBefore,
     normalizedAfter,
   );
@@ -1453,18 +1501,31 @@ function pqsRecentUpdatesQuery(
   const ctes = [
     candidateCte ? candidateWindow.cursorCte : null,
     candidateCte?.sql,
+    candidateCte
+      ? `candidate_progress as (
+        select (${candidateCte.hasMoreSql}) as has_more
+      )`
+      : null,
   ].filter((value): value is string => Boolean(value));
   const withClause = ctes.length > 0 ? `with ${ctes.join(',\n')}` : '';
   const fromClause = candidateCte
     ? `from ${candidateCte.name}
       join ${relations.transactions} tx
-        on tx.ix = ${candidateCte.name}.update_ix`
+        on tx.ix = ${candidateCte.name}.update_ix
+        ${
+          normalizedAfter && !normalizedBefore
+            ? `and tx.offset > ${normalizedAfter}`
+            : normalizedBefore
+              ? `and tx.offset < ${normalizedBefore}`
+              : ''
+        }
+      right join candidate_progress on true`
     : `from ${relations.transactions} tx`;
   const afterFilters = [
-    normalizedAfter ? `tx.offset > ${normalizedAfter}` : null,
+    candidateCte || !normalizedAfter ? null : `tx.offset > ${normalizedAfter}`,
   ].filter((value): value is string => Boolean(value));
   const olderFilters = [
-    normalizedBefore ? `tx.offset < ${normalizedBefore}` : null,
+    candidateCte || !normalizedBefore ? null : `tx.offset < ${normalizedBefore}`,
   ].filter((value): value is string => Boolean(value));
 
   if (normalizedAfter && !normalizedBefore) {
@@ -1478,7 +1539,8 @@ function pqsRecentUpdatesQuery(
         tx.transaction_id::text as update_id,
         tx.offset::text as event_offset,
         ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
-        tx.paid_traffic_cost::text as paid_traffic_cost
+        tx.paid_traffic_cost::text as paid_traffic_cost,
+        ${candidateCte ? 'candidate_progress.has_more' : 'false'} as candidate_has_more
       ${fromClause}
       ${whereClause}
       order by tx.offset asc
@@ -1495,7 +1557,8 @@ function pqsRecentUpdatesQuery(
       tx.transaction_id::text as update_id,
       tx.offset::text as event_offset,
       ${isoUtcTimestampExpression('tx.effective_at')} as record_time,
-      tx.paid_traffic_cost::text as paid_traffic_cost
+      tx.paid_traffic_cost::text as paid_traffic_cost,
+      ${candidateCte ? 'candidate_progress.has_more' : 'false'} as candidate_has_more
     ${fromClause}
     ${whereClause}
     order by tx.offset desc
@@ -3797,19 +3860,37 @@ export class PqsSummaryService {
     mode?: string,
     hideSplice?: boolean,
   ): Promise<UpdateMetaRow[]> {
-    const result = await query(
-      pqsRecentUpdatesQuery(
-        node,
-        limit,
-        before,
-        after,
-        parties,
-        templateTypePks,
-        mode,
-        hideSplice,
-      ),
-    );
-    return (result.rows as UpdateMetaRow[]) ?? [];
+    let candidateLimit = limit + 1;
+
+    for (;;) {
+      const result = await query(
+        pqsRecentUpdatesQuery(
+          node,
+          limit,
+          before,
+          after,
+          parties,
+          templateTypePks,
+          mode,
+          hideSplice,
+          candidateLimit,
+        ),
+      );
+      const rows = (result.rows as UpdateMetaRow[]) ?? [];
+      const candidateHasMore = rows.some(
+        (row) => row.candidate_has_more === true,
+      );
+      const updates = rows.filter(
+        (row): row is UpdateMetaRow & { update_id: string } =>
+          typeof row.update_id === 'string',
+      );
+
+      if (updates.length >= limit + 1 || !candidateHasMore) {
+        return updates;
+      }
+
+      candidateLimit *= 2;
+    }
   }
 
   async fetchNodeContracts(
