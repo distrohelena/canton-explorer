@@ -446,6 +446,7 @@ async function removeMovementTypeFilter(movementType: string) {
 watch(
   () => [route.fullPath, props.scope, props.tokenId],
   () => {
+    transfers.reset();
     void transfers.load();
   },
   { immediate: true },

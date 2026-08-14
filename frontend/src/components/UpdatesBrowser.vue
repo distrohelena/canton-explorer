@@ -429,6 +429,7 @@ defineExpose({
 watch(
   () => route.fullPath,
   () => {
+    updates.reset();
     void updates.load();
   },
   { immediate: true },

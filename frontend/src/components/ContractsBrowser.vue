@@ -367,6 +367,7 @@ watch(
   () => [route.fullPath, props.scope, props.nodeId, props.partyId],
   () => {
     syncFiltersFromRoute();
+    contracts.reset();
     void contracts.load();
   },
   { immediate: true },

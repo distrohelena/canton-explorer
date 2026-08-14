@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import { nextTick, reactive } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ContractsBrowser from './ContractsBrowser.vue';
 
@@ -29,17 +30,73 @@ vi.mock('../lib/api', () => ({
   fetchTemplates: fetchTemplatesMock,
 }));
 
-vi.mock('vue-router', () => ({
-  useRoute: () => route,
-  useRouter: () => ({ push: vi.fn() }),
-}));
+vi.mock('vue-router', async () => {
+  const { reactive } = await import('vue');
+  const routeState = reactive(route);
+  return {
+    useRoute: () => routeState,
+    useRouter: () => ({ push: vi.fn() }),
+  };
+});
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  route.fullPath =
+    '/contracts?before=before-1&node=node-1&party=Alice&party=Bob&partyMode=and&template=Pkg%3AT&hideSplice=true&limit=30';
+  route.query = {
+    before: 'before-1',
+    node: 'node-1',
+    party: ['Alice', 'Bob'],
+    partyMode: 'and',
+    template: 'Pkg:T',
+    hideSplice: 'true',
+    limit: '30',
+  };
 });
 
 describe('ContractsBrowser', () => {
+  it('clears prior rows when its route query changes before the replacement request settles', async () => {
+    let resolveReplacement!: (value: { limit: number; nextBefore: null; nextAfter: null; contracts: [] }) => void;
+    const replacement = new Promise<{ limit: number; nextBefore: null; nextAfter: null; contracts: [] }>((resolve) => {
+      resolveReplacement = resolve;
+    });
+    fetchLatestContractsMock
+      .mockResolvedValueOnce({
+        limit: 30,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: [{ contractId: 'old-contract', templateId: null }],
+      })
+      .mockReturnValueOnce(replacement);
+
+    render(ContractsBrowser, {
+      props: {
+        scope: 'global',
+        path: '/contracts',
+        title: 'Contracts',
+        advancedFilterId: 'contracts-filter',
+        nodeOptions: [],
+      },
+      global: {
+        stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } },
+      },
+    });
+
+    expect(await screen.findByText('old-contract')).toBeInTheDocument();
+
+    const reactiveRoute = reactive(route);
+    reactiveRoute.query = { party: 'Carol' };
+    reactiveRoute.fullPath = '/contracts?party=Carol';
+    await nextTick();
+
+    await waitFor(() => expect(fetchLatestContractsMock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('old-contract')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading contracts...')).toBeInTheDocument();
+
+    resolveReplacement({ limit: 30, nextBefore: null, nextAfter: null, contracts: [] });
+  });
+
   it('retries once automatically, exposes a local Retry, and preserves the current query', async () => {
     fetchLatestContractsMock
       .mockRejectedValueOnce(new Error('first contracts failure'))
