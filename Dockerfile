@@ -36,4 +36,5 @@ USER node
 EXPOSE 4600
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:4600/api/branding').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
-CMD ["node", "dist/src/main.js"]
+ENTRYPOINT ["node", "dist/src/cli.js"]
+CMD ["serve"]

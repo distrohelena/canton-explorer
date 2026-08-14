@@ -22,3 +22,10 @@ export async function runCli(
 
   throw new Error(`Unknown command: ${argv[0]}`);
 }
+
+if (require.main === module) {
+  void runCli(process.argv.slice(2)).catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

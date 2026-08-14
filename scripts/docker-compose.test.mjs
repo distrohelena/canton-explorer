@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('client Compose configuration renders one Explorer service with the required mounts and cache volume', (t) => {
+test('client Compose configuration renders the Explorer server and explicit index service', (t) => {
   const clientDirectory = mkdtempSync(path.join(os.tmpdir(), 'canton-explorer-client-'));
   t.after(() => rmSync(clientDirectory, { force: true, recursive: true }));
 
@@ -21,21 +21,27 @@ test('client Compose configuration renders one Explorer service with the require
   );
   mkdirSync(path.join(clientDirectory, 'debug-dars'));
 
-  execFileSync('docker', ['compose', '-f', 'compose.yaml', 'config', '--quiet'], {
+  execFileSync('docker', ['compose', '-f', 'compose.yaml', '--profile', 'indexes', 'config', '--quiet'], {
     cwd: clientDirectory,
     stdio: 'inherit',
   });
-  const rendered = JSON.parse(execFileSync('docker', ['compose', '-f', 'compose.yaml', 'config', '--format', 'json'], {
+  const rendered = JSON.parse(execFileSync('docker', ['compose', '-f', 'compose.yaml', '--profile', 'indexes', 'config', '--format', 'json'], {
     cwd: clientDirectory,
     encoding: 'utf8',
   }));
 
-  assert.deepEqual(Object.keys(rendered.services), ['canton-explorer']);
+  assert.deepEqual(Object.keys(rendered.services).sort(), ['canton-explorer', 'canton-explorer-indexes']);
   assert.deepEqual(Object.keys(rendered.volumes), ['explorer-data']);
   assert.match(rendered.services['canton-explorer'].image, /^ghcr\.io\/distrohelena\/canton-explorer:/);
   assert.deepEqual(
     rendered.services['canton-explorer'].volumes.map(({ target }) => target).sort(),
     ['/app/config/nodes.local.json', '/app/data', '/app/debug-dars'],
+  );
+  assert.deepEqual(rendered.services['canton-explorer-indexes'].profiles, ['indexes']);
+  assert.deepEqual(rendered.services['canton-explorer-indexes'].command, ['indexes', 'apply']);
+  assert.deepEqual(
+    rendered.services['canton-explorer-indexes'].volumes.map(({ target }) => target).sort(),
+    ['/app/config/nodes.local.json', '/app/debug-dars'],
   );
 });
 

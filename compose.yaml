@@ -16,5 +16,17 @@ services:
       - ./debug-dars:/app/debug-dars:ro
       - explorer-data:/app/data
 
+  canton-explorer-indexes:
+    image: ghcr.io/distrohelena/canton-explorer:${CANTON_EXPLORER_VERSION:-latest}
+    profiles: ["indexes"]
+    command: ["indexes", "apply"]
+    env_file:
+      - .env
+    environment:
+      NODE_CONFIG_PATH: /app/config/nodes.local.json
+    volumes:
+      - ./config/nodes.local.json:/app/config/nodes.local.json:ro
+      - ./debug-dars:/app/debug-dars:ro
+
 volumes:
   explorer-data:
