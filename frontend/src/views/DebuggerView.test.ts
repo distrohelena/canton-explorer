@@ -451,6 +451,7 @@ describe('DebuggerView', () => {
   });
 
   it('retries a failed node template request locally while retaining successful node templates', async () => {
+    vi.mocked(fetchNodeTemplates).mockClear();
     vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
     vi.mocked(fetchNodes).mockResolvedValue([
       {
