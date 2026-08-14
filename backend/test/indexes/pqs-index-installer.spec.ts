@@ -3,6 +3,7 @@ import {
   applyPqsIndexes,
   createPqsIndexDatabase,
   inspectPqsIndexes,
+  repairPqsIndexes,
   type PqsIndexDatabase,
 } from '../../src/indexes/pqs-index-installer';
 
@@ -11,9 +12,108 @@ type FakeExecutorOptions = {
   failSql?: RegExp;
   contractPartitions?: readonly string[];
   exercisePartitions?: readonly string[];
+  schemaSupported?: boolean;
   transactionIdType?: string | null;
-  indexStatuses?: Record<string, { is_valid: boolean; is_ready: boolean }>;
+  indexStatuses?: Record<
+    string,
+    {
+      is_valid: boolean;
+      is_ready: boolean;
+      table_name?: string;
+      access_method?: string;
+      is_unique?: boolean;
+      key_expressions?: string[];
+      included_expressions?: string[];
+      operator_classes?: string[];
+      sort_options?: number[];
+      predicate?: string | null;
+      index_definition?: string;
+      size_bytes?: string;
+    }
+  >;
 };
+
+function supportedSchemaRows() {
+  return [
+    ['__contracts', 'p', 'LIST (tpe_pk)', 'tpe_pk', 'bigint'],
+    ['__contracts', 'p', 'LIST (tpe_pk)', 'create_event_pk', 'bigint'],
+    ['__contracts', 'p', 'LIST (tpe_pk)', 'created_at_ix', 'bigint'],
+    ['__contracts', 'p', 'LIST (tpe_pk)', 'archived_at_ix', 'bigint'],
+    ['__contracts', 'p', 'LIST (tpe_pk)', 'witnesses', 'text[]'],
+    ['__exercises', 'p', 'LIST (tpe_pk)', 'tpe_pk', 'bigint'],
+    ['__exercises', 'p', 'LIST (tpe_pk)', 'witnesses', 'text[]'],
+    ['__transactions', 'r', null, 'ix', 'bigint'],
+    ['__transactions', 'r', null, 'offset', 'bigint'],
+    ['__transactions', 'r', null, 'transaction_id', 'text'],
+    ['flyway_schema_history', 'r', null, 'installed_rank', 'integer'],
+    [
+      'flyway_schema_history',
+      'r',
+      null,
+      'version',
+      'character varying(50)',
+    ],
+    ['flyway_schema_history', 'r', null, 'success', 'boolean'],
+  ].map(
+    ([relation_name, relation_kind, partition_key, column_name, column_type]) => ({
+      relation_name,
+      relation_kind,
+      partition_key,
+      column_name,
+      column_type,
+    }),
+  );
+}
+
+function inferredIndexStatus(
+  indexName: string,
+  status: NonNullable<FakeExecutorOptions['indexStatuses']>[string],
+) {
+  const witness = indexName.match(
+    /^canton_explorer_(contracts|exercises)_(\d+)_witnesses_gin$/,
+  );
+  const active = indexName.match(
+    /^canton_explorer_contracts_(\d+)_active_created_ix$/,
+  );
+  const isTransaction =
+    indexName === 'canton_explorer_transactions_transaction_id_pattern_ops';
+  const tableName = witness
+    ? `__${witness[1]}_${witness[2]}`
+    : active
+      ? `__contracts_${active[1]}`
+      : '__transactions';
+  const accessMethod = witness ? 'gin' : 'btree';
+  const keyExpressions = witness
+    ? ['witnesses']
+    : active
+      ? ['created_at_ix', 'create_event_pk']
+      : ['transaction_id'];
+  const operatorClasses = witness
+    ? ['array_ops']
+    : active
+      ? ['int8_ops', 'int8_ops']
+      : ['text_pattern_ops'];
+  const predicate = active ? 'archived_at_ix IS NULL' : null;
+  const sortOptions = active ? [3, 3] : [0];
+
+  return {
+    index_name: indexName,
+    table_schema: 'public',
+    table_name: status.table_name ?? tableName,
+    access_method: status.access_method ?? accessMethod,
+    is_unique: status.is_unique ?? false,
+    key_expressions: status.key_expressions ?? keyExpressions,
+    included_expressions: status.included_expressions ?? [],
+    operator_classes: status.operator_classes ?? operatorClasses,
+    sort_options: status.sort_options ?? sortOptions,
+    predicate: status.predicate === undefined ? predicate : status.predicate,
+    index_definition:
+      status.index_definition ?? `CREATE INDEX ${indexName} ON public.${tableName}`,
+    size_bytes: status.size_bytes ?? '8192',
+    is_valid: status.is_valid,
+    is_ready: status.is_ready,
+  };
+}
 
 function fakeDatabase(options: FakeExecutorOptions = {}): PqsIndexDatabase & {
   sql: string[];
@@ -30,6 +130,46 @@ function fakeDatabase(options: FakeExecutorOptions = {}): PqsIndexDatabase & {
       sql.push(statement);
       if (options.failSql?.test(statement)) {
         throw new Error(`Failed statement: ${statement}`);
+      }
+      if (statement.includes('canton-explorer:schema-shape')) {
+        return {
+          rows: (options.schemaSupported === false
+            ? []
+            : supportedSchemaRows()) as TRow[],
+        };
+      }
+      if (statement.includes('canton-explorer:pqs-version')) {
+        return { rows: [{ version: '041' }] as TRow[] };
+      }
+      if (statement.includes('canton-explorer:relation-stats')) {
+        return {
+          rows: [
+            {
+              relation_name: '__contracts',
+              partition_count: '2',
+              estimated_rows: '2000',
+              table_size_bytes: '131072',
+              index_size_bytes: '65536',
+              total_size_bytes: '196608',
+            },
+            {
+              relation_name: '__exercises',
+              partition_count: '2',
+              estimated_rows: '1000',
+              table_size_bytes: '65536',
+              index_size_bytes: '32768',
+              total_size_bytes: '98304',
+            },
+            {
+              relation_name: '__transactions',
+              partition_count: '0',
+              estimated_rows: '500',
+              table_size_bytes: '32768',
+              index_size_bytes: '16384',
+              total_size_bytes: '49152',
+            },
+          ] as TRow[],
+        };
       }
       if (statement.includes('from pg_inherits')) {
         return {
@@ -56,14 +196,15 @@ function fakeDatabase(options: FakeExecutorOptions = {}): PqsIndexDatabase & {
         };
       }
       if (statement.includes('from pg_index')) {
-        const expectedNames = (values[1] as readonly string[]) ?? [];
         return {
-          rows: expectedNames
-            .flatMap((index_name) => {
-              const status = indexStatuses.get(index_name);
-              return status ? [{ index_name, ...status }] : [];
-            })
-            .map((row) => row as TRow),
+          rows: [...indexStatuses.entries()].map(([indexName, status]) =>
+            inferredIndexStatus(indexName, status) as TRow,
+          ),
+        };
+      }
+      if (statement.trimStart().startsWith('explain (format json)')) {
+        return {
+          rows: [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Limit' } }] }] as TRow[],
         };
       }
       if (statement.startsWith('create index concurrently')) {
@@ -106,6 +247,20 @@ describe('PQS index installer', () => {
       /insert into .*canton_explorer_index_migrations/,
     );
     expect(database.ended).toBe(true);
+  });
+
+  it('rejects an empty or unsupported schema before creating the migration table', async () => {
+    const database = fakeDatabase({ schemaSupported: false });
+
+    await expect(
+      applyPqsIndexes('postgres://pqs', 'public', {
+        createDatabase: databaseFactory(database),
+      }),
+    ).rejects.toThrow(/unsupported PQS schema/i);
+
+    expect(database.sql.join('\n')).not.toMatch(
+      /create table|create index|drop index|insert into/i,
+    );
   });
 
   it('uses one dedicated connection for the advisory lock lifecycle and closes it', async () => {
@@ -185,7 +340,54 @@ describe('PQS index installer', () => {
     expect(sql).not.toMatch(/on "public"\."__exercises" using gin/);
   });
 
-  it('drops an invalid same-name index concurrently before rebuilding it', async () => {
+  it('reports a valid same-name index with a different definition as a conflict', async () => {
+    const database = fakeDatabase({
+      indexStatuses: {
+        canton_explorer_contracts_42_witnesses_gin: {
+          is_valid: true,
+          is_ready: true,
+          table_name: '__contracts_43',
+          access_method: 'btree',
+          is_unique: true,
+          key_expressions: ['contract_id'],
+          included_expressions: ['witnesses'],
+          operator_classes: ['text_ops'],
+          sort_options: [1],
+          predicate: 'contract_id IS NOT NULL',
+        },
+      },
+    });
+
+    const inspection = await inspectPqsIndexes('postgres://pqs', 'public', {
+      createDatabase: databaseFactory(database),
+    });
+    expect(inspection.conflicts).toEqual([
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_42_witnesses_gin',
+        reasons: expect.arrayContaining([
+          expect.stringContaining('target table'),
+          expect.stringContaining('access method'),
+          expect.stringContaining('uniqueness'),
+          expect.stringContaining('indexed expressions'),
+          expect.stringContaining('included expressions'),
+          expect.stringContaining('operator classes'),
+          expect.stringContaining('sort options'),
+          expect.stringContaining('predicate'),
+        ]),
+      }),
+    ]);
+
+    await expect(
+      applyPqsIndexes('postgres://pqs', 'public', {
+        createDatabase: databaseFactory(database),
+      }),
+    ).rejects.toThrow(/conflicting Explorer index/i);
+    expect(database.sql.join('\n')).not.toMatch(
+      /create table|create index|drop index|insert into/i,
+    );
+  });
+
+  it('makes apply fail safely on an invalid index and repairs it only through repair', async () => {
     const database = fakeDatabase({
       indexStatuses: {
         canton_explorer_contracts_42_witnesses_gin: {
@@ -195,7 +397,16 @@ describe('PQS index installer', () => {
       },
     });
 
-    await applyPqsIndexes('postgres://pqs', 'public', {
+    await expect(
+      applyPqsIndexes('postgres://pqs', 'public', {
+        createDatabase: databaseFactory(database),
+      }),
+    ).rejects.toThrow(/indexes repair/i);
+
+    expect(database.sql.join('\n')).not.toMatch(/drop index concurrently/i);
+    database.sql.length = 0;
+
+    await repairPqsIndexes('postgres://pqs', 'public', {
       createDatabase: databaseFactory(database),
     });
 
@@ -208,7 +419,7 @@ describe('PQS index installer', () => {
     );
   });
 
-  it('previews an invalid-index repair in the same drop-then-create order as apply', async () => {
+  it('separates safe apply SQL from explicit invalid-index repair SQL', async () => {
     const database = fakeDatabase({
       indexStatuses: {
         canton_explorer_contracts_42_witnesses_gin: {
@@ -226,24 +437,43 @@ describe('PQS index installer', () => {
       'drop index concurrently if exists "public"."canton_explorer_contracts_42_witnesses_gin"';
     const create =
       'create index concurrently if not exists "canton_explorer_contracts_42_witnesses_gin" on "public"."__contracts_42" using gin (witnesses)';
-    expect(inspection.proposedSql).toContain(drop);
-    expect(inspection.proposedSql).toContain(create);
-    expect(inspection.proposedSql.indexOf(drop)).toBeLessThan(
-      inspection.proposedSql.indexOf(create),
+    expect(inspection.proposedSql).not.toContain(drop);
+    expect(inspection.proposedSql).not.toContain(create);
+    expect(inspection.repairSql).toContain(drop);
+    expect(inspection.repairSql).toContain(create);
+    expect(inspection.repairSql.indexOf(drop)).toBeLessThan(
+      inspection.repairSql.indexOf(create),
     );
     expect(database.sql.join('\n')).not.toMatch(/drop index|create index/i);
   });
 
-  it('inspects through a dedicated read connection using catalog queries only', async () => {
+  it('reports schema version, definitions, relation sizes, and one bounded plan read-only', async () => {
     const database = fakeDatabase();
 
     const inspection = await inspectPqsIndexes('postgres://pqs', 'public', {
       createDatabase: databaseFactory(database),
     });
 
-    expect(inspection.proposedSql.join('\n')).toMatch(/active_created_ix/);
+    expect(inspection.schemaValidation).toEqual(
+      expect.objectContaining({ supported: true, pqsVersion: '041' }),
+    );
+    expect(inspection.relationStats).toContainEqual(
+      expect.objectContaining({
+        relationName: '__contracts',
+        partitionCount: 2,
+        totalSizeBytes: '196608',
+      }),
+    );
+    expect(inspection.representativeExplain).toEqual(
+      expect.objectContaining({ relation: '__contracts_42' }),
+    );
+    expect(
+      database.sql.filter((statement) =>
+        statement.trimStart().startsWith('explain (format json)'),
+      ),
+    ).toHaveLength(1);
     expect(database.sql.join('\n')).not.toMatch(
-      /explain|create index|create table|insert into/i,
+      /create index|create table|drop index|insert into/i,
     );
     expect(database.ended).toBe(true);
   });

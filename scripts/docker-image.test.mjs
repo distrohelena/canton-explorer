@@ -80,6 +80,7 @@ test('production image exposes the explicit index command', { timeout: 300_000 }
   const inspect = await docker('run', '--rm', imageTag, 'indexes', 'inspect', '--help');
 
   assert.match(inspect.stdout, /canton-explorer indexes inspect/);
+  assert.match(inspect.stdout, /canton-explorer indexes repair/);
 });
 
 test('Docker build context excludes local dotenv files but retains the packaged frontend config', { timeout: 300_000 }, async (t) => {

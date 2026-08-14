@@ -65,5 +65,9 @@ test('documented Compose index commands preserve the indexes subcommand', () => 
     readme,
     /docker compose --profile indexes run --rm canton-explorer-indexes indexes apply/,
   );
+  assert.match(
+    readme,
+    /docker compose --profile indexes run --rm canton-explorer-indexes indexes repair/,
+  );
   assert.match(readme, /no trailing arguments uses its default\n`indexes apply` command/);
 });

@@ -4272,10 +4272,99 @@ describe('PqsSummaryService', () => {
     expect(sql).toContain('with cursor_boundary as');
     expect(sql).toContain('where cursor_tx.offset >= 3322');
     expect(sql).toContain(
-      'contract_row.created_at_ix < (select cursor_ix from cursor_boundary)',
+      '(contract_row.created_at_ix, contract_row.create_event_pk) <',
     );
     expect(sql).toContain('active_contract_page as');
-    expect(sql).toContain('order by contract_row.created_at_ix desc');
+    expect(sql).toContain(
+      'order by contract_row.created_at_ix desc, contract_row.create_event_pk desc',
+    );
+  });
+
+  it('uses a compound contract-event cursor without skipping a transaction page boundary', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00c',
+            template_id: 'Main:C',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '30',
+          },
+          {
+            contract_id: '00b',
+            template_id: 'Main:B',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '20',
+          },
+          {
+            contract_id: '00a',
+            template_id: 'Main:A',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '10',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00a',
+            template_id: 'Main:A',
+            created_record_time: '2026-07-01T12:02:00.000Z',
+            created_event_offset: '3322',
+            created_at_ix: '77',
+            create_event_pk: '10',
+          },
+        ],
+      });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    } as const;
+
+    const firstPage = await service.fetchNodeContracts(node, { limit: 2 });
+    expect(firstPage.contracts.map((contract) => contract.contractId)).toEqual([
+      '00c',
+      '00b',
+    ]);
+    expect(firstPage.nextBefore).toMatch(/^acs1\./);
+    const cursorPayload = JSON.parse(
+      Buffer.from(firstPage.nextBefore!.slice('acs1.'.length), 'base64url').toString(
+        'utf8',
+      ),
+    );
+    expect(cursorPayload).toEqual({
+      eventOffset: '3322',
+      createdAtIx: '77',
+      createEventPk: '20',
+    });
+
+    const secondPage = await service.fetchNodeContracts(node, {
+      limit: 2,
+      before: firstPage.nextBefore ?? undefined,
+    });
+    expect(secondPage.contracts.map((contract) => contract.contractId)).toEqual([
+      '00a',
+    ]);
+    const secondSql = String(query.mock.calls[1]?.[0]);
+    expect(secondSql).toContain('select 77::bigint as cursor_ix');
+    expect(secondSql).toContain('20::bigint as cursor_event_pk');
+    expect(secondSql).toContain(
+      '(contract_row.created_at_ix, contract_row.create_event_pk) <',
+    );
   });
 
   it('prunes contract partitions for template-filtered active contracts', async () => {
@@ -4563,7 +4652,9 @@ describe('PqsSummaryService', () => {
       expect.stringContaining('where cursor_tx.offset <= 101'),
     );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('contract_row.created_at_ix >'),
+      expect.stringContaining(
+        '(contract_row.created_at_ix, contract_row.create_event_pk) >',
+      ),
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('order by contract_row.created_at_ix asc'),

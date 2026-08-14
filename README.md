@@ -92,6 +92,11 @@ Start by inspecting the configured nodes and their required indexes:
 npx @distrohelena/canton-explorer indexes inspect --config ./config/nodes.local.json
 ```
 
+Inspection is read-only. It validates the PQS table/column/partition shape,
+reports the latest PQS Flyway version without modifying its history, lists
+actual Explorer index definitions and sizes, summarizes relation/partition
+sizes, and runs one bounded `EXPLAIN (FORMAT JSON)` without `ANALYZE`.
+
 Apply indexes only after reviewing that output. Stage one node first when
 working with a large production ledger:
 
@@ -110,6 +115,23 @@ DDL before changing a database:
 npx @distrohelena/canton-explorer indexes apply --config ./config/nodes.local.json --dry-run
 ```
 
+`indexes apply` never drops an index. It stops before applying changes when an
+existing valid index has an Explorer-owned name but a different table, access
+method, key expression, predicate, sort option, uniqueness, or operator class.
+Resolve that valid-name conflict manually after reviewing its full definition.
+
+An interrupted concurrent build can leave an invalid PostgreSQL index. Apply
+reports that state and requires the separately explicit repair command:
+
+```bash
+npx @distrohelena/canton-explorer indexes repair --config ./config/nodes.local.json --node participant-1
+```
+
+Repair is the only command that may run `DROP INDEX CONCURRENTLY`; it removes
+and rebuilds invalid expected Explorer indexes, then creates any still-missing
+indexes. It does not remove a valid mismatched index. Review the `inspect`
+output's `explicit-repair-sql` section and stage repair on one node first.
+
 The published Docker image exposes the same command. The default Compose
 service continues to start the HTTP Explorer only; the profile-gated service
 must be run manually. Running it with no trailing arguments uses its default
@@ -118,6 +140,7 @@ must be run manually. Running it with no trailing arguments uses its default
 ```bash
 docker compose --profile indexes run --rm canton-explorer-indexes indexes inspect
 docker compose --profile indexes run --rm canton-explorer-indexes indexes apply
+docker compose --profile indexes run --rm canton-explorer-indexes indexes repair
 ```
 
 The index command needs PQS availability, not a gRPC connection. Each valid

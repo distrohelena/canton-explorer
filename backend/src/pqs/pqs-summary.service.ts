@@ -192,7 +192,19 @@ interface ActiveContractRow {
   template_id: string | null;
   created_record_time: string | null;
   created_event_offset: string | number | null;
+  created_at_ix?: string | number | null;
+  create_event_pk?: string | number | null;
 }
+
+interface ActiveContractCursor {
+  eventOffset: string;
+  createdAtIx: string;
+  createEventPk: string;
+}
+
+type DecodedActiveContractCursor =
+  | { kind: 'compound'; value: ActiveContractCursor }
+  | { kind: 'legacy'; eventOffset: string };
 
 interface GlobalUpdateCursor {
   recordTime: string | null;
@@ -1538,8 +1550,8 @@ function pqsActiveContractsQuery(
   hideSplice?: boolean,
 ): string {
   const relations = pqsCoreRelations(node);
-  const normalizedBefore = normalizeEventOffsetCursor(before);
-  const normalizedAfter = normalizeEventOffsetCursor(after);
+  const normalizedBefore = decodeActiveContractCursor(before);
+  const normalizedAfter = decodeActiveContractCursor(after);
   const queryLimit = limit + 1;
   const useAfterCursor = Boolean(normalizedAfter && !normalizedBefore);
   const orderDirection = useAfterCursor ? 'asc' : 'desc';
@@ -1550,41 +1562,53 @@ function pqsActiveContractsQuery(
     partyMode,
     hideSplice,
   );
-  const cursorBoundary = useAfterCursor
-    ? `cursor_boundary as (
+  const selectedCursor = useAfterCursor ? normalizedAfter : normalizedBefore;
+  const cursorBoundary =
+    selectedCursor?.kind === 'compound'
+      ? `cursor_boundary as (
+      select ${selectedCursor.value.createdAtIx}::bigint as cursor_ix,
+        ${selectedCursor.value.createEventPk}::bigint as cursor_event_pk
+    )`
+      : useAfterCursor && normalizedAfter?.kind === 'legacy'
+        ? `cursor_boundary as (
       select coalesce(
         (
           select cursor_tx.ix
           from ${relations.transactions} cursor_tx
-          where cursor_tx.offset <= ${normalizedAfter}
+          where cursor_tx.offset <= ${normalizedAfter.eventOffset}
           order by cursor_tx.offset desc
           limit 1
         ),
         -1::bigint
-      ) as cursor_ix
+      ) as cursor_ix,
+      9223372036854775807::bigint as cursor_event_pk
     )`
-    : normalizedBefore
-      ? `cursor_boundary as (
+        : normalizedBefore?.kind === 'legacy'
+          ? `cursor_boundary as (
       select coalesce(
         (
           select cursor_tx.ix
           from ${relations.transactions} cursor_tx
-          where cursor_tx.offset >= ${normalizedBefore}
+          where cursor_tx.offset >= ${normalizedBefore.eventOffset}
           order by cursor_tx.offset asc
           limit 1
         ),
         9223372036854775807::bigint
-      ) as cursor_ix
+      ) as cursor_ix,
+      -9223372036854775808::bigint as cursor_event_pk
     )`
-      : null;
+          : null;
   const cursorFilter = useAfterCursor
-    ? 'contract_row.created_at_ix > (select cursor_ix from cursor_boundary)'
+    ? `(contract_row.created_at_ix, contract_row.create_event_pk) >
+        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary))`
     : normalizedBefore
-      ? 'contract_row.created_at_ix < (select cursor_ix from cursor_boundary)'
+      ? `(contract_row.created_at_ix, contract_row.create_event_pk) <
+        ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary))`
       : null;
   const whereConditions = [
     'contract_row.archived_at_ix is null',
     'contract_row.created_at_ix is not null',
+    'contract_row.create_event_pk is not null',
     cursorFilter,
     filterClause,
   ].filter((value): value is string => Boolean(value));
@@ -1599,10 +1623,11 @@ function pqsActiveContractsQuery(
       select
         contract_row.contract_id,
         contract_row.tpe_pk,
-        contract_row.created_at_ix
+        contract_row.created_at_ix,
+        contract_row.create_event_pk
       from ${relations.contracts} contract_row
       ${whereClause}
-      order by contract_row.created_at_ix ${orderDirection}
+      order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}
       limit ${queryLimit}
     )`,
   ].filter((value): value is string => Boolean(value));
@@ -1613,13 +1638,15 @@ function pqsActiveContractsQuery(
       contract_row.contract_id::text as contract_id,
       ${contractTemplateIdentifierExpression('contract_tpe_row')} as template_id,
       ${isoUtcTimestampExpression('tx.effective_at')} as created_record_time,
-      tx.offset::text as created_event_offset
+      tx.offset::text as created_event_offset,
+      contract_row.created_at_ix::text as created_at_ix,
+      contract_row.create_event_pk::text as create_event_pk
     from active_contract_page contract_row
     join ${relations.contractTpe} contract_tpe_row
       on contract_tpe_row.pk = contract_row.tpe_pk
     join ${relations.transactions} tx
       on tx.ix = contract_row.created_at_ix
-    order by contract_row.created_at_ix ${orderDirection}
+    order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}
   `;
 }
 
@@ -2312,6 +2339,85 @@ function normalizeEventOffsetCursor(value?: string): string | null {
   }
 
   return trimmed.replace(/^0+(?=\d)/, '');
+}
+
+function normalizeActiveContractCursorPart(
+  value: string | number | null | undefined,
+): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const normalized = normalizeEventOffsetCursor(String(value));
+  if (
+    normalized === null ||
+    BigInt(normalized) > 9223372036854775807n
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function encodeActiveContractCursor(row: ActiveContractRow): string | null {
+  const eventOffset = normalizeActiveContractCursorPart(
+    row.created_event_offset,
+  );
+  if (eventOffset === null) {
+    return null;
+  }
+
+  const createdAtIx = normalizeActiveContractCursorPart(row.created_at_ix);
+  const createEventPk = normalizeActiveContractCursorPart(row.create_event_pk);
+  if (createdAtIx === null || createEventPk === null) {
+    // Compatibility for older PQS-shaped test doubles and pre-compound API
+    // cursors. Real supported PQS schemas always return both event keys.
+    return eventOffset;
+  }
+
+  return `acs1.${Buffer.from(
+    JSON.stringify({
+      eventOffset,
+      createdAtIx,
+      createEventPk,
+    } satisfies ActiveContractCursor),
+    'utf8',
+  ).toString('base64url')}`;
+}
+
+function decodeActiveContractCursor(
+  cursor?: string,
+): DecodedActiveContractCursor | null {
+  if (!cursor || !cursor.trim()) {
+    return null;
+  }
+
+  if (cursor.startsWith('acs1.')) {
+    try {
+      const decoded = JSON.parse(
+        Buffer.from(cursor.slice('acs1.'.length), 'base64url').toString('utf8'),
+      ) as Partial<ActiveContractCursor>;
+      const eventOffset = normalizeActiveContractCursorPart(
+        decoded.eventOffset,
+      );
+      const createdAtIx = normalizeActiveContractCursorPart(
+        decoded.createdAtIx,
+      );
+      const createEventPk = normalizeActiveContractCursorPart(
+        decoded.createEventPk,
+      );
+      if (eventOffset && createdAtIx && createEventPk) {
+        return {
+          kind: 'compound',
+          value: { eventOffset, createdAtIx, createEventPk },
+        };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  const eventOffset = normalizeEventOffsetCursor(cursor);
+  return eventOffset ? { kind: 'legacy', eventOffset } : null;
 }
 
 function requireEventOffsetLiteral(value: string): string {
@@ -3548,7 +3654,9 @@ export class PqsSummaryService {
     const templates = options?.templates;
     const partyMode = options?.partyMode;
     const hideSplice = options?.hideSplice === true;
-    const useAfterCursor = Boolean(after && !before);
+    const useAfterCursor = Boolean(
+      decodeActiveContractCursor(after) && !decodeActiveContractCursor(before),
+    );
     const query = client.query.bind(client);
     const normalizedTemplates = normalizeTemplateFilters(templates);
     const templateTypePks =
@@ -3576,9 +3684,7 @@ export class PqsSummaryService {
       contractId: row.contract_id,
       templateId: this.normalizeTemplateIdentifier(row.template_id),
       createdRecordTime: row.created_record_time ?? null,
-      createdEventOffset: this.normalizeOptionalScalar(
-        row.created_event_offset,
-      ),
+      cursor: encodeActiveContractCursor(row),
     }));
 
     return {
@@ -3588,17 +3694,17 @@ export class PqsSummaryService {
       nextBefore:
         orderedContracts.length > 0 && (useAfterCursor || hasMoreInQuery)
           ? (orderedContracts[orderedContracts.length - 1]
-              ?.createdEventOffset ?? null)
+              ?.cursor ?? null)
           : null,
       nextAfter:
         orderedContracts.length === 0
           ? null
           : useAfterCursor
             ? hasMoreInQuery
-              ? (orderedContracts[0]?.createdEventOffset ?? null)
+              ? (orderedContracts[0]?.cursor ?? null)
               : null
             : before
-              ? (orderedContracts[0]?.createdEventOffset ?? null)
+              ? (orderedContracts[0]?.cursor ?? null)
               : null,
       contracts: orderedContracts.map((contract) => ({
         contractId: contract.contractId,

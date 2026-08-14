@@ -26,12 +26,55 @@ function dependenciesWithNodes(nodes: readonly NodeConfig[]) {
     .fn<IndexCommandDependencies['inspectPqsIndexes']>()
     .mockResolvedValue({
       schema: 'public',
+      schemaValidation: {
+        supported: true,
+        pqsVersion: '041',
+        checkedRelations: ['__contracts', '__exercises', '__transactions'],
+      },
       contractPartitions: ['__contracts_17'],
       exercisePartitions: ['__exercises_17'],
       hasExercises: true,
       transactionIdIsText: true,
-      indexStatuses: [],
+      indexStatuses: [
+        {
+          name: 'canton_explorer_contracts_17_witnesses_gin',
+          tableSchema: 'public',
+          tableName: '__contracts_17',
+          accessMethod: 'gin',
+          keyExpressions: ['witnesses'],
+          includedExpressions: [],
+          operatorClasses: ['array_ops'],
+          sortOptions: [0],
+          predicate: null,
+          definition:
+            'CREATE INDEX canton_explorer_contracts_17_witnesses_gin ON public.__contracts_17 USING gin (witnesses)',
+          sizeBytes: '8192',
+          isUnique: false,
+          isValid: true,
+          isReady: true,
+          state: 'ready',
+          definitionMatches: true,
+          mismatchReasons: [],
+        },
+      ],
+      conflicts: [],
+      relationStats: [
+        {
+          relationName: '__contracts',
+          partitionCount: 1,
+          estimatedRows: '1000',
+          tableSizeBytes: '65536',
+          indexSizeBytes: '32768',
+          totalSizeBytes: '98304',
+        },
+      ],
+      representativeExplain: {
+        relation: '__contracts_17',
+        sql: 'explain (format json) select create_event_pk from public.__contracts_17 limit 31',
+        plan: [{ Plan: { 'Node Type': 'Limit' } }],
+      },
       proposedSql: ['create index concurrently index_17'],
+      repairSql: [],
     });
   const applyPqsIndexes = jest
     .fn<IndexCommandDependencies['applyPqsIndexes']>()
@@ -41,6 +84,17 @@ function dependenciesWithNodes(nodes: readonly NodeConfig[]) {
       newlyAppliedVersions: ['001-witnesses'],
       skippedVersions: [],
       appliedStatements: 1,
+      repairedIndexes: [],
+    });
+  const repairPqsIndexes = jest
+    .fn<IndexCommandDependencies['repairPqsIndexes']>()
+    .mockResolvedValue({
+      schema: 'public',
+      appliedVersions: ['001-witnesses'],
+      newlyAppliedVersions: [],
+      skippedVersions: [],
+      appliedStatements: 2,
+      repairedIndexes: ['canton_explorer_contracts_17_witnesses_gin'],
     });
   const onModuleDestroy = jest.fn<() => Promise<void>>().mockResolvedValue();
   const writeOutput = jest.fn<(line: string) => void>();
@@ -56,6 +110,7 @@ function dependenciesWithNodes(nodes: readonly NodeConfig[]) {
     }),
     inspectPqsIndexes,
     applyPqsIndexes,
+    repairPqsIndexes,
     writeOutput,
   };
 
@@ -63,6 +118,7 @@ function dependenciesWithNodes(nodes: readonly NodeConfig[]) {
     dependencies,
     inspectPqsIndexes,
     applyPqsIndexes,
+    repairPqsIndexes,
     onModuleDestroy,
     writeOutput,
   };
@@ -117,6 +173,19 @@ describe('runIndexCommand', () => {
     expect(setup.writeOutput).toHaveBeenCalledWith(
       expect.stringContaining('create index concurrently index_17'),
     );
+  });
+
+  it('runs destructive invalid-index recovery only for the explicit repair command', async () => {
+    const setup = dependenciesWithNodes([pqsNode]);
+
+    const result = await runIndexCommand(['repair'], setup.dependencies);
+
+    expect(result.repairedNodeIds).toEqual(['pqs-node']);
+    expect(setup.repairPqsIndexes).toHaveBeenCalledWith(
+      'postgres:///pqs-node',
+      'public',
+    );
+    expect(setup.applyPqsIndexes).not.toHaveBeenCalled();
   });
 
   it('selects one requested node and rejects an unknown node', async () => {
@@ -199,5 +268,25 @@ describe('runIndexCommand', () => {
     expect(writeOutput).toHaveBeenCalledWith(
       expect.stringContaining('canton-explorer indexes inspect'),
     );
+    expect(writeOutput).toHaveBeenCalledWith(
+      expect.stringContaining('canton-explorer indexes repair'),
+    );
+  });
+
+  it('prints schema, relation, index-definition, and bounded-plan evidence during inspect', async () => {
+    const setup = dependenciesWithNodes([pqsNode]);
+
+    await runIndexCommand(['inspect'], setup.dependencies);
+
+    const output = setup.writeOutput.mock.calls
+      .map(([line]) => line)
+      .join('\n');
+    expect(output).toContain('pqs-version=041');
+    expect(output).toContain('relation=__contracts');
+    expect(output).toContain(
+      'index=canton_explorer_contracts_17_witnesses_gin',
+    );
+    expect(output).toContain('CREATE INDEX canton_explorer_contracts_17');
+    expect(output).toContain('explain-relation=__contracts_17');
   });
 });

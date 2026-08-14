@@ -5,17 +5,19 @@ import { PqsManagerFactory } from '../pqs/pqs-manager.factory';
 import {
   applyPqsIndexes,
   inspectPqsIndexes,
+  repairPqsIndexes,
   type PqsIndexApplyResult,
   type PqsIndexInspection,
 } from './pqs-index-installer';
 
-type IndexAction = 'inspect' | 'apply';
+type IndexAction = 'inspect' | 'apply' | 'repair';
 
 export type IndexCommandResult = {
   command: IndexAction;
   dryRun: boolean;
   inspectedNodeIds: string[];
   appliedNodeIds: string[];
+  repairedNodeIds: string[];
 };
 
 type PqsConnectionFactory = {
@@ -31,6 +33,7 @@ export type IndexCommandDependencies = {
   createPqsManagerFactory: () => PqsConnectionFactory;
   inspectPqsIndexes: typeof inspectPqsIndexes;
   applyPqsIndexes: typeof applyPqsIndexes;
+  repairPqsIndexes: typeof repairPqsIndexes;
   writeOutput: (line: string) => void;
 };
 
@@ -47,11 +50,12 @@ const indexCommandHelp = `Canton Explorer PQS indexes
 Usage:
   canton-explorer indexes inspect [--config <path>] [--node <id>]
   canton-explorer indexes apply [--config <path>] [--node <id>] [--dry-run]
+  canton-explorer indexes repair [--config <path>] [--node <id>]
 
 Options:
   --config <path>  Path to the node config JSON file
   --node <id>      Process one configured PQS node
-  --dry-run        Inspect and print proposed SQL without applying it
+  --dry-run        Inspect and print safe apply SQL without applying it
   --help           Show this message`;
 
 const defaultDependencies: IndexCommandDependencies = {
@@ -59,6 +63,7 @@ const defaultDependencies: IndexCommandDependencies = {
   createPqsManagerFactory: () => new PqsManagerFactory(),
   inspectPqsIndexes,
   applyPqsIndexes,
+  repairPqsIndexes,
   writeOutput: (line) => process.stdout.write(`${line}\n`),
 };
 
@@ -85,7 +90,11 @@ function parseIndexArguments(args: readonly string[]): ParsedIndexArguments {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
 
-    if (argument === 'inspect' || argument === 'apply') {
+    if (
+      argument === 'inspect' ||
+      argument === 'apply' ||
+      argument === 'repair'
+    ) {
       if (commandWasProvided) {
         throw new Error(`Unknown indexes command: ${argument}`);
       }
@@ -148,15 +157,33 @@ function inspectOutput(
   inspection: PqsIndexInspection,
   dryRun: boolean,
 ): string {
-  const summary = `[indexes] node=${nodeId} ${dryRun ? 'dry-run' : 'inspect'} partitions=${inspection.contractPartitions.length} installed=${inspection.indexStatuses.length} proposed=${inspection.proposedSql.length}`;
-  if (inspection.proposedSql.length === 0) {
-    return summary;
+  const lines = [
+    `[indexes] node=${nodeId} ${dryRun ? 'dry-run' : 'inspect'} schema=${inspection.schema} schema-supported=${inspection.schemaValidation.supported} pqs-version=${inspection.schemaValidation.pqsVersion ?? 'unknown'} contract-partitions=${inspection.contractPartitions.length} exercise-partitions=${inspection.exercisePartitions.length} installed=${inspection.indexStatuses.length} conflicts=${inspection.conflicts.length} proposed=${inspection.proposedSql.length} repair=${inspection.repairSql.length}`,
+    ...inspection.relationStats.map(
+      (stats) =>
+        `[indexes] relation=${stats.relationName} partitions=${stats.partitionCount} estimated-rows=${stats.estimatedRows} table-bytes=${stats.tableSizeBytes} index-bytes=${stats.indexSizeBytes} total-bytes=${stats.totalSizeBytes}`,
+    ),
+    ...inspection.indexStatuses.map(
+      (status) =>
+        `[indexes] index=${status.name} state=${status.state} valid=${status.isValid} ready=${status.isReady} definition-matches=${status.definitionMatches} size-bytes=${status.sizeBytes} mismatches=${status.mismatchReasons.join(' | ') || 'none'} definition=${status.definition}`,
+    ),
+    `[indexes] explain-relation=${inspection.representativeExplain.relation} plan=${JSON.stringify(inspection.representativeExplain.plan)}`,
+  ];
+  if (inspection.proposedSql.length > 0) {
+    lines.push('[indexes] safe-apply-sql', ...inspection.proposedSql);
   }
-  return `${summary}\n${inspection.proposedSql.join('\n')}`;
+  if (inspection.repairSql.length > 0) {
+    lines.push('[indexes] explicit-repair-sql', ...inspection.repairSql);
+  }
+  return lines.join('\n');
 }
 
 function applyOutput(nodeId: string, result: PqsIndexApplyResult): string {
   return `[indexes] node=${nodeId} apply statements=${result.appliedStatements} newly-applied=${result.newlyAppliedVersions.length} skipped=${result.skippedVersions.length}`;
+}
+
+function repairOutput(nodeId: string, result: PqsIndexApplyResult): string {
+  return `[indexes] node=${nodeId} repair statements=${result.appliedStatements} repaired=${result.repairedIndexes.length} newly-applied=${result.newlyAppliedVersions.length} skipped=${result.skippedVersions.length}`;
 }
 
 export async function runIndexCommand(
@@ -170,6 +197,7 @@ export async function runIndexCommand(
     dryRun: parsed.dryRun,
     inspectedNodeIds: [],
     appliedNodeIds: [],
+    repairedNodeIds: [],
   };
 
   if (parsed.help) {
@@ -209,12 +237,22 @@ export async function runIndexCommand(
         continue;
       }
 
-      const application = await dependencies.applyPqsIndexes(
+      if (parsed.command === 'apply') {
+        const application = await dependencies.applyPqsIndexes(
+          connectionString,
+          schema,
+        );
+        result.appliedNodeIds.push(node.id);
+        dependencies.writeOutput(applyOutput(node.id, application));
+        continue;
+      }
+
+      const repair = await dependencies.repairPqsIndexes(
         connectionString,
         schema,
       );
-      result.appliedNodeIds.push(node.id);
-      dependencies.writeOutput(applyOutput(node.id, application));
+      result.repairedNodeIds.push(node.id);
+      dependencies.writeOutput(repairOutput(node.id, repair));
     }
 
     return result;
