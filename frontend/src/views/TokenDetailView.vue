@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { watch } from 'vue';
 import type { LocationQueryRaw } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
 import TokenTransfersBrowser from '../components/TokenTransfersBrowser.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import { fetchTokenDetail, fetchTokenHolders } from '../lib/api';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, normalizePageSize } from '../lib/pagination';
 import type { TokenDetailResponse, TokenHoldersResponse } from '../types/tokens';
@@ -12,25 +13,28 @@ const props = defineProps<{ tokenId: string }>();
 
 const route = useRoute();
 const router = useRouter();
-const tokenDetail = ref<TokenDetailResponse | null>(null);
-const tokenHolders = ref<TokenHoldersResponse | null>(null);
-const error = ref<string | null>(null);
-const loadingTokenDetail = ref(true);
-const loadingTokenHolders = ref(true);
+const tokenDetailSection = useSectionLoad<TokenDetailResponse>(() => fetchTokenDetail(props.tokenId));
+const tokenHoldersSection = useSectionLoad<TokenHoldersResponse>(() => {
+  const before = readHolderCursor('holdersBefore');
+  const after = before ? undefined : readHolderCursor('holdersAfter');
+  const limit = readHolderPageSize();
+  const options: { before?: string; after?: string } = {};
 
-async function loadTokenDetail() {
-  loadingTokenDetail.value = true;
-  error.value = null;
-
-  try {
-    const detail = await fetchTokenDetail(props.tokenId);
-    tokenDetail.value = detail;
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
-  } finally {
-    loadingTokenDetail.value = false;
+  if (before) {
+    options.before = before;
   }
-}
+
+  if (after) {
+    options.after = after;
+  }
+
+  return fetchTokenHolders(props.tokenId, limit, options);
+});
+
+const tokenDetail = tokenDetailSection.data;
+const tokenHolders = tokenHoldersSection.data;
+const loadingTokenDetail = tokenDetailSection.loading;
+const loadingTokenHolders = tokenHoldersSection.loading;
 
 function readHolderCursor(key: 'holdersBefore' | 'holdersAfter'): string | undefined {
   const value = route.query[key];
@@ -68,32 +72,6 @@ async function pushHolderQuery(query: LocationQueryRaw) {
     path: route.path,
     query,
   });
-}
-
-async function loadTokenHolders() {
-  loadingTokenHolders.value = true;
-  error.value = null;
-
-  try {
-    const before = readHolderCursor('holdersBefore');
-    const after = before ? undefined : readHolderCursor('holdersAfter');
-    const limit = readHolderPageSize();
-    const options: { before?: string; after?: string } = {};
-
-    if (before) {
-      options.before = before;
-    }
-
-    if (after) {
-      options.after = after;
-    }
-
-    tokenHolders.value = await fetchTokenHolders(props.tokenId, limit, options);
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
-  } finally {
-    loadingTokenHolders.value = false;
-  }
 }
 
 async function showPreviousHolders() {
@@ -151,15 +129,19 @@ function displayTokenTitle(
 watch(
   () => props.tokenId,
   () => {
-    void loadTokenDetail();
+    tokenDetailSection.reset();
+    void tokenDetailSection.load();
   },
   { immediate: true },
 );
 
 watch(
   () => [props.tokenId, route.query.holdersBefore, route.query.holdersAfter, route.query.holdersLimit],
-  () => {
-    void loadTokenHolders();
+  ([tokenId], previous) => {
+    if (!previous || previous[0] !== tokenId) {
+      tokenHoldersSection.reset();
+    }
+    void tokenHoldersSection.load();
   },
   { immediate: true },
 );
@@ -167,28 +149,34 @@ watch(
 
 <template>
   <section class="contract-detail">
-    <p v-if="error" class="node-detail__message node-detail__message--error">{{ error }}</p>
-    <p
-      v-else-if="loadingTokenDetail || !tokenDetail || !tokenHolders"
-      class="node-detail__message inline-loading"
-      role="status"
-    >
-      <span class="node-updates__spinner" aria-hidden="true"></span>
-      <span>Loading token detail...</span>
-    </p>
-    <div v-else class="node-page">
+    <div class="node-page">
       <div class="node-page__main contract-detail__content">
         <header class="node-detail__hero">
           <div>
-            <h2>{{ displayTokenTitle(tokenDetail.token) }}</h2>
+            <h2>{{ tokenDetail ? displayTokenTitle(tokenDetail.token) : props.tokenId }}</h2>
           </div>
-          <QuerySourcePill :source="tokenDetail.token.source" />
+          <QuerySourcePill v-if="tokenDetail" :source="tokenDetail.token.source" />
         </header>
 
         <div class="node-detail__sections token-detail__sections">
           <section class="node-detail__section contract-detail__section--summary">
             <h3>Overview</h3>
-            <dl class="detail-grid contract-detail__summary-grid">
+            <p v-if="loadingTokenDetail" class="node-detail__message inline-loading" role="status">
+              <span class="node-updates__spinner" aria-hidden="true"></span>
+              <span>Loading token detail...</span>
+            </p>
+            <div
+              v-else-if="tokenDetailSection.error.value"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Token overview error"
+            >
+              <span>{{ tokenDetailSection.error.value }}</span>
+              <button type="button" class="button button--secondary" @click="tokenDetailSection.retry">
+                Retry
+              </button>
+            </div>
+            <dl v-else-if="tokenDetail" class="detail-grid contract-detail__summary-grid">
               <div class="contract-detail__summary-item contract-detail__summary-item--full-row">
                 <dt>Token ID</dt>
                 <dd class="update-detail__id">
@@ -205,7 +193,7 @@ watch(
               </div>
               <div class="contract-detail__summary-item">
                 <dt>Top Holders</dt>
-                <dd>{{ tokenHolders.holders.length }}</dd>
+                <dd>{{ tokenHolders?.holders.length ?? 'n/a' }}</dd>
               </div>
               <div class="contract-detail__summary-item">
                 <dt>Latest Transfers</dt>
@@ -264,12 +252,24 @@ watch(
               <span>Loading token holders...</span>
             </p>
 
-            <p v-else-if="tokenHolders.holders.length === 0" class="dashboard__message">
+            <div
+              v-else-if="tokenHoldersSection.error.value"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Top Holders error"
+            >
+              <span>{{ tokenHoldersSection.error.value }}</span>
+              <button type="button" class="button button--secondary" @click="tokenHoldersSection.retry">
+                Retry
+              </button>
+            </div>
+
+            <p v-else-if="tokenHolders?.holders.length === 0" class="dashboard__message">
               No holders observed for this token yet.
             </p>
 
             <div
-              v-else
+              v-else-if="tokenHolders"
               class="token-detail__holders-table"
               role="table"
               aria-label="Top token holders"

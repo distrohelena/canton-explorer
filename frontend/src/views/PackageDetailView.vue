@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, watch } from 'vue';
 import PackageTypeInlineSchema from '../components/PackageTypeInlineSchema.vue';
 import PackageTypeTree from '../components/PackageTypeTree.vue';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import {
   fetchPackageDataTypes,
   fetchPackageModules,
@@ -20,102 +21,47 @@ import type {
 
 const props = defineProps<{ packageId: string }>();
 
-const packageSummary = ref<PackageDetailSummaryResponse | null>(null);
-const packageNodes = ref<PackageDetailNodesResponse | null>(null);
-const packageModules = ref<PackageDetailModulesResponse | null>(null);
-const packageTemplates = ref<PackageDetailTemplatesResponse | null>(null);
-const packageDataTypes = ref<PackageDetailDataTypesResponse | null>(null);
-const summaryLoading = ref(false);
-const nodesLoading = ref(false);
-const modulesLoading = ref(false);
-const templatesLoading = ref(false);
-const dataTypesLoading = ref(false);
-const summaryError = ref<string | null>(null);
-const nodesError = ref<string | null>(null);
-const modulesError = ref<string | null>(null);
-const templatesError = ref<string | null>(null);
-const dataTypesError = ref<string | null>(null);
+const summarySection = useSectionLoad<PackageDetailSummaryResponse>(() =>
+  fetchPackageSummary(props.packageId),
+);
+const nodesSection = useSectionLoad<PackageDetailNodesResponse>(() => fetchPackageNodes(props.packageId));
+const modulesSection = useSectionLoad<PackageDetailModulesResponse>(() =>
+  fetchPackageModules(props.packageId),
+);
+const templatesSection = useSectionLoad<PackageDetailTemplatesResponse>(() =>
+  fetchPackageTemplates(props.packageId),
+);
+const dataTypesSection = useSectionLoad<PackageDetailDataTypesResponse>(() =>
+  fetchPackageDataTypes(props.packageId),
+);
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown error';
-}
-
-async function loadPackageSummary() {
-  summaryLoading.value = true;
-  summaryError.value = null;
-  packageSummary.value = null;
-
-  try {
-    packageSummary.value = await fetchPackageSummary(props.packageId);
-  } catch (error) {
-    summaryError.value = getErrorMessage(error);
-  } finally {
-    summaryLoading.value = false;
-  }
-}
-
-async function loadPackageNodes() {
-  nodesLoading.value = true;
-  nodesError.value = null;
-  packageNodes.value = null;
-
-  try {
-    packageNodes.value = await fetchPackageNodes(props.packageId);
-  } catch (error) {
-    nodesError.value = getErrorMessage(error);
-  } finally {
-    nodesLoading.value = false;
-  }
-}
-
-async function loadPackageModules() {
-  modulesLoading.value = true;
-  modulesError.value = null;
-  packageModules.value = null;
-
-  try {
-    packageModules.value = await fetchPackageModules(props.packageId);
-  } catch (error) {
-    modulesError.value = getErrorMessage(error);
-  } finally {
-    modulesLoading.value = false;
-  }
-}
-
-async function loadPackageTemplates() {
-  templatesLoading.value = true;
-  templatesError.value = null;
-  packageTemplates.value = null;
-
-  try {
-    packageTemplates.value = await fetchPackageTemplates(props.packageId);
-  } catch (error) {
-    templatesError.value = getErrorMessage(error);
-  } finally {
-    templatesLoading.value = false;
-  }
-}
-
-async function loadPackageDataTypes() {
-  dataTypesLoading.value = true;
-  dataTypesError.value = null;
-  packageDataTypes.value = null;
-
-  try {
-    packageDataTypes.value = await fetchPackageDataTypes(props.packageId);
-  } catch (error) {
-    dataTypesError.value = getErrorMessage(error);
-  } finally {
-    dataTypesLoading.value = false;
-  }
-}
+const packageSummary = summarySection.data;
+const packageNodes = nodesSection.data;
+const packageModules = modulesSection.data;
+const packageTemplates = templatesSection.data;
+const packageDataTypes = dataTypesSection.data;
+const summaryLoading = summarySection.loading;
+const nodesLoading = nodesSection.loading;
+const modulesLoading = modulesSection.loading;
+const templatesLoading = templatesSection.loading;
+const dataTypesLoading = dataTypesSection.loading;
+const summaryError = summarySection.error;
+const nodesError = nodesSection.error;
+const modulesError = modulesSection.error;
+const templatesError = templatesSection.error;
+const dataTypesError = dataTypesSection.error;
 
 function loadPackageSections() {
-  void loadPackageSummary();
-  void loadPackageNodes();
-  void loadPackageModules();
-  void loadPackageTemplates();
-  void loadPackageDataTypes();
+  summarySection.reset();
+  nodesSection.reset();
+  modulesSection.reset();
+  templatesSection.reset();
+  dataTypesSection.reset();
+  void summarySection.load();
+  void nodesSection.load();
+  void modulesSection.load();
+  void templatesSection.load();
+  void dataTypesSection.load();
 }
 
 watch(() => props.packageId, loadPackageSections, { immediate: true });
@@ -225,9 +171,17 @@ function packageTemplatePath(templateId: string): string {
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading summary...</span>
             </div>
-            <p v-else-if="summaryError" class="node-detail__message node-detail__message--error">
-              {{ summaryError }}
-            </p>
+            <div
+              v-else-if="summaryError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Summary error"
+            >
+              <span>{{ summaryError }}</span>
+              <button type="button" class="button button--secondary" @click="summarySection.retry">
+                Retry
+              </button>
+            </div>
             <dl v-else-if="packageSummary" class="detail-grid package-detail__summary-grid">
               <div class="package-detail__summary-item package-detail__summary-item--full-row">
                 <dt>Package ID</dt>
@@ -300,9 +254,17 @@ function packageTemplatePath(templateId: string): string {
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading observed nodes...</span>
             </div>
-            <p v-else-if="nodesError" class="node-detail__message node-detail__message--error">
-              {{ nodesError }}
-            </p>
+            <div
+              v-else-if="nodesError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Seen On Nodes error"
+            >
+              <span>{{ nodesError }}</span>
+              <button type="button" class="button button--secondary" @click="nodesSection.retry">
+                Retry
+              </button>
+            </div>
             <p v-else-if="packageNodes?.seenOnNodes.length === 0" class="update-detail__empty">
               No node presence recorded for this package.
             </p>
@@ -332,9 +294,17 @@ function packageTemplatePath(templateId: string): string {
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading modules...</span>
             </div>
-            <p v-else-if="modulesError" class="node-detail__message node-detail__message--error">
-              {{ modulesError }}
-            </p>
+            <div
+              v-else-if="modulesError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Modules error"
+            >
+              <span>{{ modulesError }}</span>
+              <button type="button" class="button button--secondary" @click="modulesSection.retry">
+                Retry
+              </button>
+            </div>
             <p v-else-if="packageModules?.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
             </p>
@@ -360,9 +330,17 @@ function packageTemplatePath(templateId: string): string {
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading templates...</span>
             </div>
-            <p v-else-if="templatesError" class="node-detail__message node-detail__message--error">
-              {{ templatesError }}
-            </p>
+            <div
+              v-else-if="templatesError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Templates error"
+            >
+              <span>{{ templatesError }}</span>
+              <button type="button" class="button button--secondary" @click="templatesSection.retry">
+                Retry
+              </button>
+            </div>
             <p v-else-if="packageTemplates?.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
             </p>
@@ -391,9 +369,17 @@ function packageTemplatePath(templateId: string): string {
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading data types...</span>
             </div>
-            <p v-else-if="dataTypesError" class="node-detail__message node-detail__message--error">
-              {{ dataTypesError }}
-            </p>
+            <div
+              v-else-if="dataTypesError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+              aria-label="Data Types error"
+            >
+              <span>{{ dataTypesError }}</span>
+              <button type="button" class="button button--secondary" @click="dataTypesSection.retry">
+                Retry
+              </button>
+            </div>
             <p v-else-if="packageDataTypes?.status !== 'decoded'" class="update-detail__empty">
               Decoded package structure is not available for this package.
             </p>
