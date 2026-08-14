@@ -141,9 +141,9 @@ git commit -m "feat: add section request lifecycle"
 - Modify: `frontend/src/lib/api.test.ts`
 
 **Interfaces:**
-- Produces `GET /parties/:partyId/{summary,nodes,topology}` and `GET /namespaces/:namespaceId/{summary,nodes,topology}`.
+- Produces `GET /parties/:partyId/{summary,nodes,topology}` and `GET /namespaces/:namespaceId/{summary,nodes,topology,updates,contracts}`.
 - Keeps `fetchPartyDetail()` and `fetchNamespaceDetail()` unchanged for compatibility.
-- Adds typed frontend helpers `fetchPartySummary`, `fetchPartyNodes`, `fetchPartyTopology`, `fetchNamespaceSummary`, `fetchNamespaceNodes`, and `fetchNamespaceTopology`.
+- Adds typed frontend helpers `fetchPartySummary`, `fetchPartyNodes`, `fetchPartyTopology`, `fetchNamespaceSummary`, `fetchNamespaceNodes`, `fetchNamespaceTopology`, `fetchNamespaceUpdates`, and `fetchNamespaceContracts`.
 
 - [ ] **Step 1: Write failing controller and API-client tests**
 
@@ -155,7 +155,7 @@ expect(pqsSummaryService.fetchPartySummary).toHaveBeenCalledWith(expect.any(Arra
 await expect(controller.getPartySummary('missing')).rejects.toThrow('Unknown party: missing');
 ```
 
-Use the analogous namespace fields. Add frontend API tests that assert the six helpers request `api/parties/<id>/<section>` and `api/namespaces/<id>/<section>`.
+Use the analogous namespace fields. Add frontend API tests that assert each helper requests `api/parties/<id>/<section>` or `api/namespaces/<id>/<section>`, preserving namespace update/contract pagination query parameters.
 
 - [ ] **Step 2: Run tests to verify RED**
 
@@ -180,7 +180,7 @@ export type PartyNodesResponse = Pick<PartyDetailResponse, 'nodes'>;
 export type PartyTopologyResponse = Pick<PartyDetailResponse, 'partyTopologyByNode'>;
 ```
 
-Extract dedicated PqsSummaryService methods for Party summary/nodes discovery and topology, and Namespace summary/nodes discovery and topology. The summary and nodes methods must not call gRPC topology. The topology method may call the lightweight Party/Namespace discovery method to determine observed node IDs and local-party mappings, but must not fetch recent updates/contracts solely to populate another section. Keep `fetchPartyDetail()` and `fetchNamespaceDetail()` as compatibility wrappers that compose the new methods plus their existing recent updates/contracts fields.
+Extract dedicated PqsSummaryService methods for Party summary/nodes discovery and topology, and Namespace summary/nodes discovery, topology, updates, and contracts. The summary and nodes methods must not call gRPC topology. The topology method may call the lightweight Party/Namespace discovery method to determine observed node IDs and local-party mappings, but must not fetch recent updates/contracts solely to populate another section. Namespace update/contract endpoints return the existing namespace-scoped recent lists with their pagination behavior. Keep `fetchPartyDetail()` and `fetchNamespaceDetail()` as compatibility wrappers that compose the new methods plus their existing recent updates/contracts fields.
 
 Add controller routes before the aggregate `:partyId` and `:namespaceId` routes so literal section names are never captured as an identifier. Each controller method calls its matching dedicated section service method, preserving the existing `NotFoundException` translation.
 
@@ -192,7 +192,7 @@ export function fetchPartySummary(partyId: string): Promise<PartySummaryResponse
 }
 ```
 
-Follow the same encoding and type conventions for the other five endpoints.
+Follow the same encoding, query parameter, and type conventions for the other endpoints.
 
 - [ ] **Step 4: Run targeted verification**
 
@@ -257,7 +257,7 @@ Expected: FAIL because current detail views share aggregate/global loading and e
 Apply these exact boundaries:
 
 - Party: `fetchPartySummary`, `fetchPartyNodes`, `fetchPartyTopology`.
-- Namespace: `fetchNamespaceSummary`, `fetchNamespaceNodes`, `fetchNamespaceTopology`, and existing `fetchNamespaceParties`.
+- Namespace: `fetchNamespaceSummary`, `fetchNamespaceNodes`, `fetchNamespaceTopology`, `fetchNamespaceParties`, `fetchNamespaceUpdates`, and `fetchNamespaceContracts`.
 - Node: `fetchNode`, `fetchNodePackages`, `fetchNodeParticipantStatus`.
 - Token: existing `fetchTokenDetail` and `fetchTokenHolders`.
 - Package: existing five section helpers.

@@ -65,7 +65,7 @@ fan-out endpoint or server-side request orchestrator.
 | Home | overview activity, market history, recent active parties, updates, transfers | Existing per-section endpoints already exist; move each loader to `useSectionLoad`. |
 | Node Detail | node overview, installed packages, participant status, updates, contracts | Existing per-section endpoints already exist; replace the page-level `Promise.all` and global error. |
 | Party Detail | overview, observed nodes, party topology, updates, contracts | Split `GET /parties/:partyId` into summary, nodes, and topology section endpoints; retain aggregate endpoint temporarily. |
-| Namespace Detail | overview, observed nodes, topology, observed parties, updates, contracts | Split `GET /namespaces/:namespaceId` into summary, nodes, and topology section endpoints; retain aggregate endpoint temporarily. |
+| Namespace Detail | overview, observed nodes, topology, observed parties, updates, contracts | Split `GET /namespaces/:namespaceId` into summary, nodes, topology, updates, and contracts section endpoints; retain aggregate endpoint temporarily. |
 | Token Detail | token summary, holders, transfers | Existing token/holders/transfers endpoints; remove the shared error state and load each independently. |
 | Package Detail | summary, observed nodes, modules, templates, data types | Existing section endpoints; migrate to common retry/stale-response behavior. |
 | Settings | node/indexing status, traffic purchases for each node | Load the node snapshot section separately; start each node traffic card after node IDs arrive, each with independent state and retry. |
@@ -83,6 +83,8 @@ Add these compatibility-preserving routes:
 - `GET /namespaces/:namespaceId/summary`
 - `GET /namespaces/:namespaceId/nodes`
 - `GET /namespaces/:namespaceId/topology`
+- `GET /namespaces/:namespaceId/updates`
+- `GET /namespaces/:namespaceId/contracts`
 
 Each uses the corresponding fields of the current aggregate response. The
 frontend API client receives typed fetch helpers for each endpoint. No new
