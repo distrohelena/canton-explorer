@@ -29,7 +29,7 @@ async function main() {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
 
-    if (arg === '--help') {
+    if (arg === '--help' && !isIndexCommand) {
       printHelp();
       return;
     }

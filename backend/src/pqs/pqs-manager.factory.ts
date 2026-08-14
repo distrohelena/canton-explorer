@@ -9,8 +9,15 @@ import { appLogger, truncateForLog } from '../logging/app-logger';
 
 type PqsManager = Pick<CantonManager, 'query' | 'disposeAsync'>;
 export interface PqsRawExecutor {
-  query<TRow>(sql: string, values?: readonly unknown[]): Promise<{ rows: TRow[] }>;
+  query<TRow>(
+    sql: string,
+    values?: readonly unknown[],
+  ): Promise<{ rows: TRow[] }>;
 }
+export type PqsConnection = {
+  connectionString: string;
+  schema: string;
+};
 type SdkModule = Pick<
   typeof import('@distrohelena/canton-typescript-sdk'),
   'CantonManager' | 'CantonClientOptions' | 'QuerySource' | 'TransportKind'
@@ -51,6 +58,20 @@ export class PqsManagerFactory implements OnModuleDestroy {
     };
   }
 
+  getPqsConnection(node: NodeConfig): PqsConnection {
+    const connectionString = process.env[node.pqs.connectionUriEnv];
+    if (!connectionString) {
+      throw new Error(
+        `Missing PQS connection string env var: ${node.pqs.connectionUriEnv}`,
+      );
+    }
+
+    return {
+      connectionString,
+      schema: node.pqs.schema,
+    };
+  }
+
   async onModuleDestroy(): Promise<void> {
     const managers = await Promise.all(this.managers.values());
     await Promise.all(managers.map((manager) => manager.disposeAsync()));
@@ -69,14 +90,13 @@ export class PqsManagerFactory implements OnModuleDestroy {
   }
 
   private async createManager(node: NodeConfig): Promise<PqsManager> {
-    const connectionString = process.env[node.pqs.connectionUriEnv];
-    if (!connectionString) {
-      throw new Error(`Missing PQS connection string env var: ${node.pqs.connectionUriEnv}`);
-    }
+    const { connectionString } = this.getPqsConnection(node);
 
     const sdk = await this.loadSdk();
     const options = {
-      grpc: new sdk.CantonClientOptions({ transportKind: sdk.TransportKind.grpc }),
+      grpc: new sdk.CantonClientOptions({
+        transportKind: sdk.TransportKind.grpc,
+      }),
       querySource: sdk.QuerySource.pqs,
       pqs: {
         connectionString,

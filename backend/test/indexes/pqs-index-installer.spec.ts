@@ -32,16 +32,29 @@ function fakeDatabase(options: FakeExecutorOptions = {}): PqsIndexDatabase & {
         throw new Error(`Failed statement: ${statement}`);
       }
       if (statement.includes('from pg_inherits')) {
-        return { rows: (options.partitions ?? ['__contracts_42', '__contracts_43']).map((table_name) => ({ table_name })) as TRow[] };
+        return {
+          rows: (
+            options.partitions ?? ['__contracts_42', '__contracts_43']
+          ).map((table_name) => ({ table_name })) as TRow[],
+        };
       }
       if (statement.includes("relname = '__exercises'")) {
         return { rows: [{ exists: options.hasExercises ?? true }] as TRow[] };
       }
       if (statement.includes("attname = 'transaction_id'")) {
-        return { rows: options.transactionIdType === null ? [] : [{ column_type: options.transactionIdType ?? 'text' }] as TRow[] };
+        return {
+          rows:
+            options.transactionIdType === null
+              ? []
+              : ([
+                  { column_type: options.transactionIdType ?? 'text' },
+                ] as TRow[]),
+        };
       }
       if (statement.includes('select version from')) {
-        return { rows: appliedVersions.map((version) => ({ version })) as TRow[] };
+        return {
+          rows: appliedVersions.map((version) => ({ version })) as TRow[],
+        };
       }
       if (statement.includes('from pg_index')) {
         const expectedNames = (values[1] as readonly string[]) ?? [];
@@ -85,7 +98,9 @@ describe('PQS index installer', () => {
     const database = fakeDatabase({ failSql: /__contracts_43/ });
 
     await expect(
-      applyPqsIndexes('postgres://pqs', 'public', { createDatabase: databaseFactory(database) }),
+      applyPqsIndexes('postgres://pqs', 'public', {
+        createDatabase: databaseFactory(database),
+      }),
     ).rejects.toThrow('contracts_43');
 
     expect(database.sql.join('\n')).not.toMatch(
@@ -106,9 +121,40 @@ describe('PQS index installer', () => {
     expect(database.ended).toBe(true);
   });
 
+  it('serializes queries issued through the dedicated PostgreSQL client', async () => {
+    const database = fakeDatabase();
+    const query = database.query.bind(database);
+    let queryInFlight = false;
+    database.query = async <TRow>(
+      sql: string,
+      values: readonly unknown[] = [],
+    ) => {
+      if (queryInFlight) {
+        throw new Error('Concurrent query on pinned PostgreSQL client');
+      }
+      queryInFlight = true;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      try {
+        return await query<TRow>(sql, values);
+      } finally {
+        queryInFlight = false;
+      }
+    };
+
+    await expect(
+      applyPqsIndexes('postgres://pqs', 'public', {
+        createDatabase: databaseFactory(database),
+      }),
+    ).resolves.toMatchObject({ appliedStatements: 6 });
+  });
+
   it('reconciles a later contracts partition even when the migration is recorded', async () => {
     const database = fakeDatabase({
-      appliedVersions: ['001-witnesses', '002-active-contracts', '003-transaction-id-pattern'],
+      appliedVersions: [
+        '001-witnesses',
+        '002-active-contracts',
+        '003-transaction-id-pattern',
+      ],
       partitions: ['__contracts_42', '__contracts_77'],
     });
 
@@ -123,7 +169,10 @@ describe('PQS index installer', () => {
   it('drops an invalid same-name index concurrently before rebuilding it', async () => {
     const database = fakeDatabase({
       indexStatuses: {
-        canton_explorer_contracts_42_witnesses_gin: { is_valid: false, is_ready: false },
+        canton_explorer_contracts_42_witnesses_gin: {
+          is_valid: false,
+          is_ready: false,
+        },
       },
     });
 
@@ -135,7 +184,9 @@ describe('PQS index installer', () => {
     expect(sql).toMatch(
       /drop index concurrently if exists "public"\."canton_explorer_contracts_42_witnesses_gin"/,
     );
-    expect(sql).toMatch(/create index concurrently if not exists "canton_explorer_contracts_42_witnesses_gin"/);
+    expect(sql).toMatch(
+      /create index concurrently if not exists "canton_explorer_contracts_42_witnesses_gin"/,
+    );
   });
 
   it('inspects through a dedicated read connection using catalog queries only', async () => {
@@ -146,7 +197,9 @@ describe('PQS index installer', () => {
     });
 
     expect(inspection.proposedSql.join('\n')).toMatch(/active_created_ix/);
-    expect(database.sql.join('\n')).not.toMatch(/explain|create index|create table|insert into/i);
+    expect(database.sql.join('\n')).not.toMatch(
+      /explain|create index|create table|insert into/i,
+    );
     expect(database.ended).toBe(true);
   });
 
@@ -160,7 +213,9 @@ describe('PQS index installer', () => {
       end,
       query,
     }));
-    await expect(database.query<{ value: string }>('select 1')).resolves.toEqual({
+    await expect(
+      database.query<{ value: string }>('select 1'),
+    ).resolves.toEqual({
       rows: [{ value: 'ok' }],
     });
     await database.end();
@@ -171,7 +226,9 @@ describe('PQS index installer', () => {
   });
 
   it('closes the direct client when connecting fails', async () => {
-    const connect = jest.fn<() => Promise<void>>().mockRejectedValue(new Error('unreachable'));
+    const connect = jest
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(new Error('unreachable'));
     const end = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
     await expect(
