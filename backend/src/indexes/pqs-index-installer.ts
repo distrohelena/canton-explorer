@@ -174,6 +174,7 @@ const requiredColumns: Readonly<
   __exercises: {
     tpe_pk: 'bigint',
     witnesses: 'text[]',
+    exercised_at_ix: 'bigint',
   },
   __transactions: {
     ix: 'bigint',
@@ -304,10 +305,10 @@ function toIndexStatus(
     : [];
   const state: PqsIndexState = !expected
     ? 'unexpected'
-    : !actual.is_valid || !actual.is_ready
-      ? 'invalid'
-      : mismatchReasons.length > 0
-        ? 'conflict'
+    : mismatchReasons.length > 0
+      ? 'conflict'
+      : !actual.is_valid || !actual.is_ready
+        ? 'invalid'
         : 'ready';
 
   return {

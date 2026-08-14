@@ -234,6 +234,36 @@ export function activeContractsIndex(
   };
 }
 
+type UpdateEventOrderColumn =
+  'created_at_ix' | 'archived_at_ix' | 'exercised_at_ix';
+
+const updateEventOrderIndexSql = (
+  schema: string,
+  relation: string,
+  column: UpdateEventOrderColumn,
+): string =>
+  `create index concurrently if not exists ${quoteIdentifier(indexName(relation, `${column}_order`))} on ${qualified(schema, relation)} (${column} desc)`;
+
+function updateEventOrderIndex(
+  schema: string,
+  relation: string,
+  column: UpdateEventOrderColumn,
+): ExpectedPqsIndex {
+  return {
+    name: indexName(relation, `${column}_order`),
+    schema,
+    relation,
+    accessMethod: 'btree',
+    keyExpressions: [column],
+    includedExpressions: [],
+    operatorClasses: ['int8_ops'],
+    sortOptions: [3],
+    predicate: null,
+    isUnique: false,
+    createSql: updateEventOrderIndexSql(schema, relation, column),
+  };
+}
+
 export const transactionIdPatternIndexSql = (schema: string): string =>
   `create index concurrently if not exists ${quoteIdentifier('canton_explorer_transactions_transaction_id_pattern_ops')} on ${qualified(schema, '__transactions')} (transaction_id text_pattern_ops)`;
 
@@ -300,5 +330,18 @@ export const pqsIndexMigrations: readonly IndexMigration[] = [
       context.transactionIdIsText
         ? [transactionIdPatternIndex(context.schema)]
         : [],
+  },
+  {
+    version: '004-update-event-order',
+    name: 'Update event ordering indexes',
+    indexes: (context) => [
+      ...context.contractPartitions.flatMap((relation) => [
+        updateEventOrderIndex(context.schema, relation, 'created_at_ix'),
+        updateEventOrderIndex(context.schema, relation, 'archived_at_ix'),
+      ]),
+      ...context.exercisePartitions.map((relation) =>
+        updateEventOrderIndex(context.schema, relation, 'exercised_at_ix'),
+      ),
+    ],
   },
 ];

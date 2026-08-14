@@ -43,6 +43,7 @@ function supportedSchemaRows() {
     ['__contracts', 'p', 'LIST (tpe_pk)', 'witnesses', 'text[]'],
     ['__exercises', 'p', 'LIST (tpe_pk)', 'tpe_pk', 'bigint'],
     ['__exercises', 'p', 'LIST (tpe_pk)', 'witnesses', 'text[]'],
+    ['__exercises', 'p', 'LIST (tpe_pk)', 'exercised_at_ix', 'bigint'],
     ['__transactions', 'r', null, 'ix', 'bigint'],
     ['__transactions', 'r', null, 'offset', 'bigint'],
     ['__transactions', 'r', null, 'transaction_id', 'text'],
@@ -76,26 +77,35 @@ function inferredIndexStatus(
   const active = indexName.match(
     /^canton_explorer_contracts_(\d+)_active_created_ix$/,
   );
+  const eventOrder = indexName.match(
+    /^canton_explorer_(contracts|exercises)_(\d+)_(created_at_ix|archived_at_ix|exercised_at_ix)_order$/,
+  );
   const isTransaction =
     indexName === 'canton_explorer_transactions_transaction_id_pattern_ops';
   const tableName = witness
     ? `__${witness[1]}_${witness[2]}`
     : active
       ? `__contracts_${active[1]}`
-      : '__transactions';
+      : eventOrder
+        ? `__${eventOrder[1]}_${eventOrder[2]}`
+        : '__transactions';
   const accessMethod = witness ? 'gin' : 'btree';
   const keyExpressions = witness
     ? ['witnesses']
     : active
       ? ['created_at_ix', 'create_event_pk', 'contract_id']
-      : ['transaction_id'];
+      : eventOrder
+        ? [eventOrder[3]]
+        : ['transaction_id'];
   const operatorClasses = witness
     ? ['array_ops']
     : active
       ? ['int8_ops', 'int8_ops', 'text_ops']
-      : ['text_pattern_ops'];
+      : eventOrder
+        ? ['int8_ops']
+        : ['text_pattern_ops'];
   const predicate = active ? 'archived_at_ix IS NULL' : null;
-  const sortOptions = active ? [3, 3, 3] : [0];
+  const sortOptions = active ? [3, 3, 3] : eventOrder ? [3] : [0];
 
   return {
     index_name: indexName,
@@ -300,7 +310,7 @@ describe('PQS index installer', () => {
       applyPqsIndexes('postgres://pqs', 'public', {
         createDatabase: databaseFactory(database),
       }),
-    ).resolves.toMatchObject({ appliedStatements: 7 });
+    ).resolves.toMatchObject({ appliedStatements: 13 });
   });
 
   it('reconciles a later contracts partition even when the migration is recorded', async () => {
@@ -309,6 +319,7 @@ describe('PQS index installer', () => {
         '001-witnesses',
         '002-active-contracts',
         '003-transaction-id-pattern',
+        '004-update-event-order',
       ],
       contractPartitions: ['__contracts_42', '__contracts_77'],
     });
@@ -319,6 +330,10 @@ describe('PQS index installer', () => {
 
     expect(database.sql.join('\n')).toMatch(/contracts_77_witnesses_gin/);
     expect(database.sql.join('\n')).toMatch(/contracts_77_active_created_ix/);
+    expect(database.sql.join('\n')).toMatch(/contracts_77_created_at_ix_order/);
+    expect(database.sql.join('\n')).toMatch(
+      /contracts_77_archived_at_ix_order/,
+    );
   });
 
   it('reconciles individual exercises partitions without indexing their parent', async () => {
@@ -327,6 +342,7 @@ describe('PQS index installer', () => {
         '001-witnesses',
         '002-active-contracts',
         '003-transaction-id-pattern',
+        '004-update-event-order',
       ],
       exercisePartitions: ['__exercises_42', '__exercises_77'],
     });
@@ -338,6 +354,8 @@ describe('PQS index installer', () => {
     const sql = database.sql.join('\n');
     expect(sql).toMatch(/exercises_42_witnesses_gin/);
     expect(sql).toMatch(/exercises_77_witnesses_gin/);
+    expect(sql).toMatch(/exercises_42_exercised_at_ix_order/);
+    expect(sql).toMatch(/exercises_77_exercised_at_ix_order/);
     expect(sql).not.toMatch(/on "public"\."__exercises" using gin/);
   });
 
@@ -380,6 +398,45 @@ describe('PQS index installer', () => {
 
     await expect(
       applyPqsIndexes('postgres://pqs', 'public', {
+        createDatabase: databaseFactory(database),
+      }),
+    ).rejects.toThrow(/conflicting Explorer index/i);
+    expect(database.sql.join('\n')).not.toMatch(
+      /create table|create index|drop index|insert into/i,
+    );
+  });
+
+  it('rejects an invalid same-name definition mismatch from apply and repair without DDL', async () => {
+    const database = fakeDatabase({
+      indexStatuses: {
+        canton_explorer_contracts_42_witnesses_gin: {
+          is_valid: false,
+          is_ready: false,
+          table_name: '__contracts_43',
+          access_method: 'btree',
+          is_unique: true,
+          key_expressions: ['contract_id'],
+          included_expressions: ['witnesses'],
+          operator_classes: ['text_ops'],
+          sort_options: [1],
+          predicate: 'contract_id IS NOT NULL',
+        },
+      },
+    });
+
+    await expect(
+      applyPqsIndexes('postgres://pqs', 'public', {
+        createDatabase: databaseFactory(database),
+      }),
+    ).rejects.toThrow(/conflicting Explorer index/i);
+    expect(database.sql.join('\n')).not.toMatch(
+      /create table|create index|drop index|insert into/i,
+    );
+
+    database.sql.length = 0;
+
+    await expect(
+      repairPqsIndexes('postgres://pqs', 'public', {
         createDatabase: databaseFactory(database),
       }),
     ).rejects.toThrow(/conflicting Explorer index/i);

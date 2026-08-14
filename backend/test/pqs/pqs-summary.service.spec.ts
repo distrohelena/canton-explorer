@@ -3529,7 +3529,7 @@ describe('PqsSummaryService', () => {
     });
   });
 
-  it('uses unioned event indexes instead of correlated party-update scans', async () => {
+  it('drives party event probes from a bounded ordered transaction page', async () => {
     const query = jest.fn().mockResolvedValueOnce({ rows: [] });
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
@@ -3548,13 +3548,98 @@ describe('PqsSummaryService', () => {
     );
 
     const sql = String(query.mock.calls[0]?.[0]);
-    expect(sql).toContain('with party_update_ix as');
+    expect(sql).toContain('with party_update_ix as materialized');
     expect(sql).toContain('contract_row.created_at_ix as update_ix');
     expect(sql).toContain('contract_row.archived_at_ix as update_ix');
     expect(sql).toContain('exercise_row.exercised_at_ix as update_ix');
     expect(sql).toContain('join party_update_ix');
-    expect(sql).not.toContain('where exists');
+    expect(sql).toContain('where exists');
+    expect(sql).toContain('order by contract_row.created_at_ix desc');
+    expect(sql).toContain('order by contract_row.archived_at_ix desc');
+    expect(sql).toContain('order by exercise_row.exercised_at_ix desc');
+    expect(sql).toContain('limit 31');
   });
+
+  it.each([
+    {
+      name: 'forward OR',
+      cursor: { after: '40' },
+      partyMode: 'or',
+      operator: '>',
+      direction: 'asc',
+      cursorLookup: 'cursor_tx.offset <= 40',
+    },
+    {
+      name: 'backward AND',
+      cursor: { before: '80' },
+      partyMode: 'and',
+      operator: '<',
+      direction: 'desc',
+      cursorLookup: 'cursor_tx.offset >= 80',
+    },
+  ])(
+    'bounds every party/template event candidate branch for $name pagination',
+    async ({ cursor, partyMode, operator, direction, cursorLookup }) => {
+      const query = jest
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [
+            { type_source: 'contract', pk: '17' },
+            { type_source: 'exercise', pk: '29' },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] });
+      const service = new PqsSummaryService({
+        getRawExecutor: async () => ({ query }),
+      } as never);
+
+      await service.fetchRecentUpdates(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        {
+          limit: 3,
+          ...cursor,
+          parties: ['Alice', 'Bob'],
+          partyMode,
+          templates: ['Main:Asset'],
+        },
+      );
+
+      const sql = String(query.mock.calls[1]?.[0]);
+      expect(sql).toContain('filtered_update_ix as materialized');
+      expect(sql).toContain(cursorLookup);
+
+      for (const eventColumn of [
+        'contract_row.created_at_ix',
+        'contract_row.archived_at_ix',
+        'exercise_row.exercised_at_ix',
+      ]) {
+        const escapedColumn = eventColumn.replace('.', '\\.');
+        expect(
+          sql.match(
+            new RegExp(
+              `${escapedColumn} \\${operator} \\(select cursor_ix from update_cursor\\)`,
+              'g',
+            ),
+          ),
+        ).toHaveLength(3);
+        expect(
+          sql.match(
+            new RegExp(
+              `order by ${escapedColumn} ${direction}\\s+limit 4`,
+              'g',
+            ),
+          ),
+        ).toHaveLength(3);
+      }
+    },
+  );
 
   it('applies party filters in schema-qualified recent update queries', async () => {
     const query = jest
@@ -4905,10 +4990,10 @@ describe('PqsSummaryService', () => {
       expect.stringContaining("'Alice'"),
     );
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Bob'"));
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('having count(distinct party_filter) = 2'),
-    );
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql.match(/exists \(/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(sql).toMatch(/\band exists \(/);
+    expect(sql).not.toContain('having count(distinct party_filter)');
     expect(updates).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',

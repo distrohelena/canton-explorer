@@ -208,12 +208,27 @@ before(async () => {
     ) partition by list (tpe_pk);
     create table public.__contracts_17 partition of public.__contracts for values in (17);
     create table public.__contracts_29 partition of public.__contracts for values in (29);
+    create table public.__contract_tpe (
+      pk bigint primary key,
+      module_name text not null,
+      entity_name text not null
+    );
+    insert into public.__contract_tpe (pk, module_name, entity_name)
+      values (17, 'Main', 'Asset'), (29, 'Other', 'Bulk');
     create table public.__exercises (
       tpe_pk bigint not null,
-      witnesses text[] not null
+      witnesses text[] not null,
+      exercised_at_ix bigint not null
     ) partition by list (tpe_pk);
     create table public.__exercises_17 partition of public.__exercises for values in (17);
     create table public.__exercises_29 partition of public.__exercises for values in (29);
+    create table public.__exercise_tpe (
+      pk bigint primary key,
+      module_name text not null,
+      entity_name text not null
+    );
+    insert into public.__exercise_tpe (pk, module_name, entity_name)
+      values (17, 'Main', 'Asset'), (29, 'Other', 'Bulk');
     insert into public.__contracts_17
       (tpe_pk, witnesses, create_event_pk, created_at_ix, archived_at_ix, contract_id)
       values
@@ -228,10 +243,25 @@ before(async () => {
     create table public.__transactions (
       ix bigint not null,
       "offset" bigint not null,
-      transaction_id text not null
+      transaction_id text not null,
+      effective_at timestamptz not null,
+      paid_traffic_cost numeric
     );
-    insert into public.__transactions (ix, "offset", transaction_id)
-      values (100, 1000, 'update-100');
+    create unique index __transactions_ix_idx on public.__transactions (ix);
+    create unique index __transactions_offset_idx on public.__transactions ("offset");
+    insert into public.__transactions
+      (ix, "offset", transaction_id, effective_at, paid_traffic_cost)
+      values (100, 1000, 'update-100', '2026-08-14T00:00:00Z', null);
+    insert into public.__transactions
+      (ix, "offset", transaction_id, effective_at, paid_traffic_cost)
+      select
+        1000 + value,
+        100000 + value,
+        'bulk-update-' || value::text,
+        '2026-08-14T00:00:00Z'::timestamptz + value * interval '1 second',
+        null
+      from generate_series(1, 20000) value;
+    analyze public.__transactions;
   `);
 
   writeFileSync(
@@ -308,13 +338,17 @@ test("apply is non-destructive, repair is explicit, and reruns are idempotent", 
 
   const applyWithInvalidIndex = runInstallerResult("apply");
   assert.notEqual(applyWithInvalidIndex.status, 0);
-  assert.match(applyWithInvalidIndex.stderr, /indexes repair/i);
+  assert.match(applyWithInvalidIndex.stderr, /Conflicting Explorer index/i);
+  const repairWithInvalidConflict = runInstallerResult("repair");
+  assert.notEqual(repairWithInvalidConflict.status, 0);
+  assert.match(repairWithInvalidConflict.stderr, /Conflicting Explorer index/i);
   assert.match(
     psql(
       "select indisvalid from pg_index join pg_class on pg_class.oid = pg_index.indexrelid where pg_class.relname = 'canton_explorer_contracts_17_active_created_ix'",
     ),
     /f/,
   );
+  psql("drop index public.canton_explorer_contracts_17_active_created_ix");
 
   runInstaller("repair");
 
@@ -348,6 +382,24 @@ test("apply is non-destructive, repair is explicit, and reruns are idempotent", 
     ),
     /gin/i,
   );
+  assert.match(
+    psql(
+      "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'canton_explorer_contracts_29_created_at_ix_order'",
+    ),
+    /created_at_ix DESC/i,
+  );
+  assert.match(
+    psql(
+      "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'canton_explorer_contracts_29_archived_at_ix_order'",
+    ),
+    /archived_at_ix DESC/i,
+  );
+  assert.match(
+    psql(
+      "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'canton_explorer_exercises_29_exercised_at_ix_order'",
+    ),
+    /exercised_at_ix DESC/i,
+  );
   assert.equal(
     psql(
       "select count(*) from pg_indexes where schemaname = 'public' and tablename = '__exercises' and indexname like 'canton_explorer_%'",
@@ -371,9 +423,18 @@ test("apply is non-destructive, repair is explicit, and reruns are idempotent", 
   assert.match(inspection, /index=canton_explorer_contracts_17_witnesses_gin/);
   assert.match(inspection, /explain-relation=__contracts_29/);
   assert.match(inspection, /"Node Type":"Index Only Scan"/);
+  assert.match(inspection, /canton_explorer_contracts_29_active_created_ix/);
   assert.match(
-    inspection,
-    /canton_explorer_contracts_29_active_created_ix/,
+    psql(`
+      explain (format json)
+      select created_at_ix
+      from public.__contracts_29
+      where witnesses && array['Alice']::text[]
+        and created_at_ix < 25000
+      order by created_at_ix desc
+      limit 31
+    `),
+    /canton_explorer_contracts_29_created_at_ix_order/,
   );
 
   runInstaller("apply");
@@ -383,7 +444,7 @@ test("apply is non-destructive, repair is explicit, and reruns are idempotent", 
       .split("\n")
       .find((line) => /^\s*\d+\s*$/.test(line))
       ?.trim(),
-    "3",
+    "4",
   );
   assert.equal(
     psql(
@@ -392,6 +453,57 @@ test("apply is non-destructive, repair is explicit, and reruns are idempotent", 
       .split("\n")
       .find((line) => /^\s*\d+\s*$/.test(line))
       ?.trim(),
-    "7",
+    "13",
   );
+});
+
+test("bounded update candidates preserve OR/AND and combined filters across large history", async () => {
+  const { PqsSummaryService } =
+    await import("../backend/dist/src/pqs/pqs-summary.service.js");
+  const client = new Client({ connectionString });
+  await client.connect();
+  const service = new PqsSummaryService({
+    getRawExecutor: async () => ({
+      query: (sql) => client.query(sql),
+    }),
+  });
+  const node = {
+    id: "postgresql-test",
+    label: "PostgreSQL test",
+    role: "participant",
+    mode: "pqs_only",
+    ledgerLabel: "PostgreSQL test ledger",
+    pqs: { connectionUriEnv: "PQS_INDEX_TEST_URL", schema: "public" },
+  };
+
+  try {
+    const forwardOr = await service.fetchRecentUpdates(node, {
+      limit: 2,
+      after: "1000",
+      parties: ["Alice", "Bob"],
+      partyMode: "or",
+      templates: ["Other:Bulk"],
+    });
+    assert.deepEqual(
+      forwardOr.updates.map((update) => update.eventOffset),
+      ["100002", "100001"],
+    );
+
+    const backwardAnd = await service.fetchRecentUpdates(node, {
+      limit: 2,
+      before: "120001",
+      parties: ["Alice", "Bob"],
+      partyMode: "and",
+      templates: ["Main:Asset"],
+    });
+    assert.deepEqual(
+      backwardAnd.updates.map((update) => ({
+        eventOffset: update.eventOffset,
+        parties: update.parties,
+      })),
+      [{ eventOffset: "1000", parties: ["Alice", "Bob"] }],
+    );
+  } finally {
+    await client.end();
+  }
 });

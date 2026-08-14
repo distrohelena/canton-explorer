@@ -5,6 +5,7 @@ import {
   contractWitnessIndex,
   contractWitnessIndexSql,
   migrationTableSql,
+  pqsIndexMigrations,
   quoteIdentifier,
   representativeExplainSql,
   transactionIdPatternIndex,
@@ -31,6 +32,55 @@ describe('PQS index SQL', () => {
     expect(transactionIdPatternIndexSql('public')).toBe(
       'create index concurrently if not exists "canton_explorer_transactions_transaction_id_pattern_ops" on "public"."__transactions" (transaction_id text_pattern_ops)',
     );
+  });
+
+  it('creates order-capable update-event indexes on every physical partition', () => {
+    const migration = pqsIndexMigrations.find(
+      ({ version }) => version === '004-update-event-order',
+    );
+
+    expect(
+      migration?.indexes({
+        schema: 'public',
+        contractPartitions: ['__contracts_42', '__contracts_77'],
+        exercisePartitions: ['__exercises_29', '__exercises_83'],
+        transactionIdIsText: true,
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_42_created_at_ix_order',
+        relation: '__contracts_42',
+        keyExpressions: ['created_at_ix'],
+        sortOptions: [3],
+        createSql:
+          'create index concurrently if not exists "canton_explorer_contracts_42_created_at_ix_order" on "public"."__contracts_42" (created_at_ix desc)',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_42_archived_at_ix_order',
+        relation: '__contracts_42',
+        keyExpressions: ['archived_at_ix'],
+        sortOptions: [3],
+        createSql:
+          'create index concurrently if not exists "canton_explorer_contracts_42_archived_at_ix_order" on "public"."__contracts_42" (archived_at_ix desc)',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_77_created_at_ix_order',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_77_archived_at_ix_order',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_exercises_29_exercised_at_ix_order',
+        relation: '__exercises_29',
+        keyExpressions: ['exercised_at_ix'],
+        sortOptions: [3],
+        createSql:
+          'create index concurrently if not exists "canton_explorer_exercises_29_exercised_at_ix_order" on "public"."__exercises_29" (exercised_at_ix desc)',
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_exercises_83_exercised_at_ix_order',
+      }),
+    ]);
   });
 
   it('describes every expected index independently of PostgreSQL display formatting', () => {

@@ -87,3 +87,96 @@ The pagination regression puts `00z` and `00y` in the same
 `(created_at_ix, create_event_pk)` pair with a page limit of one. It verifies
 the older page receives `00y` after `00z` without a duplicate or skip, then
 uses `after` to return to `00z` with the three-key greater-than predicate.
+
+## Final-audit round 3: safe repair and bounded update candidates
+
+Date: 2026-08-14
+
+Commit subject: `fix: complete PQS installer final audit`
+
+### Findings resolved
+
+1. Index-definition mismatch now takes precedence over PostgreSQL validity and
+   readiness flags. A same-name index whose complete expected definition does
+   not match is always classified as `conflict`. Both `indexes apply` and
+   `indexes repair` reject it before migration-table, create-index, drop-index,
+   or migration-version DDL. Repair continues to drop only invalid indexes
+   whose complete definition matches Explorer's expectation.
+2. Party and template update filtering is now driven by an ordered, limited
+   transaction candidate CTE. Every contract-create, contract-archive, and
+   exercise probe is correlated to that transaction, repeats the selected
+   event-index cursor bound, and has its own matching `ORDER BY` direction and
+   top-N `LIMIT`. Correlating exact probes to the transaction page preserves OR
+   and AND party semantics, including parties witnessed by different events in
+   one update, and preserves the intersection of independently supplied party
+   and template filters.
+3. Explorer migration `004-update-event-order` adds descending B-tree indexes
+   for `created_at_ix` and `archived_at_ix` on every physical contracts
+   partition and `exercised_at_ix` on every physical exercises partition.
+   Indexes use `CREATE INDEX CONCURRENTLY`; no PQS-owned schema object or Flyway
+   history is changed.
+
+### TDD evidence
+
+- Safe-repair RED: the new installer regression failed 1/13 tests because an
+  invalid mismatched index was reported as `Invalid ... requires explicit
+  indexes repair` instead of a conflict. The test also guards both apply and
+  repair against persistent DDL.
+- Bounded-candidate RED: the focused three-suite run failed 8/148 tests. The
+  generated SQL lacked materialized bounded candidates, branch cursor bounds,
+  branch ordering/limits, exact AND probes, migration `004`, and six expected
+  physical order indexes (7 statements were applied instead of 13).
+- PostgreSQL RED: after the safe-conflict fixture was aligned with the first
+  finding, the disposable PostgreSQL test reached the new assertion and failed
+  because `canton_explorer_contracts_29_created_at_ix_order` did not exist.
+- GREEN used the smallest behavior changes: one classification-precedence
+  change, one new index migration, and replacement of the unbounded event CTEs
+  with correlated bounded probes.
+
+### Final verification
+
+| Command | Result |
+| --- | --- |
+| `npm test --workspace backend -- --runInBand test/indexes/pqs-index-sql.spec.ts test/indexes/pqs-index-installer.spec.ts test/pqs/pqs-summary.service.spec.ts` | 3 suites, 148 tests passed |
+| `npm test --workspace backend -- --runInBand` | 36 suites, 436 tests passed |
+| `npm test --workspace frontend` | 55 files, 445 tests passed |
+| `npm run build --workspace backend` | passed |
+| `node --test scripts/pqs-index-installer.test.mjs` | 3 tests passed |
+| `git diff --check` | passed (no output) |
+
+The PostgreSQL integration creates 20,000 historical contracts/transactions,
+executes the actual generated SQL for forward OR and backward AND pagination
+with combined party/template filters, and verifies exact returned offsets and
+parties. Its bounded representative plan names
+`canton_explorer_contracts_29_created_at_ix_order`. The installer portion also
+verifies both commands preserve an invalid mismatched index, installs 13
+Explorer indexes across physical partitions, records four Explorer migration
+versions, and remains idempotent.
+
+The first full-backend attempt inside the restricted sandbox failed only
+because existing Supertest suites could not bind an ephemeral local listener
+(`listen EPERM`). The permitted rerun produced the 436/436 passing result above.
+Expected Node experimental warnings and the existing mocked gRPC refresh log
+were present; neither caused a test failure.
+
+### Changed paths
+
+- `backend/src/indexes/pqs-index-installer.ts`
+- `backend/src/indexes/pqs-index-sql.ts`
+- `backend/src/pqs/pqs-summary.service.ts`
+- `backend/test/indexes/pqs-index-installer.spec.ts`
+- `backend/test/indexes/pqs-index-sql.spec.ts`
+- `backend/test/pqs/pqs-summary.service.spec.ts`
+- `scripts/pqs-index-installer.test.mjs`
+- `.superpowers/sdd/2026-08-14-pqs-index-installer-implementation/final-audit-fix-report.md`
+
+### Concerns
+
+- Migration `004` intentionally increases index count and therefore consumes
+  additional disk and concurrent-build I/O on large PQS partitions. Application
+  remains an explicit operator action and uses concurrent index creation.
+- Exact highly selective AND/intersection filters may still inspect many
+  transactions before finding a full page. They no longer enumerate all
+  historical matching event rows up front; each event branch is cursor-bounded,
+  index-backed, and top-N limited. The 20,000-row exactness regression completed
+  successfully.
