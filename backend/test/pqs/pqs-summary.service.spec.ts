@@ -3529,6 +3529,33 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('uses unioned event indexes instead of correlated party-update scans', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { parties: ['Alice'] },
+    );
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('with party_update_ix as');
+    expect(sql).toContain('contract_row.created_at_ix as update_ix');
+    expect(sql).toContain('contract_row.archived_at_ix as update_ix');
+    expect(sql).toContain('exercise_row.exercised_at_ix as update_ix');
+    expect(sql).toContain('join party_update_ix');
+    expect(sql).not.toContain('where exists');
+  });
+
   it('applies party filters in schema-qualified recent update queries', async () => {
     const query = jest
       .fn()
@@ -3620,6 +3647,9 @@ describe('PqsSummaryService', () => {
     const query = jest
       .fn()
       .mockResolvedValueOnce({
+        rows: [{ pk: '17' }],
+      })
+      .mockResolvedValueOnce({
         rows: [
           {
             update_id:
@@ -3671,9 +3701,44 @@ describe('PqsSummaryService', () => {
     expect(query).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining(
-        "where update_event_templates.template_id = 'Splice.DsoRules:DsoRules'",
+        "contract_tpe_row.module_name = 'Splice.DsoRules'",
       ),
     );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('contract_row.tpe_pk in (17)'),
+    );
+  });
+
+  it('prunes contract partitions for template-filtered recent updates', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ pk: '17' }, { pk: '29' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchRecentUpdates(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { templates: ['Splice.Amulet:Amulet'] },
+    );
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("contract_tpe_row.module_name = 'Splice.Amulet'"),
+    );
+    const sql = String(query.mock.calls[1]?.[0]);
+    expect(sql).toContain('contract_row.tpe_pk in (17, 29)');
+    expect(sql).toContain('exercise_row.contract_tpe_pk in (17, 29)');
+    expect(sql).not.toContain('update_event_templates.template_id');
   });
 
   it('pushes hide Splice filtering into schema-qualified recent updates queries without per-update event lookups', async () => {
@@ -4166,9 +4231,71 @@ describe('PqsSummaryService', () => {
     ).resolves.toEqual(typedNodeContractsFixture);
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('order by tx.offset desc'),
+      expect.stringContaining('order by contract_row.created_at_ix desc'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('contract_row.created_at_ix is not null'),
     );
     expect(query).toHaveBeenCalledWith(expect.stringContaining('limit 3'));
+  });
+
+  it('maps offset cursors to transaction indexes before paging active contracts', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { before: '3322' },
+    );
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('with cursor_boundary as');
+    expect(sql).toContain('where cursor_tx.offset >= 3322');
+    expect(sql).toContain(
+      'contract_row.created_at_ix < (select cursor_ix from cursor_boundary)',
+    );
+    expect(sql).toContain('active_contract_page as');
+    expect(sql).toContain('order by contract_row.created_at_ix desc');
+  });
+
+  it('prunes contract partitions for template-filtered active contracts', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ pk: '17' }, { pk: '29' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { templates: ['Splice.Amulet:Amulet'] },
+    );
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("contract_tpe_row.module_name = 'Splice.Amulet'"),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('contract_row.tpe_pk in (17, 29)'),
+    );
   });
 
   it('returns global contracts from healthy nodes when another node PQS is unavailable', async () => {
@@ -4422,24 +4549,30 @@ describe('PqsSummaryService', () => {
     });
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('tx.offset > 101'),
+      expect.stringContaining('where cursor_tx.offset <= 101'),
     );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('order by tx.offset asc'),
+      expect.stringContaining('contract_row.created_at_ix >'),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('order by contract_row.created_at_ix asc'),
     );
   });
 
   it('adds template and hide-splice filters to the ACS query', async () => {
-    const query = jest.fn().mockResolvedValueOnce({
-      rows: [
-        {
-          contract_id: '00b',
-          template_id: 'Main:Asset',
-          created_record_time: '2026-07-01T12:01:00.000Z',
-          created_event_offset: '102',
-        },
-      ],
-    });
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ pk: '17' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            contract_id: '00b',
+            template_id: 'Main:Asset',
+            created_record_time: '2026-07-01T12:01:00.000Z',
+            created_event_offset: '102',
+          },
+        ],
+      });
 
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
@@ -4457,11 +4590,15 @@ describe('PqsSummaryService', () => {
       { limit: 30, templates: ['Main:Asset'], hideSplice: true },
     );
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("end = 'Main:Asset'"),
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('contract_row.tpe_pk in (17)'),
     );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("end not like 'Splice.%'"),
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining(
+        "visible_contract_tpe.module_name not like 'Splice.%'",
+      ),
     );
   });
 
@@ -4615,6 +4752,10 @@ describe('PqsSummaryService', () => {
       expect.stringContaining("'Alice'"),
     );
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining("'Bob'"));
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('having count(distinct party_filter) = 2'),
+    );
     expect(updates).toEqual({
       nodeId: 'participant-1',
       label: 'Participant 1',
@@ -4866,7 +5007,7 @@ describe('PqsSummaryService', () => {
           ledgerLabel: 'Retail Ledger',
           pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
         },
-        'missing-update-id',
+        '99999999',
       ),
     ).rejects.toThrow('Update not found');
   });
@@ -4918,6 +5059,75 @@ describe('PqsSummaryService', () => {
         events: [],
       }),
     );
+  });
+
+  it('looks up update details through the numeric offset index', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '00003322',
+      ),
+    ).rejects.toThrow('Update not found');
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('where tx.offset = 3322');
+    expect(sql).not.toContain('tx.offset::text =');
+  });
+
+  it('rejects malformed update offsets before querying PQS', async () => {
+    const query = jest.fn();
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '3322 or 1=1',
+      ),
+    ).rejects.toThrow('Invalid event offset');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('rejects update offsets outside the PQS bigint range before querying', async () => {
+    const query = jest.fn();
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await expect(
+      service.fetchUpdateDetail(
+        {
+          id: 'participant-1',
+          label: 'Participant 1',
+          role: 'participant',
+          mode: 'pqs_only',
+          ledgerLabel: 'Retail Ledger',
+          pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+        },
+        '9223372036854775808',
+      ),
+    ).rejects.toThrow('Invalid event offset');
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('returns mixed normalized event rows on a single update detail', async () => {
@@ -5760,15 +5970,17 @@ describe('PqsSummaryService', () => {
       .mockResolvedValue([]);
 
     const response = await Promise.race([
-      (service as PqsSummaryService & {
-        fetchTokens: (
-          nodes: Array<{
-            id: string;
-            label: string;
-            mode: 'pqs_with_grpc';
-          }>,
-        ) => Promise<TokensResponse>;
-      }).fetchTokens([
+      (
+        service as PqsSummaryService & {
+          fetchTokens: (
+            nodes: Array<{
+              id: string;
+              label: string;
+              mode: 'pqs_with_grpc';
+            }>,
+          ) => Promise<TokensResponse>;
+        }
+      ).fetchTokens([
         {
           id: 'participant-1',
           label: 'Participant 1',
@@ -5835,12 +6047,16 @@ describe('PqsSummaryService', () => {
     };
 
     await Promise.all([
-      (service as PqsSummaryService & {
-        fetchTokens: (nodes: typeof node[]) => Promise<TokensResponse>;
-      }).fetchTokens([node]),
-      (service as PqsSummaryService & {
-        fetchTokens: (nodes: typeof node[]) => Promise<TokensResponse>;
-      }).fetchTokens([node]),
+      (
+        service as PqsSummaryService & {
+          fetchTokens: (nodes: (typeof node)[]) => Promise<TokensResponse>;
+        }
+      ).fetchTokens([node]),
+      (
+        service as PqsSummaryService & {
+          fetchTokens: (nodes: (typeof node)[]) => Promise<TokensResponse>;
+        }
+      ).fetchTokens([node]),
     ]);
 
     expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledTimes(1);
@@ -5871,11 +6087,13 @@ describe('PqsSummaryService', () => {
     jest
       .spyOn(service as never, 'fetchBuiltinTokensForNode')
       .mockResolvedValue([]);
-    const responsePromise = (service as PqsSummaryService & {
-      fetchTokens: (
-        nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
-      ) => Promise<TokensResponse>;
-    }).fetchTokens([
+    const responsePromise = (
+      service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string; mode: 'pqs_with_grpc' }>,
+        ) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([
       { id: 'participant-1', label: 'Participant 1', mode: 'pqs_with_grpc' },
     ]);
     let settled = false;
@@ -6018,7 +6236,9 @@ describe('PqsSummaryService', () => {
       expect.stringContaining('contract_row.tpe_pk in (12, 14, 43)'),
     );
     expect(tokenQuery?.slice(tokenQuery.indexOf('where'))).not.toEqual(
-      expect.stringContaining("contract_tpe_row.module_name || ':' || contract_tpe_row.entity_name"),
+      expect.stringContaining(
+        "contract_tpe_row.module_name || ':' || contract_tpe_row.entity_name",
+      ),
     );
   });
 
