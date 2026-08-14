@@ -5,6 +5,7 @@ import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../lib/pagination';
 import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
 import UpdatesAdvancedFilter from '../components/UpdatesAdvancedFilter.vue';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import {
   fetchNodeActiveParties,
   fetchPartyFingerprints,
@@ -23,14 +24,10 @@ type PartiesMode = 'active' | 'all' | 'fingerprints';
 const route = useRoute();
 const router = useRouter();
 const nodes = ref<NodeSnapshot[] | null>(null);
-const activePartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
-const localPartiesByNodeId = ref<Record<string, ActivePartiesNodeEntry>>({});
-const activeNodeErrors = ref<Record<string, string | null>>({});
-const localNodeErrors = ref<Record<string, string | null>>({});
+const nodesLoading = ref(false);
+const nodesError = ref<string | null>(null);
 const error = ref<string | null>(null);
 const selectedMode = ref<PartiesMode>('active');
-const activeNodeLoading = ref<Record<string, boolean>>({});
-const localNodeLoading = ref<Record<string, boolean>>({});
 const activeNodeFilters = ref<string[]>([]);
 const requestGeneration = ref(0);
 const partyPageSize = ref(DEFAULT_PAGE_SIZE);
@@ -53,6 +50,11 @@ const namespaceBeforeCursor = ref<string | null>(null);
 const namespaceAfterCursor = ref<string | null>(null);
 const namespacesResponse = ref<NodePartyFingerprintsEntry | PartyFingerprintsResponse | null>(null);
 
+type NodePartySection = ReturnType<typeof useSectionLoad<ActivePartiesNodeEntry>>;
+
+const activePartySections = new Map<string, NodePartySection>();
+const localPartySections = new Map<string, NodePartySection>();
+
 const nodeButtons = computed(() => nodes.value ?? []);
 
 const selectedNodes = computed(() =>
@@ -72,12 +74,9 @@ const selectedNodeSnapshots = computed<NodeSnapshot[]>(() => {
 });
 
 const selectedEntries = computed<ActivePartiesNodeEntry[]>(() => {
-  const source =
-    selectedMode.value === 'all' ? localPartiesByNodeId.value : activePartiesByNodeId.value;
-
   return selectableNodes.value
-    .map((node) => source[node.id])
-    .filter((entry): entry is ActivePartiesNodeEntry => entry !== undefined);
+    .map((node) => nodePartySection(selectedMode.value, node.id).data.value)
+    .filter((entry): entry is ActivePartiesNodeEntry => entry !== null);
 });
 
 const selectedParties = computed(() =>
@@ -170,12 +169,12 @@ const selectedActiveNodeError = computed(() => {
 
 const isSelectedNodeLoading = computed(() => {
   if (selectedMode.value === 'all') {
-    return selectableNodes.value.some((node) => localNodeLoading.value[node.id]);
+    return selectableNodes.value.some((node) => localPartySections.get(node.id)?.loading.value);
   }
   if (selectedMode.value === 'fingerprints') {
     return loadingNamespaces.value;
   }
-  return selectableNodes.value.some((node) => activeNodeLoading.value[node.id]);
+  return selectableNodes.value.some((node) => nodePartySection(selectedMode.value, node.id).loading.value);
 });
 
 const resultsLoadingLabel = 'Loading parties across selected nodes';
@@ -183,16 +182,26 @@ const resultsLoadingLabel = 'Loading parties across selected nodes';
 const selectedActiveRequestError = computed(
   () =>
     selectableNodes.value
-      .map((node) => activeNodeErrors.value[node.id])
+      .map((node) => activePartySections.get(node.id)?.error.value)
       .find((message): message is string => Boolean(message)) ?? null,
 );
 
 const selectedLocalRequestError = computed(
   () =>
     selectableNodes.value
-      .map((node) => localNodeErrors.value[node.id])
+      .map((node) => localPartySections.get(node.id)?.error.value)
       .find((message): message is string => Boolean(message)) ?? null,
 );
+
+const selectedActiveRequestFailure = computed(() => {
+  const node = selectableNodes.value.find((candidate) => activePartySections.get(candidate.id)?.error.value);
+  return node ? { node, message: activePartySections.get(node.id)?.error.value as string } : null;
+});
+
+const selectedLocalRequestFailure = computed(() => {
+  const node = selectableNodes.value.find((candidate) => localPartySections.get(candidate.id)?.error.value);
+  return node ? { node, message: localPartySections.get(node.id)?.error.value as string } : null;
+});
 
 function uniqueValues(values: string[]): string[] {
   return Array.from(
@@ -248,12 +257,22 @@ function beginRequestGeneration(): number {
 }
 
 function clearPartyResults(): void {
-  activePartiesByNodeId.value = {};
-  localPartiesByNodeId.value = {};
-  activeNodeErrors.value = {};
-  localNodeErrors.value = {};
-  activeNodeLoading.value = {};
-  localNodeLoading.value = {};
+  activePartySections.forEach((section) => section.reset());
+  localPartySections.forEach((section) => section.reset());
+}
+
+function nodePartySection(mode: PartiesMode, nodeId: string): NodePartySection {
+  const sections = mode === 'all' ? localPartySections : activePartySections;
+  const existing = sections.get(nodeId);
+  if (existing) {
+    return existing;
+  }
+
+  const section = useSectionLoad(() =>
+    mode === 'all' ? fetchNodeLocalParties(nodeId) : fetchNodeActiveParties(nodeId),
+  );
+  sections.set(nodeId, section);
+  return section;
 }
 
 function nodesForMode(mode: PartiesMode): NodeSnapshot[] {
@@ -301,72 +320,58 @@ async function ensureNodePartiesLoaded(
   generation = requestGeneration.value,
   force = false,
 ): Promise<void> {
-  const isCurrentRequest = () =>
-    generation === requestGeneration.value &&
-    selectedMode.value === mode &&
-    activeNodeFilters.value.includes(nodeId);
-
-  if (mode === 'active') {
-    if (!force && (activePartiesByNodeId.value[nodeId] || activeNodeLoading.value[nodeId])) {
-      return;
-    }
-
-    activeNodeLoading.value = { ...activeNodeLoading.value, [nodeId]: true };
-    activeNodeErrors.value = { ...activeNodeErrors.value, [nodeId]: null };
-    try {
-      const entry = await fetchNodeActiveParties(nodeId);
-      if (isCurrentRequest()) {
-        activePartiesByNodeId.value = {
-          ...activePartiesByNodeId.value,
-          [nodeId]: entry,
-        };
-      }
-    } catch (err) {
-      if (isCurrentRequest()) {
-        activeNodeErrors.value = {
-          ...activeNodeErrors.value,
-          [nodeId]: err instanceof Error ? err.message : 'Unknown error',
-        };
-      }
-    } finally {
-      if (generation === requestGeneration.value) {
-        activeNodeLoading.value = { ...activeNodeLoading.value, [nodeId]: false };
-      }
-    }
-    return;
-  }
-
   if (mode === 'fingerprints') {
     await loadNamespaces(generation);
     return;
   }
 
-  if (!force && (localPartiesByNodeId.value[nodeId] || localNodeLoading.value[nodeId])) {
+  if (generation !== requestGeneration.value || selectedMode.value !== mode) {
     return;
   }
 
-  localNodeLoading.value = { ...localNodeLoading.value, [nodeId]: true };
-  localNodeErrors.value = { ...localNodeErrors.value, [nodeId]: null };
-  try {
-    const entry = await fetchNodeLocalParties(nodeId);
-    if (isCurrentRequest()) {
-      localPartiesByNodeId.value = {
-        ...localPartiesByNodeId.value,
-        [nodeId]: entry,
-      };
-    }
-  } catch (err) {
-    if (isCurrentRequest()) {
-      localNodeErrors.value = {
-        ...localNodeErrors.value,
-        [nodeId]: err instanceof Error ? err.message : 'Unknown error',
-      };
-    }
-  } finally {
-    if (generation === requestGeneration.value) {
-      localNodeLoading.value = { ...localNodeLoading.value, [nodeId]: false };
-    }
+  const section = nodePartySection(mode, nodeId);
+  if (!force && (section.data.value || section.loading.value)) {
+    return;
   }
+
+  if (force) section.reset();
+  await section.load();
+}
+
+async function fetchWithOneRetry<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch {
+    return request();
+  }
+}
+
+function retryNodeParties(nodeId: string): void {
+  if (selectedMode.value === 'fingerprints') {
+    return;
+  }
+  void nodePartySection(selectedMode.value, nodeId).retry();
+}
+
+async function loadNodes(): Promise<void> {
+  nodesLoading.value = true;
+  nodesError.value = null;
+  try {
+    nodes.value = await fetchWithOneRetry(fetchNodes);
+    activeNodeFilters.value = readNodeFilters(nodes.value);
+    if (Object.prototype.hasOwnProperty.call(route.query, 'node')) {
+      showAdvancedFilter.value = true;
+    }
+    await ensureAllNodesPartiesLoaded(selectedMode.value, requestGeneration.value);
+  } catch (err) {
+    nodesError.value = err instanceof Error ? err.message : 'Unknown error';
+  } finally {
+    nodesLoading.value = false;
+  }
+}
+
+function retryNodes(): void {
+  void loadNodes();
 }
 
 function resetNamespacePagination(): void {
@@ -600,17 +605,8 @@ watch(
   { deep: true },
 );
 
-onMounted(async () => {
-  try {
-    nodes.value = await fetchNodes();
-    activeNodeFilters.value = readNodeFilters(nodes.value);
-    if (Object.prototype.hasOwnProperty.call(route.query, 'node')) {
-      showAdvancedFilter.value = true;
-    }
-    await ensureAllNodesPartiesLoaded(selectedMode.value, requestGeneration.value);
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
-  }
+onMounted(() => {
+  void loadNodes();
 });
 </script>
 
@@ -622,8 +618,7 @@ onMounted(async () => {
       </div>
     </header>
 
-    <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
-    <div v-else class="parties-page">
+    <div class="parties-page">
       <div class="parties-page__mode-switch" role="tablist" aria-label="Party source modes">
           <button
             type="button"
@@ -652,6 +647,15 @@ onMounted(async () => {
           >
             Namespaces (gRPC)
           </button>
+      </div>
+
+      <p v-if="nodesLoading" class="dashboard__message inline-loading" role="status">
+        <span class="node-updates__spinner" aria-hidden="true"></span>
+        <span>Loading nodes...</span>
+      </p>
+      <div v-else-if="nodesError" class="dashboard__message dashboard__message--error" role="alert">
+        <p>{{ nodesError }}</p>
+        <button type="button" class="button button--secondary" @click="retryNodes">Retry node discovery</button>
       </div>
 
       <div>
@@ -857,7 +861,7 @@ onMounted(async () => {
           <span>{{ resultsLoadingLabel }}...</span>
         </div>
 
-        <div v-else-if="selectedMode === 'active'" class="package-detail__list">
+        <div v-if="selectedMode === 'active'" class="package-detail__list">
           <div
             v-for="party in paginatedSelectedParties.items"
             :key="party"
@@ -886,8 +890,18 @@ onMounted(async () => {
           <p
             v-if="selectedActiveRequestError"
             class="package-detail__seen-meta parties-page__results-copy"
+            role="alert"
           >
             {{ selectedActiveRequestError }}
+            <button
+              v-if="selectedActiveRequestFailure"
+              type="button"
+              class="button button--secondary"
+              :aria-label="`Retry ${selectedActiveRequestFailure.node.label}`"
+              @click="retryNodeParties(selectedActiveRequestFailure.node.id)"
+            >
+              Retry
+            </button>
           </p>
           <p
             v-if="selectedParties.length === 0 && selectedActiveNodeStatus !== 'pqs_error' && !selectedActiveRequestError"
@@ -898,7 +912,7 @@ onMounted(async () => {
         </div>
 
         <div
-          v-else-if="selectedMode === 'all' && (selectedNodes.length === 0 || selectableNodes.length > 0)"
+          v-if="selectedMode === 'all' && (selectedNodes.length === 0 || selectableNodes.length > 0)"
           class="package-detail__list"
         >
           <div
@@ -953,8 +967,18 @@ onMounted(async () => {
           <p
             v-if="selectedLocalRequestError"
             class="package-detail__seen-meta parties-page__results-copy"
+            role="alert"
           >
             {{ selectedLocalRequestError }}
+            <button
+              v-if="selectedLocalRequestFailure"
+              type="button"
+              class="button button--secondary"
+              :aria-label="`Retry ${selectedLocalRequestFailure.node.label}`"
+              @click="retryNodeParties(selectedLocalRequestFailure.node.id)"
+            >
+              Retry
+            </button>
           </p>
           <p
             v-else-if="selectedParties.length === 0 && !selectedLocalRequestError"
@@ -964,7 +988,7 @@ onMounted(async () => {
           </p>
         </div>
 
-        <div v-else-if="selectedMode === 'fingerprints'" class="package-detail__list">
+        <div v-if="selectedMode === 'fingerprints'" class="package-detail__list">
           <RouterLink
             v-for="fingerprint in selectedFingerprints"
             :key="fingerprint"

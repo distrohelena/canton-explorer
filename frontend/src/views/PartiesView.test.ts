@@ -121,6 +121,29 @@ describe('PartiesView', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps successful node parties visible when another node fails and retries only that node', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) => {
+      if (nodeId === 'participant-1') {
+        return makeActiveEntry(nodeId, ['Alice']);
+      }
+      throw new Error('participant-2 unavailable');
+    });
+
+    await renderAt();
+
+    expect(await screen.findByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(await screen.findByText('participant-2 unavailable')).toBeInTheDocument();
+    expect(fetchNodeActiveParties).toHaveBeenCalledTimes(3);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry Participant 2' }));
+
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(5));
+    expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-2');
+    expect(fetchNodeActiveParties.mock.calls.filter(([nodeId]) => nodeId === 'participant-1')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
+  });
+
   it('shows a loading state before active parties resolve', async () => {
     vi.mocked(fetchNodes).mockResolvedValue([
       {
@@ -173,7 +196,7 @@ describe('PartiesView', () => {
     expect(screen.getByRole('tablist', { name: 'Party source modes' })).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Party source modes' }).querySelectorAll('button')).toHaveLength(3);
     expect(screen.queryByRole('tablist', { name: 'Node selectors' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Loading nodes...')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading nodes...')).toBeInTheDocument();
   });
 
   it('renders one unified advanced filter with all nodes checked by default', async () => {
@@ -266,6 +289,7 @@ describe('PartiesView', () => {
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
     expect(router.currentRoute.value.query.view).toBe('compact');
     expect(router.currentRoute.value.query.node).toBe('participant-2');
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-2'));
 
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
     await waitFor(() => expect(router.currentRoute.value.query.node).toBeUndefined());
@@ -488,6 +512,7 @@ describe('PartiesView', () => {
     vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
     vi.mocked(fetchNodeActiveParties)
       .mockResolvedValueOnce(makeActiveEntry('participant-1', ['Alice']))
+      .mockRejectedValueOnce(new Error('participant-2 unavailable'))
       .mockRejectedValueOnce(new Error('participant-2 unavailable'));
 
     await renderAt();
