@@ -292,6 +292,23 @@ interface CachedNodeObservedTokens {
   tokens: TokenSummary[];
 }
 
+interface TokenTemplateType {
+  pk: number;
+  templateId: string;
+  isCip112: boolean;
+}
+
+interface CachedNodeTokenTemplateTypes {
+  cachedAt: number;
+  templateTypes: TokenTemplateType[];
+}
+
+interface TokenTemplateTypeRow {
+  pk: string | number | null;
+  module_name: string | null;
+  entity_name: string | null;
+}
+
 interface LoadedNodeObservedTokens {
   refreshing: boolean;
   tokens: TokenSummary[];
@@ -2034,30 +2051,21 @@ function contractDetailQuery(node: NodeConfig, contractId: string): string {
 function tokenRowsQuery(
   node: NodeConfig,
   limit: number,
-  templateIds: readonly string[],
-  templatePatterns: readonly string[] = [],
+  templateTypePks: readonly number[],
 ): string {
   const relations = pqsCoreRelations(node);
   const normalizedLimit =
     Number.isFinite(limit) && Number(limit) > 0
       ? Math.trunc(limit)
       : TOKEN_TRANSFER_CACHE_LIMIT;
-  const quotedTemplateIds = templateIds
-    .map((templateId) => `'${escapeSqlLiteral(templateId)}'`)
-    .join(',\n        ');
+  const normalizedTemplateTypePks = templateTypePks.filter(
+    (pk) => Number.isSafeInteger(pk) && pk > 0,
+  );
   const contractTemplateId =
     contractTemplateIdentifierExpression('contract_tpe_row');
-  const patternClauses = templatePatterns.map(
-    (pattern) => `${contractTemplateId} like '${escapeSqlLiteral(pattern)}'`,
-  );
-  const templateFilterClause = [
-    quotedTemplateIds
-      ? `${contractTemplateId} in (\n        ${quotedTemplateIds}\n      )`
-      : null,
-    ...patternClauses,
-  ]
-    .filter((clause): clause is string => clause !== null)
-    .join('\n        or ');
+  const templateFilterClause = normalizedTemplateTypePks.length
+    ? `contract_row.tpe_pk in (${normalizedTemplateTypePks.join(', ')})`
+    : 'false';
 
   return `
     select
@@ -2088,6 +2096,33 @@ function tokenRowsQuery(
     ) token_transfer_rows
     order by event_offset::numeric desc
     limit ${normalizedLimit}
+  `;
+}
+
+function tokenTemplateTypesQuery(node: NodeConfig): string {
+  const relations = pqsCoreRelations(node);
+  const exactTemplateClauses = TOKEN_DISCOVERY_TEMPLATE_IDS.map(
+    (templateId) => {
+      const separatorIndex = templateId.lastIndexOf(':');
+      const moduleName = templateId.slice(0, separatorIndex);
+      const entityName = templateId.slice(separatorIndex + 1);
+
+      return `(contract_tpe_row.module_name = '${escapeSqlLiteral(moduleName)}'
+        and contract_tpe_row.entity_name = '${escapeSqlLiteral(entityName)}')`;
+    },
+  ).join('\n      or ');
+
+  return `
+    select
+      contract_tpe_row.pk::text as pk,
+      contract_tpe_row.module_name::text as module_name,
+      contract_tpe_row.entity_name::text as entity_name
+    from ${relations.contractTpe} contract_tpe_row
+    where ${exactTemplateClauses}
+      or (
+        contract_tpe_row.module_name like '%.CIP112'
+        and contract_tpe_row.entity_name is not null
+      )
   `;
 }
 
@@ -2200,6 +2235,10 @@ export class PqsSummaryService {
   private readonly observedTokensByNode = new Map<
     string,
     CachedNodeObservedTokens
+  >();
+  private readonly tokenTemplateTypesByNode = new Map<
+    string,
+    CachedNodeTokenTemplateTypes
   >();
   private readonly grpcObservedTokensByNode = new Map<
     string,
@@ -5982,19 +6021,19 @@ export class PqsSummaryService {
     limit: number,
     options?: { includeCip112?: boolean },
   ): Promise<TokenSummary[]> {
-    const client = await this.managerFactory.getRawExecutor(node);
     const includeCip112 = options?.includeCip112 ?? true;
+    const templateTypePks = await this.resolveTokenTemplateTypePks(
+      node,
+      includeCip112
+        ? TOKEN_DISCOVERY_TEMPLATE_IDS
+        : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS,
+      includeCip112
+        ? TOKEN_DISCOVERY_TEMPLATE_PATTERNS
+        : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS,
+    );
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(
-      tokenRowsQuery(
-        node,
-        limit,
-        includeCip112
-          ? TOKEN_DISCOVERY_TEMPLATE_IDS
-          : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_IDS,
-        includeCip112
-          ? TOKEN_DISCOVERY_TEMPLATE_PATTERNS
-          : TOKEN_DISCOVERY_NON_CIP112_TEMPLATE_PATTERNS,
-      ),
+      tokenRowsQuery(node, limit, templateTypePks),
     );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const dedupedTokens = new Map<string, TokenSummary>();
@@ -6011,6 +6050,64 @@ export class PqsSummaryService {
         left.name.localeCompare(right.name) ||
         left.tokenId.localeCompare(right.tokenId),
     );
+  }
+
+  private async resolveTokenTemplateTypePks(
+    node: NodeConfig,
+    templateIds: readonly string[],
+    templatePatterns: readonly string[],
+  ): Promise<number[]> {
+    const templateTypes = await this.loadCachedTokenTemplateTypes(node);
+    const includeCip112 = templatePatterns.includes(
+      CIP112_TEMPLATE_ID_LIKE_PATTERN,
+    );
+    const requestedTemplateIds = new Set(templateIds);
+
+    return templateTypes
+      .filter(
+        (templateType) =>
+          requestedTemplateIds.has(templateType.templateId) ||
+          (includeCip112 && templateType.isCip112),
+      )
+      .map((templateType) => templateType.pk);
+  }
+
+  private async loadCachedTokenTemplateTypes(
+    node: NodeConfig,
+  ): Promise<TokenTemplateType[]> {
+    const cached = this.tokenTemplateTypesByNode.get(node.id);
+    if (cached && Date.now() - cached.cachedAt < TOKEN_TRANSFER_CACHE_TTL_MS) {
+      return cached.templateTypes;
+    }
+
+    const client = await this.managerFactory.getRawExecutor(node);
+    const result = await client.query<TokenTemplateTypeRow>(
+      tokenTemplateTypesQuery(node),
+    );
+    const templateTypes = (result.rows ?? []).flatMap((row) => {
+      const pk = Number(row.pk);
+      if (
+        !Number.isSafeInteger(pk) ||
+        pk <= 0 ||
+        typeof row.module_name !== 'string' ||
+        typeof row.entity_name !== 'string'
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          pk,
+          templateId: `${row.module_name}:${row.entity_name}`,
+          isCip112: row.module_name.endsWith('.CIP112'),
+        },
+      ];
+    });
+    this.tokenTemplateTypesByNode.set(node.id, {
+      cachedAt: Date.now(),
+      templateTypes,
+    });
+    return templateTypes;
   }
 
   private async findObservedToken(
@@ -6145,19 +6242,19 @@ export class PqsSummaryService {
     limit: number,
     options?: { includeCip112?: boolean },
   ): Promise<NodeTokenHolderObservation[]> {
-    const client = await this.managerFactory.getRawExecutor(node);
     const includeCip112 = options?.includeCip112 ?? true;
+    const templateTypePks = await this.resolveTokenTemplateTypePks(
+      node,
+      includeCip112
+        ? TOKEN_HOLDER_TEMPLATE_IDS
+        : TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS,
+      includeCip112
+        ? TOKEN_HOLDER_TEMPLATE_PATTERNS
+        : TOKEN_HOLDER_NON_CIP112_TEMPLATE_PATTERNS,
+    );
+    const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(
-      tokenRowsQuery(
-        node,
-        limit,
-        includeCip112
-          ? TOKEN_HOLDER_TEMPLATE_IDS
-          : TOKEN_HOLDER_NON_CIP112_TEMPLATE_IDS,
-        includeCip112
-          ? TOKEN_HOLDER_TEMPLATE_PATTERNS
-          : TOKEN_HOLDER_NON_CIP112_TEMPLATE_PATTERNS,
-      ),
+      tokenRowsQuery(node, limit, templateTypePks),
     );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const holders: NodeTokenHolderObservation[] = [];
@@ -6256,9 +6353,14 @@ export class PqsSummaryService {
     node: NodeConfig,
     limit: number,
   ): Promise<NodeTokenTransferObservation[]> {
+    const templateTypePks = await this.resolveTokenTemplateTypePks(
+      node,
+      TOKEN_TRANSFER_TEMPLATE_IDS,
+      [],
+    );
     const client = await this.managerFactory.getRawExecutor(node);
     const result = await client.query(
-      tokenRowsQuery(node, limit, TOKEN_TRANSFER_TEMPLATE_IDS),
+      tokenRowsQuery(node, limit, templateTypePks),
     );
     const rows = (result.rows as TokenTransferRow[]) ?? [];
     const transfers: NodeTokenTransferObservation[] = [];

@@ -5948,6 +5948,80 @@ describe('PqsSummaryService', () => {
     });
   });
 
+  it('uses cached literal template type PKs to prune token contract partitions', async () => {
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('contract_tpe_row.pk::text as pk')) {
+        return Promise.resolve({
+          rows: [
+            {
+              pk: '12',
+              module_name: 'Splice.Amulet',
+              entity_name: 'Amulet',
+            },
+            {
+              pk: '14',
+              module_name: 'Splice.Api.Token.HoldingV1',
+              entity_name: 'Holding',
+            },
+            {
+              pk: '43',
+              module_name: 'Splice.Api.Token.TransferInstructionV1',
+              entity_name: 'Transfer',
+            },
+          ],
+        });
+      }
+
+      if (sql.includes('from "public"."__transactions" tx')) {
+        return Promise.resolve({
+          rows: [
+            {
+              update_id: 'token-update-amulet',
+              event_offset: '303',
+              record_time: '2026-07-07T13:00:00.000Z',
+              template_id: 'Splice.Amulet:Amulet',
+              package_id: 'splice-amulet-package',
+              contract_instance: Buffer.from('amulet-1'),
+            },
+          ],
+        });
+      }
+
+      return Promise.resolve({ rows: [] });
+    });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await (
+      service as PqsSummaryService & {
+        fetchTokens: (
+          nodes: Array<{ id: string; label: string }>,
+        ) => Promise<TokensResponse>;
+      }
+    ).fetchTokens([{ id: 'participant-1', label: 'Participant 1' } as never]);
+
+    const typeLookupQuery = query.mock.calls
+      .map(([sql]) => sql as string)
+      .find((sql) => sql.includes('contract_tpe_row.pk::text as pk'));
+    const tokenQuery = query.mock.calls
+      .map(([sql]) => sql as string)
+      .find((sql) => sql.includes('from "public"."__transactions" tx'));
+
+    expect(typeLookupQuery).toEqual(
+      expect.stringContaining("contract_tpe_row.module_name = 'Splice.Amulet'"),
+    );
+    expect(typeLookupQuery).toEqual(
+      expect.stringContaining("contract_tpe_row.module_name like '%.CIP112'"),
+    );
+    expect(tokenQuery).toEqual(
+      expect.stringContaining('contract_row.tpe_pk in (12, 14, 43)'),
+    );
+    expect(tokenQuery?.slice(tokenQuery.indexOf('where'))).not.toEqual(
+      expect.stringContaining("contract_tpe_row.module_name || ':' || contract_tpe_row.entity_name"),
+    );
+  });
+
   it('discovers an observed CIP56 token from a holding create even when no transfers exist yet', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [
@@ -6110,7 +6184,8 @@ describe('PqsSummaryService', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [{ template_id: 'Splice.AmuletRules:AmuletRules' }],
-      });
+      })
+      .mockResolvedValue({ rows: [] });
     const service = new PqsSummaryService({
       getRawExecutor: async () => ({ query }),
     } as never);
@@ -6278,7 +6353,7 @@ describe('PqsSummaryService', () => {
       }
     ).fetchTokens([node]);
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('%.CIP112'));
     expect(packageSyncService.syncPackagesById).toHaveBeenCalledWith(node, [
       'vault-base-package',
     ]);
@@ -6466,7 +6541,7 @@ describe('PqsSummaryService', () => {
     expect(grpcOperationsService.fetchHoldingV2Tokens).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'participant-1' }),
     );
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('%.CIP112'));
     expect(response.tokens).toEqual([
       {
         tokenId: 'Issuer::USDCx',
@@ -7016,8 +7091,8 @@ describe('PqsSummaryService', () => {
       ],
     });
 
-    expect(participant1Query).toHaveBeenCalledTimes(2);
-    expect(participant2Query).toHaveBeenCalledTimes(2);
+    expect(participant1Query).toHaveBeenCalledTimes(3);
+    expect(participant2Query).toHaveBeenCalledTimes(3);
     expect(decoder.decodeContractInstance).toHaveBeenCalledTimes(2);
   });
 
@@ -10532,7 +10607,7 @@ describe('PqsSummaryService', () => {
       'VaultAdmin::vault-1:share',
     );
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('.CIP112:'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('%.CIP112'));
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('join "public"."__contracts" contract_row'),
     );
