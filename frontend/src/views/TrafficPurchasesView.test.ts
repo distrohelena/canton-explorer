@@ -106,6 +106,14 @@ const traffic: GlobalTrafficPurchasesResponse = {
   ],
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 describe('TrafficPurchasesView', () => {
   afterEach(() => cleanup());
 
@@ -144,6 +152,22 @@ describe('TrafficPurchasesView', () => {
     expect(screen.getByText(/12\.5000000000 CC/)).toBeInTheDocument();
     expect(screen.queryByText('healthy')).not.toBeInTheDocument();
     expect(fetchTrafficPurchases).toHaveBeenCalledWith({ limit: 15 });
+  });
+
+  it('renders unfiltered traffic while node discovery is still pending', async () => {
+    const pendingNodes = deferred<NodeSnapshot[]>();
+    vi.mocked(fetchNodes).mockReturnValue(pendingNodes.promise);
+    vi.mocked(fetchTrafficPurchases).mockResolvedValue(traffic);
+
+    renderView();
+
+    expect(await screen.findByRole('table', { name: 'All node traffic purchases' })).toBeInTheDocument();
+    expect(screen.getByText('Loading nodes…')).toBeInTheDocument();
+    expect(fetchTrafficPurchases).toHaveBeenCalledWith({ limit: 15 });
+
+    pendingNodes.resolve([node, secondNode]);
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Search' }));
+    expect(await screen.findByRole('checkbox', { name: 'Participant 1' })).toBeChecked();
   });
 
   it('shows all node checkboxes checked inside Advanced Search', async () => {
@@ -232,7 +256,7 @@ describe('TrafficPurchasesView', () => {
 
     renderView();
 
-    expect(await screen.findByText('No traffic purchases recorded.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('No traffic purchases recorded.')).toBeInTheDocument());
     expect(screen.queryByText(/PROTO_DESERIALIZATION_FAILURE/)).not.toBeInTheDocument();
     expect(screen.queryByText('PQS: available')).not.toBeInTheDocument();
     expect(screen.queryByText('gRPC: unavailable')).not.toBeInTheDocument();

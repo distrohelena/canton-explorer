@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchNodeTrafficPurchases, fetchNodes } from '../lib/api';
 import type { NodeSnapshot, NodeTrafficPurchasesResponse } from '../types/nodes';
@@ -87,6 +87,23 @@ const healthyTraffic: NodeTrafficPurchasesResponse = {
     error: null,
   },
 };
+
+const secondHealthyNode: NodeSnapshot = {
+  ...healthyNode,
+  id: 'participant-2',
+  label: 'Participant 2',
+};
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+}
 
 function renderSettings() {
   return render(SettingsView, {
@@ -211,6 +228,7 @@ describe('SettingsView', () => {
   it('renders empty and error states with retry', async () => {
     vi.mocked(fetchNodes)
       .mockRejectedValueOnce(new Error('nodes unavailable'))
+      .mockRejectedValueOnce(new Error('nodes unavailable'))
       .mockResolvedValueOnce([]);
 
     renderSettings();
@@ -222,6 +240,35 @@ describe('SettingsView', () => {
 
     await waitFor(() => expect(screen.getByText('No nodes are configured.')).toBeInTheDocument());
     expect(screen.getByText('Explorer configuration is managed by the server.')).toBeInTheDocument();
+  });
+
+  it('keeps successful node traffic visible when another node traffic section fails and retries independently', async () => {
+    let secondNodeAttempts = 0;
+    vi.mocked(fetchNodes).mockResolvedValue([healthyNode, secondHealthyNode]);
+    vi.mocked(fetchNodeTrafficPurchases).mockImplementation(async (nodeId) => {
+      if (nodeId === healthyNode.id) return healthyTraffic;
+      secondNodeAttempts += 1;
+      if (secondNodeAttempts <= 2) throw new Error('participant-2 traffic unavailable');
+      return { ...healthyTraffic, nodeId, label: 'Participant 2' };
+    });
+
+    renderSettings();
+
+    const firstCard = (await screen.findByText('Participant 1')).closest('article');
+    const secondCard = screen.getByText('Participant 2').closest('article');
+    expect(firstCard).not.toBeNull();
+    expect(secondCard).not.toBeNull();
+
+    await waitFor(() => expect(within(firstCard!).getByText('1,000,000 bytes')).toBeInTheDocument());
+    expect(await within(secondCard!).findByText('Unable to load traffic purchase data.')).toBeInTheDocument();
+    expect(fetchNodes).toHaveBeenCalledTimes(1);
+    expect(fetchNodeTrafficPurchases).toHaveBeenCalledTimes(3);
+
+    await fireEvent.click(within(secondCard!).getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(within(secondCard!).getByText('1,000,000 bytes')).toBeInTheDocument());
+    expect(fetchNodes).toHaveBeenCalledTimes(1);
+    expect(fetchNodeTrafficPurchases).toHaveBeenCalledTimes(4);
   });
 
   it('refreshes periodically and clears the refresh timer on unmount', async () => {
@@ -237,5 +284,47 @@ describe('SettingsView', () => {
     view.unmount();
     await vi.advanceTimersByTimeAsync(15000);
     expect(fetchNodes).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the last successful indexing cards visible while a periodic refresh is pending', async () => {
+    vi.useFakeTimers();
+    const refresh = deferred<NodeSnapshot[]>();
+    vi.mocked(fetchNodes)
+      .mockResolvedValueOnce([healthyNode])
+      .mockReturnValueOnce(refresh.promise);
+
+    renderSettings();
+    expect(await screen.findByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(screen.getByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+    expect(screen.getByText('Refreshing…')).toBeInTheDocument();
+    expect(screen.queryByText('Loading indexing status…')).not.toBeInTheDocument();
+
+    refresh.resolve([healthyNode]);
+    await waitFor(() => expect(screen.queryByText('Refreshing…')).not.toBeInTheDocument());
+  });
+
+  it('keeps the last successful indexing cards visible and retries a failed refresh locally', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchNodes)
+      .mockResolvedValueOnce([healthyNode])
+      .mockRejectedValueOnce(new Error('refresh unavailable'))
+      .mockRejectedValueOnce(new Error('refresh unavailable'))
+      .mockResolvedValueOnce([healthyNode]);
+
+    renderSettings();
+    expect(await screen.findByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(screen.getByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
+    expect(await screen.findByText(/Refresh failed: refresh unavailable/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(screen.queryByText(/Refresh failed: refresh unavailable/)).not.toBeInTheDocument());
+    expect(fetchNodes).toHaveBeenCalledTimes(4);
+    expect(screen.getByRole('link', { name: 'Participant 1' })).toBeInTheDocument();
   });
 });

@@ -6,6 +6,14 @@ const fetchActivityHistoryMock = vi.hoisted(() => vi.fn());
 const fetchCantonCoinHistoryMock = vi.hoisted(() => vi.fn());
 const fetchRecentActivePartiesMock = vi.hoisted(() => vi.fn());
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 vi.mock('../lib/api', () => ({
   fetchActivityHistory: fetchActivityHistoryMock,
   fetchCantonCoinHistory: fetchCantonCoinHistoryMock,
@@ -137,5 +145,38 @@ describe('HomeDashboardOverview', () => {
     expect(screen.getByRole('heading', { name: 'Active Parties (30d)' })).toBeInTheDocument();
     expect(fetchCantonCoinHistoryMock).toHaveBeenCalledTimes(1);
     expect(fetchRecentActivePartiesMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('renders market and recent parties while activity remains pending', async () => {
+    const pendingActivity = deferred<Awaited<ReturnType<typeof fetchActivityHistoryMock>>>();
+    fetchActivityHistoryMock.mockReturnValueOnce(pendingActivity.promise);
+
+    render(HomeDashboardOverview);
+
+    expect(await screen.findByText('0.10 USDT')).toBeInTheDocument();
+    expect(await screen.findByText('42')).toBeInTheDocument();
+    expect(screen.getByText('Loading transaction activity…')).toBeInTheDocument();
+    expect(fetchCantonCoinHistoryMock).toHaveBeenCalledTimes(1);
+    expect(fetchRecentActivePartiesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries only the failed activity section', async () => {
+    fetchActivityHistoryMock
+      .mockRejectedValueOnce(new Error('Activity unavailable'))
+      .mockRejectedValueOnce(new Error('Activity unavailable'));
+
+    render(HomeDashboardOverview);
+
+    expect(await screen.findByRole('button', { name: 'Retry activity' })).toBeInTheDocument();
+    expect(fetchActivityHistoryMock).toHaveBeenCalledTimes(2);
+    expect(fetchCantonCoinHistoryMock).toHaveBeenCalledTimes(1);
+    expect(fetchRecentActivePartiesMock).toHaveBeenCalledTimes(1);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry activity' }));
+
+    expect(await screen.findByRole('img', { name: 'Transactions over time chart' })).toBeInTheDocument();
+    expect(fetchActivityHistoryMock).toHaveBeenCalledTimes(3);
+    expect(fetchCantonCoinHistoryMock).toHaveBeenCalledTimes(1);
+    expect(fetchRecentActivePartiesMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PackageDetailView from './PackageDetailView.vue';
 import {
@@ -56,6 +56,7 @@ describe('PackageDetailView', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.resetAllMocks();
     cleanup();
   });
 
@@ -157,6 +158,77 @@ describe('PackageDetailView', () => {
     expect(await screen.findByText('Templates unavailable')).toBeInTheDocument();
     expect(screen.getByText('Main.Module')).toBeInTheDocument();
     expect(screen.getByText('No data type definitions are present in this package.')).toBeInTheDocument();
+  });
+
+  it('retries only a failed panel and preserves sibling panel data', async () => {
+    vi.mocked(fetchPackageSummary).mockResolvedValue({
+      packageId: 'pkg',
+      name: 'pkg',
+      version: '1.0.0',
+      uploadedAt: null,
+      packageSize: null,
+      status: 'decoded',
+      moduleCount: 1,
+      templateCount: 1,
+      dataTypeCount: 0,
+    });
+    vi.mocked(fetchPackageNodes).mockResolvedValue({ packageId: 'pkg', seenOnNodes: [] });
+    vi.mocked(fetchPackageModules).mockResolvedValue({
+      packageId: 'pkg',
+      status: 'decoded',
+      modules: ['Main.Module'],
+    });
+    vi.mocked(fetchPackageTemplates)
+      .mockRejectedValueOnce(new Error('Templates temporarily unavailable'))
+      .mockRejectedValueOnce(new Error('Templates still unavailable'))
+      .mockRejectedValueOnce(new Error('Templates retry failed once'))
+      .mockResolvedValueOnce({
+        packageId: 'pkg',
+        status: 'decoded',
+        templates: [
+          {
+            templateId: 'Main.Module:Template',
+            moduleName: 'Main.Module',
+            entityName: 'Template',
+            createType: null,
+            choices: [],
+          },
+        ],
+      });
+    vi.mocked(fetchPackageDataTypes).mockResolvedValue({
+      packageId: 'pkg',
+      status: 'decoded',
+      dataTypes: [],
+    });
+
+    render(PackageDetailView, {
+      props: { packageId: 'pkg' },
+      global: {
+        stubs: {
+          RouterLink: {
+            props: ['to'],
+            template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+          },
+        },
+      },
+    });
+
+    expect(await screen.findByText('Main.Module')).toBeInTheDocument();
+    const templatesSection = screen.getByRole('heading', { name: 'Templates' }).closest('section');
+    if (!templatesSection) {
+      throw new Error('Expected templates section');
+    }
+
+    expect(await within(templatesSection).findByText('Templates still unavailable')).toBeInTheDocument();
+    expect(fetchPackageTemplates).toHaveBeenCalledTimes(2);
+    expect(fetchPackageModules).toHaveBeenCalledTimes(1);
+
+    await fireEvent.click(within(templatesSection).getByRole('button', { name: 'Retry' }));
+
+    expect(await within(templatesSection).findByText('Main.Module:Template')).toBeInTheDocument();
+    expect(fetchPackageTemplates).toHaveBeenCalledTimes(4);
+    expect(fetchPackageModules).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Main.Module')).toBeInTheDocument();
   });
 
   it('shows a loading state before the package detail resolves', () => {

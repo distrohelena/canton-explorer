@@ -10,6 +10,15 @@ vi.mock('../lib/api', () => ({
   fetchTokenTransfers: vi.fn(),
 }));
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
+}
+
 async function renderAt(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -52,6 +61,112 @@ describe('TokenDetailView', () => {
 
     return renderAt('/tokens/canton-coin').then(() => {
       expect(screen.getByText('Loading token detail...')).toBeInTheDocument();
+    });
+  });
+
+  it('keeps the token summary and transfers mounted when holders fail twice and retries only holders', async () => {
+    vi.mocked(fetchTokenDetail).mockResolvedValue({
+      token: {
+        tokenId: 'canton-coin',
+        name: 'Canton Coin',
+        symbol: 'CC',
+        issuer: null,
+        source: 'pqs',
+      },
+      transfers: [],
+    });
+    vi.mocked(fetchTokenHolders)
+      .mockRejectedValueOnce(new Error('Holders temporarily unavailable'))
+      .mockRejectedValueOnce(new Error('Holders still unavailable'))
+      .mockResolvedValueOnce({
+        tokenId: 'canton-coin',
+        limit: 15,
+        nextBefore: null,
+        nextAfter: null,
+        holders: [
+          {
+            partyId: 'Alice',
+            amount: '100.0',
+            nodes: [{ nodeId: 'participant-1', label: 'Participant 1' }],
+          },
+        ],
+      });
+    vi.mocked(fetchTokenTransfers).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    await renderAt('/tokens/canton-coin');
+
+    expect(await screen.findByRole('heading', { name: 'CC' })).toBeInTheDocument();
+    expect(screen.getByText('canton-coin')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Latest Transfers' })).toBeInTheDocument();
+    const holdersSection = screen.getByRole('heading', { name: 'Top Holders' }).closest('section');
+    if (!holdersSection) {
+      throw new Error('Expected top holders section');
+    }
+
+    expect(await within(holdersSection).findByText('Holders still unavailable')).toBeInTheDocument();
+    expect(fetchTokenHolders).toHaveBeenCalledTimes(2);
+    expect(fetchTokenDetail).toHaveBeenCalledTimes(1);
+
+    await fireEvent.click(within(holdersSection).getByRole('button', { name: 'Retry' }));
+
+    expect(await within(holdersSection).findByText('Alice')).toBeInTheDocument();
+    expect(fetchTokenHolders).toHaveBeenCalledTimes(3);
+    expect(fetchTokenDetail).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('canton-coin')).toBeInTheDocument();
+  });
+
+  it('ignores stale token summary responses after the route changes', async () => {
+    const oldSummary = deferred<Awaited<ReturnType<typeof fetchTokenDetail>>>();
+    vi.mocked(fetchTokenDetail)
+      .mockReturnValueOnce(oldSummary.promise)
+      .mockResolvedValueOnce({
+        token: {
+          tokenId: 'new-token',
+          name: 'New Token',
+          symbol: 'NEW',
+          issuer: null,
+          source: 'pqs',
+        },
+        transfers: [],
+      });
+    vi.mocked(fetchTokenHolders).mockImplementation(async (tokenId) => ({
+      tokenId,
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      holders: [],
+    }));
+    vi.mocked(fetchTokenTransfers).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    const { router } = await renderAt('/tokens/old-token');
+    await router.push('/tokens/new-token');
+
+    expect(await screen.findByRole('heading', { name: 'NEW' })).toBeInTheDocument();
+
+    oldSummary.resolve({
+      token: {
+        tokenId: 'old-token',
+        name: 'Old Token',
+        symbol: 'OLD',
+        issuer: null,
+        source: 'pqs',
+      },
+      transfers: [],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'NEW' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'OLD' })).not.toBeInTheDocument();
     });
   });
 

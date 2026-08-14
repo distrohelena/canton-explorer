@@ -12,6 +12,7 @@ import {
 import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import type { GlobalContractsResponse, NodeContractsResponse } from '../types/contracts';
 import type { PartyContractsResponse } from '../types/parties';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import ContractsTable from './ContractsTable.vue';
 import UpdatesAdvancedFilter from './UpdatesAdvancedFilter.vue';
 import UpdatesToolbar from './UpdatesToolbar.vue';
@@ -56,9 +57,11 @@ const props = withDefaults(
 
 const route = useRoute();
 const router = useRouter();
-const contractsResponse = ref<GlobalContractsResponse | NodeContractsResponse | PartyContractsResponse | null>(null);
-const error = ref<string | null>(null);
-const loading = ref(false);
+type ContractsResponse = GlobalContractsResponse | NodeContractsResponse | PartyContractsResponse;
+const contracts = useSectionLoad<ContractsResponse>(fetchContracts);
+const contractsResponse = contracts.data;
+const error = contracts.error;
+const loading = contracts.loading;
 const showAdvancedFilter = ref(false);
 const partyFilterDraft = ref('');
 const templateFilterDraft = ref('');
@@ -258,107 +261,95 @@ async function loadTemplateOptions() {
   }
 }
 
-async function loadContracts() {
-  loading.value = true;
-  error.value = null;
+async function fetchContracts(): Promise<ContractsResponse> {
+  const before = readQueryCursor(route.query[queryKey('before')]);
+  const after = readQueryCursor(route.query[queryKey('after')]);
+  const parties = activePartyFilters.value;
+  const templates = activeTemplateFilters.value;
+  const partyMode = activeFilterMode.value;
+  const hideSplice = activeHideSplice.value;
+  const limit = activePageSize.value;
 
-  try {
-    const before = readQueryCursor(route.query[queryKey('before')]);
-    const after = readQueryCursor(route.query[queryKey('after')]);
-    const parties = activePartyFilters.value;
-    const templates = activeTemplateFilters.value;
-    const partyMode = activeFilterMode.value;
-    const hideSplice = activeHideSplice.value;
-    const limit = activePageSize.value;
+  if (props.scope === 'node' && props.nodeId) {
+    const options: NonNullable<Parameters<typeof fetchNodeContracts>[1]> = { limit };
 
-    if (props.scope === 'node' && props.nodeId) {
-      const options: NonNullable<Parameters<typeof fetchNodeContracts>[1]> = { limit };
-
-      if (before) {
-        options.before = before;
-      }
-      if (after) {
-        options.after = after;
-      }
-      if (parties.length > 0) {
-        options.parties = parties;
-        options.partyMode = partyMode;
-      }
-      if (templates.length > 0) {
-        options.templates = templates;
-      }
-      if (hideSplice) {
-        options.hideSplice = true;
-      }
-
-      contractsResponse.value = await fetchNodeContracts(props.nodeId, options);
-      return;
+    if (before) {
+      options.before = before;
+    }
+    if (after) {
+      options.after = after;
+    }
+    if (parties.length > 0) {
+      options.parties = parties;
+      options.partyMode = partyMode;
+    }
+    if (templates.length > 0) {
+      options.templates = templates;
+    }
+    if (hideSplice) {
+      options.hideSplice = true;
     }
 
-    if (props.scope === 'global') {
-      const options: Parameters<typeof fetchLatestContracts>[1] = {};
-
-      const availableNodeIds = props.nodeOptions.map((node) => node.id);
-      const allNodesSelected =
-        availableNodeIds.length > 0 &&
-        availableNodeIds.every((nodeId) => activeNodeFilters.value.includes(nodeId)) &&
-        activeNodeFilters.value.length === availableNodeIds.length;
-
-      if (availableNodeIds.length > 0 && !allNodesSelected) {
-        options.nodeIds = activeNodeFilters.value;
-      }
-
-      if (before) {
-        options.before = before;
-      }
-      if (after) {
-        options.after = after;
-      }
-      if (parties.length > 0) {
-        options.parties = parties;
-        options.partyMode = partyMode;
-      }
-      if (templates.length > 0) {
-        options.templates = templates;
-      }
-      if (hideSplice) {
-        options.hideSplice = true;
-      }
-
-      contractsResponse.value = await fetchLatestContracts(limit, options);
-      return;
-    }
-
-    if (props.scope === 'party' && props.partyId) {
-      const options: NonNullable<Parameters<typeof fetchPartyContracts>[1]> = { limit };
-
-      if (before) {
-        options.before = before;
-      }
-      if (after) {
-        options.after = after;
-      }
-      if (templates.length > 0) {
-        options.templates = templates;
-      }
-      if (hideSplice) {
-        options.hideSplice = true;
-      }
-
-      contractsResponse.value = await fetchPartyContracts(props.partyId, options);
-      return;
-    }
-
-    throw new Error('Invalid contracts browser configuration');
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
-  } finally {
-    loading.value = false;
+    return fetchNodeContracts(props.nodeId, options);
   }
+
+  if (props.scope === 'global') {
+    const options: Parameters<typeof fetchLatestContracts>[1] = {};
+
+    const availableNodeIds = props.nodeOptions.map((node) => node.id);
+    const allNodesSelected =
+      availableNodeIds.length > 0 &&
+      availableNodeIds.every((nodeId) => activeNodeFilters.value.includes(nodeId)) &&
+      activeNodeFilters.value.length === availableNodeIds.length;
+
+    if (availableNodeIds.length > 0 && !allNodesSelected) {
+      options.nodeIds = activeNodeFilters.value;
+    }
+
+    if (before) {
+      options.before = before;
+    }
+    if (after) {
+      options.after = after;
+    }
+    if (parties.length > 0) {
+      options.parties = parties;
+      options.partyMode = partyMode;
+    }
+    if (templates.length > 0) {
+      options.templates = templates;
+    }
+    if (hideSplice) {
+      options.hideSplice = true;
+    }
+
+    return fetchLatestContracts(limit, options);
+  }
+
+  if (props.scope === 'party' && props.partyId) {
+    const options: NonNullable<Parameters<typeof fetchPartyContracts>[1]> = { limit };
+
+    if (before) {
+      options.before = before;
+    }
+    if (after) {
+      options.after = after;
+    }
+    if (templates.length > 0) {
+      options.templates = templates;
+    }
+    if (hideSplice) {
+      options.hideSplice = true;
+    }
+
+    return fetchPartyContracts(props.partyId, options);
+  }
+
+  throw new Error('Invalid contracts browser configuration');
 }
 
 defineExpose({
-  reload: loadContracts,
+  reload: contracts.load,
 });
 
 watch(
@@ -376,7 +367,8 @@ watch(
   () => [route.fullPath, props.scope, props.nodeId, props.partyId],
   () => {
     syncFiltersFromRoute();
-    void loadContracts();
+    contracts.reset();
+    void contracts.load();
   },
   { immediate: true },
 );
@@ -628,7 +620,12 @@ async function setNodeFilters(nodeIds: string[]) {
       />
     </div>
 
-    <p v-if="error" class="dashboard__message dashboard__message--error">{{ error }}</p>
+    <p v-if="error" class="dashboard__message dashboard__message--error" role="alert">
+      {{ error }}
+      <button type="button" class="dashboard__refresh" @click="contracts.retry">
+        Retry contracts
+      </button>
+    </p>
     <p
       v-else-if="contractsResponse && renderedContracts.length === 0 && !loading"
       class="dashboard__message"

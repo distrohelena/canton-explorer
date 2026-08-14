@@ -5,6 +5,7 @@ import {
   fetchCantonCoinHistory,
   fetchRecentActiveParties,
 } from '../lib/api';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import {
   aggregateActivityPoints,
   dashboardRangeDays,
@@ -34,15 +35,31 @@ type HomeDashboardChartKind = 'activity' | 'price';
 type HomeDashboardChartScale = { min: number; max: number; valueRange: number };
 
 const selectedRange = ref<HomeDashboardRange>('24h');
-const activity = ref<ActivityHistoryResponse | null>(null);
-const activityLoading = ref(true);
-const activityError = ref<string | null>(null);
-const market = ref<CantonCoinHistoryResponse | null>(null);
-const marketLoading = ref(true);
-const marketError = ref<string | null>(null);
-const recentParties = ref<RecentActivePartiesResponse | null>(null);
-const recentPartiesLoading = ref(true);
-const recentPartiesError = ref<string | null>(null);
+const activitySection = useSectionLoad<ActivityHistoryResponse>(() =>
+  fetchActivityHistory(dashboardRangeDays(selectedRange.value)),
+);
+const marketSection = useSectionLoad<CantonCoinHistoryResponse>(() =>
+  fetchCantonCoinHistory('1D'),
+);
+const recentPartiesSection = useSectionLoad<RecentActivePartiesResponse>(async () => {
+  const response = await fetchRecentActiveParties(
+    dashboardRangeDays(selectedRange.value) * 24,
+  );
+  if (response.status === 'error') {
+    throw new Error(response.error ?? 'Unable to load active parties.');
+  }
+  return response;
+});
+
+const activity = activitySection.data;
+const activityLoading = activitySection.loading;
+const activityError = activitySection.error;
+const market = marketSection.data;
+const marketLoading = marketSection.loading;
+const marketError = marketSection.error;
+const recentParties = recentPartiesSection.data;
+const recentPartiesLoading = recentPartiesSection.loading;
+const recentPartiesError = recentPartiesSection.error;
 
 const activityPoints = computed(() =>
   aggregateActivityPoints(activity.value?.nodes ?? []),
@@ -89,57 +106,16 @@ const latestPrice = computed(() => {
   return points[points.length - 1] ?? null;
 });
 
-async function refreshActivity() {
-  activityLoading.value = true;
-  activityError.value = null;
-
-  try {
-    activity.value = await fetchActivityHistory(dashboardRangeDays(selectedRange.value));
-  } catch (error) {
-    activityError.value = error instanceof Error ? error.message : 'Unable to load transaction activity.';
-  } finally {
-    activityLoading.value = false;
-  }
-}
-
-async function refreshMarket() {
-  marketLoading.value = true;
-  marketError.value = null;
-
-  try {
-    market.value = await fetchCantonCoinHistory('1D');
-  } catch (error) {
-    marketError.value = error instanceof Error ? error.message : 'Unable to load Canton Coin price history.';
-  } finally {
-    marketLoading.value = false;
-  }
-}
-
-async function refreshRecentParties() {
-  recentPartiesLoading.value = true;
-  recentPartiesError.value = null;
-
-  try {
-    recentParties.value = await fetchRecentActiveParties(
-      dashboardRangeDays(selectedRange.value) * 24,
-    );
-    if (recentParties.value.status === 'error') {
-      recentPartiesError.value = recentParties.value.error ?? 'Unable to load active parties.';
-    }
-  } catch (error) {
-    recentPartiesError.value = error instanceof Error ? error.message : 'Unable to load active parties.';
-  } finally {
-    recentPartiesLoading.value = false;
-  }
-}
-
-async function selectRange(range: HomeDashboardRange) {
+function selectRange(range: HomeDashboardRange) {
   if (range === selectedRange.value) {
     return;
   }
 
   selectedRange.value = range;
-  await Promise.all([refreshActivity(), refreshRecentParties()]);
+  activitySection.reset();
+  recentPartiesSection.reset();
+  void activitySection.load();
+  void recentPartiesSection.load();
 }
 
 function chartValue(point: HomeDashboardChartPoint): number {
@@ -265,9 +241,9 @@ function round(value: number): number {
 }
 
 onMounted(() => {
-  void refreshActivity();
-  void refreshMarket();
-  void refreshRecentParties();
+  void activitySection.load();
+  void marketSection.load();
+  void recentPartiesSection.load();
 });
 </script>
 
@@ -300,9 +276,19 @@ onMounted(() => {
           </div>
           <span class="home-dashboard-overview__panel-unit">updates</span>
         </div>
-        <div v-if="activityLoading" class="home-dashboard-overview__state">Loading transaction activity…</div>
-        <div v-else-if="activityError" class="home-dashboard-overview__state home-dashboard-overview__state--error">
-          {{ activityError }}
+        <div v-if="activityLoading" class="home-dashboard-overview__state inline-loading" role="status">
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>Loading transaction activity…</span>
+        </div>
+        <div
+          v-else-if="activityError"
+          class="home-dashboard-overview__state home-dashboard-overview__state--error"
+          role="alert"
+        >
+          <span>{{ activityError }}</span>
+          <button type="button" class="dashboard__refresh" @click="activitySection.retry">
+            Retry activity
+          </button>
         </div>
         <div v-else-if="activityPoints.length === 0" class="home-dashboard-overview__state">
           No transaction activity available yet.
@@ -357,9 +343,19 @@ onMounted(() => {
           </div>
           <span class="home-dashboard-overview__panel-unit">{{ latestPrice?.quote ?? '—' }}</span>
         </div>
-        <div v-if="marketLoading" class="home-dashboard-overview__state">Loading Canton Coin price…</div>
-        <div v-else-if="marketError" class="home-dashboard-overview__state home-dashboard-overview__state--error">
-          {{ marketError }}
+        <div v-if="marketLoading" class="home-dashboard-overview__state inline-loading" role="status">
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>Loading Canton Coin price…</span>
+        </div>
+        <div
+          v-else-if="marketError"
+          class="home-dashboard-overview__state home-dashboard-overview__state--error"
+          role="alert"
+        >
+          <span>{{ marketError }}</span>
+          <button type="button" class="dashboard__refresh" @click="marketSection.retry">
+            Retry market
+          </button>
         </div>
         <div v-else-if="pricePoints.length === 0" class="home-dashboard-overview__state">
           No Canton Coin price data available yet.
@@ -422,11 +418,21 @@ onMounted(() => {
       </article>
       <article class="home-dashboard-overview__metric-panel">
         <h4>Active Parties ({{ selectedRange }})</h4>
-        <strong v-if="!recentPartiesLoading && !recentPartiesError">{{ recentParties?.count ?? 0 }}</strong>
-        <strong v-else-if="recentPartiesLoading">Loading…</strong>
-        <strong v-else>—</strong>
-        <span v-if="recentPartiesError" class="home-dashboard-overview__metric-error">{{ recentPartiesError }}</span>
-        <span v-else>Unique parties seen in updates during the last {{ selectedRange }}</span>
+        <div v-if="recentPartiesLoading" class="inline-loading" role="status">
+          <span class="node-updates__spinner" aria-hidden="true"></span>
+          <span>Loading active parties…</span>
+        </div>
+        <template v-else-if="recentPartiesError">
+          <strong>—</strong>
+          <span class="home-dashboard-overview__metric-error" role="alert">{{ recentPartiesError }}</span>
+          <button type="button" class="dashboard__refresh" @click="recentPartiesSection.retry">
+            Retry recent parties
+          </button>
+        </template>
+        <template v-else>
+          <strong>{{ recentParties?.count ?? 0 }}</strong>
+          <span>Unique parties seen in updates during the last {{ selectedRange }}</span>
+        </template>
       </article>
       <article class="home-dashboard-overview__metric-panel">
         <h4>Transactions</h4>

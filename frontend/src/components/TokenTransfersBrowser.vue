@@ -8,6 +8,7 @@ import UpdatesToolbar from './UpdatesToolbar.vue';
 import { fetchLatestTokenTransfers, fetchTokenTransfers } from '../lib/api';
 import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
 import type { TokenTransfersResponse } from '../types/tokens';
+import { useSectionLoad } from '../composables/useSectionLoad';
 
 type TokenTransferScope = 'global' | 'token';
 const COMPACT_PREVIEW_LIMIT = 6;
@@ -45,9 +46,10 @@ const props = withDefaults(
 
 const route = useRoute();
 const router = useRouter();
-const tokenTransfersResponse = ref<TokenTransfersResponse | null>(null);
-const tokenTransfersError = ref<string | null>(null);
-const loadingTransfers = ref(true);
+const transfers = useSectionLoad<TokenTransfersResponse>(fetchTransfers);
+const tokenTransfersResponse = transfers.data;
+const tokenTransfersError = transfers.error;
+const loadingTransfers = transfers.loading;
 const showAdvancedFilter = ref(false);
 const fromPartyFilterDraft = ref('');
 const toPartyFilterDraft = ref('');
@@ -185,66 +187,56 @@ async function pushQuery(query: LocationQueryRaw) {
   });
 }
 
-async function loadTransfers() {
-  loadingTransfers.value = true;
-  tokenTransfersError.value = null;
+async function fetchTransfers(): Promise<TokenTransfersResponse> {
+  const before = readQueryCursor(route.query[queryKey('before')]);
+  const after = readQueryCursor(route.query[queryKey('after')]);
+  const fromParties = activeFromPartyFilters.value;
+  const toParties = activeToPartyFilters.value;
+  const movementTypes = activeMovementTypeFilters.value;
+  const amountGt = activeAmountGt.value;
+  const amountLt = activeAmountLt.value;
+  const limit = activePageSize.value;
+  const options: {
+    before?: string;
+    after?: string;
+    fromParties?: string[];
+    toParties?: string[];
+    movementTypes?: string[];
+    amountGt?: string;
+    amountLt?: string;
+  } = {};
 
-  try {
-    const before = readQueryCursor(route.query[queryKey('before')]);
-    const after = readQueryCursor(route.query[queryKey('after')]);
-    const fromParties = activeFromPartyFilters.value;
-    const toParties = activeToPartyFilters.value;
-    const movementTypes = activeMovementTypeFilters.value;
-    const amountGt = activeAmountGt.value;
-    const amountLt = activeAmountLt.value;
-    const limit = activePageSize.value;
-    const options: {
-      before?: string;
-      after?: string;
-      fromParties?: string[];
-      toParties?: string[];
-      movementTypes?: string[];
-      amountGt?: string;
-      amountLt?: string;
-    } = {};
-
-    if (before) {
-      options.before = before;
-    }
-
-    if (after) {
-      options.after = after;
-    }
-
-    if (fromParties.length > 0) {
-      options.fromParties = fromParties;
-    }
-
-    if (toParties.length > 0) {
-      options.toParties = toParties;
-    }
-
-    if (movementTypes.length > 0) {
-      options.movementTypes = movementTypes;
-    }
-
-    if (amountGt.length > 0) {
-      options.amountGt = amountGt;
-    }
-
-    if (amountLt.length > 0) {
-      options.amountLt = amountLt;
-    }
-
-    tokenTransfersResponse.value =
-      props.scope === 'token' && props.tokenId
-        ? await fetchTokenTransfers(props.tokenId, limit, options)
-        : await fetchLatestTokenTransfers(limit, options);
-  } catch (err) {
-    tokenTransfersError.value = err instanceof Error ? err.message : 'Unknown error';
-  } finally {
-    loadingTransfers.value = false;
+  if (before) {
+    options.before = before;
   }
+
+  if (after) {
+    options.after = after;
+  }
+
+  if (fromParties.length > 0) {
+    options.fromParties = fromParties;
+  }
+
+  if (toParties.length > 0) {
+    options.toParties = toParties;
+  }
+
+  if (movementTypes.length > 0) {
+    options.movementTypes = movementTypes;
+  }
+
+  if (amountGt.length > 0) {
+    options.amountGt = amountGt;
+  }
+
+  if (amountLt.length > 0) {
+    options.amountLt = amountLt;
+  }
+
+  return props.scope === 'token' && props.tokenId
+    ? fetchTokenTransfers(props.tokenId, limit, options)
+    : fetchLatestTokenTransfers(limit, options);
 }
 
 function formatRecordTime(recordTime: string | null): { date: string; time: string } | null {
@@ -454,7 +446,8 @@ async function removeMovementTypeFilter(movementType: string) {
 watch(
   () => [route.fullPath, props.scope, props.tokenId],
   () => {
-    void loadTransfers();
+    transfers.reset();
+    void transfers.load();
   },
   { immediate: true },
 );
@@ -546,8 +539,15 @@ watch([amountGtDraft, amountLtDraft], async ([nextAmountGt, nextAmountLt]) => {
       />
     </div>
 
-    <p v-if="tokenTransfersError" class="dashboard__message dashboard__message--error">
+    <p
+      v-if="tokenTransfersError"
+      class="dashboard__message dashboard__message--error"
+      role="alert"
+    >
       {{ tokenTransfersError }}
+      <button type="button" class="dashboard__refresh" @click="transfers.retry">
+        Retry transfers
+      </button>
     </p>
     <p
       v-else-if="tokenTransfersResponse && renderedTransfers.length === 0 && !loadingTransfers"

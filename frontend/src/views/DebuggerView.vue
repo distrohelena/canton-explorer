@@ -30,6 +30,7 @@ import {
 import { resolveDamlFunctionVariableRanges } from '../lib/daml-hover-resolution';
 import { toReplayValue } from '../lib/debugger-value-form';
 import { resolveDefaultControlPanelX } from '../lib/debugger-layout';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import type {
   DebuggerReplayEventSummary,
   DebuggerSessionResponse,
@@ -71,7 +72,6 @@ const activeSourcePath = ref<string | null>(null);
 const loading = ref(false);
 const actionLoading = ref(false);
 const eventLoading = ref(false);
-const error = ref<string | null>(null);
 const templateLoading = ref(false);
 const templateError = ref<string | null>(null);
 const templateGroups = ref<DebuggerTemplateGroup[]>([]);
@@ -91,6 +91,15 @@ const showNewSimulation = ref(false);
 const activeContracts = ref<NodeActiveContractSummary[]>([]);
 const activeContractsLoading = ref(false);
 const activeContractsError = ref<string | null>(null);
+const actionError = ref<string | null>(null);
+const eventError = ref<string | null>(null);
+const sessionError = ref<string | null>(null);
+const activeContractsRequest = ref<{
+  nodeId: string;
+  simulationKind: DebuggerSimulationKind;
+} | null>(null);
+const constructorRequest = ref<DebuggerTemplateSelection | null>(null);
+const eventsSessionId = ref<string | null>(null);
 const workspace = ref<HTMLElement | null>(null);
 const controlPanel = ref<HTMLElement | null>(null);
 const editorWidth = ref<number | null>(null);
@@ -103,6 +112,13 @@ let controlPanelDragOffsetX = 0;
 let controlPanelDragOffsetY = 0;
 let syncingRouteFromSession = false;
 let pendingLoadKey: string | null = null;
+
+const debuggerSessionsSection = useSectionLoad(fetchDebuggerSessions);
+const templateCatalogSection = useSectionLoad(fetchTemplateCatalog);
+const activeContractsSection = useSectionLoad(fetchActiveContracts);
+const constructorSection = useSectionLoad(fetchConstructorSchema);
+const eventsSection = useSectionLoad(fetchEvents);
+const debuggerSessionSection = useSectionLoad(fetchCurrentDebuggerSession);
 
 const RESIZE_HANDLE_WIDTH = 14;
 const SUMMARY_MIN_WIDTH = 320;
@@ -352,12 +368,10 @@ const templateOptions = computed<DebuggerTemplateOption[]>(() =>
   ),
 );
 
-let constructorLoadSequence = 0;
-
 function resetConstructorState() {
-  constructorLoadSequence += 1;
+  constructorRequest.value = null;
+  constructorSection.reset();
   constructorSchema.value = null;
-  constructorLoading.value = false;
   constructorError.value = null;
   constructorValue.value = null;
   constructorValid.value = false;
@@ -372,43 +386,39 @@ function resolveConstructorType(node: PackageTypeNode): PackageTypeNode | null {
   return constructorTypeDefinitions.value.get(`${node.packageId}:${node.typeId}`) ?? null;
 }
 
-async function loadConstructorSchema(selection: DebuggerTemplateSelection) {
+async function fetchConstructorSchema() {
+  const selection = constructorRequest.value;
+  if (!selection || selection.simulationKind !== 'create' || !selection.packageId) {
+    return null;
+  }
+
+  const detail = await fetchPackageDetail(selection.packageId);
+  if (detail.status !== 'decoded') {
+    throw new Error('The selected package is not available as a decoded package.');
+  }
+  const template = detail.templates.find((candidate) => candidate.templateId === selection.templateId);
+  if (!template?.createType) {
+    throw new Error('The selected template does not expose a constructor schema.');
+  }
+
+  return {
+    schema: template.createType,
+    typeDefinitions: new Map(
+      detail.dataTypes
+        .filter((dataType) => dataType.definition)
+        .map((dataType) => [`${detail.packageId}:${dataType.typeId}`, dataType.definition!]),
+    ),
+  };
+}
+
+function loadConstructorSchema(selection: DebuggerTemplateSelection) {
   resetConstructorState();
   if (selection.simulationKind !== 'create' || !selection.packageId) {
     return;
   }
 
-  const sequence = constructorLoadSequence;
-  constructorLoading.value = true;
-
-  try {
-    const detail = await fetchPackageDetail(selection.packageId);
-    if (sequence !== constructorLoadSequence) return;
-    if (detail.status !== 'decoded') {
-      throw new Error('The selected package is not available as a decoded package.');
-    }
-    const template = detail.templates.find((candidate) => candidate.templateId === selection.templateId);
-    if (!template) {
-      throw new Error('The selected template was not found in its package.');
-    }
-    if (!template.createType) {
-      throw new Error('The selected template does not expose a constructor schema.');
-    }
-    constructorTypeDefinitions.value = new Map(
-      detail.dataTypes
-        .filter((dataType) => dataType.definition)
-        .map((dataType) => [`${detail.packageId}:${dataType.typeId}`, dataType.definition!]),
-    );
-    constructorSchema.value = template.createType;
-  } catch (err) {
-    if (sequence === constructorLoadSequence) {
-      constructorError.value = err instanceof Error ? err.message : 'Unable to load template schema.';
-    }
-  } finally {
-    if (sequence === constructorLoadSequence) {
-      constructorLoading.value = false;
-    }
-  }
+  constructorRequest.value = selection;
+  void constructorSection.load();
 }
 
 function resetNewSimulationState() {
@@ -430,7 +440,7 @@ async function createSimulationSession() {
 
   creatingSimulationSession.value = true;
   simulationError.value = null;
-  error.value = null;
+  actionError.value = null;
 
   try {
     const nextSession = await createSimulatedDebuggerSession({
@@ -457,52 +467,47 @@ async function createSimulationSession() {
 
 function selectTemplate(selection: DebuggerTemplateSelection) {
   selectedTemplate.value = selection;
-  void loadConstructorSchema(selection);
+  loadConstructorSchema(selection);
 }
 
-async function loadActiveContracts(nodeId: string, simulationKind: DebuggerSimulationKind) {
+async function fetchActiveContracts() {
+  const request = activeContractsRequest.value;
+  if (!request || request.simulationKind !== 'exercise_existing') {
+    return [];
+  }
+
+  const response = await fetchNodeContracts(request.nodeId, { limit: 100 });
+  return response.contracts;
+}
+
+function loadActiveContracts(nodeId: string, simulationKind: DebuggerSimulationKind) {
+  activeContractsSection.reset();
   activeContracts.value = [];
   activeContractsError.value = null;
 
   if (simulationKind !== 'exercise_existing') {
-    activeContractsLoading.value = false;
+    activeContractsRequest.value = null;
     return;
   }
 
-  activeContractsLoading.value = true;
-
-  try {
-    const response = await fetchNodeContracts(nodeId, { limit: 100 });
-    activeContracts.value = response.contracts;
-  } catch (err) {
-    activeContractsError.value = err instanceof Error ? err.message : 'Unable to load active contracts.';
-  } finally {
-    activeContractsLoading.value = false;
-  }
+  activeContractsRequest.value = { nodeId, simulationKind };
+  void activeContractsSection.load();
 }
 
-async function loadDebuggerSessions() {
-  debuggerSessionsLoading.value = true;
-  debuggerSessionsError.value = null;
-
-  try {
-    debuggerSessions.value = await fetchDebuggerSessions();
-  } catch (err) {
-    debuggerSessions.value = [];
-    debuggerSessionsError.value = err instanceof Error ? err.message : 'Unable to load debugger sessions.';
-  } finally {
-    debuggerSessionsLoading.value = false;
-  }
+function loadDebuggerSessions() {
+  debuggerSessionsSection.reset();
+  void debuggerSessionsSection.load();
 }
 
 function startNewSimulation() {
   showNewSimulation.value = true;
-  void loadTemplateCatalog();
+  if (!templateCatalogSection.data.value && !templateCatalogSection.loading.value) {
+    loadTemplateCatalog();
+  }
 }
 
 function returnToSessions() {
   showNewSimulation.value = false;
-  void loadDebuggerSessions();
 }
 
 async function openDebuggerSession(debuggerSession: DebuggerSessionSummary) {
@@ -900,15 +905,19 @@ const controlPanelStyle = computed<CSSProperties>(() => {
   };
 });
 
-async function syncEvents(sessionId: string) {
-  eventLoading.value = true;
-
-  try {
-    const response = await fetchDebuggerEvents(sessionId);
-    replayEvents.value = response.replayEvents;
-  } finally {
-    eventLoading.value = false;
+async function fetchEvents() {
+  if (!eventsSessionId.value) {
+    return null;
   }
+
+  return fetchDebuggerEvents(eventsSessionId.value);
+}
+
+function syncEvents(sessionId: string) {
+  eventsSection.reset();
+  eventsSessionId.value = sessionId;
+  replayEvents.value = [];
+  void eventsSection.load();
 }
 
 function buildDebuggerQuery(nextSession: DebuggerSessionResponse | null): LocationQueryRaw {
@@ -961,92 +970,57 @@ async function syncRouteToSession(nextSession: DebuggerSessionResponse | null) {
   }
 }
 
-async function loadDebuggerSession() {
+async function fetchCurrentDebuggerSession() {
   if (!updateId.value && !routeSessionId.value) {
+    throw new Error('Open the debugger from an update detail page to launch a replay session.');
+  }
+
+  let nextSession: DebuggerSessionResponse;
+
+  if (routeSessionId.value) {
+    try {
+      nextSession = await fetchDebuggerSession(routeSessionId.value);
+    } catch {
+      if (!updateId.value) {
+        throw new Error('Debugger session could not be loaded.');
+      }
+      nextSession = await createDebuggerSession(updateId.value ?? '');
+    }
+  } else {
+    nextSession = await createDebuggerSession(updateId.value ?? '');
+  }
+
+  if (routeStepId.value && nextSession.currentStep.stepId !== routeStepId.value) {
+    nextSession = await jumpDebuggerSessionToStep(nextSession.sessionId, routeStepId.value);
+  }
+
+  return nextSession;
+}
+
+function loadDebuggerSession() {
+  if (!updateId.value && !routeSessionId.value) {
+    debuggerSessionSection.reset();
     session.value = null;
-    error.value = 'Open the debugger from an update detail page to launch a replay session.';
+    sessionError.value = 'Open the debugger from an update detail page to launch a replay session.';
     return;
   }
 
   const loadKey = routeReplayKey.value;
+  if (pendingLoadKey === loadKey) return;
 
-  try {
-    if (
-      session.value
-      && session.value.updateId === updateId.value
-      && (!routeSessionId.value || session.value.sessionId === routeSessionId.value)
-      && (!routeStepId.value || session.value.currentStep.stepId === routeStepId.value)
-    ) {
-      return;
-    }
-
-    if (pendingLoadKey === loadKey) {
-      return;
-    }
-
-    pendingLoadKey = loadKey;
-    loading.value = true;
-    error.value = null;
-
-    let nextSession: DebuggerSessionResponse;
-
-    if (routeSessionId.value) {
-      try {
-        nextSession = await fetchDebuggerSession(routeSessionId.value);
-      } catch {
-        if (!updateId.value) {
-          throw new Error('Debugger session could not be loaded.');
-        }
-        nextSession = await createDebuggerSession(updateId.value ?? '');
-      }
-    } else {
-      nextSession = await createDebuggerSession(updateId.value ?? '');
-    }
-
-    if (routeStepId.value && nextSession.currentStep.stepId !== routeStepId.value) {
-      nextSession = await jumpDebuggerSessionToStep(nextSession.sessionId, routeStepId.value);
-    }
-
-    if (routeReplayKey.value !== loadKey || !hasReplayContext.value) {
-      return;
-    }
-
-    rememberSessionSource(nextSession, {
-      reset: nextSession.sessionId !== session.value?.sessionId,
-    });
-    session.value = nextSession;
-    await syncEvents(nextSession.sessionId);
-    await syncRouteToSession(nextSession);
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
-    session.value = null;
-    replayEvents.value = [];
-  } finally {
-    if (pendingLoadKey === loadKey) {
-      pendingLoadKey = null;
-    }
-    loading.value = false;
-  }
-}
-
-async function loadTemplateCatalog() {
-  templateLoading.value = true;
-  templateError.value = null;
-  error.value = null;
-  selectedTemplate.value = null;
-  templateGroups.value = [];
-  activeContracts.value = [];
-  activeContractsError.value = null;
-  activeContractsLoading.value = false;
+  pendingLoadKey = loadKey;
+  sessionError.value = null;
   session.value = null;
   replayEvents.value = [];
-  openSourceTabs.value = [];
-  activeSourcePath.value = null;
+  debuggerSessionSection.reset();
+  void debuggerSessionSection.load();
+}
 
-  try {
-    const nodes = await fetchNodes();
-    templateGroups.value = await Promise.all(
-      nodes.map(async (node) => {
+async function fetchTemplateCatalog(): Promise<DebuggerTemplateGroup[]> {
+  const nodes = await fetchNodes();
+  return Promise.all(
+    nodes.map(async (node) => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
           const response = await fetchNodeTemplates(node.id);
           return {
@@ -1057,22 +1031,30 @@ async function loadTemplateCatalog() {
             error: null,
           } satisfies DebuggerTemplateGroup;
         } catch (err) {
-          return {
-            nodeId: node.id,
-            label: node.label,
-            mode: node.mode,
-            templates: [],
-            error: err instanceof Error ? err.message : 'Unable to load templates.',
-          } satisfies DebuggerTemplateGroup;
+          if (attempt === 1) {
+            return {
+              nodeId: node.id,
+              label: node.label,
+              mode: node.mode,
+              templates: [],
+              error: err instanceof Error ? err.message : 'Unable to load templates.',
+            } satisfies DebuggerTemplateGroup;
+          }
         }
-      }),
-    );
-  } catch (err) {
-    templateGroups.value = [];
-    templateError.value = err instanceof Error ? err.message : 'Unable to load templates.';
-  } finally {
-    templateLoading.value = false;
-  }
+      }
+
+      throw new Error('Unable to load templates.');
+    }),
+  );
+}
+
+function loadTemplateCatalog() {
+  templateCatalogSection.reset();
+  selectedTemplate.value = null;
+  templateGroups.value = [];
+  loadActiveContracts('', 'create');
+  resetConstructorState();
+  void templateCatalogSection.load();
 }
 
 async function runAction(
@@ -1083,7 +1065,7 @@ async function runAction(
   }
 
   actionLoading.value = true;
-  error.value = null;
+  actionError.value = null;
 
   try {
     const nextSession = await stepDebuggerSession(session.value.sessionId, action);
@@ -1092,7 +1074,7 @@ async function runAction(
     await syncEvents(nextSession.sessionId);
     await syncRouteToSession(nextSession);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    actionError.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
     actionLoading.value = false;
   }
@@ -1104,7 +1086,7 @@ async function refreshSession() {
   }
 
   loading.value = true;
-  error.value = null;
+  actionError.value = null;
 
   try {
     const nextSession = await fetchDebuggerSession(session.value.sessionId);
@@ -1113,7 +1095,7 @@ async function refreshSession() {
     await syncEvents(nextSession.sessionId);
     await syncRouteToSession(nextSession);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    actionError.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
     loading.value = false;
   }
@@ -1125,7 +1107,7 @@ async function selectEventStep(stepId: string) {
   }
 
   actionLoading.value = true;
-  error.value = null;
+  actionError.value = null;
 
   try {
     const nextSession = await jumpDebuggerSessionToStep(session.value.sessionId, stepId);
@@ -1134,11 +1116,91 @@ async function selectEventStep(stepId: string) {
     await syncEvents(nextSession.sessionId);
     await syncRouteToSession(nextSession);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error';
+    actionError.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
     actionLoading.value = false;
   }
 }
+
+watch(debuggerSessionsSection.data, (nextSessions) => {
+  debuggerSessions.value = nextSessions ?? [];
+});
+watch(debuggerSessionsSection.loading, (nextLoading) => {
+  debuggerSessionsLoading.value = nextLoading;
+});
+watch(debuggerSessionsSection.error, (nextError) => {
+  debuggerSessionsError.value = nextError;
+});
+
+watch(templateCatalogSection.data, (nextGroups) => {
+  templateGroups.value = nextGroups ?? [];
+  templateError.value = nextGroups?.find((group) => group.error)?.error ?? null;
+});
+watch(templateCatalogSection.loading, (nextLoading) => {
+  templateLoading.value = nextLoading;
+});
+watch(templateCatalogSection.error, (nextError) => {
+  if (nextError) {
+    templateError.value = nextError;
+  }
+});
+
+watch(activeContractsSection.data, (nextContracts) => {
+  activeContracts.value = nextContracts ?? [];
+});
+watch(activeContractsSection.loading, (nextLoading) => {
+  activeContractsLoading.value = nextLoading;
+});
+watch(activeContractsSection.error, (nextError) => {
+  activeContractsError.value = nextError;
+});
+
+watch(constructorSection.data, (nextSchema) => {
+  constructorSchema.value = nextSchema?.schema ?? null;
+  constructorTypeDefinitions.value = nextSchema?.typeDefinitions ?? new Map();
+});
+watch(constructorSection.loading, (nextLoading) => {
+  constructorLoading.value = nextLoading;
+});
+watch(constructorSection.error, (nextError) => {
+  constructorError.value = nextError;
+});
+
+watch(eventsSection.data, (nextEvents) => {
+  replayEvents.value = nextEvents?.replayEvents ?? [];
+});
+watch(eventsSection.loading, (nextLoading) => {
+  eventLoading.value = nextLoading;
+});
+watch(eventsSection.error, (nextError) => {
+  eventError.value = nextError;
+});
+
+watch(debuggerSessionSection.data, (nextSession) => {
+  if (!nextSession || !hasReplayContext.value) {
+    return;
+  }
+
+  rememberSessionSource(nextSession, {
+    reset: nextSession.sessionId !== session.value?.sessionId,
+  });
+  session.value = nextSession;
+  syncEvents(nextSession.sessionId);
+  void syncRouteToSession(nextSession);
+}, { flush: 'sync' });
+watch(debuggerSessionSection.loading, (nextLoading) => {
+  loading.value = nextLoading;
+  if (!nextLoading) {
+    pendingLoadKey = null;
+  }
+});
+watch(debuggerSessionSection.error, (nextError) => {
+  sessionError.value = nextError;
+  if (nextError) {
+    session.value = null;
+    replayEvents.value = [];
+  }
+});
 
 watch(
   routeReplayKey,
@@ -1188,6 +1250,10 @@ onMounted(() => {
     attributeFilter: ['data-theme'],
   });
   window.addEventListener('resize', handleViewportResize);
+  void loadTemplateCatalog();
+  if (hasReplayContext.value) {
+    loadDebuggerSessions();
+  }
   void nextTick(() => {
     ensureDefaultControlPanelPosition();
   });
@@ -1223,6 +1289,7 @@ onBeforeUnmount(() => {
       </p>
       <p v-else-if="debuggerSessionsError" class="debugger-view__session-state debugger-view__session-state--error">
         {{ debuggerSessionsError }}
+        <button type="button" class="button button--secondary" @click="debuggerSessionsSection.retry">Retry sessions</button>
       </p>
       <template v-else-if="debuggerSessions.length > 0">
         <div class="debugger-view__session-heading">
@@ -1285,6 +1352,9 @@ onBeforeUnmount(() => {
         @select="selectTemplate"
         @node-select="loadActiveContracts"
         @reset="resetNewSimulationState"
+        @retry-templates="templateCatalogSection.retry"
+        @retry-active-contracts="activeContractsSection.retry"
+        @retry-constructor="constructorSection.retry"
         @constructor-value="constructorValue = $event"
         @constructor-validity="constructorValid = $event"
         :creating-session="creatingSimulationSession"
@@ -1292,7 +1362,11 @@ onBeforeUnmount(() => {
         @create-session="createSimulationSession"
       />
     </section>
-    <p v-if="error" class="debugger-view__error-state" role="alert">{{ error }}</p>
+    <p v-if="sessionError" class="debugger-view__error-state" role="alert">
+      {{ sessionError }}
+      <button type="button" class="button button--secondary" @click="loadDebuggerSession">Retry debugger session</button>
+    </p>
+    <p v-else-if="actionError" class="debugger-view__error-state" role="alert">{{ actionError }}</p>
     <p v-else-if="loading && !session" class="debugger-view__loading-state inline-loading" role="status">
       <span class="node-updates__spinner" aria-hidden="true"></span>
       <span>Loading debugger session...</span>
@@ -1436,7 +1510,9 @@ onBeforeUnmount(() => {
               :replay-events="liveReplayEvents"
               :current-step-id="session.currentStep.stepId"
               :loading="eventLoading"
+              :error="eventError"
               @select-step="selectEventStep"
+              @retry="eventsSection.retry"
             />
           </div>
         </div>

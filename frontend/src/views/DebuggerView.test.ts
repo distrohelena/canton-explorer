@@ -88,6 +88,16 @@ describe('DebuggerView', () => {
     };
   }
 
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((nextResolve, nextReject) => {
+      resolve = nextResolve;
+      reject = nextReject;
+    });
+    return { promise, resolve, reject };
+  }
+
   it('opens a full-screen template search from the combobox', async () => {
     vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
     vi.mocked(fetchNodes).mockResolvedValue([
@@ -229,6 +239,63 @@ describe('DebuggerView', () => {
     expect(createDebuggerSession).not.toHaveBeenCalled();
   });
 
+  it('ignores a stale constructor schema after a newer template selection', async () => {
+    const firstSchema = deferred<never>();
+    const secondSchema = deferred<never>();
+
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
+    vi.mocked(fetchNodes).mockResolvedValue([{
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_with_grpc',
+    }] as never);
+    vi.mocked(fetchNodeTemplates).mockResolvedValue({
+      templates: [
+        { templateId: 'Main:First', packageId: 'pkg-first', packageName: 'first', packageVersion: '1.0.0' },
+        { templateId: 'Main:Second', packageId: 'pkg-second', packageName: 'second', packageVersion: '1.0.0' },
+      ],
+    });
+    vi.mocked(fetchPackageDetail).mockImplementation((packageId) =>
+      packageId === 'pkg-first' ? firstSchema.promise : secondSchema.promise,
+    );
+
+    await renderAt('/debugger');
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+    await fireEvent.click(screen.getByRole('option', { name: /^Create / }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Participant 1.*PQS \+ gRPC/s }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Main:First.*first/s }));
+    await fireEvent.click(screen.getByRole('option', { name: /Main:Second.*second/s }));
+
+    secondSchema.resolve({
+      packageId: 'pkg-second', name: 'second', version: '1.0.0', uploadedAt: null, packageSize: null,
+      status: 'decoded', seenOnNodes: [], moduleCount: 1, templateCount: 1, dataTypeCount: 0,
+      modules: ['Main'],
+      templates: [{
+        templateId: 'Main:Second', moduleName: 'Main', entityName: 'Second',
+        createType: { kind: 'record', label: 'Main:Second', fields: [{ name: 'secondField', type: { kind: 'builtin', label: 'Text' } }] },
+        choices: [],
+      }],
+      dataTypes: [],
+    } as never);
+
+    expect(await screen.findByText('secondField')).toBeInTheDocument();
+    firstSchema.resolve({
+      packageId: 'pkg-first', name: 'first', version: '1.0.0', uploadedAt: null, packageSize: null,
+      status: 'decoded', seenOnNodes: [], moduleCount: 1, templateCount: 1, dataTypeCount: 0,
+      modules: ['Main'],
+      templates: [{
+        templateId: 'Main:First', moduleName: 'Main', entityName: 'First',
+        createType: { kind: 'record', label: 'Main:First', fields: [{ name: 'firstField', type: { kind: 'builtin', label: 'Text' } }] },
+        choices: [],
+      }],
+      dataTypes: [],
+    } as never);
+
+    await waitFor(() => expect(screen.queryByText('firstField')).not.toBeInTheDocument());
+    expect(screen.getByText('secondField')).toBeInTheDocument();
+  });
+
   it('creates a simulated debug session from valid constructor arguments', async () => {
     vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
     vi.mocked(fetchNodes).mockResolvedValue([{
@@ -347,6 +414,98 @@ describe('DebuggerView', () => {
     expect(router.currentRoute.value.query.updateId).toBe('update-1');
     expect(router.currentRoute.value.query.nodeId).toBeUndefined();
     expect(router.currentRoute.value.query.eventOffset).toBeUndefined();
+  });
+
+  it('retries the template catalog locally without clearing loaded debug sessions', async () => {
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([
+      {
+        sessionId: 'session-1',
+        nodeId: 'participant-1',
+        updateId: 'update-1',
+        offset: '42',
+        stepCount: 12,
+        currentStepIndex: 3,
+        isTerminal: false,
+        createdAt: '2026-07-22T12:00:00Z',
+      },
+    ]);
+    vi.mocked(fetchNodes)
+      .mockRejectedValueOnce(new Error('Template catalog unavailable'))
+      .mockRejectedValueOnce(new Error('Template catalog unavailable'))
+      .mockResolvedValueOnce([] as never);
+
+    await renderAt('/debugger');
+
+    expect(await screen.findByText('session-1')).toBeInTheDocument();
+    const sessionCatalogCalls = vi.mocked(fetchDebuggerSessions).mock.calls.length;
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+
+    expect(await screen.findByText('Template catalog unavailable')).toBeInTheDocument();
+    expect(fetchDebuggerSessions).toHaveBeenCalledTimes(sessionCatalogCalls);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry templates' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Back to Sessions' }));
+
+    expect(await screen.findByText('session-1')).toBeInTheDocument();
+    expect(fetchDebuggerSessions).toHaveBeenCalledTimes(sessionCatalogCalls);
+  });
+
+  it('retries a failed node template request locally while retaining successful node templates', async () => {
+    vi.mocked(fetchNodeTemplates).mockClear();
+    vi.mocked(fetchDebuggerSessions).mockResolvedValue([]);
+    vi.mocked(fetchNodes).mockResolvedValue([
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_with_grpc',
+      },
+      {
+        id: 'participant-2',
+        label: 'Participant 2',
+        role: 'participant',
+        mode: 'pqs_only',
+      },
+    ] as never);
+    let participantTwoAttempts = 0;
+    vi.mocked(fetchNodeTemplates).mockImplementation(async (nodeId) => {
+      if (nodeId === 'participant-1') {
+        return {
+          templates: [{
+            templateId: 'Main:Asset',
+            packageId: 'pkg-a',
+            packageName: 'demo-package',
+            packageVersion: '1.0.0',
+          }],
+        };
+      }
+
+      participantTwoAttempts += 1;
+      if (participantTwoAttempts <= 2) {
+        throw new Error('participant-2 templates unavailable');
+      }
+
+      return {
+        templates: [{
+          templateId: 'Main:Holding',
+          packageId: 'pkg-b',
+          packageName: 'other-package',
+          packageVersion: '2.0.0',
+        }],
+      };
+    });
+    await renderAt('/debugger');
+    await fireEvent.click(screen.getByRole('button', { name: 'New Simulation' }));
+
+    expect(await screen.findByText('participant-2 templates unavailable')).toBeInTheDocument();
+    expect(fetchNodeTemplates).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('option', { name: /Participant 1.*PQS \+ gRPC/s })).toBeInTheDocument();
+    expect(screen.queryByText('No nodes available.')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry templates' }));
+
+    expect(await screen.findByRole('option', { name: /Participant 2.*PQS only/s })).toBeInTheDocument();
+    expect(screen.queryByText('participant-2 templates unavailable')).not.toBeInTheDocument();
+    expect(participantTwoAttempts).toBe(3);
   });
 
   it('clears the active session when returning to the debugger session list', async () => {
@@ -580,7 +739,7 @@ describe('DebuggerView', () => {
     expect(screen.getByTestId('debugger-editor-shell')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-editor-shell')).toContainElement(screen.getByTestId('monaco-stub'));
     expect(screen.getByTestId('monaco-stub')).toHaveAttribute('data-language', 'daml');
-    expect(screen.getByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('debugger-editor-divider')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-floating-controls')).toBeInTheDocument();
     expect(screen.getByTestId('debugger-summary-context')).toContainElement(
@@ -717,7 +876,7 @@ describe('DebuggerView', () => {
 
     await renderAt('/debugger?nodeId=cnqs-sv&updateId=42&eventOffset=205');
 
-    expect(screen.getByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: 'Main.daml' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('monaco-stub')).toHaveTextContent('template Main where');
 
     await fireEvent.click(screen.getByText('Step Into'));

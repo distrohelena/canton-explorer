@@ -20,6 +20,7 @@ import CopyToClipboardButton from "./CopyToClipboardButton.vue";
 import QuerySourcePill from "./QuerySourcePill.vue";
 import UpdatesAdvancedFilter from "./UpdatesAdvancedFilter.vue";
 import UpdatesToolbar from "./UpdatesToolbar.vue";
+import { useSectionLoad } from "../composables/useSectionLoad";
 
 type FilterMode = "or" | "and";
 type UpdateScope = "global" | "node" | "party";
@@ -72,14 +73,15 @@ const props = withDefaults(
 
 const route = useRoute();
 const router = useRouter();
-const updatesResponse = ref<UpdatesResponse | null>(null);
-const error = ref<string | null>(null);
-const loading = ref(false);
 const showAdvancedFilter = ref(false);
 const partyFilterDraft = ref("");
 const templateFilterDraft = ref("");
 const templateOptions = ref<string[]>([]);
 const templatesLoaded = ref(false);
+const updates = useSectionLoad<UpdatesResponse>(fetchUpdates);
+const updatesResponse = updates.data;
+const error = updates.error;
+const loading = updates.loading;
 
 function queryKey(
   base:
@@ -342,104 +344,93 @@ async function loadTemplateOptions() {
   }
 }
 
-async function loadUpdates() {
-  loading.value = true;
-  error.value = null;
+async function fetchUpdates(): Promise<UpdatesResponse> {
+  const before = readQueryCursor(route.query[queryKey("before")]);
+  const after = readQueryCursor(route.query[queryKey("after")]);
+  const parties = activePartyFilters.value;
+  const templates = activeTemplateFilters.value;
+  const partyMode = activeFilterMode.value;
+  const hideSplice = activeHideSplice.value;
+  const limit = activePageSize.value;
 
-  try {
-    const before = readQueryCursor(route.query[queryKey("before")]);
-    const after = readQueryCursor(route.query[queryKey("after")]);
-    const parties = activePartyFilters.value;
-    const templates = activeTemplateFilters.value;
-    const partyMode = activeFilterMode.value;
-    const hideSplice = activeHideSplice.value;
-    const limit = activePageSize.value;
-
-    if (props.scope === "global") {
-      const options: Parameters<typeof fetchLatestUpdates>[1] = {};
-      if (before) {
-        options.before = before;
-      }
-      if (after) {
-        options.after = after;
-      }
-      if (parties.length > 0) {
-        options.parties = parties;
-        options.partyMode = partyMode;
-      }
-      if (templates.length > 0) {
-        options.templates = templates;
-      }
-      if (hideSplice) {
-        options.hideSplice = true;
-      }
-
-      updatesResponse.value = await fetchLatestUpdates(limit, options);
-      return;
+  if (props.scope === "global") {
+    const options: Parameters<typeof fetchLatestUpdates>[1] = {};
+    if (before) {
+      options.before = before;
+    }
+    if (after) {
+      options.after = after;
+    }
+    if (parties.length > 0) {
+      options.parties = parties;
+      options.partyMode = partyMode;
+    }
+    if (templates.length > 0) {
+      options.templates = templates;
+    }
+    if (hideSplice) {
+      options.hideSplice = true;
     }
 
-    if (props.scope === "node" && props.nodeId) {
-      const options: NonNullable<Parameters<typeof fetchNodeUpdates>[1]> = {
-        limit,
-      };
-      if (before) {
-        options.before = before;
-      }
-      if (after) {
-        options.after = after;
-      }
-      if (parties.length > 0) {
-        options.parties = parties;
-        options.partyMode = partyMode;
-      }
-      if (templates.length > 0) {
-        options.templates = templates;
-      }
-      if (hideSplice) {
-        options.hideSplice = true;
-      }
-
-      updatesResponse.value = await fetchNodeUpdates(props.nodeId, options);
-      return;
-    }
-
-    if (props.scope === "party" && props.partyId) {
-      const options: NonNullable<Parameters<typeof fetchPartyUpdates>[1]> = {
-        limit,
-      };
-      if (before) {
-        options.before = before;
-      }
-      if (after) {
-        options.after = after;
-      }
-      if (templates.length > 0) {
-        options.templates = templates;
-      }
-      if (hideSplice) {
-        options.hideSplice = true;
-      }
-
-      updatesResponse.value = await fetchPartyUpdates(props.partyId, options);
-      return;
-    }
-
-    throw new Error("Invalid updates browser configuration");
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "Unknown error";
-  } finally {
-    loading.value = false;
+    return fetchLatestUpdates(limit, options);
   }
+
+  if (props.scope === "node" && props.nodeId) {
+    const options: NonNullable<Parameters<typeof fetchNodeUpdates>[1]> = {
+      limit,
+    };
+    if (before) {
+      options.before = before;
+    }
+    if (after) {
+      options.after = after;
+    }
+    if (parties.length > 0) {
+      options.parties = parties;
+      options.partyMode = partyMode;
+    }
+    if (templates.length > 0) {
+      options.templates = templates;
+    }
+    if (hideSplice) {
+      options.hideSplice = true;
+    }
+
+    return fetchNodeUpdates(props.nodeId, options);
+  }
+
+  if (props.scope === "party" && props.partyId) {
+    const options: NonNullable<Parameters<typeof fetchPartyUpdates>[1]> = {
+      limit,
+    };
+    if (before) {
+      options.before = before;
+    }
+    if (after) {
+      options.after = after;
+    }
+    if (templates.length > 0) {
+      options.templates = templates;
+    }
+    if (hideSplice) {
+      options.hideSplice = true;
+    }
+
+    return fetchPartyUpdates(props.partyId, options);
+  }
+
+  throw new Error("Invalid updates browser configuration");
 }
 
 defineExpose({
-  reload: loadUpdates,
+  reload: updates.load,
 });
 
 watch(
   () => route.fullPath,
   () => {
-    void loadUpdates();
+    updates.reset();
+    void updates.load();
   },
   { immediate: true },
 );
@@ -712,8 +703,15 @@ function nodeLink(nodeId: string): string {
       />
     </div>
 
-    <p v-if="error" class="dashboard__message dashboard__message--error">
+    <p
+      v-if="error"
+      class="dashboard__message dashboard__message--error"
+      role="alert"
+    >
       {{ error }}
+      <button type="button" class="dashboard__refresh" @click="updates.retry">
+        Retry updates
+      </button>
     </p>
     <p
       v-else-if="updatesResponse && renderedUpdates.length === 0 && !loading"

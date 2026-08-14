@@ -3,11 +3,17 @@ import { resolve } from 'node:path';
 import type {
   ActivePartiesResponse,
   NamespaceDetailResponse,
+  NamespaceNodesResponse,
+  NamespaceSummaryResponse,
   NamespacePartiesResponse,
+  NamespaceUpdatesResponse,
+  NamespaceContractsResponse,
   NodeContractsResponse,
   NodeContractDetailResponse,
   NodePackagesResponse,
   PartyDetailResponse,
+  PartyNodesResponse,
+  PartySummaryResponse,
   PackageDetailResponse,
   PackageFamilyResponse,
   SearchResultsResponse,
@@ -653,20 +659,22 @@ describe('PqsSummaryService', () => {
       ],
     };
     const packageRegistry = {
-      resolveChoice: jest.fn().mockImplementation(({ choice }: { choice: string }) =>
-        choice === 'AppPaymentRequest_Accept'
-          ? {
-              ok: true as const,
-              definition: {
-                template: { packageRef: {} },
-                templateChoice: {
-                  argBinder: { type: argumentRawType },
-                  retType: resultRawType,
+      resolveChoice: jest
+        .fn()
+        .mockImplementation(({ choice }: { choice: string }) =>
+          choice === 'AppPaymentRequest_Accept'
+            ? {
+                ok: true as const,
+                definition: {
+                  template: { packageRef: {} },
+                  templateChoice: {
+                    argBinder: { type: argumentRawType },
+                    retType: resultRawType,
+                  },
                 },
-              },
-            }
-          : { ok: false as const, reason: 'unknown_choice' as const },
-      ),
+              }
+            : { ok: false as const, reason: 'unknown_choice' as const },
+        ),
       buildTypeNodeForType: jest.fn((_packageRef: unknown, rawType: unknown) =>
         rawType === argumentRawType ? argumentSchema : null,
       ),
@@ -1563,6 +1571,277 @@ describe('PqsSummaryService', () => {
         'Alice',
       ),
     ).resolves.toEqual(typedPartyDetailFixture);
+  });
+
+  it('resolves party summary and nodes without waiting for topology', async () => {
+    const deferredTopology = new Promise<never>(() => undefined);
+    const grpcOperationsService = {
+      listLocalParties: jest.fn().mockResolvedValue([]),
+      fetchPartyTopology: jest.fn().mockReturnValue(deferredTopology),
+    };
+    const service = new PqsSummaryService(
+      {} as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      grpcOperationsService as never,
+    );
+    const privateService = service as unknown as {
+      fetchActivePartiesForNode: jest.Mock;
+      fetchPartyRecentUpdatesForNode: jest.Mock;
+      fetchPartyRecentContractsForNode: jest.Mock;
+    };
+    privateService.fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValue(['Alice']);
+    privateService.fetchPartyRecentUpdatesForNode = jest
+      .fn()
+      .mockResolvedValue(typedPartyDetailFixture.recentUpdates.slice(0, 1));
+    privateService.fetchPartyRecentContractsForNode = jest
+      .fn()
+      .mockResolvedValue(typedPartyDetailFixture.recentContracts.slice(0, 1));
+    const sections = service as unknown as {
+      fetchPartySummary: (
+        nodes: Array<{ id: string; label: string }>,
+        partyId: string,
+      ) => Promise<PartySummaryResponse>;
+      fetchPartyNodes: (
+        nodes: Array<{ id: string; label: string }>,
+        partyId: string,
+      ) => Promise<PartyNodesResponse>;
+    };
+
+    const result = await Promise.race([
+      Promise.all([
+        sections.fetchPartySummary(
+          [{ id: 'participant-1', label: 'Participant 1' }],
+          'Alice',
+        ),
+        sections.fetchPartyNodes(
+          [{ id: 'participant-1', label: 'Participant 1' }],
+          'Alice',
+        ),
+      ]).then((responses) => ({ kind: 'sections' as const, responses })),
+      new Promise<{ kind: 'timeout' }>((resolve) =>
+        setTimeout(() => resolve({ kind: 'timeout' }), 100),
+      ),
+    ]);
+
+    expect(result).toEqual({
+      kind: 'sections',
+      responses: [
+        {
+          partyId: 'Alice',
+          nodeCount: 1,
+          recentUpdateCount: 1,
+          recentContractCount: 1,
+        },
+        {
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+              recentUpdateCount: 1,
+              recentContractCount: 1,
+            },
+          ],
+        },
+      ],
+    });
+    expect(grpcOperationsService.fetchPartyTopology).not.toHaveBeenCalled();
+  });
+
+  it('resolves namespace summary and nodes without waiting for topology', async () => {
+    const deferredTopology = new Promise<never>(() => undefined);
+    const grpcOperationsService = {
+      listLocalParties: jest.fn().mockResolvedValue([]),
+      fetchPartyTopology: jest.fn().mockReturnValue(deferredTopology),
+    };
+    const service = new PqsSummaryService(
+      {} as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      grpcOperationsService as never,
+    );
+    const privateService = service as unknown as {
+      fetchActivePartiesForNode: jest.Mock;
+      fetchGlobalRecentUpdates: jest.Mock;
+      fetchGlobalContracts: jest.Mock;
+    };
+    privateService.fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValue(['Alice::1220abcd']);
+    privateService.fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      updates: typedNamespaceDetailFixture.recentUpdates,
+    });
+    privateService.fetchGlobalContracts = jest.fn().mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: typedNamespaceDetailFixture.recentContracts,
+    });
+    const sections = service as unknown as {
+      fetchNamespaceSummary: (
+        nodes: Array<{ id: string; label: string }>,
+        namespaceId: string,
+      ) => Promise<NamespaceSummaryResponse>;
+      fetchNamespaceNodes: (
+        nodes: Array<{ id: string; label: string }>,
+        namespaceId: string,
+      ) => Promise<NamespaceNodesResponse>;
+    };
+
+    const result = await Promise.race([
+      Promise.all([
+        sections.fetchNamespaceSummary(
+          [{ id: 'participant-1', label: 'Participant 1' }],
+          '1220abcd',
+        ),
+        sections.fetchNamespaceNodes(
+          [{ id: 'participant-1', label: 'Participant 1' }],
+          '1220abcd',
+        ),
+      ]).then((responses) => ({ kind: 'sections' as const, responses })),
+      new Promise<{ kind: 'timeout' }>((resolve) =>
+        setTimeout(() => resolve({ kind: 'timeout' }), 100),
+      ),
+    ]);
+
+    expect(result).toEqual({
+      kind: 'sections',
+      responses: [
+        {
+          namespaceId: '1220abcd',
+          partyCount: 1,
+          nodeCount: 2,
+          recentUpdateCount: 2,
+          recentContractCount: 1,
+        },
+        {
+          nodes: [
+            {
+              nodeId: 'participant-1',
+              label: 'Participant 1',
+              recentUpdateCount: 1,
+              recentContractCount: 0,
+            },
+            {
+              nodeId: 'participant-2',
+              label: 'Participant 2',
+              recentUpdateCount: 1,
+              recentContractCount: 1,
+            },
+          ],
+        },
+      ],
+    });
+    expect(grpcOperationsService.fetchPartyTopology).not.toHaveBeenCalled();
+  });
+
+  it('fetches paginated namespace updates and contracts for the namespace parties', async () => {
+    const service = new PqsSummaryService({} as never);
+    const privateService = service as unknown as {
+      fetchActivePartiesForNode: jest.Mock;
+      fetchGlobalRecentUpdates: jest.Mock;
+      fetchGlobalContracts: jest.Mock;
+    };
+    privateService.fetchActivePartiesForNode = jest
+      .fn()
+      .mockResolvedValue(['Alice::1220abcd', 'Bob::1220abcd']);
+    privateService.fetchGlobalRecentUpdates = jest.fn().mockResolvedValue({
+      limit: 25,
+      nextBefore: 'update-cursor-1',
+      nextAfter: null,
+      updates: typedNamespaceDetailFixture.recentUpdates,
+    });
+    privateService.fetchGlobalContracts = jest.fn().mockResolvedValue({
+      limit: 20,
+      nextBefore: null,
+      nextAfter: 'contract-cursor-0',
+      contracts: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          recordTime: '2026-07-09T12:00:00.000Z',
+        },
+      ],
+    });
+    const sections = service as unknown as {
+      fetchNamespaceUpdates: (
+        nodes: Array<{ id: string; label: string }>,
+        namespaceId: string,
+        options?: { limit?: number; before?: string; after?: string },
+      ) => Promise<NamespaceUpdatesResponse>;
+      fetchNamespaceContracts: (
+        nodes: Array<{ id: string; label: string }>,
+        namespaceId: string,
+        options?: { limit?: number; before?: string; after?: string },
+      ) => Promise<NamespaceContractsResponse>;
+    };
+    const nodes = [{ id: 'participant-2', label: 'Participant 2' }];
+
+    await expect(
+      sections.fetchNamespaceUpdates(nodes, '1220abcd', {
+        limit: 25,
+        before: 'update-cursor-0',
+      }),
+    ).resolves.toEqual({
+      limit: 25,
+      nextBefore: 'update-cursor-1',
+      nextAfter: null,
+      updates: typedNamespaceDetailFixture.recentUpdates,
+    });
+    expect(privateService.fetchGlobalRecentUpdates).toHaveBeenCalledWith(
+      nodes,
+      25,
+      {
+        before: 'update-cursor-0',
+        after: undefined,
+        parties: ['Alice::1220abcd', 'Bob::1220abcd'],
+        partyMode: 'or',
+      },
+    );
+
+    await expect(
+      sections.fetchNamespaceContracts(nodes, '1220abcd', {
+        limit: 20,
+        after: 'contract-cursor-1',
+      }),
+    ).resolves.toEqual({
+      limit: 20,
+      nextBefore: null,
+      nextAfter: 'contract-cursor-0',
+      contracts: [
+        {
+          nodeId: 'participant-2',
+          label: 'Participant 2',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          packageId: null,
+          packageName: null,
+          packageVersion: null,
+          recordTime: '2026-07-09T12:00:00.000Z',
+        },
+      ],
+    });
+    expect(privateService.fetchGlobalContracts).toHaveBeenCalledWith(
+      nodes,
+      20,
+      {
+        before: undefined,
+        after: 'contract-cursor-1',
+        parties: ['Alice::1220abcd', 'Bob::1220abcd'],
+        partyMode: 'or',
+      },
+    );
   });
 
   it('matches both stripped and prefixed party identifiers for party detail lookups', async () => {
@@ -2726,11 +3005,21 @@ describe('PqsSummaryService', () => {
       },
       { inspectPackage },
     ) as PqsSummaryService & {
-      fetchPackageSummary?: (packageId: string) => Promise<PackageDetailSummaryResponse>;
-      fetchPackageNodes?: (packageId: string) => Promise<PackageDetailNodesResponse>;
-      fetchPackageModules?: (packageId: string) => Promise<PackageDetailModulesResponse>;
-      fetchPackageTemplates?: (packageId: string) => Promise<PackageDetailTemplatesResponse>;
-      fetchPackageDataTypes?: (packageId: string) => Promise<PackageDetailDataTypesResponse>;
+      fetchPackageSummary?: (
+        packageId: string,
+      ) => Promise<PackageDetailSummaryResponse>;
+      fetchPackageNodes?: (
+        packageId: string,
+      ) => Promise<PackageDetailNodesResponse>;
+      fetchPackageModules?: (
+        packageId: string,
+      ) => Promise<PackageDetailModulesResponse>;
+      fetchPackageTemplates?: (
+        packageId: string,
+      ) => Promise<PackageDetailTemplatesResponse>;
+      fetchPackageDataTypes?: (
+        packageId: string,
+      ) => Promise<PackageDetailDataTypesResponse>;
     };
 
     const [summary, nodes, modules, templates, dataTypes] = await Promise.all([
@@ -2763,7 +3052,11 @@ describe('PqsSummaryService', () => {
         },
       ],
     });
-    expect(modules).toEqual({ packageId: 'splice-amulet', status: 'decoded', modules: ['Splice.Amulet'] });
+    expect(modules).toEqual({
+      packageId: 'splice-amulet',
+      status: 'decoded',
+      modules: ['Splice.Amulet'],
+    });
     expect(templates).toEqual({
       packageId: 'splice-amulet',
       status: 'decoded',
@@ -2909,7 +3202,9 @@ describe('PqsSummaryService', () => {
       'Splice.Amulet:SvRewardCoupon',
     );
 
-    expect(templateDetail?.template?.choices).toEqual(representativeTemplateChoices);
+    expect(templateDetail?.template?.choices).toEqual(
+      representativeTemplateChoices,
+    );
     expect(templateDetail).toEqual({
       packageId: 'main-package',
       name: 'Main Package',

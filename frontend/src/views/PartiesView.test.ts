@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import PartiesView from './PartiesView.vue';
 import type { PartyFingerprintsResponse } from '../types/active-parties';
 import type { NodeSnapshot } from '../types/nodes';
@@ -121,6 +121,30 @@ describe('PartiesView', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps successful node parties visible when another node fails and retries only that node', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
+    vi.mocked(fetchNodeActiveParties).mockImplementation(async (nodeId: string) => {
+      if (nodeId === 'participant-1') {
+        return makeActiveEntry(nodeId, ['Alice']);
+      }
+      throw new Error('participant-2 unavailable');
+    });
+
+    await renderAt();
+
+    expect(await screen.findByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(await screen.findByText('participant-2 unavailable')).toBeInTheDocument();
+    expect(fetchNodeActiveParties).toHaveBeenCalledTimes(3);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry Participant 2' }));
+
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(5));
+    expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-2');
+    const fetchNodeActivePartiesMock = fetchNodeActiveParties as unknown as Mock;
+    expect(fetchNodeActivePartiesMock.mock.calls.filter(([nodeId]) => nodeId === 'participant-1')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
+  });
+
   it('shows a loading state before active parties resolve', async () => {
     vi.mocked(fetchNodes).mockResolvedValue([
       {
@@ -173,7 +197,7 @@ describe('PartiesView', () => {
     expect(screen.getByRole('tablist', { name: 'Party source modes' })).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: 'Party source modes' }).querySelectorAll('button')).toHaveLength(3);
     expect(screen.queryByRole('tablist', { name: 'Node selectors' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Loading nodes...')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading nodes...')).toBeInTheDocument();
   });
 
   it('renders one unified advanced filter with all nodes checked by default', async () => {
@@ -266,6 +290,7 @@ describe('PartiesView', () => {
     expect(await screen.findByText('Advanced Filter Parameters')).toBeInTheDocument();
     expect(router.currentRoute.value.query.view).toBe('compact');
     expect(router.currentRoute.value.query.node).toBe('participant-2');
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledWith('participant-2'));
 
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
     await waitFor(() => expect(router.currentRoute.value.query.node).toBeUndefined());
@@ -333,6 +358,50 @@ describe('PartiesView', () => {
     expect(await screen.findByText('1220deferred')).toBeInTheDocument();
     expect(fetchPartyFingerprints).toHaveBeenCalledWith({ limit: 15 });
     expect(fetchNodeActiveParties).not.toHaveBeenCalled();
+  });
+
+  it('ends node discovery loading before the independent party sections settle', async () => {
+    const parties = deferred<ReturnType<typeof makeActiveEntry>>();
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1')]);
+    vi.mocked(fetchNodeActiveParties).mockReturnValue(parties.promise);
+
+    await renderAt();
+
+    await waitFor(() => expect(fetchNodeActiveParties).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Loading nodes...')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading parties across selected nodes' })).toBeInTheDocument();
+
+    parties.resolve(makeActiveEntry('participant-1', ['Alice']));
+    expect(await screen.findByRole('link', { name: 'Alice' })).toBeInTheDocument();
+  });
+
+  it('retries failed namespace requests and renders a local retry instead of an empty result', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1')]);
+    vi.mocked(fetchNodeActiveParties).mockResolvedValue(makeActiveEntry('participant-1', ['Alice']));
+    vi.mocked(fetchPartyFingerprints)
+      .mockRejectedValueOnce(new Error('namespaces unavailable'))
+      .mockRejectedValueOnce(new Error('namespaces unavailable'))
+      .mockResolvedValueOnce({
+        source: 'grpc',
+        limit: 15,
+        nextBefore: null,
+        nextAfter: null,
+        fingerprints: ['1220retry'],
+      });
+
+    await renderAt();
+    await screen.findByRole('link', { name: 'Alice' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces (gRPC)' }));
+
+    expect(await screen.findByText('Unable to load namespaces.')).toBeInTheDocument();
+    expect(screen.getByText('namespaces unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('No known namespaces found across selected nodes.')).not.toBeInTheDocument();
+    expect(fetchPartyFingerprints).toHaveBeenCalledTimes(2);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry namespaces' }));
+
+    expect(await screen.findByRole('link', { name: '1220retry' })).toBeInTheDocument();
+    expect(fetchPartyFingerprints).toHaveBeenCalledTimes(3);
   });
 
   it('reloads active parties immediately when a node is unchecked', async () => {
@@ -488,6 +557,7 @@ describe('PartiesView', () => {
     vi.mocked(fetchNodes).mockResolvedValue([makeNode('participant-1'), makeNode('participant-2')]);
     vi.mocked(fetchNodeActiveParties)
       .mockResolvedValueOnce(makeActiveEntry('participant-1', ['Alice']))
+      .mockRejectedValueOnce(new Error('participant-2 unavailable'))
       .mockRejectedValueOnce(new Error('participant-2 unavailable'));
 
     await renderAt();
@@ -873,7 +943,7 @@ describe('PartiesView', () => {
     await waitFor(() =>
       expect(fetchPartyFingerprints).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByText('1220alice')).toBeInTheDocument();
+    expect(await screen.findByText('1220alice')).toBeInTheDocument();
     expect(screen.getByText('1220carol')).toBeInTheDocument();
     expect(screen.queryByText('PQS')).not.toBeInTheDocument();
     expect(screen.queryAllByText('gRPC')).toHaveLength(0);

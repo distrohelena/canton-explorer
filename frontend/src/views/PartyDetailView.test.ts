@@ -1,15 +1,31 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PartyDetailView from './PartyDetailView.vue';
 import * as api from '../lib/api';
+import type { PartyDetailResponse } from '../types/parties';
 
 vi.mock('../lib/api', () => ({
-  fetchPartyDetail: vi.fn(),
+  fetchPartySummary: vi.fn(),
+  fetchPartyNodes: vi.fn(),
+  fetchPartyTopology: vi.fn(),
   fetchPartyUpdates: vi.fn(),
   fetchPartyContracts: vi.fn(),
   fetchTemplates: vi.fn(),
 }));
+
+function mockPartySections(detail: PartyDetailResponse): void {
+  vi.mocked(api.fetchPartySummary).mockResolvedValue({
+    partyId: detail.partyId,
+    nodeCount: detail.nodeCount,
+    recentUpdateCount: detail.recentUpdateCount,
+    recentContractCount: detail.recentContractCount,
+  });
+  vi.mocked(api.fetchPartyNodes).mockResolvedValue({ nodes: detail.nodes });
+  vi.mocked(api.fetchPartyTopology).mockResolvedValue({
+    partyTopologyByNode: detail.partyTopologyByNode,
+  });
+}
 
 async function renderAt(path: string) {
   const router = createRouter({
@@ -41,13 +57,19 @@ async function renderAt(path: string) {
 }
 
 describe('PartyDetailView', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
   });
 
   it('draws the section blocks with their titles instantly, loading only their content', async () => {
-    vi.mocked(api.fetchPartyDetail).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(api.fetchPartySummary).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(api.fetchPartyNodes).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(api.fetchPartyTopology).mockReturnValue(new Promise(() => undefined));
 
     await renderAt('/parties/Alice');
 
@@ -62,8 +84,32 @@ describe('PartyDetailView', () => {
     expect(screen.getByRole('status', { name: 'Loading party topology' })).toBeInTheDocument();
   });
 
+  it('keeps the overview visible while nodes load and retries only a failed topology section', async () => {
+    vi.mocked(api.fetchPartySummary).mockResolvedValue({
+      partyId: 'Alice', nodeCount: 1, recentUpdateCount: 0, recentContractCount: 0,
+    });
+    vi.mocked(api.fetchPartyNodes).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(api.fetchPartyTopology).mockRejectedValue(new Error('Topology unavailable'));
+
+    await renderAt('/parties/Alice');
+
+    await waitFor(() => {
+      expect(api.fetchPartySummary).toHaveBeenCalledWith('Alice');
+      expect(api.fetchPartyNodes).toHaveBeenCalledWith('Alice');
+      expect(api.fetchPartyTopology).toHaveBeenCalledWith('Alice');
+    });
+    expect(await screen.findByText('Party ID')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading observed nodes' })).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Topology unavailable');
+    expect(api.fetchPartyTopology).toHaveBeenCalledTimes(2);
+    await fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(api.fetchPartyTopology).toHaveBeenCalledTimes(4));
+    expect(api.fetchPartySummary).toHaveBeenCalledTimes(1);
+  });
+
   it('renders a summary-first party detail page with inline paginated updates and contracts browsers', async () => {
-    vi.mocked(api.fetchPartyDetail).mockResolvedValue({
+    const detail: PartyDetailResponse = {
       partyId: 'Alice',
       nodeCount: 2,
       recentUpdateCount: 2,
@@ -160,7 +206,8 @@ describe('PartyDetailView', () => {
           partyToKeyMappings: [],
         },
       ],
-    });
+    };
+    mockPartySections(detail);
     vi.mocked(
       (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
         .fetchPartyUpdates,
@@ -383,6 +430,9 @@ describe('PartyDetailView', () => {
       }),
     );
 
+    await waitFor(() =>
+      expect(contractsTopPager.getByRole('button', { name: 'Older' })).not.toBeDisabled(),
+    );
     await fireEvent.click(contractsTopPager.getByRole('button', { name: 'Older' }));
 
     await waitFor(() =>
@@ -400,7 +450,7 @@ describe('PartyDetailView', () => {
   });
 
   it('renders node-local topology empty and error states without breaking the party page', async () => {
-    vi.mocked(api.fetchPartyDetail).mockResolvedValue({
+    const detail: PartyDetailResponse = {
       partyId: 'Alice',
       nodeCount: 1,
       recentUpdateCount: 1,
@@ -435,7 +485,8 @@ describe('PartyDetailView', () => {
           partyToKeyMappings: [],
         },
       ],
-    });
+    };
+    mockPartySections(detail);
     vi.mocked(
       (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
         .fetchPartyUpdates,

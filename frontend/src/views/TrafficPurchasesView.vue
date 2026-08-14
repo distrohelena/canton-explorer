@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import UpdatesToolbar from '../components/UpdatesToolbar.vue';
 import {
   fetchNodes,
   fetchTrafficPurchases,
 } from '../lib/api';
 import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
-import type {
-  GlobalTrafficPurchasesResponse,
-  NodeSnapshot,
-} from '../types/nodes';
+import { useSectionLoad } from '../composables/useSectionLoad';
 
 type TrafficPurchaseFilters = {
   minDate: string;
@@ -20,16 +17,16 @@ type TrafficPurchaseFilters = {
   paidMax: string;
 };
 
-const nodes = ref<NodeSnapshot[]>([]);
 const selectedNodeIds = ref<string[]>([]);
-const traffic = ref<GlobalTrafficPurchasesResponse | null>(null);
 const pageSize = ref(DEFAULT_PAGE_SIZE);
-const pageLoading = ref(false);
-const loading = ref(true);
 const advancedSearchExpanded = ref(false);
 const filters = ref<TrafficPurchaseFilters>(emptyTrafficFilters());
 const filterDraft = ref<TrafficPurchaseFilters>(emptyTrafficFilters());
-const error = ref<string | null>(null);
+const trafficRequest = ref<Parameters<typeof fetchTrafficPurchases>[0]>({ limit: DEFAULT_PAGE_SIZE });
+const nodesSection = useSectionLoad(fetchNodes);
+const trafficSection = useSectionLoad(() => fetchTrafficPurchases(trafficRequest.value));
+const nodes = computed(() => nodesSection.data.value ?? []);
+const traffic = computed(() => trafficSection.data.value);
 
 function emptyTrafficFilters(): TrafficPurchaseFilters {
   return {
@@ -44,6 +41,7 @@ function emptyTrafficFilters(): TrafficPurchaseFilters {
 
 const allNodesSelected = computed(
   () =>
+    nodesSection.data.value !== null &&
     nodes.value.length > 0 &&
     selectedNodeIds.value.length === nodes.value.length &&
     nodes.value.every((node) => selectedNodeIds.value.includes(node.id)),
@@ -114,7 +112,7 @@ function requestOptions(options: {
     ...nonEmptyFilters(filters.value),
   };
 
-  if (!allNodesSelected.value) {
+  if (nodesSection.data.value !== null && !allNodesSelected.value) {
     request.nodeIds = [...selectedNodeIds.value];
   }
   if (options.before) {
@@ -127,43 +125,31 @@ function requestOptions(options: {
   return request;
 }
 
-async function loadTraffic(options: {
+function loadTraffic(options: {
   limit?: number;
   before?: string;
   after?: string;
 } = {}): Promise<void> {
-  pageLoading.value = true;
-  error.value = null;
-
-  try {
-    traffic.value = await fetchTrafficPurchases(requestOptions(options));
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : 'Unable to load traffic purchases.';
-    traffic.value = null;
-  } finally {
-    pageLoading.value = false;
-  }
+  trafficRequest.value = requestOptions(options);
+  trafficSection.reset();
+  return trafficSection.load();
 }
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
+function load(): void {
+  nodesSection.reset();
+  void nodesSection.load();
+  void loadTraffic();
+}
 
-  try {
-    const nextNodes = await fetchNodes();
+watch(nodesSection.data, (nextNodes) => {
+  if (nextNodes) {
     const previousSelection = new Set(selectedNodeIds.value);
-    nodes.value = nextNodes;
     selectedNodeIds.value =
       previousSelection.size === 0
         ? nextNodes.map((node) => node.id)
         : nextNodes.map((node) => node.id).filter((nodeId) => previousSelection.has(nodeId));
-    await loadTraffic();
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : 'Unable to load traffic purchases.';
-  } finally {
-    loading.value = false;
   }
-}
+});
 
 function toggleAdvancedSearch(): void {
   advancedSearchExpanded.value = !advancedSearchExpanded.value;
@@ -217,7 +203,7 @@ function showNewer(): void {
 }
 
 onMounted(() => {
-  void load();
+  load();
 });
 </script>
 
@@ -229,22 +215,7 @@ onMounted(() => {
       </div>
     </header>
 
-    <div v-if="loading" class="traffic-page__state inline-loading" role="status">
-      <span class="node-updates__spinner" aria-hidden="true"></span>
-      <span>Loading traffic purchases…</span>
-    </div>
-
-    <div v-else-if="error" class="traffic-page__state traffic-page__state--error" role="alert">
-      <strong>Unable to load traffic purchases.</strong>
-      <span>{{ error }}</span>
-      <button type="button" class="button button--secondary" @click="load">Retry</button>
-    </div>
-
-    <div v-else-if="nodes.length === 0" class="traffic-page__state">
-      No nodes are configured.
-    </div>
-
-    <section v-else class="traffic-page__section activity-home__updates-section">
+    <section class="traffic-page__section activity-home__updates-section">
       <header class="node-detail__hero">
         <div>
           <h3>Purchases</h3>
@@ -254,8 +225,8 @@ onMounted(() => {
             :advanced-filter-expanded="advancedSearchExpanded"
             advanced-filter-controls="traffic-purchases-advanced-search"
             advanced-filter-label="Advanced Search"
-            :newer-disabled="!traffic?.nextAfter || pageLoading"
-            :older-disabled="!traffic?.nextBefore || pageLoading"
+            :newer-disabled="!traffic?.nextAfter || trafficSection.loading.value"
+            :older-disabled="!traffic?.nextBefore || trafficSection.loading.value"
             :page-size="pageSize"
             page-size-aria-label="Traffic Purchases per page"
             @toggle-advanced-filter="toggleAdvancedSearch"
@@ -280,7 +251,18 @@ onMounted(() => {
           <div class="traffic-advanced-search__grid">
             <div class="node-updates__advanced-filter-field node-updates__advanced-filter-field--nodes">
               <span>Nodes</span>
-              <div class="node-updates__advanced-filter-node-list">
+              <div v-if="nodesSection.loading.value" class="inline-loading" role="status">
+                <span class="node-updates__spinner" aria-hidden="true"></span>
+                <span>Loading nodes…</span>
+              </div>
+              <div v-else-if="nodesSection.error.value" class="traffic-page__state traffic-page__state--error" role="alert">
+                <span>{{ nodesSection.error.value }}</span>
+                <button type="button" class="button button--secondary" @click="nodesSection.retry">Retry nodes</button>
+              </div>
+              <div v-else-if="nodes.length === 0" class="traffic-page__state">
+                No nodes are configured.
+              </div>
+              <div v-else class="node-updates__advanced-filter-node-list">
                 <label
                   v-for="node in nodes"
                   :key="node.id"
@@ -333,7 +315,16 @@ onMounted(() => {
         </section>
       </div>
 
-      <div v-if="traffic?.purchases.length" class="traffic-purchases-table" role="table" aria-label="All node traffic purchases">
+      <div v-if="trafficSection.loading.value" class="traffic-page__state inline-loading" role="status">
+        <span class="node-updates__spinner" aria-hidden="true"></span>
+        <span>Loading traffic purchases…</span>
+      </div>
+      <div v-else-if="trafficSection.error.value" class="traffic-page__state traffic-page__state--error" role="alert">
+        <strong>Unable to load traffic purchases.</strong>
+        <span>{{ trafficSection.error.value }}</span>
+        <button type="button" class="button button--secondary" @click="trafficSection.retry">Retry</button>
+      </div>
+      <div v-else-if="traffic?.purchases.length" class="traffic-purchases-table" role="table" aria-label="All node traffic purchases">
         <div class="traffic-purchases-table__row traffic-purchases-table__row--header" role="row">
           <span>Node</span>
           <span>Purchased</span>

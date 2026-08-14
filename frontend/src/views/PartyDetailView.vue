@@ -1,16 +1,39 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { watch } from 'vue';
 import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
 import ContractsBrowser from '../components/ContractsBrowser.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
 import UpdatesBrowser from '../components/UpdatesBrowser.vue';
-import { fetchPartyDetail } from '../lib/api';
-import type { PartyDetailResponse } from '../types/parties';
+import { useSectionLoad } from '../composables/useSectionLoad';
+import { fetchPartyNodes, fetchPartySummary, fetchPartyTopology } from '../lib/api';
+import type { PartyTopologyResponse } from '../types/parties';
 
 const props = defineProps<{ partyId: string }>();
 
-const partyDetail = ref<PartyDetailResponse | null>(null);
-const detailError = ref<string | null>(null);
+const {
+  data: summaryData,
+  loading: summaryLoading,
+  error: summaryError,
+  load: loadSummary,
+  retry: retrySummary,
+  reset: resetSummary,
+} = useSectionLoad(() => fetchPartySummary(props.partyId));
+const {
+  data: nodesData,
+  loading: nodesLoading,
+  error: nodesError,
+  load: loadNodes,
+  retry: retryNodes,
+  reset: resetNodes,
+} = useSectionLoad(() => fetchPartyNodes(props.partyId));
+const {
+  data: topologyData,
+  loading: topologyLoading,
+  error: topologyError,
+  load: loadTopology,
+  retry: retryTopology,
+  reset: resetTopology,
+} = useSectionLoad(() => fetchPartyTopology(props.partyId));
 const partyPurposeLabels: Record<string, string> = {
   namespace: 'Namespace',
   proofOfOwnership: 'Proof-of-Ownership',
@@ -120,7 +143,7 @@ function formatPartyKeyFormatLabel(value: string | null): string | null {
 }
 
 function resolvePartyParticipantThreshold(
-  participants: PartyDetailResponse['partyTopologyByNode'][number]['partyToParticipants'],
+  participants: PartyTopologyResponse['partyTopologyByNode'][number]['partyToParticipants'],
 ): number | null {
   const thresholds = participants
     .map((participant) => participant.threshold)
@@ -134,7 +157,7 @@ function resolvePartyParticipantThreshold(
 }
 
 function resolvePartyKeyThreshold(
-  keyMappings: PartyDetailResponse['partyTopologyByNode'][number]['partyToKeyMappings'],
+  keyMappings: PartyTopologyResponse['partyTopologyByNode'][number]['partyToKeyMappings'],
 ): number | null {
   const thresholds = keyMappings
     .map((keyMapping) => keyMapping.threshold)
@@ -147,20 +170,15 @@ function resolvePartyKeyThreshold(
   return thresholds[0] ?? null;
 }
 
-async function loadPartyDetail() {
-  detailError.value = null;
-
-  try {
-    partyDetail.value = await fetchPartyDetail(props.partyId);
-  } catch (err) {
-    detailError.value = err instanceof Error ? err.message : 'Unknown error';
-  }
-}
-
 watch(
   () => props.partyId,
   () => {
-    void loadPartyDetail();
+    resetSummary();
+    resetNodes();
+    resetTopology();
+    void loadSummary();
+    void loadNodes();
+    void loadTopology();
   },
   { immediate: true },
 );
@@ -168,8 +186,7 @@ watch(
 
 <template>
   <section class="party-detail">
-    <p v-if="detailError" class="node-detail__message node-detail__message--error">{{ detailError }}</p>
-    <div v-else class="node-page">
+    <div class="node-page">
       <div class="node-page__main node-detail__content">
         <header class="node-detail__hero">
           <div class="party-detail__heading">
@@ -182,7 +199,7 @@ watch(
           <section class="node-detail__section party-detail__section--summary">
             <h3>Overview</h3>
             <div
-              v-if="!partyDetail"
+              v-if="summaryLoading"
               class="inline-loading"
               role="status"
               aria-label="Loading overview"
@@ -190,22 +207,30 @@ watch(
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading overview...</span>
             </div>
-            <dl v-else class="detail-grid party-detail__summary-grid">
+            <div
+              v-else-if="summaryError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+            >
+              <span>{{ summaryError }}</span>
+              <button type="button" class="button button--secondary" @click="retrySummary">Retry</button>
+            </div>
+            <dl v-else-if="summaryData" class="detail-grid party-detail__summary-grid">
               <div class="party-detail__summary-item party-detail__summary-item--full-row">
                 <dt>Party ID</dt>
-                <dd class="update-detail__id">{{ partyDetail.partyId }}</dd>
+                <dd class="update-detail__id">{{ summaryData.partyId }}</dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Observed Nodes</dt>
-                <dd>{{ partyDetail.nodeCount }}</dd>
+                <dd>{{ summaryData.nodeCount }}</dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Recent Updates</dt>
-                <dd>{{ partyDetail.recentUpdateCount }}</dd>
+                <dd>{{ summaryData.recentUpdateCount }}</dd>
               </div>
               <div class="party-detail__summary-item">
                 <dt>Recent Contracts</dt>
-                <dd>{{ partyDetail.recentContractCount }}</dd>
+                <dd>{{ summaryData.recentContractCount }}</dd>
               </div>
             </dl>
           </section>
@@ -213,7 +238,7 @@ watch(
           <section class="node-detail__section party-detail__section--nodes">
             <h3>Observed Nodes</h3>
             <div
-              v-if="!partyDetail"
+              v-if="nodesLoading"
               class="inline-loading"
               role="status"
               aria-label="Loading observed nodes"
@@ -221,9 +246,17 @@ watch(
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading observed nodes...</span>
             </div>
-            <div v-else class="package-detail__list">
+            <div
+              v-else-if="nodesError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+            >
+              <span>{{ nodesError }}</span>
+              <button type="button" class="button button--secondary" @click="retryNodes">Retry</button>
+            </div>
+            <div v-else-if="nodesData" class="package-detail__list">
               <div
-                v-for="node in partyDetail.nodes"
+                v-for="node in nodesData.nodes"
                 :key="node.nodeId"
                 class="package-detail__list-row"
               >
@@ -242,7 +275,7 @@ watch(
           <section class="node-detail__section party-detail__section--topology">
             <h3>Party Topology</h3>
             <div
-              v-if="!partyDetail"
+              v-if="topologyLoading"
               class="inline-loading"
               role="status"
               aria-label="Loading party topology"
@@ -250,9 +283,17 @@ watch(
               <span class="node-updates__spinner" aria-hidden="true"></span>
               <span>Loading party topology...</span>
             </div>
-            <div v-else class="party-topology__list">
+            <div
+              v-else-if="topologyError"
+              class="node-detail__message node-detail__message--error"
+              role="alert"
+            >
+              <span>{{ topologyError }}</span>
+              <button type="button" class="button button--secondary" @click="retryTopology">Retry</button>
+            </div>
+            <div v-else-if="topologyData" class="party-topology__list">
               <article
-                v-for="topology in partyDetail.partyTopologyByNode"
+                v-for="topology in topologyData.partyTopologyByNode"
                 :key="topology.nodeId"
                 class="party-topology__card"
               >

@@ -9,18 +9,25 @@ import QuerySourcePill from '../components/QuerySourcePill.vue';
 import UpdatesToolbar from '../components/UpdatesToolbar.vue';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, normalizePageSize } from '../lib/pagination';
 import { fetchTokens } from '../lib/api';
+import { useSectionLoad } from '../composables/useSectionLoad';
 import type { TokensResponse } from '../types/tokens';
 
 const route = useRoute();
 const router = useRouter();
-const tokensResponse = ref<TokensResponse | null>(null);
-const tokensError = ref<string | null>(null);
-const loadingTokens = ref(true);
 const showAdvancedFilter = ref(false);
 const nameFilterDraft = ref('');
 const excludeNameFilterDraft = ref('');
 const issuerFilterDraft = ref('');
 const tokensAdvancedFilterId = 'tokens-advanced-filter';
+const tokensRequest = ref<Parameters<typeof fetchTokens>[0]>({});
+const {
+  data: tokensResponse,
+  loading: loadingTokens,
+  error: tokensError,
+  load: loadTokenSection,
+  retry: retryTokenSection,
+  reset: resetTokenSection,
+} = useSectionLoad<TokensResponse>(() => fetchTokens(tokensRequest.value));
 
 function readTokenCursor(key: 'tokensBefore' | 'tokensAfter'): string | undefined {
   const value = route.query[key];
@@ -115,30 +122,18 @@ async function pushTokenQuery(query: LocationQueryRaw) {
   });
 }
 
-async function loadTokens() {
-  loadingTokens.value = true;
-  tokensError.value = null;
-
-  try {
-    const before = readTokenCursor('tokensBefore');
-    const after = before ? undefined : readTokenCursor('tokensAfter');
-    const limit = readTokenPageSize();
-    const names = activeNameFilters.value;
-    const excludeNames = activeExcludeNameFilters.value;
-    const issuers = activeIssuerFilters.value;
-    tokensResponse.value = await fetchTokens({
-      before,
-      after,
-      limit,
-      names,
-      excludeNames,
-      issuers,
-    });
-  } catch (err) {
-    tokensError.value = err instanceof Error ? err.message : 'Unknown error';
-  } finally {
-    loadingTokens.value = false;
-  }
+function loadTokens(): void {
+  const before = readTokenCursor('tokensBefore');
+  tokensRequest.value = {
+    before,
+    after: before ? undefined : readTokenCursor('tokensAfter'),
+    limit: readTokenPageSize(),
+    names: activeNameFilters.value,
+    excludeNames: activeExcludeNameFilters.value,
+    issuers: activeIssuerFilters.value,
+  };
+  resetTokenSection();
+  void loadTokenSection();
 }
 
 function tokenDetailLink(tokenId: string): string {
@@ -336,9 +331,10 @@ watch(
         <span class="node-updates__spinner" aria-hidden="true"></span>
         <span>Loading tokens...</span>
       </p>
-      <p v-else-if="tokensError" class="dashboard__message dashboard__message--error">
-        {{ tokensError }}
-      </p>
+      <div v-else-if="tokensError" class="dashboard__message dashboard__message--error" role="alert">
+        <p>{{ tokensError }}</p>
+        <button type="button" class="button button--secondary" @click="retryTokenSection">Retry</button>
+      </div>
       <p v-else-if="tokensResponse && tokensResponse.tokens.length === 0" class="dashboard__message">
         No tokens discovered yet.
       </p>

@@ -76,6 +76,30 @@ describe('TokensView', () => {
     expect(screen.getByText('Loading latest token transfers...')).toBeInTheDocument();
   });
 
+  it('retries the known tokens section locally without affecting latest transfers', async () => {
+    vi.mocked(fetchTokens)
+      .mockRejectedValueOnce(new Error('tokens unavailable'))
+      .mockRejectedValueOnce(new Error('tokens unavailable'))
+      .mockResolvedValueOnce(makeTokensResponse([]));
+    vi.mocked(fetchLatestTokenTransfers).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      transfers: [],
+    });
+
+    await renderAt('/tokens');
+
+    expect(await screen.findByText('tokens unavailable')).toBeInTheDocument();
+    expect(fetchTokens).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('No token transfers available yet.')).toBeInTheDocument();
+
+    await fireEvent.click(within(sectionForHeading('Known Tokens')).getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(fetchTokens).toHaveBeenCalledTimes(3));
+    expect(fetchLatestTokenTransfers).toHaveBeenCalledTimes(1);
+  });
+
   it('renders known tokens and the latest transfer feed', async () => {
     vi.mocked(fetchTokens).mockResolvedValue(makeTokensResponse([
         {
@@ -415,7 +439,12 @@ describe('TokensView', () => {
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/tokens?tokensBefore=tokens-cursor-before-1'));
     expect(await screen.findByText('Beta')).toBeInTheDocument();
 
-    await fireEvent.click(within(knownTokensBottomPager).getByRole('button', { name: 'Newer' }));
+    const refreshedKnownTokensSection = sectionForHeading('Known Tokens');
+    const refreshedKnownTokensBottomPager = within(refreshedKnownTokensSection).getByRole('group', {
+      name: 'Bottom known tokens pagination',
+    });
+
+    await fireEvent.click(within(refreshedKnownTokensBottomPager).getByRole('button', { name: 'Newer' }));
 
     await waitFor(() =>
       expect(fetchTokens).toHaveBeenNthCalledWith(3, {
@@ -492,6 +521,7 @@ describe('TokensView', () => {
 
     const { router } = await renderAt('/tokens');
     const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
+    await within(transfersTable).findByRole('link', { name: /Canton Coin/i });
 
     await fireEvent.click(within(transfersTable).getByRole('link', { name: /Canton Coin/i }));
 
@@ -536,6 +566,7 @@ describe('TokensView', () => {
 
     const { router, container } = await renderAt('/tokens');
 
+    await screen.findByText('Participant 2');
     const row = container.querySelector('.tokens-page__row.node-updates__row--link');
     expect(row).not.toBeNull();
 
@@ -634,7 +665,7 @@ describe('TokensView', () => {
 
     expect((await screen.findAllByText('Canton Coin')).length).toBeGreaterThan(0);
 
-    await screen.findByRole('table', { name: 'Latest token transfers' });
+    await screen.findByText('Participant 2');
     const transfersBrowserSection = sectionForHeading('Latest Transfers');
     const transfersBottomPager = within(transfersBrowserSection).getByRole('group', {
       name: 'Bottom latest transfers pagination',
@@ -699,6 +730,7 @@ describe('TokensView', () => {
 
     const { container } = await renderAt('/tokens');
     const transfersTable = await screen.findByRole('table', { name: 'Latest token transfers' });
+    await within(transfersTable).findByText('CNQS App Provider');
     expect(within(transfersTable).getAllByText(/CNQS /)).toHaveLength(2);
     expect(within(transfersTable).getByText('CNQS App Provider')).toBeInTheDocument();
     expect(within(transfersTable).getByText('CNQS Super Validator')).toBeInTheDocument();

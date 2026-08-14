@@ -29,13 +29,43 @@ import {
   fetchPackageDataTypes,
   fetchPackageModule,
   fetchPackageTemplate,
+  fetchPartySummary,
+  fetchPartyNodes,
+  fetchPartyTopology,
+  fetchNamespaceSummary,
+  fetchNamespaceNodes,
+  fetchNamespaceTopology,
+  fetchNamespaceUpdates,
+  fetchNamespaceContracts,
 } from './api';
-import type { NodeContractDetailResponse, NodeContractsResponse } from '../types/contracts';
-import type { NodePackagesResponse, NodeParticipantStatusResponse } from '../types/nodes';
+import type {
+  NodeContractDetailResponse,
+  NodeContractsResponse,
+} from '../types/contracts';
+import type {
+  NodePackagesResponse,
+  NodeParticipantStatusResponse,
+} from '../types/nodes';
 import type { ActivePartiesResponse } from '../types/active-parties';
-import type { NamespaceDetailResponse, NamespacePartiesResponse } from '../types/namespaces';
-import type { PartyDetailResponse } from '../types/parties';
-import type { PackageDetailResponse, PackageFamilyResponse } from '../types/packages';
+import type {
+  NamespaceDetailResponse,
+  NamespaceNodesResponse,
+  NamespacePartiesResponse,
+  NamespaceSummaryResponse,
+  NamespaceTopologyResponse,
+  NamespaceUpdatesResponse,
+  NamespaceContractsResponse,
+} from '../types/namespaces';
+import type {
+  PartyDetailResponse,
+  PartyNodesResponse,
+  PartySummaryResponse,
+  PartyTopologyResponse,
+} from '../types/parties';
+import type {
+  PackageDetailResponse,
+  PackageFamilyResponse,
+} from '../types/packages';
 import type {
   TokenDetailResponse,
   TokenHoldersResponse,
@@ -48,7 +78,8 @@ const typedUpdateDetailFixture = {
   nodeId: 'participant-1',
   label: 'Participant 1',
   eventOffset: '0000000000000001',
-  updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+  updateId:
+    '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
   recordTime: '2026-07-01T12:00:00.000Z',
   parties: ['Alice'],
   events: [
@@ -74,7 +105,8 @@ const typedUpdateDetailFixture = {
     },
   ],
   meta: {
-    update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+    update_id:
+      '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
     record_time: 1782907200000000,
     event_offset: '0000000000000001',
   },
@@ -105,7 +137,8 @@ const typedNamespaceDetailFixture = {
       nodeId: 'participant-2',
       label: 'Participant 2',
       eventOffset: '42',
-      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      updateId:
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-09T12:00:00.000Z',
       parties: ['Alice::1220abcd', 'Bob::1220abcd'],
     },
@@ -158,7 +191,8 @@ const typedContractDetailFixture = {
   packageId: 'main-package',
   packageName: 'main-package-name',
   packageVersion: '1.2.3',
-  createdUpdateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+  createdUpdateId:
+    '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
   createdEventOffset: '0000000000000001',
   createdRecordTime: '2026-07-01T12:00:00.000Z',
   archivedUpdateId: null,
@@ -360,7 +394,8 @@ const typedPartyDetailFixture = {
       nodeId: 'participant-1',
       label: 'Participant 1',
       eventOffset: '0000000000000001',
-      updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+      updateId:
+        '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
       recordTime: '2026-07-01T12:00:00.000Z',
       parties: ['Alice', 'Bob'],
     },
@@ -379,6 +414,51 @@ const typedPartyDetailFixture = {
   ],
   partyTopologyByNode: [],
 } satisfies PartyDetailResponse;
+
+const typedPartySummaryFixture = {
+  partyId: typedPartyDetailFixture.partyId,
+  nodeCount: typedPartyDetailFixture.nodeCount,
+  recentUpdateCount: typedPartyDetailFixture.recentUpdateCount,
+  recentContractCount: typedPartyDetailFixture.recentContractCount,
+} satisfies PartySummaryResponse;
+
+const typedPartyNodesFixture = {
+  nodes: typedPartyDetailFixture.nodes,
+} satisfies PartyNodesResponse;
+
+const typedPartyTopologyFixture = {
+  partyTopologyByNode: typedPartyDetailFixture.partyTopologyByNode,
+} satisfies PartyTopologyResponse;
+
+const typedNamespaceSummaryFixture = {
+  namespaceId: typedNamespaceDetailFixture.namespaceId,
+  partyCount: typedNamespaceDetailFixture.partyCount,
+  nodeCount: typedNamespaceDetailFixture.nodeCount,
+  recentUpdateCount: typedNamespaceDetailFixture.recentUpdateCount,
+  recentContractCount: typedNamespaceDetailFixture.recentContractCount,
+} satisfies NamespaceSummaryResponse;
+
+const typedNamespaceNodesFixture = {
+  nodes: typedNamespaceDetailFixture.nodes,
+} satisfies NamespaceNodesResponse;
+
+const typedNamespaceTopologyFixture = {
+  topologyByNode: typedNamespaceDetailFixture.topologyByNode,
+} satisfies NamespaceTopologyResponse;
+
+const typedNamespaceUpdatesFixture = {
+  limit: 15,
+  nextBefore: 'update-cursor-1',
+  nextAfter: null,
+  updates: typedNamespaceDetailFixture.recentUpdates,
+} satisfies NamespaceUpdatesResponse;
+
+const typedNamespaceContractsFixture = {
+  limit: 15,
+  nextBefore: null,
+  nextAfter: 'contract-cursor-0',
+  contracts: typedNamespaceDetailFixture.recentContracts,
+} satisfies NamespaceContractsResponse;
 
 const typedActivePartiesFixture = {
   nodes: [
@@ -546,26 +626,38 @@ describe('fetchNodes', () => {
   it('keeps typed update and contract detail fixtures in sync with API response contracts', () => {
     expect(typedUpdateDetailFixture.events[0].createData).toBeDefined();
     expect(typedContractDetailFixture.contractData).toBeDefined();
-    expect(typedPackageDetailFixture.templates[0].templateId).toBe('Splice.Amulet:SvRewardCoupon');
-    expect(typedPackageFamilyFixture.packages[0].packageId).toBe('splice-amulet-v2');
-    expect(typedNodePackagesFixture.packagesByName[0].packages[0].packageId).toBe('main-package-v2');
-    expect(typedPartyDetailFixture.recentUpdates[0].updateId).toContain('1220994e');
-    expect(typedNamespacePartiesFixture.parties[0].partyId).toContain('1220abcd');
+    expect(typedPackageDetailFixture.templates[0].templateId).toBe(
+      'Splice.Amulet:SvRewardCoupon',
+    );
+    expect(typedPackageFamilyFixture.packages[0].packageId).toBe(
+      'splice-amulet-v2',
+    );
+    expect(
+      typedNodePackagesFixture.packagesByName[0].packages[0].packageId,
+    ).toBe('main-package-v2');
+    expect(typedPartyDetailFixture.recentUpdates[0].updateId).toContain(
+      '1220994e',
+    );
+    expect(typedNamespacePartiesFixture.parties[0].partyId).toContain(
+      '1220abcd',
+    );
     expect(typedTokenDetailFixture.token.tokenId).toBe('canton-coin');
     expect(typedTokenHoldersFixture.holders[0].partyId).toBe('Alice');
   });
 
   it('routes the public explorer hostname to the public backend host', () => {
-    expect(resolveApiBaseUrl(undefined, false, '443', 'canton.sweetsquare.io')).toBe(
-      'https://canton-server.sweetsquare.io/api',
-    );
+    expect(
+      resolveApiBaseUrl(undefined, false, '443', 'canton.sweetsquare.io'),
+    ).toBe('https://canton-server.sweetsquare.io/api');
   });
 
   it('uses the local backend only for the vite dev server', () => {
     expect(resolveApiBaseUrl('', false, '4600', 'localhost')).toBe('api');
     expect(resolveApiBaseUrl('', false, '8080', 'example.com')).toBe('api');
     expect(resolveApiBaseUrl('', false, '46000', 'localhost')).toBe('api');
-    expect(resolveApiBaseUrl('', true, '46000', 'localhost')).toBe('http://localhost:4600/api');
+    expect(resolveApiBaseUrl('', true, '46000', 'localhost')).toBe(
+      'http://localhost:4600/api',
+    );
   });
 
   it('loads the configured branding from the backend API', async () => {
@@ -605,28 +697,28 @@ describe('fetchNodes', () => {
 
   it('loads activity history from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          generatedAt: '2026-07-01T12:00:00.000Z',
-          windowMinutes: 180,
-          nodes: [
-            {
-              nodeId: 'participant-1',
-              label: 'Participant 1',
-              status: 'healthy',
-              latestActiveContractCount: 15,
-              samples: [
-                {
-                  timestamp: '2026-07-01T12:00:00.000Z',
-                  activityValue: 3,
-                  activeContractCount: 15,
-                  latestOffset: '11',
-                },
-              ],
-            },
-          ],
-        }),
-      });
+      ok: true,
+      json: async () => ({
+        generatedAt: '2026-07-01T12:00:00.000Z',
+        windowMinutes: 180,
+        nodes: [
+          {
+            nodeId: 'participant-1',
+            label: 'Participant 1',
+            status: 'healthy',
+            latestActiveContractCount: 15,
+            samples: [
+              {
+                timestamp: '2026-07-01T12:00:00.000Z',
+                activityValue: 3,
+                activeContractCount: 15,
+                latestOffset: '11',
+              },
+            ],
+          },
+        ],
+      }),
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const history = await fetchActivityHistory(7);
@@ -666,9 +758,7 @@ describe('fetchNodes', () => {
     const result = await fetchRecentActiveParties();
 
     expect(result.count).toBe(4);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'api/parties/activity?hours=24',
-    );
+    expect(fetchMock).toHaveBeenCalledWith('api/parties/activity?hours=24');
   });
 
   it('loads local parties grouped by node from the backend API', async () => {
@@ -707,7 +797,9 @@ describe('fetchNodes', () => {
     const result = await fetchNodeLocalParties('participant-2');
 
     expect(result.nodeId).toBe('participant-2');
-    expect(fetchMock).toHaveBeenCalledWith('api/nodes/participant-2/parties/local');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/nodes/participant-2/parties/local',
+    );
   });
 
   it('loads party fingerprints for a single node from the backend API', async () => {
@@ -804,7 +896,10 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchPartyFingerprints({ limit: 30, after: '1220999' });
+    const result = await fetchPartyFingerprints({
+      limit: 30,
+      after: '1220999',
+    });
 
     expect(result.source).toBe('pqs');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -825,7 +920,10 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await fetchPartyFingerprints({ nodeIds: ['participant-2', 'participant-1'], limit: 30 });
+    await fetchPartyFingerprints({
+      nodeIds: ['participant-2', 'participant-1'],
+      limit: 30,
+    });
 
     expect(fetchMock).toHaveBeenCalledWith(
       'api/parties/fingerprints?node=participant-2&node=participant-1&limit=30',
@@ -847,9 +945,7 @@ describe('fetchNodes', () => {
 
     await fetchPartyFingerprints({ nodeIds: [] });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'api/parties/fingerprints?node=',
-    );
+    expect(fetchMock).toHaveBeenCalledWith('api/parties/fingerprints?node=');
   });
 
   it('loads participant status for a single node from the backend API', async () => {
@@ -888,7 +984,10 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokens({ before: 'tokens-cursor-before-1', limit: 50 });
+    const result = await fetchTokens({
+      before: 'tokens-cursor-before-1',
+      limit: 50,
+    });
 
     expect(result.tokens[0]?.tokenId).toBe('canton-coin');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -923,7 +1022,9 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchLatestTokenTransfers(30, { before: 'cursor-token-0' });
+    const result = await fetchLatestTokenTransfers(30, {
+      before: 'cursor-token-0',
+    });
 
     expect(result.transfers[0]?.updateId).toBe('token-update-2');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -1007,7 +1108,9 @@ describe('fetchNodes', () => {
     const result = await fetchTokenHolders('canton-coin');
 
     expect(result.holders[0]?.partyId).toBe('Alice');
-    expect(fetchMock).toHaveBeenCalledWith('api/tokens/canton-coin/holders?limit=30');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/tokens/canton-coin/holders?limit=30',
+    );
   });
 
   it('loads token holders by token id with cursor pagination from the backend API', async () => {
@@ -1017,7 +1120,9 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokenHolders('canton-coin', 30, { before: 'holders-cursor-1' });
+    const result = await fetchTokenHolders('canton-coin', 30, {
+      before: 'holders-cursor-1',
+    });
 
     expect(result.holders[0]?.partyId).toBe('Alice');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -1032,7 +1137,9 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchTokenTransfers('validator-license', 30, { before: 'token-cursor-before-2' });
+    const result = await fetchTokenTransfers('validator-license', 30, {
+      before: 'token-cursor-before-2',
+    });
 
     expect(result.transfers[0]?.tokenId).toBe('validator-license');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -1115,7 +1222,9 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchNodeContracts('participant-1', { before: '000000000000000099' });
+    const result = await fetchNodeContracts('participant-1', {
+      before: '000000000000000099',
+    });
 
     expect(result.nodeId).toBe('participant-1');
     expect(result.contracts[0].contractId).toBe('00abc');
@@ -1148,11 +1257,18 @@ describe('fetchNodes', () => {
   it('loads global contracts with repeated node filters from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ limit: 15, nextBefore: null, nextAfter: null, contracts: [] }),
+      json: async () => ({
+        limit: 15,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: [],
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await fetchLatestContracts(15, { nodeIds: ['participant-1', 'participant-2'] });
+    await fetchLatestContracts(15, {
+      nodeIds: ['participant-1', 'participant-2'],
+    });
 
     expect(fetchMock).toHaveBeenCalledWith(
       'api/contracts?node=participant-1&node=participant-2&limit=15',
@@ -1162,7 +1278,12 @@ describe('fetchNodes', () => {
   it('loads no global contracts with an explicit empty node selection', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ limit: 15, nextBefore: null, nextAfter: null, contracts: [] }),
+      json: async () => ({
+        limit: 15,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: [],
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -1205,7 +1326,9 @@ describe('fetchNodes', () => {
     expect(updates.nextBefore).toBe('000000000000000001');
     expect(updates.nextAfter).toBeNull();
     expect(updates.updates[0].eventOffset).toBe('000000000000000001');
-    expect(updates.updates[0].updateId).toBe('00000000000000000000000000000001');
+    expect(updates.updates[0].updateId).toBe(
+      '00000000000000000000000000000001',
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       'api/nodes/participant-1/updates?before=000000000000000025&party=Alice&party=Bob&template=Main%3AAsset&partyMode=and',
     );
@@ -1239,7 +1362,9 @@ describe('fetchNodes', () => {
     expect(updates.nodeId).toBe('participant-1');
     expect(updates.limit).toBe(30);
     expect(updates.updates[0].eventOffset).toBe('000000000000000001');
-    expect(updates.updates[0].updateId).toBe('00000000000000000000000000000001');
+    expect(updates.updates[0].updateId).toBe(
+      '00000000000000000000000000000001',
+    );
   });
 
   it('loads globally merged recent updates from the backend API', async () => {
@@ -1405,7 +1530,8 @@ describe('fetchNodes', () => {
           nodeId: 'participant-1',
           label: 'Participant 1',
           eventOffset: '0000000000000001',
-          updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+          updateId:
+            '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
           recordTime: '2026-07-01T12:00:00.000Z',
           parties: ['Alice'],
           events: [
@@ -1424,7 +1550,8 @@ describe('fetchNodes', () => {
             },
           ],
           meta: {
-            update_id: '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+            update_id:
+              '\\x1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
             record_time: 1782907200000000,
             event_offset: '0000000000000001',
           },
@@ -1434,7 +1561,10 @@ describe('fetchNodes', () => {
 
     const fetchNodeUpdateDetail = (
       api as {
-        fetchNodeUpdateDetail?: (id: string, updateId: string) => Promise<unknown>;
+        fetchNodeUpdateDetail?: (
+          id: string,
+          updateId: string,
+        ) => Promise<unknown>;
       }
     ).fetchNodeUpdateDetail;
 
@@ -1449,7 +1579,8 @@ describe('fetchNodes', () => {
       expect.objectContaining({
         nodeId: 'participant-1',
         eventOffset: '0000000000000001',
-        updateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+        updateId:
+          '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
         events: [
           expect.objectContaining({
             eventKind: 'create',
@@ -1473,7 +1604,8 @@ describe('fetchNodes', () => {
         packageId: 'main-package',
         packageName: 'main-package-name',
         packageVersion: '1.2.3',
-        createdUpdateId: '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
+        createdUpdateId:
+          '1220994e2270c5b3c5e5e0149d19cc2c4a2df6e1764f07b6a411a6a9cafe879fd8e1',
         createdEventOffset: '0000000000000001',
         createdRecordTime: '2026-07-01T12:00:00.000Z',
         archivedUpdateId: null,
@@ -1486,15 +1618,23 @@ describe('fetchNodes', () => {
 
     const fetchNodeContractDetail = (
       api as {
-        fetchNodeContractDetail?: (id: string, contractId: string) => Promise<unknown>;
+        fetchNodeContractDetail?: (
+          id: string,
+          contractId: string,
+        ) => Promise<unknown>;
       }
     ).fetchNodeContractDetail;
 
     expect(fetchNodeContractDetail).toBeTypeOf('function');
 
-    const contractDetail = await fetchNodeContractDetail?.('participant-1', '00abc');
+    const contractDetail = await fetchNodeContractDetail?.(
+      'participant-1',
+      '00abc',
+    );
 
-    expect(fetchMock).toHaveBeenCalledWith('api/nodes/participant-1/contracts/00abc');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/nodes/participant-1/contracts/00abc',
+    );
     expect(contractDetail).toEqual(
       expect.objectContaining({
         nodeId: 'participant-1',
@@ -1532,12 +1672,28 @@ describe('fetchNodes', () => {
   });
 
   it('loads package detail panels through independent backend endpoints', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg' }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', seenOnNodes: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', modules: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', templates: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ packageId: 'pkg', dataTypes: [] }) });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ packageId: 'pkg' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ packageId: 'pkg', seenOnNodes: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ packageId: 'pkg', modules: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ packageId: 'pkg', templates: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ packageId: 'pkg', dataTypes: [] }),
+      });
     vi.stubGlobal('fetch', fetchMock);
 
     await Promise.all([
@@ -1585,9 +1741,9 @@ describe('fetchNodes', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchPackageTemplate('pkg', 'Main.Module:Asset')).resolves.toEqual(
-      expect.objectContaining({ packageId: 'pkg' }),
-    );
+    await expect(
+      fetchPackageTemplate('pkg', 'Main.Module:Asset'),
+    ).resolves.toEqual(expect.objectContaining({ packageId: 'pkg' }));
     expect(fetchMock).toHaveBeenCalledWith(
       'api/packages/pkg/templates/Main.Module%3AAsset',
     );
@@ -1633,9 +1789,7 @@ describe('fetchNodes', () => {
 
     const nodePackages = await fetchNodePackages?.('participant-1');
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'api/nodes/participant-1/packages',
-    );
+    expect(fetchMock).toHaveBeenCalledWith('api/nodes/participant-1/packages');
     expect(nodePackages).toEqual(typedNodePackagesFixture);
   });
 
@@ -1683,6 +1837,62 @@ describe('fetchNodes', () => {
     expect(fetch).toHaveBeenCalledWith('api/namespaces/1220abcd');
   });
 
+  it.each([
+    [
+      'party summary',
+      fetchPartySummary,
+      'Alice',
+      'api/parties/Alice/summary',
+      typedPartySummaryFixture,
+    ],
+    [
+      'party nodes',
+      fetchPartyNodes,
+      'Alice',
+      'api/parties/Alice/nodes',
+      typedPartyNodesFixture,
+    ],
+    [
+      'party topology',
+      fetchPartyTopology,
+      'Alice',
+      'api/parties/Alice/topology',
+      typedPartyTopologyFixture,
+    ],
+    [
+      'namespace summary',
+      fetchNamespaceSummary,
+      '1220abcd',
+      'api/namespaces/1220abcd/summary',
+      typedNamespaceSummaryFixture,
+    ],
+    [
+      'namespace nodes',
+      fetchNamespaceNodes,
+      '1220abcd',
+      'api/namespaces/1220abcd/nodes',
+      typedNamespaceNodesFixture,
+    ],
+    [
+      'namespace topology',
+      fetchNamespaceTopology,
+      '1220abcd',
+      'api/namespaces/1220abcd/topology',
+      typedNamespaceTopologyFixture,
+    ],
+  ])(
+    'loads %s from the backend API',
+    async (_section, fetchSection, identifier, expectedUrl, fixture) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => fixture });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(fetchSection(identifier)).resolves.toEqual(fixture);
+      expect(fetchMock).toHaveBeenCalledWith(expectedUrl);
+    },
+  );
+
   it('loads paginated namespace parties from the backend API', async () => {
     vi.stubGlobal(
       'fetch',
@@ -1711,6 +1921,44 @@ describe('fetchNodes', () => {
     expect(namespaceParties).toEqual(typedNamespacePartiesFixture);
     expect(fetch).toHaveBeenCalledWith(
       'api/namespaces/1220abcd/parties?before=Bob%3A%3A1220abcd&limit=30',
+    );
+  });
+
+  it('loads paginated namespace updates from the encoded backend path', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedNamespaceUpdatesFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchNamespaceUpdates('1220 ab/cd', {
+        before: 'update cursor/0?x=1',
+        limit: 15,
+      }),
+    ).resolves.toEqual(typedNamespaceUpdatesFixture);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/namespaces/1220%20ab%2Fcd/updates?before=update+cursor%2F0%3Fx%3D1&limit=15',
+    );
+  });
+
+  it('loads paginated namespace contracts from the encoded backend path', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => typedNamespaceContractsFixture,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchNamespaceContracts('1220 ab/cd', {
+        after: 'contract cursor/1?x=2',
+        limit: 15,
+      }),
+    ).resolves.toEqual(typedNamespaceContractsFixture);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/namespaces/1220%20ab%2Fcd/contracts?after=contract+cursor%2F1%3Fx%3D2&limit=15',
     );
   });
 
@@ -1994,7 +2242,9 @@ describe('fetchNodes', () => {
 
     const fetchTrafficPurchases = (
       api as {
-        fetchTrafficPurchases?: (options?: Record<string, unknown>) => Promise<unknown>;
+        fetchTrafficPurchases?: (
+          options?: Record<string, unknown>,
+        ) => Promise<unknown>;
       }
     ).fetchTrafficPurchases;
 
