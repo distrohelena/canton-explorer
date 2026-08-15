@@ -11814,6 +11814,58 @@ describe('PqsSummaryService', () => {
     );
   });
 
+  it('fetches live traffic purchase history when a same-day estimate cache exists', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-14T12:00:00.000Z'));
+    const tempDir = mkdtempSync(resolve(tmpdir(), 'pqs-summary-service-'));
+    const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const query = jest.fn().mockResolvedValue({ rows: [] });
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    } as const;
+    const service = new PqsSummaryService(
+      { getRawExecutor: async () => ({ query }) } as never,
+      undefined,
+      cacheService,
+    );
+
+    cacheService.storeNodeTrafficPurchase({
+      nodeId: node.id,
+      cacheDay: '2026-08-14',
+      purchase: {
+        updateId: 'cached-purchase',
+        eventOffset: '1',
+        recordTime: '2026-08-14T10:00:00.000Z',
+        purchasedTraffic: '1000',
+        amuletPaid: '5',
+      },
+      cachedAt: '2026-08-14T11:00:00.000Z',
+    });
+
+    try {
+      await service.fetchTrafficPurchases(node, { limit: 1 });
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('AmuletRules_BuyMemberTraffic'),
+      );
+    } finally {
+      cacheService.close();
+      if (originalDatabasePath === undefined) {
+        delete process.env.PACKAGE_CACHE_DB_PATH;
+      } else {
+        process.env.PACKAGE_CACHE_DB_PATH = originalDatabasePath;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+      jest.useRealTimers();
+    }
+  });
+
   it('supports newer traffic purchase pages using an after cursor', async () => {
     const query = jest.fn().mockResolvedValue({
       rows: [
