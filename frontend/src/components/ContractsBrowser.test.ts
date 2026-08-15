@@ -9,6 +9,7 @@ const fetchNodeContractsMock = vi.hoisted(() => vi.fn());
 const fetchNodeTemplatesMock = vi.hoisted(() => vi.fn().mockResolvedValue({ templates: [] }));
 const fetchPartyContractsMock = vi.hoisted(() => vi.fn());
 const fetchTemplatesMock = vi.hoisted(() => vi.fn().mockResolvedValue({ templates: [] }));
+const routerPushMock = vi.hoisted(() => vi.fn());
 const route = vi.hoisted(() => ({
   fullPath:
     '/contracts?before=before-1&node=node-1&party=Alice&party=Bob&partyMode=and&template=Pkg%3AT&hideSplice=true&limit=30',
@@ -36,7 +37,7 @@ vi.mock('vue-router', async () => {
   const routeState = reactive(route);
   return {
     useRoute: () => routeState,
-    useRouter: () => ({ push: vi.fn() }),
+    useRouter: () => ({ push: routerPushMock }),
   };
 });
 
@@ -152,5 +153,126 @@ describe('ContractsBrowser', () => {
       templates: ['Pkg:T'],
       hideSplice: true,
     });
+  });
+
+  it('uses the contracts node query for a Party filter and keeps its prefix isolated', async () => {
+    route.fullPath = '/parties/Alice?contractsNode=participant-2&contractsLimit=30';
+    route.query = { contractsNode: 'participant-2', contractsLimit: '30' };
+    fetchPartyContractsMock.mockResolvedValue({
+      limit: 30,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    render(ContractsBrowser, {
+      props: {
+        scope: 'party',
+        path: '/parties/Alice',
+        partyId: 'Alice',
+        title: 'Contracts',
+        queryPrefix: 'contracts',
+        advancedFilterId: 'party-contracts-filter',
+        nodeOptions: [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+          { id: 'participant-3', label: 'Participant 3' },
+        ],
+      },
+      global: {
+        stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } },
+      },
+    });
+
+    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('checkbox', { name: 'Participant 2' })).toBeChecked();
+    await waitFor(() =>
+      expect(fetchPartyContractsMock).toHaveBeenLastCalledWith('Alice', {
+        nodeIds: ['participant-2'],
+        limit: 30,
+      }),
+    );
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Participant 1' }));
+
+    expect(routerPushMock).toHaveBeenLastCalledWith({
+      path: '/parties/Alice',
+      query: { contractsNode: ['participant-2', 'participant-1'], contractsLimit: '30' },
+    });
+  });
+
+  it('forwards an explicit empty Party contracts node selection', async () => {
+    route.fullPath = '/parties/Alice?contractsNode=&contractsLimit=30';
+    route.query = { contractsNode: '', contractsLimit: '30' };
+    fetchPartyContractsMock.mockResolvedValue({
+      limit: 30,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    render(ContractsBrowser, {
+      props: {
+        scope: 'party',
+        path: '/parties/Alice',
+        partyId: 'Alice',
+        title: 'Contracts',
+        queryPrefix: 'contracts',
+        advancedFilterId: 'party-contracts-filter',
+        nodeOptions: [{ id: 'participant-1', label: 'Participant 1' }],
+      },
+      global: {
+        stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } },
+      },
+    });
+
+    await waitFor(() =>
+      expect(fetchPartyContractsMock).toHaveBeenLastCalledWith('Alice', {
+        nodeIds: [],
+        limit: 30,
+      }),
+    );
+  });
+
+  it('applies a Party contracts node deep link after node options arrive', async () => {
+    route.fullPath = '/parties/Alice?contractsNode=participant-2&contractsLimit=30';
+    route.query = { contractsNode: 'participant-2', contractsLimit: '30' };
+    fetchPartyContractsMock.mockResolvedValue({
+      limit: 30,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    const { rerender } = render(ContractsBrowser, {
+      props: {
+        scope: 'party',
+        path: '/parties/Alice',
+        partyId: 'Alice',
+        title: 'Contracts',
+        queryPrefix: 'contracts',
+        advancedFilterId: 'party-contracts-filter',
+        nodeOptions: [],
+      },
+      global: {
+        stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } },
+      },
+    });
+
+    await rerender({
+      nodeOptions: [
+        { id: 'participant-1', label: 'Participant 1' },
+        { id: 'participant-2', label: 'Participant 2' },
+      ],
+    });
+
+    expect(screen.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('checkbox', { name: 'Participant 2' })).toBeChecked();
+    await waitFor(() =>
+      expect(fetchPartyContractsMock).toHaveBeenLastCalledWith('Alice', {
+        nodeIds: ['participant-2'],
+        limit: 30,
+      }),
+    );
   });
 });

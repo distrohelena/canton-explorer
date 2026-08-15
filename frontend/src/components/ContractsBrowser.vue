@@ -72,6 +72,9 @@ const activeTemplateFilters = ref<string[]>([]);
 const activeNodeFilters = ref<string[]>([]);
 const activeFilterMode = ref<FilterMode>('or');
 const activeHideSplice = ref(false);
+const nodeFilteringEnabled = computed(
+  () => (props.scope === 'global' || props.scope === 'party') && props.nodeOptions.length > 0,
+);
 
 function queryKey(
   base: 'before' | 'after' | 'node' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit',
@@ -106,6 +109,10 @@ function readQueryList(value: unknown): string[] {
 }
 
 function readNodeFilters(): string[] {
+  if (!nodeFilteringEnabled.value) {
+    return [];
+  }
+
   const availableNodeIds = props.nodeOptions.map((node) => node.id);
   const nodeQueryKey = queryKey('node');
 
@@ -131,7 +138,7 @@ function readHideSplice(value: unknown): boolean {
 }
 
 function syncFiltersFromRoute() {
-  activeNodeFilters.value = props.scope === 'global' ? readNodeFilters() : [];
+  activeNodeFilters.value = readNodeFilters();
   activePartyFilters.value = props.showPartyFilters
     ? uniqueValues(readQueryList(route.query[queryKey('party')]))
     : [];
@@ -170,7 +177,7 @@ const activePageSize = computed(() => normalizePageSize(route.query[queryKey('li
 
 function hasAdvancedFilterQuery(): boolean {
   return (
-    (props.scope === 'global' && Object.prototype.hasOwnProperty.call(route.query, queryKey('node'))) ||
+    (nodeFilteringEnabled.value && Object.prototype.hasOwnProperty.call(route.query, queryKey('node'))) ||
     activePartyFilters.value.length > 0 ||
     activeTemplateFilters.value.length > 0 ||
     (activePartyFilters.value.length > 0 && activeFilterMode.value !== 'or') ||
@@ -181,7 +188,9 @@ function hasAdvancedFilterQuery(): boolean {
 function clearManagedKeys(query: LocationQueryRaw) {
   delete query[queryKey('before')];
   delete query[queryKey('after')];
-  delete query[queryKey('node')];
+  if (nodeFilteringEnabled.value) {
+    delete query[queryKey('node')];
+  }
   delete query[queryKey('party')];
   delete query[queryKey('template')];
   delete query[queryKey('partyMode')];
@@ -219,7 +228,7 @@ function buildQuery(
     availableNodeIds.length > 0 &&
     availableNodeIds.every((nodeId) => nodeIds.includes(nodeId)) &&
     nodeIds.length === availableNodeIds.length;
-  if (props.scope === 'global' && availableNodeIds.length > 0 && !allNodesSelected) {
+  if (nodeFilteringEnabled.value && !allNodesSelected) {
     nextQuery[queryKey('node')] = nodeIds.length > 0 ? nodeIds : '';
   }
   const parties = options?.parties;
@@ -302,7 +311,7 @@ async function fetchContracts(): Promise<ContractsResponse> {
       availableNodeIds.every((nodeId) => activeNodeFilters.value.includes(nodeId)) &&
       activeNodeFilters.value.length === availableNodeIds.length;
 
-    if (availableNodeIds.length > 0 && !allNodesSelected) {
+    if (nodeFilteringEnabled.value && !allNodesSelected) {
       options.nodeIds = activeNodeFilters.value;
     }
 
@@ -341,6 +350,14 @@ async function fetchContracts(): Promise<ContractsResponse> {
     if (hideSplice) {
       options.hideSplice = true;
     }
+    const availableNodeIds = props.nodeOptions.map((node) => node.id);
+    const allNodesSelected =
+      availableNodeIds.length > 0 &&
+      availableNodeIds.every((nodeId) => activeNodeFilters.value.includes(nodeId)) &&
+      activeNodeFilters.value.length === availableNodeIds.length;
+    if (nodeFilteringEnabled.value && !allNodesSelected) {
+      options.nodeIds = activeNodeFilters.value;
+    }
 
     return fetchPartyContracts(props.partyId, options);
   }
@@ -364,7 +381,7 @@ watch(
 );
 
 watch(
-  () => [route.fullPath, props.scope, props.nodeId, props.partyId],
+  () => [route.fullPath, props.scope, props.nodeId, props.partyId, props.nodeOptions],
   () => {
     syncFiltersFromRoute();
     contracts.reset();
@@ -374,7 +391,7 @@ watch(
 );
 
 watch(
-  () => route.fullPath,
+  () => [route.fullPath, props.nodeOptions],
   () => {
     syncFiltersFromRoute();
     if (hasAdvancedFilterQuery()) {
@@ -604,7 +621,7 @@ async function setNodeFilters(nodeIds: string[]) {
         :active-parties="activePartyFilters"
         :active-templates="activeTemplateFilters"
         :template-options="templateOptions"
-        :node-options="nodeOptions"
+        :node-options="nodeFilteringEnabled ? nodeOptions : []"
         :active-nodes="activeNodeFilters"
         :filter-mode="activeFilterMode"
         :hide-splice="activeHideSplice"

@@ -1064,6 +1064,7 @@ export function fetchPartyUpdates(
     after?: string;
     templates?: string[];
     hideSplice?: boolean;
+    nodeIds?: string[];
     limit?: number;
   },
 ): Promise<GlobalUpdatesResponse> {
@@ -1082,6 +1083,7 @@ export function fetchPartyUpdates(
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
   }
+  appendNodeQueryParams(params, options?.nodeIds);
   params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 30))));
 
   return fetchJson<GlobalUpdatesResponse>(
@@ -1096,6 +1098,7 @@ export function fetchPartyContracts(
     after?: string;
     templates?: string[];
     hideSplice?: boolean;
+    nodeIds?: string[];
     limit?: number;
   },
 ): Promise<PartyContractsResponse> {
@@ -1114,6 +1117,7 @@ export function fetchPartyContracts(
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
   }
+  appendNodeQueryParams(params, options?.nodeIds);
   params.set('limit', String(Math.max(1, Math.trunc(options?.limit ?? 30))));
 
   return fetchJson<PartyContractsResponse>(

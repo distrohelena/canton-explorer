@@ -2026,6 +2026,31 @@ describe('fetchNodes', () => {
     });
   });
 
+  it('serializes selected Party update nodes as repeated query parameters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ limit: 30, nextBefore: null, nextAfter: null, updates: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchPartyUpdates = (
+      api as {
+        fetchPartyUpdates?: (
+          partyId: string,
+          options?: { nodeIds?: string[] },
+        ) => Promise<unknown>;
+      }
+    ).fetchPartyUpdates;
+
+    await fetchPartyUpdates?.('Alice', {
+      nodeIds: ['participant-1', 'participant-2'],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/parties/Alice/updates?node=participant-1&node=participant-2&limit=30',
+    );
+  });
+
   it('loads party-scoped contracts from the backend API', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -2125,6 +2150,31 @@ describe('fetchNodes', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'api/parties/Alice/contracts?before=cursor-contract-0&template=Main%3AAsset&hideSplice=true&limit=30',
+    );
+  });
+
+  it('serializes selected Party contract nodes as repeated query parameters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ limit: 30, nextBefore: null, nextAfter: null, contracts: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const fetchPartyContracts = (
+      api as {
+        fetchPartyContracts?: (
+          partyId: string,
+          options?: { nodeIds?: string[] },
+        ) => Promise<unknown>;
+      }
+    ).fetchPartyContracts;
+
+    await fetchPartyContracts?.('Alice', {
+      nodeIds: ['participant-1', 'participant-2'],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/parties/Alice/contracts?node=participant-1&node=participant-2&limit=30',
     );
   });
 

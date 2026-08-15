@@ -27,6 +27,10 @@ type UpdateScope = "global" | "node" | "party";
 type HeadingTag = "h2" | "h3";
 type UpdatesResponse = GlobalUpdatesResponse | NodeUpdatesResponse;
 type UpdatesEntry = GlobalUpdateEntry | NodeUpdateEntry;
+type NodeFilterOption = {
+  id: string;
+  label: string;
+};
 const COMPACT_PREVIEW_LIMIT = 6;
 
 const props = withDefaults(
@@ -41,6 +45,7 @@ const props = withDefaults(
     headingTag?: HeadingTag;
     nodeId?: string;
     partyId?: string;
+    nodeOptions?: NodeFilterOption[];
     queryPrefix?: string;
     showNodeColumn?: boolean;
     showPartyFilters?: boolean;
@@ -60,6 +65,7 @@ const props = withDefaults(
     viewAllTo: "",
     headingTag: "h3",
     queryPrefix: "",
+    nodeOptions: () => [],
     showNodeColumn: false,
     showPartyFilters: true,
     responseLabelTitle: false,
@@ -78,6 +84,7 @@ const partyFilterDraft = ref("");
 const templateFilterDraft = ref("");
 const templateOptions = ref<string[]>([]);
 const templatesLoaded = ref(false);
+const activeNodeFilters = ref<string[]>([]);
 const updates = useSectionLoad<UpdatesResponse>(fetchUpdates);
 const updatesResponse = updates.data;
 const error = updates.error;
@@ -87,6 +94,7 @@ function queryKey(
   base:
     | "before"
     | "after"
+    | "node"
     | "party"
     | "template"
     | "partyMode"
@@ -121,6 +129,33 @@ function readQueryList(value: unknown): string[] {
   }
 
   return typeof value === "string" && value.trim().length > 0 ? [value] : [];
+}
+
+const nodeFilteringEnabled = computed(
+  () =>
+    (props.scope === "global" || props.scope === "party") &&
+    props.nodeOptions.length > 0,
+);
+
+function readNodeFilters(): string[] {
+  if (!nodeFilteringEnabled.value) {
+    return [];
+  }
+
+  const availableNodeIds = props.nodeOptions.map((node) => node.id);
+  const nodeQueryKey = queryKey("node");
+
+  if (!Object.prototype.hasOwnProperty.call(route.query, nodeQueryKey)) {
+    return availableNodeIds;
+  }
+
+  return uniqueValues(readQueryList(route.query[nodeQueryKey])).filter((nodeId) =>
+    availableNodeIds.includes(nodeId),
+  );
+}
+
+function syncFiltersFromRoute() {
+  activeNodeFilters.value = readNodeFilters();
 }
 
 function readFilterMode(value: unknown): FilterMode {
@@ -166,6 +201,8 @@ const activePageSize = computed(() =>
 
 function hasAdvancedFilterQuery(): boolean {
   return (
+    (nodeFilteringEnabled.value &&
+      Object.prototype.hasOwnProperty.call(route.query, queryKey("node"))) ||
     activePartyFilters.value.length > 0 ||
     activeTemplateFilters.value.length > 0 ||
     typeof route.query[queryKey("partyMode")] === "string" ||
@@ -179,6 +216,9 @@ function hasAdvancedFilterQuery(): boolean {
 function clearManagedKeys(query: LocationQueryRaw) {
   delete query[queryKey("before")];
   delete query[queryKey("after")];
+  if (nodeFilteringEnabled.value) {
+    delete query[queryKey("node")];
+  }
   delete query[queryKey("party")];
   delete query[queryKey("template")];
   delete query[queryKey("partyMode")];
@@ -197,6 +237,7 @@ function buildQuery(options?: {
   templates?: string[];
   mode?: FilterMode;
   hideSplice?: boolean;
+  nodeIds?: string[];
   limit?: number;
 }): LocationQueryRaw {
   const nextQuery: LocationQueryRaw = { ...route.query };
@@ -207,6 +248,16 @@ function buildQuery(options?: {
   }
   if (options?.after) {
     nextQuery[queryKey("after")] = options.after;
+  }
+
+  const nodeIds = options?.nodeIds ?? activeNodeFilters.value;
+  const availableNodeIds = props.nodeOptions.map((node) => node.id);
+  const allNodesSelected =
+    availableNodeIds.length > 0 &&
+    availableNodeIds.every((nodeId) => nodeIds.includes(nodeId)) &&
+    nodeIds.length === availableNodeIds.length;
+  if (nodeFilteringEnabled.value && !allNodesSelected) {
+    nextQuery[queryKey("node")] = nodeIds.length > 0 ? nodeIds : "";
   }
 
   if (props.showPartyFilters && (options?.parties?.length ?? 0) > 0) {
@@ -415,6 +466,14 @@ async function fetchUpdates(): Promise<UpdatesResponse> {
     if (hideSplice) {
       options.hideSplice = true;
     }
+    const availableNodeIds = props.nodeOptions.map((node) => node.id);
+    const allNodesSelected =
+      availableNodeIds.length > 0 &&
+      availableNodeIds.every((nodeId) => activeNodeFilters.value.includes(nodeId)) &&
+      activeNodeFilters.value.length === availableNodeIds.length;
+    if (nodeFilteringEnabled.value && !allNodesSelected) {
+      options.nodeIds = activeNodeFilters.value;
+    }
 
     return fetchPartyUpdates(props.partyId, options);
   }
@@ -427,8 +486,9 @@ defineExpose({
 });
 
 watch(
-  () => route.fullPath,
+  () => [route.fullPath, props.scope, props.nodeId, props.partyId, props.nodeOptions],
   () => {
+    syncFiltersFromRoute();
     updates.reset();
     void updates.load();
   },
@@ -437,11 +497,13 @@ watch(
 
 watch(
   () => [
+    route.query[queryKey("node")],
     route.query[queryKey("party")],
     route.query[queryKey("template")],
     route.query[queryKey("partyMode")],
     route.query[queryKey("hideSplice")],
     props.queryPrefix ? undefined : route.query.mode,
+    props.nodeOptions,
   ],
   () => {
     if (hasAdvancedFilterQuery()) {
@@ -619,6 +681,22 @@ async function setHideSplice(hidden: boolean) {
   );
 }
 
+async function setNodeFilters(nodeIds: string[]) {
+  activeNodeFilters.value = uniqueValues(nodeIds).filter((nodeId) =>
+    props.nodeOptions.some((node) => node.id === nodeId),
+  );
+
+  await pushQuery(
+    buildQuery({
+      parties: activePartyFilters.value,
+      templates: activeTemplateFilters.value,
+      mode: activeFilterMode.value,
+      hideSplice: activeHideSplice.value,
+      limit: activePageSize.value,
+    }),
+  );
+}
+
 function updateLink(
   update: (typeof renderedUpdates.value)[number],
 ): string | null {
@@ -691,6 +769,8 @@ function nodeLink(nodeId: string): string {
         :active-parties="activePartyFilters"
         :active-templates="activeTemplateFilters"
         :template-options="templateOptions"
+        :node-options="nodeFilteringEnabled ? nodeOptions : []"
+        :active-nodes="activeNodeFilters"
         :filter-mode="activeFilterMode"
         :hide-splice="activeHideSplice"
         :show-party-filters="showPartyFilters"
@@ -700,6 +780,7 @@ function nodeLink(nodeId: string): string {
         @remove-template-filter="removeTemplateFilter"
         @set-filter-mode="setFilterMode"
         @set-hide-splice="setHideSplice"
+        @set-node-filters="setNodeFilters"
       />
     </div>
 
