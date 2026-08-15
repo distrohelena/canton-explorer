@@ -518,4 +518,88 @@ describe('PartyDetailView', () => {
     expect(screen.getAllByText('Not Present').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Topology read failed')).toBeInTheDocument();
   });
+
+  it('uses observed nodes for isolated updates and contracts node filters', async () => {
+    const nodes = [
+      {
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        recentUpdateCount: 0,
+        recentContractCount: 0,
+      },
+      {
+        nodeId: 'participant-2',
+        label: 'Participant 2',
+        recentUpdateCount: 0,
+        recentContractCount: 0,
+      },
+    ];
+    vi.mocked(api.fetchPartySummary).mockResolvedValue({
+      partyId: 'Alice', nodeCount: 2, recentUpdateCount: 0, recentContractCount: 0,
+    });
+    vi.mocked(api.fetchPartyNodes).mockResolvedValue({ nodes });
+    vi.mocked(api.fetchPartyTopology).mockResolvedValue({ partyTopologyByNode: [] });
+    vi.mocked(
+      (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
+        .fetchPartyUpdates,
+    ).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+    vi.mocked(
+      (api as { fetchPartyContracts: (partyId: string, options?: unknown) => Promise<unknown> })
+        .fetchPartyContracts,
+    ).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+    vi.mocked(
+      (api as { fetchTemplates: () => Promise<{ templates: Array<{ templateId: string }> }> }).fetchTemplates,
+    ).mockResolvedValue({ templates: [] });
+
+    await renderAt('/parties/Alice?updatesNode=participant-1&contractsNode=participant-2');
+
+    expect(await screen.findByRole('link', { name: 'Participant 1' })).toHaveAttribute(
+      'href',
+      '/nodes/participant-1',
+    );
+    await waitFor(() => {
+      expect(api.fetchPartyUpdates).toHaveBeenLastCalledWith('Alice', {
+        nodeIds: ['participant-1'],
+        limit: 15,
+      });
+      expect(api.fetchPartyContracts).toHaveBeenLastCalledWith('Alice', {
+        nodeIds: ['participant-2'],
+        limit: 15,
+      });
+    });
+    const updatesSection = screen.getByRole('heading', { name: 'Updates' }).closest('section');
+    const contractsSection = screen.getByRole('heading', { name: 'Contracts' }).closest('section');
+    expect(updatesSection).not.toBeNull();
+    expect(contractsSection).not.toBeNull();
+
+    const updatesScope = within(updatesSection!);
+    const contractsScope = within(contractsSection!);
+    expect(updatesScope.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(await updatesScope.findByRole('checkbox', { name: 'Participant 1' })).toBeChecked();
+    expect(updatesScope.getByRole('checkbox', { name: 'Participant 2' })).not.toBeChecked();
+
+    expect(contractsScope.getByRole('button', { name: 'Advanced Filter' })).toHaveAttribute('aria-expanded', 'true');
+    expect(await contractsScope.findByRole('checkbox', { name: 'Participant 2' })).toBeChecked();
+    expect(contractsScope.getByRole('checkbox', { name: 'Participant 1' })).not.toBeChecked();
+    await waitFor(() => {
+      expect(api.fetchPartyUpdates).toHaveBeenLastCalledWith('Alice', {
+        nodeIds: ['participant-1'],
+        limit: 15,
+      });
+      expect(api.fetchPartyContracts).toHaveBeenLastCalledWith('Alice', {
+        nodeIds: ['participant-2'],
+        limit: 15,
+      });
+    });
+  });
 });

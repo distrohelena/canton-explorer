@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import CopyToClipboardButton from '../components/CopyToClipboardButton.vue';
 import ContractsBrowser from '../components/ContractsBrowser.vue';
 import QuerySourcePill from '../components/QuerySourcePill.vue';
@@ -34,6 +34,9 @@ const {
   retry: retryTopology,
   reset: resetTopology,
 } = useSectionLoad(() => fetchPartyTopology(props.partyId));
+const partyNodeOptions = computed(() =>
+  (nodesData.value?.nodes ?? []).map((node) => ({ id: node.nodeId, label: node.label })),
+);
 const partyPurposeLabels: Record<string, string> = {
   namespace: 'Namespace',
   proofOfOwnership: 'Proof-of-Ownership',
@@ -487,6 +490,7 @@ watch(
               :show-party-filters="false"
               source-tag="party"
               query-prefix="updates"
+              :node-options="partyNodeOptions"
               advanced-filter-id="party-updates-advanced-filter"
               loading-message="Loading party updates..."
               empty-message="No updates found for this party."
@@ -503,6 +507,7 @@ watch(
               title="Contracts"
               eyebrow=""
               query-prefix="contracts"
+              :node-options="partyNodeOptions"
               show-node-column
               :show-party-filters="false"
               advanced-filter-id="party-contracts-advanced-filter"
