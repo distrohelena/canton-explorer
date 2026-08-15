@@ -2682,6 +2682,10 @@ function requireEventOffsetLiteral(value: string): string {
   return normalizedOffset;
 }
 
+function utcCacheDay(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
 function normalizeByteaHex(value: string): string {
   return value.startsWith('\\x') ? value.slice(2) : value;
 }
@@ -2711,6 +2715,10 @@ export class PqsSummaryService {
   private readonly tokenTransfersByNode = new Map<
     string,
     CachedNodeTokenTransfers
+  >();
+  private readonly latestTrafficPurchaseRefreshes = new Map<
+    string,
+    Promise<NodeTrafficPurchase | null>
   >();
 
   constructor(
@@ -3082,12 +3090,53 @@ export class PqsSummaryService {
       return null;
     }
 
-    try {
-      const response = await this.fetchTrafficPurchases(node, { limit: 1 });
-      return response.purchases[0] ?? null;
-    } catch {
-      return null;
+    if (!this.packageCacheService) {
+      try {
+        const response = await this.fetchTrafficPurchases(node, { limit: 1 });
+        return response.purchases[0] ?? null;
+      } catch {
+        return null;
+      }
     }
+
+    const cacheDay = utcCacheDay();
+    const cachedPurchase = this.packageCacheService.getNodeTrafficPurchase(
+      node.id,
+      cacheDay,
+    );
+    if (cachedPurchase) {
+      return cachedPurchase.purchase;
+    }
+
+    const refreshKey = `${node.id}:${cacheDay}`;
+    const existingRefresh = this.latestTrafficPurchaseRefreshes.get(refreshKey);
+    if (existingRefresh) {
+      return existingRefresh;
+    }
+
+    let refresh: Promise<NodeTrafficPurchase | null>;
+    refresh = (async () => {
+      try {
+        const response = await this.fetchTrafficPurchases(node, { limit: 1 });
+        const purchase = response.purchases[0] ?? null;
+        this.packageCacheService?.storeNodeTrafficPurchase({
+          nodeId: node.id,
+          cacheDay,
+          purchase,
+          cachedAt: new Date().toISOString(),
+        });
+        return purchase;
+      } catch {
+        return null;
+      } finally {
+        if (this.latestTrafficPurchaseRefreshes.get(refreshKey) === refresh) {
+          this.latestTrafficPurchaseRefreshes.delete(refreshKey);
+        }
+      }
+    })();
+    this.latestTrafficPurchaseRefreshes.set(refreshKey, refresh);
+
+    return refresh;
   }
 
   private async estimateTraffic(

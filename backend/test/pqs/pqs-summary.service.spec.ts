@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import type {
   ActivePartiesResponse,
@@ -12053,6 +12055,108 @@ describe('PqsSummaryService', () => {
       expect.objectContaining({ purchasedTraffic: '1000', amuletPaid: '5' }),
     );
     expect(response.updates[0]).toMatchObject({ estimatedTrafficUsd: '12.34' });
+  });
+
+  it('reuses the daily traffic purchase cache and refreshes it on the next UTC day', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-14T23:59:00.000Z'));
+    const tempDir = mkdtempSync(resolve(tmpdir(), 'pqs-summary-service-'));
+    const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const query = jest.fn().mockImplementation((sql: string) =>
+      Promise.resolve({
+        rows: sql.includes('from party_update_ix')
+          ? [{ update_id: 'update-1', parties: ['Alice'] }]
+          : [
+              {
+                update_id: 'update-1',
+                event_offset: '10',
+                record_time: '2026-08-14T12:00:00.000Z',
+                paid_traffic_cost: '100',
+              },
+            ],
+      }),
+    );
+    const service = new PqsSummaryService(
+      { getRawExecutor: async () => ({ query }) } as never,
+      undefined,
+      cacheService,
+    );
+    (
+      service as PqsSummaryService & { trafficCostEstimateService: unknown }
+    ).trafficCostEstimateService = {
+      estimate: jest.fn().mockResolvedValue('12.34'),
+    };
+    const fetchTrafficPurchases = jest
+      .spyOn(service, 'fetchTrafficPurchases')
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        limit: 1,
+        nextBefore: null,
+        nextAfter: null,
+        purchases: [
+          {
+            updateId: 'purchase-1',
+            eventOffset: '9',
+            recordTime: '2026-08-14T12:00:00.000Z',
+            purchasedTraffic: '1000',
+            amuletPaid: '5',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        limit: 1,
+        nextBefore: null,
+        nextAfter: null,
+        purchases: [
+          {
+            updateId: 'purchase-2',
+            eventOffset: '11',
+            recordTime: '2026-08-15T00:01:00.000Z',
+            purchasedTraffic: '2000',
+            amuletPaid: '10',
+          },
+        ],
+      });
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    } as const;
+
+    try {
+      await service.fetchRecentUpdates(node);
+      await service.fetchRecentUpdates(node);
+
+      expect(fetchTrafficPurchases).toHaveBeenCalledTimes(1);
+
+      jest.setSystemTime(new Date('2026-08-15T00:01:00.000Z'));
+      const response = await service.fetchRecentUpdates(node);
+
+      expect(fetchTrafficPurchases).toHaveBeenCalledTimes(2);
+      expect(cacheService.getNodeTrafficPurchase(node.id, '2026-08-15')).toEqual(
+        expect.objectContaining({
+          purchase: expect.objectContaining({ updateId: 'purchase-2' }),
+        }),
+      );
+      expect(response.updates[0]).toMatchObject({ estimatedTrafficUsd: '12.34' });
+    } finally {
+      cacheService.close();
+      if (originalDatabasePath === undefined) {
+        delete process.env.PACKAGE_CACHE_DB_PATH;
+      } else {
+        process.env.PACKAGE_CACHE_DB_PATH = originalDatabasePath;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+      jest.useRealTimers();
+    }
   });
 
   it('adds the estimate to update detail without exposing the raw traffic cost field', async () => {
