@@ -3090,7 +3090,8 @@ export class PqsSummaryService {
       return null;
     }
 
-    if (!this.packageCacheService) {
+    const packageCacheService = this.packageCacheService;
+    if (!packageCacheService) {
       try {
         const response = await this.fetchTrafficPurchases(node, { limit: 1 });
         return response.purchases[0] ?? null;
@@ -3100,7 +3101,7 @@ export class PqsSummaryService {
     }
 
     const cacheDay = utcCacheDay();
-    const cachedPurchase = this.packageCacheService.getNodeTrafficPurchase(
+    const cachedPurchase = packageCacheService.getNodeTrafficPurchase(
       node.id,
       cacheDay,
     );
@@ -3114,27 +3115,26 @@ export class PqsSummaryService {
       return existingRefresh;
     }
 
-    let refresh: Promise<NodeTrafficPurchase | null>;
-    refresh = (async () => {
-      try {
-        const response = await this.fetchTrafficPurchases(node, { limit: 1 });
+    const refresh = this.fetchTrafficPurchases(node, { limit: 1 })
+      .then((response) => {
         const purchase = response.purchases[0] ?? null;
-        this.packageCacheService?.storeNodeTrafficPurchase({
+        packageCacheService.storeNodeTrafficPurchase({
           nodeId: node.id,
           cacheDay,
           purchase,
           cachedAt: new Date().toISOString(),
         });
         return purchase;
-      } catch {
+      })
+      .catch(() => {
         return null;
-      } finally {
-        if (this.latestTrafficPurchaseRefreshes.get(refreshKey) === refresh) {
-          this.latestTrafficPurchaseRefreshes.delete(refreshKey);
-        }
-      }
-    })();
+      });
     this.latestTrafficPurchaseRefreshes.set(refreshKey, refresh);
+    void refresh.finally(() => {
+      if (this.latestTrafficPurchaseRefreshes.get(refreshKey) === refresh) {
+        this.latestTrafficPurchaseRefreshes.delete(refreshKey);
+      }
+    });
 
     return refresh;
   }
