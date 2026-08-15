@@ -2,6 +2,7 @@ import { BeforeApplicationShutdown, Injectable, OnModuleDestroy } from '@nestjs/
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { NodeTrafficPurchase } from '../domain/node.types';
 
 export interface CachedPackageRef {
   packageId: string;
@@ -38,6 +39,13 @@ export interface CachedPackageNodePresence {
   uploadedAt: string | null;
   packageSize: number | null;
   seenAt: string;
+}
+
+export interface CachedNodeTrafficPurchase {
+  nodeId: string;
+  cacheDay: string;
+  purchase: NodeTrafficPurchase | null;
+  cachedAt: string;
 }
 
 @Injectable()
@@ -137,6 +145,89 @@ export class PackageCacheService implements OnModuleDestroy, BeforeApplicationSh
       .all() as Array<{ package_id: string }>;
 
     return rows.map((row) => row.package_id);
+  }
+
+  getNodeTrafficPurchase(nodeId: string, cacheDay: string): CachedNodeTrafficPurchase | null {
+    const row = this.database
+      .prepare(`
+        select
+          node_id,
+          cache_day,
+          update_id,
+          event_offset,
+          record_time,
+          purchased_traffic,
+          amulet_paid,
+          cached_at
+        from node_traffic_purchase_cache
+        where node_id = ? and cache_day = ?
+      `)
+      .get(nodeId, cacheDay) as
+      | {
+          node_id: string;
+          cache_day: string;
+          update_id: string | null;
+          event_offset: string | null;
+          record_time: string | null;
+          purchased_traffic: string | null;
+          amulet_paid: string | null;
+          cached_at: string;
+        }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      nodeId: row.node_id,
+      cacheDay: row.cache_day,
+      purchase:
+        row.update_id === null
+          ? null
+          : {
+              updateId: row.update_id,
+              eventOffset: row.event_offset as string,
+              recordTime: row.record_time,
+              purchasedTraffic: row.purchased_traffic,
+              amuletPaid: row.amulet_paid,
+            },
+      cachedAt: row.cached_at,
+    };
+  }
+
+  storeNodeTrafficPurchase(snapshot: CachedNodeTrafficPurchase): void {
+    const purchase = snapshot.purchase;
+    this.database
+      .prepare(`
+        insert into node_traffic_purchase_cache (
+          node_id,
+          cache_day,
+          update_id,
+          event_offset,
+          record_time,
+          purchased_traffic,
+          amulet_paid,
+          cached_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(node_id, cache_day) do update set
+          update_id = excluded.update_id,
+          event_offset = excluded.event_offset,
+          record_time = excluded.record_time,
+          purchased_traffic = excluded.purchased_traffic,
+          amulet_paid = excluded.amulet_paid,
+          cached_at = excluded.cached_at
+      `)
+      .run(
+        snapshot.nodeId,
+        snapshot.cacheDay,
+        purchase?.updateId ?? null,
+        purchase?.eventOffset ?? null,
+        purchase?.recordTime ?? null,
+        purchase?.purchasedTraffic ?? null,
+        purchase?.amuletPaid ?? null,
+        snapshot.cachedAt,
+      );
   }
 
   getPackage(packageId: string): CachedPackageBlob | null {
@@ -487,6 +578,18 @@ export class PackageCacheService implements OnModuleDestroy, BeforeApplicationSh
         package_size integer,
         seen_at text not null,
         primary key (node_id, package_id)
+      );
+
+      create table if not exists node_traffic_purchase_cache (
+        node_id text not null,
+        cache_day text not null,
+        update_id text,
+        event_offset text,
+        record_time text,
+        purchased_traffic text,
+        amulet_paid text,
+        cached_at text not null,
+        primary key (node_id, cache_day)
       );
     `);
   }

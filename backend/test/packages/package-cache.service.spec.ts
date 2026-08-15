@@ -3,9 +3,17 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
+import type { NodeTrafficPurchase } from '../../src/domain/node.types';
 import { PackageCacheService } from '../../src/packages/package-cache.service';
 
 describe('PackageCacheService', () => {
+  const trafficPurchase: NodeTrafficPurchase = {
+    updateId: 'purchase-1',
+    eventOffset: '42',
+    recordTime: '2026-08-14T10:00:00.000Z',
+    purchasedTraffic: '1000',
+    amuletPaid: '5',
+  };
   let tempDir: string | null = null;
   const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
 
@@ -385,5 +393,53 @@ describe('PackageCacheService', () => {
       },
     ]);
     expect(service.listPackagesForNode('missing-node')).toEqual([]);
+  });
+
+  it('persists a daily node traffic purchase snapshot across service instances', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    const databasePath = join(tempDir, 'packages.sqlite');
+    process.env.PACKAGE_CACHE_DB_PATH = databasePath;
+    const service = new PackageCacheService();
+
+    service.storeNodeTrafficPurchase({
+      nodeId: 'participant-1',
+      cacheDay: '2026-08-14',
+      purchase: trafficPurchase,
+      cachedAt: '2026-08-14T12:00:00.000Z',
+    });
+    service.close();
+
+    const reopenedService = new PackageCacheService();
+    expect(reopenedService.getNodeTrafficPurchase('participant-1', '2026-08-14')).toEqual({
+      nodeId: 'participant-1',
+      cacheDay: '2026-08-14',
+      purchase: trafficPurchase,
+      cachedAt: '2026-08-14T12:00:00.000Z',
+    });
+    reopenedService.close();
+  });
+
+  it('persists a cached daily node traffic purchase no-result across service instances', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'package-cache-service-'));
+    const databasePath = join(tempDir, 'packages.sqlite');
+    process.env.PACKAGE_CACHE_DB_PATH = databasePath;
+    const service = new PackageCacheService();
+
+    service.storeNodeTrafficPurchase({
+      nodeId: 'participant-1',
+      cacheDay: '2026-08-14',
+      purchase: null,
+      cachedAt: '2026-08-14T12:00:00.000Z',
+    });
+    service.close();
+
+    const reopenedService = new PackageCacheService();
+    expect(reopenedService.getNodeTrafficPurchase('participant-1', '2026-08-14')).toEqual({
+      nodeId: 'participant-1',
+      cacheDay: '2026-08-14',
+      purchase: null,
+      cachedAt: '2026-08-14T12:00:00.000Z',
+    });
+    reopenedService.close();
   });
 });
