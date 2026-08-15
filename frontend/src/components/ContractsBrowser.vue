@@ -86,6 +86,12 @@ function queryKey(
   return `${props.queryPrefix}${base.charAt(0).toUpperCase()}${base.slice(1)}`;
 }
 
+function queryWatchValue(
+  base: 'before' | 'after' | 'node' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit',
+): string | undefined {
+  return JSON.stringify(route.query[queryKey(base)]);
+}
+
 function uniqueValues(values: string[]): string[] {
   return Array.from(
     new Set(
@@ -381,7 +387,25 @@ watch(
 );
 
 watch(
-  () => [route.fullPath, props.scope, props.nodeId, props.partyId, props.nodeOptions],
+  [
+    () => route.path,
+    () => queryWatchValue('before'),
+    () => queryWatchValue('after'),
+    () => queryWatchValue('node'),
+    () => queryWatchValue('party'),
+    () => queryWatchValue('template'),
+    () => queryWatchValue('partyMode'),
+    () => queryWatchValue('hideSplice'),
+    () => queryWatchValue('limit'),
+    () => (props.queryPrefix ? undefined : JSON.stringify(route.query.mode)),
+    () => props.scope,
+    () => props.path,
+    () => props.nodeId,
+    () => props.partyId,
+    () => props.queryPrefix,
+    () => props.showPartyFilters,
+    () => props.nodeOptions,
+  ],
   () => {
     syncFiltersFromRoute();
     contracts.reset();

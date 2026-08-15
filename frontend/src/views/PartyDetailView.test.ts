@@ -602,4 +602,78 @@ describe('PartyDetailView', () => {
       });
     });
   });
+
+  it('reloads only the browser whose Party node filter changes', async () => {
+    const nodes = [
+      {
+        nodeId: 'participant-1',
+        label: 'Participant 1',
+        recentUpdateCount: 0,
+        recentContractCount: 0,
+      },
+      {
+        nodeId: 'participant-2',
+        label: 'Participant 2',
+        recentUpdateCount: 0,
+        recentContractCount: 0,
+      },
+    ];
+    vi.mocked(api.fetchPartySummary).mockResolvedValue({
+      partyId: 'Alice', nodeCount: 2, recentUpdateCount: 0, recentContractCount: 0,
+    });
+    vi.mocked(api.fetchPartyNodes).mockResolvedValue({ nodes });
+    vi.mocked(api.fetchPartyTopology).mockResolvedValue({ partyTopologyByNode: [] });
+    vi.mocked(
+      (api as { fetchPartyUpdates: (partyId: string, options?: unknown) => Promise<unknown> })
+        .fetchPartyUpdates,
+    ).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+    vi.mocked(
+      (api as { fetchPartyContracts: (partyId: string, options?: unknown) => Promise<unknown> })
+        .fetchPartyContracts,
+    ).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+    vi.mocked(
+      (api as { fetchTemplates: () => Promise<{ templates: Array<{ templateId: string }> }> }).fetchTemplates,
+    ).mockResolvedValue({ templates: [] });
+
+    await renderAt('/parties/Alice');
+
+    const updatesSection = (await screen.findByRole('heading', { name: 'Updates' })).closest('section');
+    const contractsSection = screen.getByRole('heading', { name: 'Contracts' }).closest('section');
+    expect(updatesSection).not.toBeNull();
+    expect(contractsSection).not.toBeNull();
+
+    const updatesScope = within(updatesSection!);
+    const contractsScope = within(contractsSection!);
+    await fireEvent.click(updatesScope.getByRole('button', { name: 'Advanced Filter' }));
+    const updatesCallsBefore = vi.mocked(api.fetchPartyUpdates).mock.calls.length;
+    const contractsCallsBeforeUpdatesFilter = vi.mocked(api.fetchPartyContracts).mock.calls.length;
+
+    await fireEvent.click(await updatesScope.findByRole('checkbox', { name: 'Participant 2' }));
+
+    await waitFor(() =>
+      expect(vi.mocked(api.fetchPartyUpdates).mock.calls.length).toBeGreaterThan(updatesCallsBefore),
+    );
+    expect(vi.mocked(api.fetchPartyContracts)).toHaveBeenCalledTimes(contractsCallsBeforeUpdatesFilter);
+
+    await fireEvent.click(contractsScope.getByRole('button', { name: 'Advanced Filter' }));
+    const updatesCallsBeforeContractsFilter = vi.mocked(api.fetchPartyUpdates).mock.calls.length;
+    const contractsCallsBefore = vi.mocked(api.fetchPartyContracts).mock.calls.length;
+
+    await fireEvent.click(await contractsScope.findByRole('checkbox', { name: 'Participant 2' }));
+
+    await waitFor(() =>
+      expect(vi.mocked(api.fetchPartyContracts).mock.calls.length).toBeGreaterThan(contractsCallsBefore),
+    );
+    expect(vi.mocked(api.fetchPartyUpdates)).toHaveBeenCalledTimes(updatesCallsBeforeContractsFilter);
+  });
 });
