@@ -3302,6 +3302,7 @@ export class PqsSummaryService {
       partyMode?: string;
       mode?: string;
       hideSplice?: boolean;
+      nodeIds?: string[];
     },
   ): Promise<GlobalRecentUpdatesResponse> {
     const normalizedLimit =
@@ -3321,7 +3322,11 @@ export class PqsSummaryService {
     // feed needlessly expensive, especially when each row also loads parties
     // and traffic-cost metadata before the global merge.
     const pageSize = normalizedLimit + 1;
-    const nodeStates = nodes.map((node) => ({
+    const eligibleNodes =
+      options?.nodeIds === undefined
+        ? nodes
+        : nodes.filter((node) => options.nodeIds?.includes(node.id));
+    const nodeStates = eligibleNodes.map((node) => ({
       node,
       nextBefore: undefined as string | undefined,
       oldestFetched: null as GlobalUpdateCursor | null,
@@ -5172,6 +5177,7 @@ export class PqsSummaryService {
       templates?: string[];
       partyMode?: string;
       hideSplice?: boolean;
+      nodeIds?: string[];
     },
   ): Promise<GlobalRecentUpdatesResponse> {
     return this.fetchGlobalRecentUpdates(nodes, options?.limit ?? 30, {
@@ -5181,6 +5187,7 @@ export class PqsSummaryService {
       templates: options?.templates,
       partyMode: options?.partyMode,
       hideSplice: options?.hideSplice,
+      nodeIds: options?.nodeIds,
     });
   }
 
@@ -5372,6 +5379,7 @@ export class PqsSummaryService {
       after?: string;
       templates?: string[];
       hideSplice?: boolean;
+      nodeIds?: string[];
     },
   ): Promise<PartyContractsResponse> {
     const normalizedPartyId = this.normalizePartyIdentifier(partyId);
@@ -5386,7 +5394,11 @@ export class PqsSummaryService {
       beforeCursor === null ? decodeGlobalContractCursor(options?.after) : null;
     const useAfterCursor = Boolean(afterCursor && !beforeCursor);
     const pageSize = Math.max(normalizedLimit * 2, normalizedLimit + 1);
-    const nodeStates = nodes.map((node) => ({
+    const eligibleNodes =
+      options?.nodeIds === undefined
+        ? nodes
+        : nodes.filter((node) => options.nodeIds?.includes(node.id));
+    const nodeStates = eligibleNodes.map((node) => ({
       node,
       nextBefore: undefined as string | undefined,
       exhausted: false,

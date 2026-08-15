@@ -4784,6 +4784,145 @@ describe('PqsSummaryService', () => {
     expect(serviceWithFetch.fetchNodeContracts).not.toHaveBeenCalled();
   });
 
+  it('queries only the selected nodes for party updates', async () => {
+    const service = new PqsSummaryService({
+      getRawExecutor: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchRecentUpdates: jest.Mock;
+    };
+
+    serviceWithFetch.fetchRecentUpdates = jest.fn(
+      async (node: { id: string; label: string }) => ({
+        nodeId: node.id,
+        label: node.label,
+        limit: 16,
+        nextBefore: null,
+        nextAfter: null,
+        updates: [],
+      }),
+    );
+
+    await expect(
+      service.fetchPartyUpdates(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ] as never,
+        'Alice',
+        { limit: 15, nodeIds: ['participant-2'] },
+      ),
+    ).resolves.toEqual({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+
+    expect(serviceWithFetch.fetchRecentUpdates).toHaveBeenCalledTimes(1);
+    expect(serviceWithFetch.fetchRecentUpdates).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+      expect.anything(),
+    );
+  });
+
+  it('returns no party updates without querying when no nodes are selected', async () => {
+    const service = new PqsSummaryService({
+      getRawExecutor: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchRecentUpdates: jest.Mock;
+    };
+
+    serviceWithFetch.fetchRecentUpdates = jest.fn();
+
+    await expect(
+      service.fetchPartyUpdates(
+        [{ id: 'participant-1', label: 'Participant 1' }] as never,
+        'Alice',
+        { limit: 15, nodeIds: [] },
+      ),
+    ).resolves.toEqual({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      updates: [],
+    });
+
+    expect(serviceWithFetch.fetchRecentUpdates).not.toHaveBeenCalled();
+  });
+
+  it('queries only the selected nodes for party contracts', async () => {
+    const service = new PqsSummaryService({
+      getRawExecutor: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchPartyContractsForNode: jest.Mock;
+    };
+
+    serviceWithFetch.fetchPartyContractsForNode = jest.fn(
+      async (node: { id: string; label: string }) => ({
+        nodeId: node.id,
+        label: node.label,
+        limit: 30,
+        nextBefore: null,
+        nextAfter: null,
+        contracts: [],
+      }),
+    );
+
+    await expect(
+      service.fetchPartyContracts(
+        [
+          { id: 'participant-1', label: 'Participant 1' },
+          { id: 'participant-2', label: 'Participant 2' },
+        ] as never,
+        'Alice',
+        { limit: 15, nodeIds: ['participant-2'] },
+      ),
+    ).resolves.toEqual({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    expect(serviceWithFetch.fetchPartyContractsForNode).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(serviceWithFetch.fetchPartyContractsForNode).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'participant-2' }),
+      'Alice',
+      expect.anything(),
+    );
+  });
+
+  it('returns no party contracts without querying when no nodes are selected', async () => {
+    const service = new PqsSummaryService({
+      getRawExecutor: jest.fn(),
+    } as never);
+    const serviceWithFetch = service as PqsSummaryService & {
+      fetchPartyContractsForNode: jest.Mock;
+    };
+
+    serviceWithFetch.fetchPartyContractsForNode = jest.fn();
+
+    await expect(
+      service.fetchPartyContracts(
+        [{ id: 'participant-1', label: 'Participant 1' }] as never,
+        'Alice',
+        { limit: 15, nodeIds: [] },
+      ),
+    ).resolves.toEqual({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [],
+    });
+
+    expect(serviceWithFetch.fetchPartyContractsForNode).not.toHaveBeenCalled();
+  });
+
   it('returns party contracts from healthy nodes when another node PQS is unavailable', async () => {
     const service = new PqsSummaryService({
       getRawExecutor: jest.fn(),

@@ -2296,6 +2296,7 @@ describe('NodesController', () => {
           partyMode?: string,
           mode?: string,
           hideSplice?: string,
+          node?: string | string[],
         ) => Promise<unknown>;
       }
     ).listPartyUpdates(
@@ -2307,6 +2308,7 @@ describe('NodesController', () => {
       undefined,
       undefined,
       'true',
+      ['participant-1', 'participant-2'],
     );
 
     expect(pqsSummaryService.fetchPartyUpdates).toHaveBeenCalledWith(
@@ -2319,6 +2321,7 @@ describe('NodesController', () => {
         templates: ['Main:Asset'],
         partyMode: undefined,
         hideSplice: true,
+        nodeIds: ['participant-1', 'participant-2'],
       },
     );
   });
@@ -2333,6 +2336,7 @@ describe('NodesController', () => {
           after?: string,
           template?: string | string[],
           hideSplice?: string,
+          node?: string | string[],
         ) => Promise<unknown>;
       }
     ).listPartyContracts(
@@ -2342,6 +2346,7 @@ describe('NodesController', () => {
       undefined,
       'Main:Asset',
       'true',
+      ['participant-1', 'participant-2'],
     );
 
     expect(pqsSummaryService.fetchPartyContracts).toHaveBeenCalledWith(
@@ -2353,6 +2358,7 @@ describe('NodesController', () => {
         after: undefined,
         templates: ['Main:Asset'],
         hideSplice: true,
+        nodeIds: ['participant-1', 'participant-2'],
       },
     );
   });
