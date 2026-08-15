@@ -22,6 +22,7 @@ import type {
   TokenTransfersResponse,
   TokensResponse,
   NodeUpdateDetailResponse,
+  NodeTrafficPurchasesResponse,
   PackageDetailDataTypesResponse,
   PackageDetailModulesResponse,
   PackageDetailNodesResponse,
@@ -12156,6 +12157,213 @@ describe('PqsSummaryService', () => {
       }
       rmSync(tempDir, { recursive: true, force: true });
       jest.useRealTimers();
+    }
+  });
+
+  it('persists a same-day no-purchase result', async () => {
+    const tempDir = mkdtempSync(resolve(tmpdir(), 'pqs-summary-service-'));
+    const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const query = jest.fn().mockImplementation((sql: string) =>
+      Promise.resolve({
+        rows: sql.includes('from party_update_ix')
+          ? [{ update_id: 'update-1', parties: ['Alice'] }]
+          : [
+              {
+                update_id: 'update-1',
+                event_offset: '10',
+                record_time: '2026-08-14T12:00:00.000Z',
+                paid_traffic_cost: '100',
+              },
+            ],
+      }),
+    );
+    const service = new PqsSummaryService(
+      { getRawExecutor: async () => ({ query }) } as never,
+      undefined,
+      cacheService,
+    );
+    (
+      service as PqsSummaryService & { trafficCostEstimateService: unknown }
+    ).trafficCostEstimateService = {
+      estimate: jest.fn().mockResolvedValue('12.34'),
+    };
+    const fetchTrafficPurchases = jest.spyOn(service, 'fetchTrafficPurchases');
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    } as const;
+    const emptyResponse: NodeTrafficPurchasesResponse = {
+      nodeId: node.id,
+      label: node.label,
+      limit: 1,
+      nextBefore: null,
+      nextAfter: null,
+      purchases: [],
+    };
+    fetchTrafficPurchases.mockResolvedValueOnce(emptyResponse);
+
+    try {
+      await service.fetchRecentUpdates(node);
+      await service.fetchRecentUpdates(node);
+      expect(fetchTrafficPurchases).toHaveBeenCalledTimes(1);
+    } finally {
+      cacheService.close();
+      if (originalDatabasePath === undefined) {
+        delete process.env.PACKAGE_CACHE_DB_PATH;
+      } else {
+        process.env.PACKAGE_CACHE_DB_PATH = originalDatabasePath;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not persist a failed daily refresh', async () => {
+    const tempDir = mkdtempSync(resolve(tmpdir(), 'pqs-summary-service-'));
+    const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const query = jest.fn().mockImplementation((sql: string) =>
+      Promise.resolve({
+        rows: sql.includes('from party_update_ix')
+          ? [{ update_id: 'update-1', parties: ['Alice'] }]
+          : [
+              {
+                update_id: 'update-1',
+                event_offset: '10',
+                record_time: '2026-08-14T12:00:00.000Z',
+                paid_traffic_cost: '100',
+              },
+            ],
+      }),
+    );
+    const service = new PqsSummaryService(
+      { getRawExecutor: async () => ({ query }) } as never,
+      undefined,
+      cacheService,
+    );
+    (
+      service as PqsSummaryService & { trafficCostEstimateService: unknown }
+    ).trafficCostEstimateService = {
+      estimate: jest.fn().mockResolvedValue('12.34'),
+    };
+    const fetchTrafficPurchases = jest.spyOn(service, 'fetchTrafficPurchases');
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    } as const;
+    fetchTrafficPurchases.mockRejectedValueOnce(new Error('PQS unavailable'));
+
+    try {
+      await expect(service.fetchRecentUpdates(node)).resolves.toMatchObject({
+        updates: expect.any(Array),
+      });
+      await service.fetchRecentUpdates(node);
+      expect(fetchTrafficPurchases).toHaveBeenCalledTimes(2);
+    } finally {
+      cacheService.close();
+      if (originalDatabasePath === undefined) {
+        delete process.env.PACKAGE_CACHE_DB_PATH;
+      } else {
+        process.env.PACKAGE_CACHE_DB_PATH = originalDatabasePath;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('coalesces concurrent same-node daily refreshes', async () => {
+    const tempDir = mkdtempSync(resolve(tmpdir(), 'pqs-summary-service-'));
+    const originalDatabasePath = process.env.PACKAGE_CACHE_DB_PATH;
+    process.env.PACKAGE_CACHE_DB_PATH = resolve(tempDir, 'packages.sqlite');
+    const cacheService = new PackageCacheService();
+    const query = jest.fn().mockImplementation((sql: string) =>
+      Promise.resolve({
+        rows: sql.includes('from party_update_ix')
+          ? [{ update_id: 'update-1', parties: ['Alice'] }]
+          : [
+              {
+                update_id: 'update-1',
+                event_offset: '10',
+                record_time: '2026-08-14T12:00:00.000Z',
+                paid_traffic_cost: '100',
+              },
+            ],
+      }),
+    );
+    const service = new PqsSummaryService(
+      { getRawExecutor: async () => ({ query }) } as never,
+      undefined,
+      cacheService,
+    );
+    (
+      service as PqsSummaryService & { trafficCostEstimateService: unknown }
+    ).trafficCostEstimateService = {
+      estimate: jest.fn().mockResolvedValue('12.34'),
+    };
+    const fetchTrafficPurchases = jest.spyOn(service, 'fetchTrafficPurchases');
+    const node = {
+      id: 'participant-1',
+      label: 'Participant 1',
+      role: 'participant',
+      mode: 'pqs_only',
+      ledgerLabel: 'Retail Ledger',
+      pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+    } as const;
+    const responseWithPurchase: NodeTrafficPurchasesResponse = {
+      nodeId: node.id,
+      label: node.label,
+      limit: 1,
+      nextBefore: null,
+      nextAfter: null,
+      purchases: [
+        {
+          updateId: 'purchase-1',
+          eventOffset: '9',
+          recordTime: '2026-08-14T12:00:00.000Z',
+          purchasedTraffic: '1000',
+          amuletPaid: '5',
+        },
+      ],
+    };
+    let resolveFetchStarted!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => {
+      resolveFetchStarted = resolve;
+    });
+    let resolvePurchase!: (value: NodeTrafficPurchasesResponse) => void;
+    const purchasePromise = new Promise<NodeTrafficPurchasesResponse>(
+      (resolve) => {
+        resolvePurchase = resolve;
+      },
+    );
+    fetchTrafficPurchases.mockImplementationOnce(() => {
+      resolveFetchStarted();
+      return purchasePromise;
+    });
+
+    try {
+      const first = service.fetchRecentUpdates(node);
+      const second = service.fetchRecentUpdates(node);
+      await fetchStarted;
+      expect(fetchTrafficPurchases).toHaveBeenCalledTimes(1);
+      resolvePurchase(responseWithPurchase);
+      await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    } finally {
+      cacheService.close();
+      if (originalDatabasePath === undefined) {
+        delete process.env.PACKAGE_CACHE_DB_PATH;
+      } else {
+        process.env.PACKAGE_CACHE_DB_PATH = originalDatabasePath;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
     }
   });
 
