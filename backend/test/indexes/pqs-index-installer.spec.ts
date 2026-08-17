@@ -75,7 +75,7 @@ function inferredIndexStatus(
     /^canton_explorer_(contracts|exercises)_(\d+)_witnesses_gin$/,
   );
   const active = indexName.match(
-    /^canton_explorer_contracts_(\d+)_active_created_ix$/,
+    /^canton_explorer_contracts_(\d+)_(active|all)_created_ix$/,
   );
   const eventOrder = indexName.match(
     /^canton_explorer_(contracts|exercises)_(\d+)_(created_at_ix|archived_at_ix|exercised_at_ix)_order$/,
@@ -104,7 +104,8 @@ function inferredIndexStatus(
       : eventOrder
         ? ['int8_ops']
         : ['text_pattern_ops'];
-  const predicate = active ? 'archived_at_ix IS NULL' : null;
+  const predicate =
+    active && active[2] === 'active' ? 'archived_at_ix IS NULL' : null;
   const sortOptions = active ? [3, 3, 3] : eventOrder ? [3] : [0];
 
   return {
@@ -310,7 +311,7 @@ describe('PQS index installer', () => {
       applyPqsIndexes('postgres://pqs', 'public', {
         createDatabase: databaseFactory(database),
       }),
-    ).resolves.toMatchObject({ appliedStatements: 13 });
+    ).resolves.toMatchObject({ appliedStatements: 15 });
   });
 
   it('reconciles a later contracts partition even when the migration is recorded', async () => {
@@ -320,6 +321,7 @@ describe('PQS index installer', () => {
         '002-active-contracts',
         '003-transaction-id-pattern',
         '004-update-event-order',
+        '005-all-contracts',
       ],
       contractPartitions: ['__contracts_42', '__contracts_77'],
     });
@@ -330,6 +332,7 @@ describe('PQS index installer', () => {
 
     expect(database.sql.join('\n')).toMatch(/contracts_77_witnesses_gin/);
     expect(database.sql.join('\n')).toMatch(/contracts_77_active_created_ix/);
+    expect(database.sql.join('\n')).toMatch(/contracts_77_all_created_ix/);
     expect(database.sql.join('\n')).toMatch(/contracts_77_created_at_ix_order/);
     expect(database.sql.join('\n')).toMatch(
       /contracts_77_archived_at_ix_order/,
@@ -343,6 +346,7 @@ describe('PQS index installer', () => {
         '002-active-contracts',
         '003-transaction-id-pattern',
         '004-update-event-order',
+        '005-all-contracts',
       ],
       exercisePartitions: ['__exercises_42', '__exercises_77'],
     });

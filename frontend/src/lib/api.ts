@@ -8,6 +8,7 @@ import type { ActivityHistoryResponse } from '../types/activity';
 import type { BrandingConfig } from '../types/branding';
 import type { CantonCoinHistoryResponse } from '../types/market';
 import type {
+  ContractStatusFilter,
   GlobalContractsResponse,
   NodeContractDetailResponse,
   NodeContractsQueryOptions,
@@ -310,6 +311,9 @@ export function fetchNodeContracts(
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
   }
+  if (options?.status) {
+    params.set('status', options.status);
+  }
   if (
     typeof options?.limit === 'number' &&
     Number.isFinite(options.limit) &&
@@ -332,6 +336,7 @@ export function fetchLatestContracts(
     templates?: string[];
     partyMode?: 'or' | 'and';
     hideSplice?: boolean;
+    status?: ContractStatusFilter;
   },
 ): Promise<GlobalContractsResponse> {
   const params = new URLSearchParams();
@@ -357,6 +362,9 @@ export function fetchLatestContracts(
   }
   if (options?.hideSplice) {
     params.set('hideSplice', 'true');
+  }
+  if (options?.status) {
+    params.set('status', options.status);
   }
   params.set('limit', String(Math.max(1, Math.trunc(limit))));
 

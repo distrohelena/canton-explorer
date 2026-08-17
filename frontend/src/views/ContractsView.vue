@@ -40,7 +40,7 @@ onMounted(() => {
           :show-party-filters="true"
           advanced-filter-id="contracts-advanced-filter"
           loading-message="Loading contracts across all nodes..."
-          empty-message="No active contracts found across all nodes."
+          empty-message="No contracts found across all nodes."
           table-aria-label="All node contracts"
           spinner-label="Updating all node contracts"
         />

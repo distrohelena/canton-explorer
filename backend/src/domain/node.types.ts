@@ -138,6 +138,7 @@ export interface NodeActiveContractSummary {
   contractId: string;
   templateId: string | null;
   createdRecordTime: string | null;
+  status?: 'active' | 'archived';
 }
 
 export interface NodeContractsResponse {
@@ -155,6 +156,7 @@ export interface GlobalContractSummary {
   contractId: string;
   templateId: string | null;
   recordTime: string | null;
+  status?: 'active' | 'archived';
 }
 
 export interface GlobalContractsResponse {

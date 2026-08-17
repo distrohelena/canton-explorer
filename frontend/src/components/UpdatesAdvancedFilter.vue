@@ -2,11 +2,18 @@
 import SearchableCombobox from './SearchableCombobox.vue';
 
 type FilterMode = 'or' | 'and';
+type ContractStatusFilter = 'active' | 'archived' | 'all';
 
 type NodeFilterOption = {
   id: string;
   label: string;
 };
+
+const STATUS_FILTER_OPTIONS: Array<{ value: ContractStatusFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Archived' },
+];
 
 const props = withDefaults(
   defineProps<{
@@ -23,9 +30,13 @@ const props = withDefaults(
     showPartyFilters?: boolean;
     showTemplateFilters?: boolean;
     hideSpliceLabel?: string;
+    showStatusFilter?: boolean;
+    statusFilter?: ContractStatusFilter;
   }>(),
   {
     showTemplateFilters: true,
+    showStatusFilter: false,
+    statusFilter: 'all',
   },
 );
 
@@ -38,6 +49,7 @@ const emit = defineEmits<{
   removeTemplateFilter: [templateId: string];
   setFilterMode: [mode: FilterMode];
   setHideSplice: [hidden: boolean];
+  setStatusFilter: [status: ContractStatusFilter];
   setNodeFilters: [nodeIds: string[]];
 }>();
 
@@ -104,6 +116,29 @@ function handleNodeChange(nodeId: string, event: Event) {
       </div>
 
       <slot name="additional-fields" />
+
+      <div
+        v-if="props.showStatusFilter"
+        class="node-updates__advanced-filter-field node-updates__advanced-filter-field--status"
+      >
+        <span>Status</span>
+        <div class="node-updates__advanced-filter-input-row">
+          <button
+            v-for="option in STATUS_FILTER_OPTIONS"
+            :key="option.value"
+            type="button"
+            class="node-updates__advanced-filter-mode"
+            :class="{
+              'node-updates__advanced-filter-mode--active': props.statusFilter === option.value,
+            }"
+            :aria-label="`Show ${option.label.toLowerCase()} contracts`"
+            :aria-pressed="props.statusFilter === option.value"
+            @click="$emit('setStatusFilter', option.value)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </div>
 
       <div
         v-if="props.showPartyFilters !== false"

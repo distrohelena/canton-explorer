@@ -138,11 +138,11 @@ describe('ContractsView', () => {
 
     await fireEvent.click(participantOne);
     await waitFor(() =>
-      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, { nodeIds: ['participant-2'] }),
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, { nodeIds: ['participant-2'], status: 'all' }),
     );
 
     await fireEvent.click(participantTwo);
-    await waitFor(() => expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, { nodeIds: [] }));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, { nodeIds: [], status: 'all' }));
   });
 
   it('renders the global contracts browser across all nodes by default', async () => {
@@ -241,7 +241,7 @@ describe('ContractsView', () => {
 
     const { container } = await renderAt('/contracts');
 
-    await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledWith(15, {}));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledWith(15, { status: 'all' }));
     expect(screen.queryByRole('tablist', { name: 'Node selectors' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Contracts', level: 2 })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Contracts', level: 3 })).toBeInTheDocument();
@@ -251,6 +251,53 @@ describe('ContractsView', () => {
     expect(await screen.findByRole('link', { name: '00def' })).toHaveAttribute(
       'href',
       '/nodes/participant-2/contracts/00def',
+    );
+  });
+
+  it('shows archived contracts with status badges and filters by archive status', async () => {
+    vi.mocked(fetchNodes).mockResolvedValue([
+      { id: 'participant-1', label: 'Participant 1' },
+    ] as never);
+    vi.mocked(fetchTemplates).mockResolvedValue({ templates: [] } as never);
+    vi.mocked(fetchLatestContracts).mockResolvedValue({
+      limit: 15,
+      nextBefore: null,
+      nextAfter: null,
+      contracts: [
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00abc',
+          templateId: 'Main:Asset',
+          recordTime: '2026-07-01T12:00:00.000Z',
+          status: 'active',
+        },
+        {
+          nodeId: 'participant-1',
+          label: 'Participant 1',
+          contractId: '00def',
+          templateId: 'Main:Asset',
+          recordTime: '2026-07-01T11:00:00.000Z',
+          status: 'archived',
+        },
+      ],
+    });
+
+    await renderAt('/contracts');
+
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenCalledWith(15, { status: 'all' }));
+    expect(
+      await screen.findByRole('columnheader', { name: 'Status' }),
+    ).toBeInTheDocument();
+    const contractsTable = await screen.findByRole('table', { name: 'All node contracts' });
+    expect(await within(contractsTable).findByText('Archived')).toBeInTheDocument();
+    expect(within(contractsTable).getByText('Active')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Show archived contracts' }));
+
+    await waitFor(() =>
+      expect(fetchLatestContracts).toHaveBeenLastCalledWith(15, { status: 'archived' }),
     );
   });
 
@@ -446,7 +493,7 @@ describe('ContractsView', () => {
     const { container } = await renderAt('/contracts');
 
     expect(await screen.findByRole('heading', { name: 'Contracts' })).toBeInTheDocument();
-    expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 15, {});
+    expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 15, { status: 'all' });
     expect(screen.getByText('PQS')).toHaveAttribute('title', 'Data sourced from PQS');
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
@@ -474,6 +521,7 @@ describe('ContractsView', () => {
         templates: ['Main:Asset'],
         partyMode: 'and',
         hideSplice: true,
+        status: 'all',
       }),
     );
 
@@ -492,6 +540,7 @@ describe('ContractsView', () => {
         templates: ['Main:Asset'],
         partyMode: 'and',
         hideSplice: true,
+        status: 'all',
       }),
     );
 
@@ -512,6 +561,7 @@ describe('ContractsView', () => {
         templates: ['Main:Asset'],
         partyMode: 'and',
         hideSplice: true,
+        status: 'all',
       }),
     );
 
@@ -534,6 +584,7 @@ describe('ContractsView', () => {
         templates: ['Main:Asset'],
         partyMode: 'and',
         hideSplice: true,
+        status: 'all',
       }),
     );
   });
@@ -649,11 +700,11 @@ describe('ContractsView', () => {
 
     const { router } = await renderAt('/contracts');
 
-    await waitFor(() => expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 15, {}));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenNthCalledWith(1, 15, { status: 'all' }));
 
     await fireEvent.update(screen.getByRole('combobox', { name: 'Items per page' }), '50');
 
-    await waitFor(() => expect(fetchLatestContracts).toHaveBeenNthCalledWith(2, 50, {}));
+    await waitFor(() => expect(fetchLatestContracts).toHaveBeenNthCalledWith(2, 50, { status: 'all' }));
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/contracts?limit=50'));
     expect(await screen.findByRole('link', { name: '00fed' })).toHaveAttribute(
       'href',
@@ -720,6 +771,7 @@ describe('ContractsView', () => {
       parties: ['Alice'],
       partyMode: 'or',
       hideSplice: true,
+      status: 'all',
     });
   });
 });

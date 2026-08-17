@@ -196,6 +196,7 @@ interface ActiveContractRow {
   created_event_offset: string | number | null;
   created_at_ix?: string | number | null;
   create_event_pk?: string | number | null;
+  archived?: boolean | null;
 }
 
 interface ActiveContractCursor {
@@ -1005,6 +1006,12 @@ function normalizePartyFilterMode(partyMode?: string): 'or' | 'and' {
   return partyMode === 'and' ? 'and' : 'or';
 }
 
+type ContractStatusFilter = 'active' | 'archived' | 'all';
+
+function normalizeContractStatusFilter(status?: string): ContractStatusFilter {
+  return status === 'archived' || status === 'all' ? status : 'active';
+}
+
 function normalizeTemplateFilterValue(templateId: string): string {
   return templateId.trim().replace(/^t\|#[^:]+:/, '');
 }
@@ -1785,6 +1792,7 @@ function pqsActiveContractsQuery(
   templateTypePks?: readonly bigint[],
   partyMode?: string,
   hideSplice?: boolean,
+  status: ContractStatusFilter = 'active',
 ): string {
   const relations = pqsCoreRelations(node);
   const normalizedBefore = decodeActiveContractCursor(before);
@@ -1846,7 +1854,11 @@ function pqsActiveContractsQuery(
         ((select cursor_ix from cursor_boundary), (select cursor_event_pk from cursor_boundary), (select cursor_contract_id from cursor_boundary))`
       : null;
   const whereConditions = [
-    'contract_row.archived_at_ix is null',
+    status === 'all'
+      ? null
+      : status === 'archived'
+        ? 'contract_row.archived_at_ix is not null'
+        : 'contract_row.archived_at_ix is null',
     'contract_row.created_at_ix is not null',
     'contract_row.create_event_pk is not null',
     cursorFilter,
@@ -1864,7 +1876,8 @@ function pqsActiveContractsQuery(
         contract_row.contract_id,
         contract_row.tpe_pk,
         contract_row.created_at_ix,
-        contract_row.create_event_pk
+        contract_row.create_event_pk,
+        contract_row.archived_at_ix
       from ${relations.contracts} contract_row
       ${whereClause}
       order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}, contract_row.contract_id ${orderDirection}
@@ -1880,7 +1893,8 @@ function pqsActiveContractsQuery(
       ${isoUtcTimestampExpression('tx.effective_at')} as created_record_time,
       tx.offset::text as created_event_offset,
       contract_row.created_at_ix::text as created_at_ix,
-      contract_row.create_event_pk::text as create_event_pk
+      contract_row.create_event_pk::text as create_event_pk,
+      (contract_row.archived_at_ix is not null) as archived
     from active_contract_page contract_row
     join ${relations.contractTpe} contract_tpe_row
       on contract_tpe_row.pk = contract_row.tpe_pk
@@ -3989,6 +4003,7 @@ export class PqsSummaryService {
       templates?: string[];
       partyMode?: string;
       hideSplice?: boolean;
+      status?: string;
     },
   ): Promise<NodeContractsResponse> {
     const client = await this.managerFactory.getRawExecutor(node);
@@ -4004,6 +4019,7 @@ export class PqsSummaryService {
     const templates = options?.templates;
     const partyMode = options?.partyMode;
     const hideSplice = options?.hideSplice === true;
+    const status = normalizeContractStatusFilter(options?.status);
     const useAfterCursor = Boolean(
       decodeActiveContractCursor(after) && !decodeActiveContractCursor(before),
     );
@@ -4023,6 +4039,7 @@ export class PqsSummaryService {
         templateTypePks?.contract,
         partyMode,
         hideSplice,
+        status,
       ),
     );
     const rawRows = (result.rows as ActiveContractRow[]) ?? [];
@@ -4034,6 +4051,8 @@ export class PqsSummaryService {
       contractId: row.contract_id,
       templateId: this.normalizeTemplateIdentifier(row.template_id),
       createdRecordTime: row.created_record_time ?? null,
+      status:
+        row.archived === true ? ('archived' as const) : ('active' as const),
       cursor: encodeActiveContractCursor(row),
     }));
 
@@ -4060,6 +4079,7 @@ export class PqsSummaryService {
         contractId: contract.contractId,
         templateId: contract.templateId,
         createdRecordTime: contract.createdRecordTime,
+        status: contract.status,
       })),
     };
   }
@@ -5202,6 +5222,7 @@ export class PqsSummaryService {
       partyMode?: string;
       hideSplice?: boolean;
       nodeIds?: string[];
+      status?: string;
     },
   ): Promise<GlobalContractsResponse> {
     const normalizedLimit =
@@ -5231,6 +5252,7 @@ export class PqsSummaryService {
     const activeTemplateFilters = normalizeTemplateFilters(options?.templates);
     const partyMode = normalizePartyFilterMode(options?.partyMode);
     const hideSplice = options?.hideSplice === true;
+    const status = normalizeContractStatusFilter(options?.status);
 
     const filterContracts = (
       contracts: GlobalContractsResponse['contracts'],
@@ -5291,6 +5313,7 @@ export class PqsSummaryService {
                 : undefined,
             partyMode,
             hideSplice,
+            status,
           }),
         ),
       );
@@ -5330,6 +5353,7 @@ export class PqsSummaryService {
             contractId: contract.contractId,
             templateId: contract.templateId,
             recordTime: contract.createdRecordTime,
+            status: contract.status,
           });
         }
 

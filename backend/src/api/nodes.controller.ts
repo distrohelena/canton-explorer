@@ -98,6 +98,7 @@ export class NodesController {
     @Query('partyMode') partyMode?: string,
     @Query('mode') mode?: string,
     @Query('hideSplice') hideSplice?: string,
+    @Query('status') status?: string,
   ) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
 
@@ -118,6 +119,7 @@ export class NodesController {
         partyMode: partyMode ?? mode,
         hideSplice:
           hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+        status,
       },
     );
   }
@@ -537,6 +539,7 @@ export class NodesController {
     @Query('partyMode') partyMode?: string,
     @Query('mode') mode?: string,
     @Query('hideSplice') hideSplice?: string,
+    @Query('status') status?: string,
   ) {
     const node = this.getNodeConfig(id);
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 30;
@@ -554,6 +557,7 @@ export class NodesController {
       partyMode: partyMode ?? mode,
       hideSplice:
         hideSplice === 'true' || hideSplice === '1' ? true : undefined,
+      status,
     });
   }
 

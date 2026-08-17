@@ -1,9 +1,12 @@
 import type { DecodeState, DecodedDamlValue } from './daml';
 
+export type ContractStatusFilter = 'active' | 'archived' | 'all';
+
 export interface NodeActiveContractSummary {
   contractId: string;
   templateId: string | null;
   createdRecordTime: string | null;
+  status?: 'active' | 'archived';
 }
 
 export interface NodeContractsResponse {
@@ -21,6 +24,7 @@ export interface GlobalContractSummary {
   contractId: string;
   templateId: string | null;
   recordTime: string | null;
+  status?: 'active' | 'archived';
 }
 
 export interface GlobalContractsResponse {
@@ -38,6 +42,7 @@ export interface NodeContractsQueryOptions {
   templates?: string[];
   partyMode?: 'or' | 'and';
   hideSplice?: boolean;
+  status?: ContractStatusFilter;
 }
 
 export interface NodeContractDetailResponse {

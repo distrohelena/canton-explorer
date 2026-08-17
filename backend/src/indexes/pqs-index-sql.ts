@@ -248,6 +248,31 @@ export function activeContractsIndex(
   };
 }
 
+export const allContractsIndexSql = (
+  schema: string,
+  relation: string,
+): string =>
+  `create index concurrently if not exists ${quoteIdentifier(indexName(relation, 'all_created_ix'))} on ${qualified(schema, relation)} (created_at_ix desc, create_event_pk desc, contract_id desc)`;
+
+export function allContractsIndex(
+  schema: string,
+  relation: string,
+): ExpectedPqsIndex {
+  return {
+    name: indexName(relation, 'all_created_ix'),
+    schema,
+    relation,
+    accessMethod: 'btree',
+    keyExpressions: ['created_at_ix', 'create_event_pk', 'contract_id'],
+    includedExpressions: [],
+    operatorClasses: ['int8_ops', 'int8_ops', 'text_ops'],
+    sortOptions: [3, 3, 3],
+    predicate: null,
+    isUnique: false,
+    createSql: allContractsIndexSql(schema, relation),
+  };
+}
+
 type UpdateEventOrderColumn =
   'created_at_ix' | 'archived_at_ix' | 'exercised_at_ix';
 
@@ -357,5 +382,16 @@ export const pqsIndexMigrations: readonly IndexMigration[] = [
         updateEventOrderIndex(context.schema, relation, 'exercised_at_ix'),
       ),
     ],
+  },
+  {
+    // Supports the Contracts browser's archived/all status filters, which page
+    // over the same total creation order without the archived_at_ix predicate
+    // that scopes the 002 partial index to active contracts.
+    version: '005-all-contracts',
+    name: 'All contracts creation order indexes',
+    indexes: (context) =>
+      context.contractPartitions.map((relation) =>
+        allContractsIndex(context.schema, relation),
+      ),
   },
 ];

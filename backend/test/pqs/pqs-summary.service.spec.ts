@@ -211,11 +211,13 @@ const typedNodeContractsFixture = {
       contractId: '00c',
       templateId: 'Main:C',
       createdRecordTime: '2026-07-01T12:02:00.000Z',
+      status: 'active' as const,
     },
     {
       contractId: '00b',
       templateId: 'Main:B',
       createdRecordTime: '2026-07-01T12:01:00.000Z',
+      status: 'active' as const,
     },
   ],
 } satisfies NodeContractsResponse;
@@ -4459,6 +4461,71 @@ describe('PqsSummaryService', () => {
     expect(query).toHaveBeenCalledWith(expect.stringContaining('limit 3'));
   });
 
+  it('includes archived contracts and marks their status when the status filter is all', async () => {
+    const query = jest.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          contract_id: '00c',
+          template_id: 'Main:C',
+          created_record_time: '2026-07-01T12:02:00.000Z',
+          created_event_offset: '103',
+          archived: true,
+        },
+        {
+          contract_id: '00b',
+          template_id: 'Main:B',
+          created_record_time: '2026-07-01T12:01:00.000Z',
+          created_event_offset: '102',
+          archived: false,
+        },
+      ],
+    });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    const response = await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { limit: 2, status: 'all' },
+    );
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).not.toContain('contract_row.archived_at_ix is null');
+    expect(
+      response.contracts.map((contract) => contract.status),
+    ).toEqual(['archived', 'active']);
+  });
+
+  it('filters to archived contracts when the status filter is archived', async () => {
+    const query = jest.fn().mockResolvedValueOnce({ rows: [] });
+    const service = new PqsSummaryService({
+      getRawExecutor: async () => ({ query }),
+    } as never);
+
+    await service.fetchNodeContracts(
+      {
+        id: 'participant-1',
+        label: 'Participant 1',
+        role: 'participant',
+        mode: 'pqs_only',
+        ledgerLabel: 'Retail Ledger',
+        pqs: { connectionUriEnv: 'PARTICIPANT_1_PQS_URL' },
+      },
+      { limit: 2, status: 'archived' },
+    );
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('contract_row.archived_at_ix is not null');
+    expect(sql).not.toContain('contract_row.archived_at_ix is null');
+  });
+
   it('maps offset cursors to transaction indexes before paging active contracts', async () => {
     const query = jest.fn().mockResolvedValueOnce({ rows: [] });
     const service = new PqsSummaryService({
@@ -5038,11 +5105,13 @@ describe('PqsSummaryService', () => {
           contractId: '00c',
           templateId: 'Main:C',
           createdRecordTime: '2026-07-01T12:02:00.000Z',
+          status: 'active',
         },
         {
           contractId: '00b',
           templateId: 'Main:B',
           createdRecordTime: '2026-07-01T12:01:00.000Z',
+          status: 'active',
         },
       ],
     });

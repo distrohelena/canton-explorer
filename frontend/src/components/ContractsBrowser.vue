@@ -10,7 +10,11 @@ import {
   fetchTemplates,
 } from '../lib/api';
 import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../lib/pagination';
-import type { GlobalContractsResponse, NodeContractsResponse } from '../types/contracts';
+import type {
+  ContractStatusFilter,
+  GlobalContractsResponse,
+  NodeContractsResponse,
+} from '../types/contracts';
 import type { PartyContractsResponse } from '../types/parties';
 import { useSectionLoad } from '../composables/useSectionLoad';
 import ContractsTable from './ContractsTable.vue';
@@ -49,7 +53,7 @@ const props = withDefaults(
     showPartyFilters: true,
     eyebrow: 'Contracts',
     loadingMessage: 'Loading contracts...',
-    emptyMessage: 'No active contracts found for this node.',
+    emptyMessage: 'No contracts found for this node.',
     tableAriaLabel: 'Contracts',
     spinnerLabel: 'Updating contracts',
   },
@@ -72,12 +76,23 @@ const activeTemplateFilters = ref<string[]>([]);
 const activeNodeFilters = ref<string[]>([]);
 const activeFilterMode = ref<FilterMode>('or');
 const activeHideSplice = ref(false);
+const activeStatusFilter = ref<ContractStatusFilter>('all');
 const nodeFilteringEnabled = computed(
   () => (props.scope === 'global' || props.scope === 'party') && props.nodeOptions.length > 0,
 );
+const statusFilteringEnabled = computed(() => props.scope !== 'party');
 
 function queryKey(
-  base: 'before' | 'after' | 'node' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit',
+  base:
+    | 'before'
+    | 'after'
+    | 'node'
+    | 'party'
+    | 'template'
+    | 'partyMode'
+    | 'hideSplice'
+    | 'status'
+    | 'limit',
 ): string {
   if (!props.queryPrefix) {
     return base;
@@ -87,7 +102,16 @@ function queryKey(
 }
 
 function queryWatchValue(
-  base: 'before' | 'after' | 'node' | 'party' | 'template' | 'partyMode' | 'hideSplice' | 'limit',
+  base:
+    | 'before'
+    | 'after'
+    | 'node'
+    | 'party'
+    | 'template'
+    | 'partyMode'
+    | 'hideSplice'
+    | 'status'
+    | 'limit',
 ): string | undefined {
   return JSON.stringify(route.query[queryKey(base)]);
 }
@@ -143,6 +167,10 @@ function readHideSplice(value: unknown): boolean {
   return value === 'true';
 }
 
+function readStatusFilter(value: unknown): ContractStatusFilter {
+  return value === 'active' || value === 'archived' ? value : 'all';
+}
+
 function syncFiltersFromRoute() {
   activeNodeFilters.value = readNodeFilters();
   activePartyFilters.value = props.showPartyFilters
@@ -160,6 +188,9 @@ function syncFiltersFromRoute() {
   }
 
   activeHideSplice.value = readHideSplice(route.query[queryKey('hideSplice')]);
+  activeStatusFilter.value = statusFilteringEnabled.value
+    ? readStatusFilter(route.query[queryKey('status')])
+    : 'all';
 }
 
 const renderedContracts = computed(() => {
@@ -187,7 +218,8 @@ function hasAdvancedFilterQuery(): boolean {
     activePartyFilters.value.length > 0 ||
     activeTemplateFilters.value.length > 0 ||
     (activePartyFilters.value.length > 0 && activeFilterMode.value !== 'or') ||
-    activeHideSplice.value
+    activeHideSplice.value ||
+    (statusFilteringEnabled.value && activeStatusFilter.value !== 'all')
   );
 }
 
@@ -201,6 +233,7 @@ function clearManagedKeys(query: LocationQueryRaw) {
   delete query[queryKey('template')];
   delete query[queryKey('partyMode')];
   delete query[queryKey('hideSplice')];
+  delete query[queryKey('status')];
   delete query[queryKey('limit')];
   if (!props.queryPrefix) {
     delete query.mode;
@@ -215,6 +248,7 @@ function buildQuery(
     templates?: string[];
     mode?: FilterMode;
     hideSplice?: boolean;
+    status?: ContractStatusFilter;
     nodeIds?: string[];
     limit?: number;
   },
@@ -248,6 +282,10 @@ function buildQuery(
   }
   if (options?.hideSplice) {
     nextQuery[queryKey('hideSplice')] = 'true';
+  }
+  const status = options?.status ?? activeStatusFilter.value;
+  if (statusFilteringEnabled.value && status !== 'all') {
+    nextQuery[queryKey('status')] = status;
   }
 
   const limit = normalizePageSize(options?.limit);
@@ -304,6 +342,7 @@ async function fetchContracts(): Promise<ContractsResponse> {
     if (hideSplice) {
       options.hideSplice = true;
     }
+    options.status = activeStatusFilter.value;
 
     return fetchNodeContracts(props.nodeId, options);
   }
@@ -337,6 +376,7 @@ async function fetchContracts(): Promise<ContractsResponse> {
     if (hideSplice) {
       options.hideSplice = true;
     }
+    options.status = activeStatusFilter.value;
 
     return fetchLatestContracts(limit, options);
   }
@@ -396,6 +436,7 @@ watch(
     () => queryWatchValue('template'),
     () => queryWatchValue('partyMode'),
     () => queryWatchValue('hideSplice'),
+    () => queryWatchValue('status'),
     () => queryWatchValue('limit'),
     () => (props.queryPrefix ? undefined : JSON.stringify(route.query.mode)),
     () => props.scope,
@@ -594,6 +635,21 @@ async function setHideSplice(hidden: boolean) {
   );
 }
 
+async function setStatusFilter(status: ContractStatusFilter) {
+  activeStatusFilter.value = status;
+
+  await pushQuery(
+    buildQuery({
+      parties: activePartyFilters.value,
+      templates: activeTemplateFilters.value,
+      mode: activeFilterMode.value,
+      hideSplice: activeHideSplice.value,
+      status,
+      limit: activePageSize.value,
+    }),
+  );
+}
+
 async function setNodeFilters(nodeIds: string[]) {
   activeNodeFilters.value = uniqueValues(nodeIds).filter((nodeId) =>
     props.nodeOptions.some((node) => node.id === nodeId),
@@ -650,6 +706,8 @@ async function setNodeFilters(nodeIds: string[]) {
         :filter-mode="activeFilterMode"
         :hide-splice="activeHideSplice"
         :show-party-filters="showPartyFilters"
+        :show-status-filter="statusFilteringEnabled"
+        :status-filter="activeStatusFilter"
         hide-splice-label="Hide Splice Templates"
         @add-party-filter="addPartyFilter"
         @add-template-filter="addTemplateFilter"
@@ -657,6 +715,7 @@ async function setNodeFilters(nodeIds: string[]) {
         @remove-template-filter="removeTemplateFilter"
         @set-filter-mode="setFilterMode"
         @set-hide-splice="setHideSplice"
+        @set-status-filter="setStatusFilter"
         @set-node-filters="setNodeFilters"
       />
     </div>
@@ -692,6 +751,7 @@ async function setNodeFilters(nodeIds: string[]) {
         :class="{ 'node-updates__table--loading': loading && renderedContracts.length > 0 }"
         :contracts="renderedContracts"
         :show-node-column="showNodeColumn"
+        :show-status-column="statusFilteringEnabled"
         :aria-label="tableAriaLabel"
         :loading="loading"
         :loading-message="loadingMessage"

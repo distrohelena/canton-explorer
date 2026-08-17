@@ -11,18 +11,21 @@ interface ContractRow {
   templateId: string | null;
   createdRecordTime?: string | null;
   recordTime?: string | null;
+  status?: 'active' | 'archived';
 }
 
 const props = withDefaults(
   defineProps<{
     contracts: ContractRow[];
     showNodeColumn?: boolean;
+    showStatusColumn?: boolean;
     ariaLabel?: string;
     loading?: boolean;
     loadingMessage?: string;
   }>(),
   {
     showNodeColumn: false,
+    showStatusColumn: false,
     ariaLabel: 'Contracts',
     loading: false,
     loadingMessage: 'Loading contracts...',
@@ -99,11 +102,15 @@ function navigateToContract(contract: ContractRow): void {
   <div class="node-updates__table contracts-table" role="table" :aria-label="ariaLabel">
     <div
       class="node-updates__row node-updates__row--head contracts-table__row"
-      :class="{ 'contracts-table__row--with-node': showNodeColumn }"
+      :class="{
+        'contracts-table__row--with-node': showNodeColumn,
+        'contracts-table__row--with-status': showStatusColumn,
+      }"
     >
       <span v-if="showNodeColumn" role="columnheader">Node</span>
       <span role="columnheader">Contract ID</span>
       <span role="columnheader">Template ID</span>
+      <span v-if="showStatusColumn" role="columnheader">Status</span>
       <span class="contracts-table__record-time-header" role="columnheader">
         <span>Created Time</span>
         <QuerySourcePill class="contracts-table__source-pill" source="pqs" />
@@ -123,7 +130,10 @@ function navigateToContract(contract: ContractRow): void {
         v-for="contract in renderedContracts"
         :key="`${contract.nodeId}-${contract.contractId}`"
         class="node-updates__row node-updates__row--link contracts-table__row"
-        :class="{ 'contracts-table__row--with-node': showNodeColumn }"
+        :class="{
+          'contracts-table__row--with-node': showNodeColumn,
+          'contracts-table__row--with-status': showStatusColumn,
+        }"
         role="row"
         tabindex="0"
         @click="navigateToContract(contract)"
@@ -168,6 +178,16 @@ function navigateToContract(contract: ContractRow): void {
             :value="contract.templateId"
             label="template ID"
           />
+        </span>
+        <span v-if="showStatusColumn" class="contracts-table__cell" role="cell">
+          <span
+            v-if="contract.status"
+            class="contracts-table__status-badge"
+            :class="`contracts-table__status-badge--${contract.status}`"
+          >
+            {{ contract.status === 'archived' ? 'Archived' : 'Active' }}
+          </span>
+          <template v-else>n/a</template>
         </span>
         <span class="node-updates__time contracts-table__cell" role="cell">
           <template v-if="contract.recordTimeLines">

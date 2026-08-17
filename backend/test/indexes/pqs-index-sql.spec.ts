@@ -2,6 +2,8 @@ import { describe, expect, it } from '@jest/globals';
 import {
   activeContractsIndex,
   activeContractsIndexSql,
+  allContractsIndex,
+  allContractsIndexSql,
   contractWitnessIndex,
   contractWitnessIndexSql,
   migrationTableSql,
@@ -55,6 +57,36 @@ describe('PQS index SQL', () => {
     expect(transactionIdPatternIndexSql('public')).toBe(
       'create index concurrently if not exists "canton_explorer_transactions_transaction_id_pattern_ops" on "public"."__transactions" (transaction_id text_pattern_ops)',
     );
+  });
+
+  it('creates an unpredicated creation-order index covering archived contracts', () => {
+    expect(allContractsIndexSql('public', '__contracts_42')).toBe(
+      'create index concurrently if not exists "canton_explorer_contracts_42_all_created_ix" on "public"."__contracts_42" (created_at_ix desc, create_event_pk desc, contract_id desc)',
+    );
+
+    const migration = pqsIndexMigrations.find(
+      ({ version }) => version === '005-all-contracts',
+    );
+    expect(
+      migration?.indexes({
+        schema: 'public',
+        contractPartitions: ['__contracts_42', '__contracts_77'],
+        exercisePartitions: ['__exercises_29'],
+        transactionIdIsText: true,
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_42_all_created_ix',
+        relation: '__contracts_42',
+        keyExpressions: ['created_at_ix', 'create_event_pk', 'contract_id'],
+        sortOptions: [3, 3, 3],
+        predicate: null,
+      }),
+      expect.objectContaining({
+        name: 'canton_explorer_contracts_77_all_created_ix',
+        relation: '__contracts_77',
+      }),
+    ]);
   });
 
   it('creates order-capable update-event indexes on every physical partition', () => {
@@ -122,6 +154,14 @@ describe('PQS index SQL', () => {
       keyExpressions: ['created_at_ix', 'create_event_pk', 'contract_id'],
       operatorClasses: ['int8_ops', 'int8_ops', 'text_ops'],
       predicate: 'archived_at_ix IS NULL',
+    });
+    expect(allContractsIndex('public', '__contracts_42')).toMatchObject({
+      name: 'canton_explorer_contracts_42_all_created_ix',
+      relation: '__contracts_42',
+      accessMethod: 'btree',
+      keyExpressions: ['created_at_ix', 'create_event_pk', 'contract_id'],
+      operatorClasses: ['int8_ops', 'int8_ops', 'text_ops'],
+      predicate: null,
     });
     expect(transactionIdPatternIndex('public')).toMatchObject({
       name: 'canton_explorer_transactions_transaction_id_pattern_ops',

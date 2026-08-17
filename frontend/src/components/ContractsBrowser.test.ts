@@ -139,11 +139,12 @@ describe('ContractsBrowser', () => {
       partyMode: 'and',
       templates: ['Pkg:T'],
       hideSplice: true,
+      status: 'all',
     });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Retry contracts' }));
 
-    expect(await screen.findByText('No active contracts found for this node.')).toBeInTheDocument();
+    expect(await screen.findByText('No contracts found for this node.')).toBeInTheDocument();
     expect(fetchLatestContractsMock).toHaveBeenCalledTimes(3);
     expect(fetchLatestContractsMock).toHaveBeenLastCalledWith(30, {
       nodeIds: ['node-1'],
@@ -152,6 +153,7 @@ describe('ContractsBrowser', () => {
       partyMode: 'and',
       templates: ['Pkg:T'],
       hideSplice: true,
+      status: 'all',
     });
   });
 
