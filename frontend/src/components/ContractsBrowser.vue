@@ -751,7 +751,7 @@ async function setNodeFilters(nodeIds: string[]) {
         :class="{ 'node-updates__table--loading': loading && renderedContracts.length > 0 }"
         :contracts="renderedContracts"
         :show-node-column="showNodeColumn"
-        :show-status-column="statusFilteringEnabled"
+        :show-archive-columns="statusFilteringEnabled"
         :aria-label="tableAriaLabel"
         :loading="loading"
         :loading-message="loadingMessage"

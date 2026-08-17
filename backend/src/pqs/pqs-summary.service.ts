@@ -197,6 +197,7 @@ interface ActiveContractRow {
   created_at_ix?: string | number | null;
   create_event_pk?: string | number | null;
   archived?: boolean | null;
+  archived_record_time?: string | null;
 }
 
 interface ActiveContractCursor {
@@ -1894,12 +1895,15 @@ function pqsActiveContractsQuery(
       tx.offset::text as created_event_offset,
       contract_row.created_at_ix::text as created_at_ix,
       contract_row.create_event_pk::text as create_event_pk,
-      (contract_row.archived_at_ix is not null) as archived
+      (contract_row.archived_at_ix is not null) as archived,
+      ${isoUtcTimestampExpression('archived_tx.effective_at')} as archived_record_time
     from active_contract_page contract_row
     join ${relations.contractTpe} contract_tpe_row
       on contract_tpe_row.pk = contract_row.tpe_pk
     join ${relations.transactions} tx
       on tx.ix = contract_row.created_at_ix
+    left join ${relations.transactions} archived_tx
+      on archived_tx.ix = contract_row.archived_at_ix
     order by contract_row.created_at_ix ${orderDirection}, contract_row.create_event_pk ${orderDirection}, contract_row.contract_id ${orderDirection}
   `;
 }
@@ -4053,6 +4057,7 @@ export class PqsSummaryService {
       createdRecordTime: row.created_record_time ?? null,
       status:
         row.archived === true ? ('archived' as const) : ('active' as const),
+      archivedRecordTime: row.archived_record_time ?? null,
       cursor: encodeActiveContractCursor(row),
     }));
 
@@ -4080,6 +4085,7 @@ export class PqsSummaryService {
         templateId: contract.templateId,
         createdRecordTime: contract.createdRecordTime,
         status: contract.status,
+        archivedRecordTime: contract.archivedRecordTime,
       })),
     };
   }
@@ -5354,6 +5360,7 @@ export class PqsSummaryService {
             templateId: contract.templateId,
             recordTime: contract.createdRecordTime,
             status: contract.status,
+            archivedRecordTime: contract.archivedRecordTime,
           });
         }
 

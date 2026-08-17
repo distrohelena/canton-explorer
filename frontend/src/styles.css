@@ -5661,16 +5661,16 @@ h3 {
     minmax(170px, 0.85fr);
 }
 
-.contracts-table__row--with-status {
+.contracts-table__row--with-archive {
   grid-template-columns:
-    minmax(220px, 1.7fr) minmax(200px, 1.1fr) minmax(90px, 0.45fr)
-    minmax(170px, 0.9fr);
+    minmax(200px, 1.5fr) minmax(180px, 1fr) minmax(90px, 0.45fr)
+    minmax(150px, 0.8fr) minmax(150px, 0.8fr);
 }
 
-.contracts-table__row--with-node.contracts-table__row--with-status {
+.contracts-table__row--with-node.contracts-table__row--with-archive {
   grid-template-columns:
-    minmax(140px, 0.9fr) minmax(220px, 1.5fr) minmax(180px, 1fr)
-    minmax(90px, 0.4fr) minmax(170px, 0.85fr);
+    minmax(130px, 0.8fr) minmax(200px, 1.4fr) minmax(170px, 0.95fr)
+    minmax(85px, 0.4fr) minmax(140px, 0.75fr) minmax(140px, 0.75fr);
 }
 
 .contracts-table__status-badge {
@@ -5702,6 +5702,13 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Keep the node link's hit area on its text; clicks on the rest of the
+   cell fall through to the row's contract navigation. */
+.contracts-table__node-link {
+  justify-self: start;
+  max-width: 100%;
 }
 
 .contracts-table__cell {

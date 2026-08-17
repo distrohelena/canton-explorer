@@ -212,12 +212,14 @@ const typedNodeContractsFixture = {
       templateId: 'Main:C',
       createdRecordTime: '2026-07-01T12:02:00.000Z',
       status: 'active' as const,
+      archivedRecordTime: null,
     },
     {
       contractId: '00b',
       templateId: 'Main:B',
       createdRecordTime: '2026-07-01T12:01:00.000Z',
       status: 'active' as const,
+      archivedRecordTime: null,
     },
   ],
 } satisfies NodeContractsResponse;
@@ -4470,6 +4472,7 @@ describe('PqsSummaryService', () => {
           created_record_time: '2026-07-01T12:02:00.000Z',
           created_event_offset: '103',
           archived: true,
+          archived_record_time: '2026-07-02T09:30:00.000Z',
         },
         {
           contract_id: '00b',
@@ -4477,6 +4480,7 @@ describe('PqsSummaryService', () => {
           created_record_time: '2026-07-01T12:01:00.000Z',
           created_event_offset: '102',
           archived: false,
+          archived_record_time: null,
         },
       ],
     });
@@ -4498,9 +4502,13 @@ describe('PqsSummaryService', () => {
 
     const sql = String(query.mock.calls[0]?.[0]);
     expect(sql).not.toContain('contract_row.archived_at_ix is null');
+    expect(sql).toContain('archived_tx.effective_at');
     expect(
       response.contracts.map((contract) => contract.status),
     ).toEqual(['archived', 'active']);
+    expect(
+      response.contracts.map((contract) => contract.archivedRecordTime),
+    ).toEqual(['2026-07-02T09:30:00.000Z', null]);
   });
 
   it('filters to archived contracts when the status filter is archived', async () => {
@@ -5106,12 +5114,14 @@ describe('PqsSummaryService', () => {
           templateId: 'Main:C',
           createdRecordTime: '2026-07-01T12:02:00.000Z',
           status: 'active',
+          archivedRecordTime: null,
         },
         {
           contractId: '00b',
           templateId: 'Main:B',
           createdRecordTime: '2026-07-01T12:01:00.000Z',
           status: 'active',
+          archivedRecordTime: null,
         },
       ],
     });

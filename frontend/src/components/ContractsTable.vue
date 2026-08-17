@@ -12,20 +12,21 @@ interface ContractRow {
   createdRecordTime?: string | null;
   recordTime?: string | null;
   status?: 'active' | 'archived';
+  archivedRecordTime?: string | null;
 }
 
 const props = withDefaults(
   defineProps<{
     contracts: ContractRow[];
     showNodeColumn?: boolean;
-    showStatusColumn?: boolean;
+    showArchiveColumns?: boolean;
     ariaLabel?: string;
     loading?: boolean;
     loadingMessage?: string;
   }>(),
   {
     showNodeColumn: false,
-    showStatusColumn: false,
+    showArchiveColumns: false,
     ariaLabel: 'Contracts',
     loading: false,
     loadingMessage: 'Loading contracts...',
@@ -80,6 +81,7 @@ const renderedContracts = computed(() =>
     ...contract,
     templateIdLines: formatTemplateId(contract.templateId),
     recordTimeLines: formatRecordTime(contract.createdRecordTime ?? contract.recordTime ?? null),
+    archivedRecordTimeLines: formatRecordTime(contract.archivedRecordTime ?? null),
   })),
 );
 
@@ -104,17 +106,18 @@ function navigateToContract(contract: ContractRow): void {
       class="node-updates__row node-updates__row--head contracts-table__row"
       :class="{
         'contracts-table__row--with-node': showNodeColumn,
-        'contracts-table__row--with-status': showStatusColumn,
+        'contracts-table__row--with-archive': showArchiveColumns,
       }"
     >
       <span v-if="showNodeColumn" role="columnheader">Node</span>
       <span role="columnheader">Contract ID</span>
       <span role="columnheader">Template ID</span>
-      <span v-if="showStatusColumn" role="columnheader">Status</span>
+      <span v-if="showArchiveColumns" role="columnheader">Status</span>
       <span class="contracts-table__record-time-header" role="columnheader">
         <span>Created Time</span>
         <QuerySourcePill class="contracts-table__source-pill" source="pqs" />
       </span>
+      <span v-if="showArchiveColumns" role="columnheader">Archived Time</span>
     </div>
 
     <div
@@ -132,7 +135,7 @@ function navigateToContract(contract: ContractRow): void {
         class="node-updates__row node-updates__row--link contracts-table__row"
         :class="{
           'contracts-table__row--with-node': showNodeColumn,
-          'contracts-table__row--with-status': showStatusColumn,
+          'contracts-table__row--with-archive': showArchiveColumns,
         }"
         role="row"
         tabindex="0"
@@ -142,7 +145,7 @@ function navigateToContract(contract: ContractRow): void {
       >
         <span v-if="showNodeColumn" class="node-updates__cell-with-copy contracts-table__cell" role="cell">
           <RouterLink
-            class="contract-detail__link"
+            class="contract-detail__link contracts-table__node-link"
             :to="nodeLink(contract.nodeId)"
             @click.stop
             @keydown.enter.stop
@@ -179,7 +182,7 @@ function navigateToContract(contract: ContractRow): void {
             label="template ID"
           />
         </span>
-        <span v-if="showStatusColumn" class="contracts-table__cell" role="cell">
+        <span v-if="showArchiveColumns" class="contracts-table__cell" role="cell">
           <span
             v-if="contract.status"
             class="contracts-table__status-badge"
@@ -195,6 +198,17 @@ function navigateToContract(contract: ContractRow): void {
             <span class="node-updates__time-clock">{{ contract.recordTimeLines.time }}</span>
           </template>
           <template v-else>Not available</template>
+        </span>
+        <span
+          v-if="showArchiveColumns"
+          class="node-updates__time contracts-table__cell"
+          role="cell"
+        >
+          <template v-if="contract.archivedRecordTimeLines">
+            <span class="node-updates__time-date">{{ contract.archivedRecordTimeLines.date }}</span>
+            <span class="node-updates__time-clock">{{ contract.archivedRecordTimeLines.time }}</span>
+          </template>
+          <template v-else>&mdash;</template>
         </span>
       </div>
     </template>

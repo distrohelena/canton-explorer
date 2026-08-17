@@ -271,6 +271,7 @@ describe('ContractsView', () => {
           templateId: 'Main:Asset',
           recordTime: '2026-07-01T12:00:00.000Z',
           status: 'active',
+          archivedRecordTime: null,
         },
         {
           nodeId: 'participant-1',
@@ -279,6 +280,7 @@ describe('ContractsView', () => {
           templateId: 'Main:Asset',
           recordTime: '2026-07-01T11:00:00.000Z',
           status: 'archived',
+          archivedRecordTime: '2026-07-02T09:30:00.000Z',
         },
       ],
     });
@@ -289,9 +291,13 @@ describe('ContractsView', () => {
     expect(
       await screen.findByRole('columnheader', { name: 'Status' }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: 'Archived Time' }),
+    ).toBeInTheDocument();
     const contractsTable = await screen.findByRole('table', { name: 'All node contracts' });
     expect(await within(contractsTable).findByText('Archived')).toBeInTheDocument();
     expect(within(contractsTable).getByText('Active')).toBeInTheDocument();
+    expect(within(contractsTable).getByText('—')).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Advanced Filter' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Show archived contracts' }));
